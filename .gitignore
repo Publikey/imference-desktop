@@ -1,0 +1,19 @@
+build/bin
+node_modules
+frontend/dist
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+
+# Env / secrets — settings live in OS config dir, not here
+.env
+.env.*
+
+# Sidecar artifacts
+sidecar/__pycache__/
+sidecar/*.pyc
+sidecar/.venv/

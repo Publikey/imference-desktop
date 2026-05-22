@@ -295,13 +295,26 @@ func (a *App) InstallEngine() error {
 			a.bus.Error("app", "InstallEngine failed", map[string]any{"err": err.Error()})
 			return
 		}
-		// On success, auto-fill pythonPath in settings — this triggers
-		// sidecar.Restart() via the existing SidecarConfigChanged logic in
-		// SaveSettings, so the user doesn't have to re-open the dialog.
+
+		// Persist the new pythonPath. Skip SaveSettings (which auto-restarts
+		// only when the path actually changed) and write directly via the
+		// store — we'll always restart explicitly below, since the install
+		// flow stopped the sidecar at its start regardless of whether the
+		// path changed (the venv may have been reused on a reinstall, in
+		// which case path is unchanged but the sidecar is still stopped).
 		s := a.settings.Get()
 		s.PythonPath = installer.VenvPython(venvDir)
-		if _, err := a.SaveSettings(s); err != nil {
-			a.bus.Error("app", "auto-fill pythonPath failed", map[string]any{"err": err.Error()})
+		if _, err := a.settings.Save(s); err != nil {
+			a.bus.Error("app", "post-install settings save failed", map[string]any{"err": err.Error()})
+		}
+
+		// Always restart the sidecar after a successful install — the
+		// pre-install Stop() left it in "stopped" state and nothing else
+		// will revive it. Avoids the "local: stopped" pill that lingered
+		// indefinitely on reinstall-with-same-pythonPath previously.
+		a.bus.Info("app", "restarting sidecar after install", nil)
+		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath); rerr != nil {
+			a.bus.Warn("app", "post-install sidecar restart failed", map[string]any{"err": rerr.Error()})
 		}
 	}()
 

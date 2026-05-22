@@ -45,6 +45,14 @@ const TorchIndexURL = "https://download.pytorch.org/whl/cu124"
 // version that doesn't match, let me swap it" surprises in the engine phase.
 const TorchSpec = "torch>=2.6"
 
+// SDEmbedTarball is the GitHub archive URL for sd_embed (weighted prompt
+// embeddings + BREAK keyword). MUST be installed with --no-deps because
+// sd_embed's setup.py declares unconstrained `torch` + `torchvision`
+// dependencies that would clobber our CUDA torch with the CPU wheel.
+// All transitive deps it actually uses (torch, transformers, ftfy) are
+// already in imference-engine[runtime].
+const SDEmbedTarball = "sd-embed @ https://github.com/xhinker/sd_embed/archive/refs/heads/main.tar.gz"
+
 type Options struct {
 	// VenvDir is where the engine venv lives. Recommended: os.UserCacheDir()/imference-desktop-go/engine-venv.
 	VenvDir string
@@ -145,8 +153,8 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 	}
 	emit(types.InstallProgress{Phase: "torch", Message: "torch installed", PercentEstimate: 100})
 
-	// ----- Phase 4: pip install sidecar deps (fastapi + uvicorn) -----
-	emit(types.InstallProgress{Phase: "sidecar-deps", Message: "Installing FastAPI + uvicorn"})
+	// ----- Phase 4: pip install sidecar deps (runqy-python) -----
+	emit(types.InstallProgress{Phase: "sidecar-deps", Message: "Installing runqy-python (stdio protocol)"})
 	i.bus.Info("installer", "sidecar-deps phase start", map[string]any{"reqs": opts.SidecarRequirementsPath})
 	if err := i.runPip(ctx, venvPython, "sidecar-deps", emit,
 		"install", "-r", opts.SidecarRequirementsPath,
@@ -169,6 +177,30 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 		return err
 	}
 	emit(types.InstallProgress{Phase: "engine", Message: "imference-engine installed", PercentEstimate: 100})
+
+	// ----- Phase 6: pip install sd-embed (weighted prompts + BREAK keyword) -----
+	// Separate phase BECAUSE sd_embed's setup.py declares unconstrained torch +
+	// torchvision deps. Without --no-deps, pip would tear down our CUDA torch
+	// and install the CPU wheel as a "satisfying" alternative. With --no-deps,
+	// we just pull the sd_embed module bytes into site-packages and rely on
+	// the engine's existing torch/transformers/ftfy install.
+	emit(types.InstallProgress{
+		Phase:   "extras",
+		Message: "Installing sd-embed (weighted prompts) with --no-deps",
+	})
+	i.bus.Info("installer", "extras phase start", map[string]any{"tarball": SDEmbedTarball})
+	if err := i.runPip(ctx, venvPython, "extras", emit,
+		"install", "--no-deps", SDEmbedTarball,
+	); err != nil {
+		// Non-fatal: the engine works without sd_embed, just falls back to raw
+		// prompts (with a runtime warning). Log + continue.
+		i.bus.Warn("installer", "sd-embed install failed; engine will use raw prompts", map[string]any{
+			"err": err.Error(),
+		})
+		emit(types.InstallProgress{Phase: "extras", Message: "sd-embed install failed (non-fatal)"})
+	} else {
+		emit(types.InstallProgress{Phase: "extras", Message: "sd-embed installed", PercentEstimate: 100})
+	}
 
 	// ----- Done -----
 	i.bus.Info("installer", "install complete", map[string]any{"python": venvPython})

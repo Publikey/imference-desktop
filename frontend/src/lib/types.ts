@@ -81,6 +81,7 @@ export type InstallPhase =
   | "torch"
   | "sidecar-deps"
   | "engine"
+  | "extras"
   | "done"
   | "error";
 

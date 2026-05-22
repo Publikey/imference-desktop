@@ -10,11 +10,12 @@ const PHASE_LABEL: Record<InstallPhase, string> = {
   torch: "Downloading torch (CUDA)",
   "sidecar-deps": "Installing sidecar deps",
   engine: "Downloading imference-engine",
+  extras: "Installing sd-embed (weighted prompts)",
   done: "Done",
   error: "Error",
 };
 
-const PHASE_ORDER: InstallPhase[] = ["detect", "venv", "torch", "sidecar-deps", "engine"];
+const PHASE_ORDER: InstallPhase[] = ["detect", "venv", "torch", "sidecar-deps", "engine", "extras"];
 
 type Props = {
   // Called after a successful install completes so the parent dialog can

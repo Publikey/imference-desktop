@@ -1,4 +1,13 @@
 runqy-python>=0.2.2
+
+# Real runtime dep of sd-embed (the prompt-grammar parser). The installer's
+# `extras` phase installs sd-embed with --no-deps to avoid pip pulling the
+# CPU torch wheel and jupyter junk (ipykernel/ipywidgets) that sd-embed
+# declares but never imports at runtime. `lark` is the one declared dep
+# that's actually needed at import time — verified by running the actual
+# import path: `from sd_embed.embedding_funcs import get_weighted_text_embeddings_sdxl`.
+lark>=1.1
+
 # imference-engine itself is installed by the desktop's bundled installer with
 # the [runtime] extra (pip install "imference-engine[runtime] @ <github>").
 # Torch CUDA must be present first — the installer's torch phase covers that.

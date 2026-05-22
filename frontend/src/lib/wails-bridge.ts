@@ -6,14 +6,19 @@
 import {
   ClearLogs,
   DetectPython,
+  ExportWalletPrivateKey,
   GenerateCloud,
   GenerateLocal,
+  GenerateWallet,
   GetEngineInfo,
   GetLogs,
   GetSettings,
   GetSidecarStatus,
+  GetWalletInfo,
+  ImportWallet,
   InstallEngine,
   LogFromFrontend,
+  RefreshWalletBalance,
   RestartSidecar,
   SaveSettings,
 } from "../../wailsjs/go/main/App";
@@ -28,6 +33,7 @@ import type {
   LogLevel,
   PythonInfo,
   SidecarStatus,
+  WalletInfo,
 } from "./types";
 
 // Wails-generated functions are typed as (anyOfTheArgs) => Promise<any>.
@@ -56,6 +62,13 @@ const raw = {
   detectPython: DetectPython as () => Promise<PythonInfo>,
   getEngineInfo: GetEngineInfo as () => Promise<EngineInfo>,
   installEngine: InstallEngine as () => Promise<void>,
+
+  // Wallet (x402 mode)
+  getWalletInfo: GetWalletInfo as () => Promise<WalletInfo>,
+  refreshWalletBalance: RefreshWalletBalance as () => Promise<string>,
+  generateWallet: GenerateWallet as () => Promise<string>,
+  importWallet: ImportWallet as (privateKeyHex: string) => Promise<string>,
+  exportWalletPrivateKey: ExportWalletPrivateKey as () => Promise<string>,
 
   onSidecarStatus: (cb: (s: SidecarStatus) => void): (() => void) => {
     EventsOn("sidecar:status", (s: SidecarStatus) => cb(s));

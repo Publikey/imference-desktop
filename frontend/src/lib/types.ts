@@ -10,6 +10,20 @@ export type AppSettings = {
   cloudModel: string;
   /** Optional override for the auto-save directory. Empty → Go default (~/Pictures/Imference). */
   outputDir: string;
+  /** "bearer" (default, uses apiKey) or "x402" (uses local wallet on Base mainnet). */
+  paymentMode: PaymentMode;
+  /** Mirror of the configured wallet's public address. Private key lives in OS keychain. */
+  walletAddress: string;
+};
+
+export type PaymentMode = "bearer" | "x402";
+
+export type WalletInfo = {
+  configured: boolean;
+  address: string;
+  balanceUSDC: string;
+  network: string;
+  error?: string;
 };
 
 export type GenerationRequest = {

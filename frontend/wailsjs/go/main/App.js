@@ -10,12 +10,20 @@ export function DetectPython() {
   return window['go']['main']['App']['DetectPython']();
 }
 
+export function ExportWalletPrivateKey() {
+  return window['go']['main']['App']['ExportWalletPrivateKey']();
+}
+
 export function GenerateCloud(arg1) {
   return window['go']['main']['App']['GenerateCloud'](arg1);
 }
 
 export function GenerateLocal(arg1) {
   return window['go']['main']['App']['GenerateLocal'](arg1);
+}
+
+export function GenerateWallet() {
+  return window['go']['main']['App']['GenerateWallet']();
 }
 
 export function GetEngineInfo() {
@@ -34,12 +42,24 @@ export function GetSidecarStatus() {
   return window['go']['main']['App']['GetSidecarStatus']();
 }
 
+export function GetWalletInfo() {
+  return window['go']['main']['App']['GetWalletInfo']();
+}
+
+export function ImportWallet(arg1) {
+  return window['go']['main']['App']['ImportWallet'](arg1);
+}
+
 export function InstallEngine() {
   return window['go']['main']['App']['InstallEngine']();
 }
 
 export function LogFromFrontend(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['LogFromFrontend'](arg1, arg2, arg3, arg4);
+}
+
+export function RefreshWalletBalance() {
+  return window['go']['main']['App']['RefreshWalletBalance']();
 }
 
 export function RestartSidecar() {

@@ -105,6 +105,8 @@ export namespace types {
 	    sdxlPath: string;
 	    cloudModel: string;
 	    outputDir: string;
+	    paymentMode: string;
+	    walletAddress: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -117,6 +119,8 @@ export namespace types {
 	        this.sdxlPath = source["sdxlPath"];
 	        this.cloudModel = source["cloudModel"];
 	        this.outputDir = source["outputDir"];
+	        this.paymentMode = source["paymentMode"];
+	        this.walletAddress = source["walletAddress"];
 	    }
 	}
 	export class SidecarStatus {
@@ -135,6 +139,26 @@ export namespace types {
 	        this.port = source["port"];
 	        this.device = source["device"];
 	        this.message = source["message"];
+	    }
+	}
+	export class WalletInfo {
+	    configured: boolean;
+	    address: string;
+	    balanceUSDC: string;
+	    network: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WalletInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.configured = source["configured"];
+	        this.address = source["address"];
+	        this.balanceUSDC = source["balanceUSDC"];
+	        this.network = source["network"];
+	        this.error = source["error"];
 	    }
 	}
 

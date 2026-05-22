@@ -7,9 +7,13 @@ export function ClearLogs():Promise<void>;
 
 export function DetectPython():Promise<types.PythonInfo>;
 
+export function ExportWalletPrivateKey():Promise<string>;
+
 export function GenerateCloud(arg1:types.GenerationRequest):Promise<types.GenerationResult>;
 
 export function GenerateLocal(arg1:types.GenerationRequest):Promise<types.GenerationResult>;
+
+export function GenerateWallet():Promise<string>;
 
 export function GetEngineInfo():Promise<types.EngineInfo>;
 
@@ -19,9 +23,15 @@ export function GetSettings():Promise<types.Settings>;
 
 export function GetSidecarStatus():Promise<types.SidecarStatus>;
 
+export function GetWalletInfo():Promise<types.WalletInfo>;
+
+export function ImportWallet(arg1:string):Promise<string>;
+
 export function InstallEngine():Promise<void>;
 
 export function LogFromFrontend(arg1:string,arg2:string,arg3:string,arg4:any):Promise<void>;
+
+export function RefreshWalletBalance():Promise<string>;
 
 export function RestartSidecar():Promise<void>;
 

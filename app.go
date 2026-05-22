@@ -16,6 +16,7 @@ import (
 	"imference-desktop-go/internal/settings"
 	"imference-desktop-go/internal/sidecar"
 	"imference-desktop-go/internal/types"
+	"imference-desktop-go/internal/wallet"
 )
 
 // App is the Wails-bound facade. Every method on *App becomes a
@@ -138,19 +139,38 @@ func (a *App) RestartSidecar() error {
 }
 
 // GenerateCloud is the only HTTP surface to imference.com. Frontend never
-// touches the network directly — keeps auth-key handling in Go and gives
-// us a single point to add retries / progress events later.
+// touches the network directly — keeps auth-key/wallet handling in Go and
+// gives us a single point to add retries / progress events later.
+//
+// Dispatches based on settings.PaymentMode:
+//   - "x402"   : signs each request with the local wallet (Base mainnet USDC)
+//   - default  : "bearer" — uses settings.APIKey
 func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult, error) {
 	s := a.settings.Get()
-	if s.APIKey == "" {
-		a.bus.Warn("app", "GenerateCloud: API key not set", nil)
-		return types.GenerationResult{}, errors.New("Cloud API key not set")
-	}
 	if s.CloudModel == "" {
 		a.bus.Warn("app", "GenerateCloud: model not set", nil)
 		return types.GenerationResult{}, errors.New("Cloud model not set")
 	}
-	result, err := a.cloud.Generate(a.ctx, s.APIKey, s.CloudModel, req)
+
+	var result types.GenerationResult
+	var err error
+
+	switch s.PaymentMode {
+	case "x402":
+		w, lerr := wallet.LoadFromKeychain()
+		if lerr != nil {
+			a.bus.Warn("app", "GenerateCloud: x402 mode but no wallet configured", nil)
+			return types.GenerationResult{}, errors.New("x402 mode selected but no wallet configured — open Settings to generate/import one")
+		}
+		result, err = a.cloud.GenerateX402(a.ctx, s.CloudModel, req, w)
+	default:
+		if s.APIKey == "" {
+			a.bus.Warn("app", "GenerateCloud: API key not set", nil)
+			return types.GenerationResult{}, errors.New("Cloud API key not set")
+		}
+		result, err = a.cloud.Generate(a.ctx, s.APIKey, s.CloudModel, req)
+	}
+
 	if err != nil {
 		return result, err
 	}
@@ -293,6 +313,113 @@ func (a *App) InstallEngine() error {
 	}()
 
 	return nil
+}
+
+// ------------------------------------------------------------------------
+// Wallet surface — x402 burner-key management
+// ------------------------------------------------------------------------
+
+// GetWalletInfo reports the current wallet state to the renderer. Cheap
+// when the keychain has no entry (just an ErrNoWallet round-trip). When
+// configured, also fetches the USDC balance over the Base RPC — that's
+// network I/O, so the call can block for a couple seconds.
+func (a *App) GetWalletInfo() types.WalletInfo {
+	info := types.WalletInfo{Network: "base-mainnet"}
+	w, err := wallet.LoadFromKeychain()
+	if err != nil {
+		// ErrNoWallet is the common case; other errors mean the OS
+		// keychain is unhappy and the user should see that.
+		if err != wallet.ErrNoWallet {
+			info.Error = err.Error()
+			a.bus.Warn("app", "GetWalletInfo: keychain error", map[string]any{"err": err.Error()})
+		}
+		return info
+	}
+	info.Configured = true
+	info.Address = w.Address().Hex()
+	balance, berr := wallet.USDCBalance(a.ctx, w.Address(), false)
+	if berr != nil {
+		info.Error = berr.Error()
+		a.bus.Warn("app", "GetWalletInfo: balance fetch failed", map[string]any{"err": berr.Error()})
+	} else {
+		info.BalanceUSDC = balance
+	}
+	return info
+}
+
+// RefreshWalletBalance bypasses the in-memory balance cache and re-queries
+// the RPC. Bound separately because the renderer's refresh button must
+// always read fresh state, not the 10s-cached one.
+func (a *App) RefreshWalletBalance() (string, error) {
+	w, err := wallet.LoadFromKeychain()
+	if err != nil {
+		return "", err
+	}
+	return wallet.USDCBalance(a.ctx, w.Address(), true)
+}
+
+// GenerateWallet creates a fresh keypair, stores it in the keychain
+// (overwriting any existing entry), mirrors the public address into
+// settings.json, and returns the new address.
+//
+// The renderer is responsible for confirming destruction of any
+// existing wallet BEFORE calling this — the Go side just does what it's
+// told to keep the UI flow clean.
+func (a *App) GenerateWallet() (string, error) {
+	w, err := wallet.Generate()
+	if err != nil {
+		a.bus.Error("app", "GenerateWallet failed", map[string]any{"err": err.Error()})
+		return "", err
+	}
+	if err := wallet.SaveToKeychain(w); err != nil {
+		a.bus.Error("app", "GenerateWallet save failed", map[string]any{"err": err.Error()})
+		return "", err
+	}
+	addr := w.Address().Hex()
+	s := a.settings.Get()
+	s.WalletAddress = addr
+	if _, err := a.SaveSettings(s); err != nil {
+		a.bus.Warn("app", "GenerateWallet: failed to mirror address to settings", map[string]any{"err": err.Error()})
+	}
+	a.bus.Info("app", "wallet generated", map[string]any{"address": addr})
+	return addr, nil
+}
+
+// ImportWallet parses a hex private key (0x-prefixed or not), stores it
+// in the keychain, mirrors the address to settings, returns the address.
+// Errors on malformed input — caller's textarea should display the message
+// inline so the user knows what to fix.
+func (a *App) ImportWallet(privateKeyHex string) (string, error) {
+	w, err := wallet.Import(privateKeyHex)
+	if err != nil {
+		a.bus.Warn("app", "ImportWallet: invalid key", map[string]any{"err": err.Error()})
+		return "", err
+	}
+	if err := wallet.SaveToKeychain(w); err != nil {
+		a.bus.Error("app", "ImportWallet save failed", map[string]any{"err": err.Error()})
+		return "", err
+	}
+	addr := w.Address().Hex()
+	s := a.settings.Get()
+	s.WalletAddress = addr
+	if _, err := a.SaveSettings(s); err != nil {
+		a.bus.Warn("app", "ImportWallet: failed to mirror address to settings", map[string]any{"err": err.Error()})
+	}
+	a.bus.Info("app", "wallet imported", map[string]any{"address": addr})
+	return addr, nil
+}
+
+// ExportWalletPrivateKey returns the raw hex private key so the user
+// can back it up. The renderer must gate this behind a confirmation
+// modal — once this method returns, the secret is in the renderer's
+// memory (and the user's clipboard if they copy it). NEVER LOGGED here.
+func (a *App) ExportWalletPrivateKey() (string, error) {
+	w, err := wallet.LoadFromKeychain()
+	if err != nil {
+		return "", err
+	}
+	a.bus.Info("app", "wallet private key exported to renderer", map[string]any{"address": w.Address().Hex()})
+	return w.PrivateKeyHex(), nil
 }
 
 // resolveSidecarDir finds the sidecar/ folder relative to the running binary.

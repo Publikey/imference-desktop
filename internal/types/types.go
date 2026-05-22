@@ -15,6 +15,24 @@ type Settings struct {
 	// OutputDir overrides where generated images are auto-saved. When empty,
 	// defaults to imagesink.DefaultDir() (typically <home>/Pictures/Imference).
 	OutputDir string `json:"outputDir"`
+	// PaymentMode picks the cloud auth scheme: "bearer" (default; uses APIKey)
+	// or "x402" (pays per request from the local wallet on Base mainnet).
+	PaymentMode string `json:"paymentMode"`
+	// WalletAddress is the public EVM address of the configured wallet,
+	// mirrored here for display in the UI when the renderer hasn't unlocked
+	// the keychain yet. The private key itself NEVER lives in this file —
+	// it's in the OS keychain (Windows Credential Manager).
+	WalletAddress string `json:"walletAddress"`
+}
+
+// WalletInfo is what the renderer sees when it asks about the wallet
+// status. The private key is never exposed through this struct.
+type WalletInfo struct {
+	Configured  bool   `json:"configured"`  // true if a key exists in the keychain
+	Address     string `json:"address"`     // checksummed hex (0x…) or ""
+	BalanceUSDC string `json:"balanceUSDC"` // human string ("1.234"), atomic / 10^6
+	Network     string `json:"network"`     // always "base-mainnet" in this POC
+	Error       string `json:"error,omitempty"`
 }
 
 // GenerationRequest is the unified frontend → Go payload for both modes.

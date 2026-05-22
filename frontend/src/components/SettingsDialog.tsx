@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
+import { WalletSection } from "@/components/WalletSection";
 import { api } from "@/lib/wails-bridge";
-import type { AppSettings } from "@/lib/types";
+import type { AppSettings, PaymentMode } from "@/lib/types";
 
 type Props = {
   open: boolean;
@@ -27,6 +28,8 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
     sdxlPath: "",
     cloudModel: "",
     outputDir: "",
+    paymentMode: "bearer",
+    walletAddress: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -65,25 +68,67 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
 
         <LocalEngineSection onInstallDone={handleInstallDone} />
 
-        <div className="grid gap-4 py-2">
-          <div className="grid gap-2">
-            <Label htmlFor="apiKey">Imference API key</Label>
-            <Input
-              id="apiKey"
-              type="password"
-              value={draft.apiKey}
-              onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
-              placeholder="Bearer token from imference.com"
-            />
+        <section className="border-border rounded-lg border p-4">
+          <h3 className="mb-3 text-sm font-semibold">Cloud payment</h3>
+          <div className="mb-4 grid gap-2">
+            <Label className="text-xs">Mode</Label>
+            <div className="flex gap-4 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  value="bearer"
+                  checked={draft.paymentMode !== "x402"}
+                  onChange={() => setDraft({ ...draft, paymentMode: "bearer" as PaymentMode })}
+                />
+                API key (credit)
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  value="x402"
+                  checked={draft.paymentMode === "x402"}
+                  onChange={() => setDraft({ ...draft, paymentMode: "x402" as PaymentMode })}
+                />
+                x402 (USDC wallet)
+              </label>
+            </div>
           </div>
 
+          {draft.paymentMode !== "x402" && (
+            <div className="grid gap-2">
+              <Label htmlFor="apiKey">Imference API key</Label>
+              <Input
+                id="apiKey"
+                type="password"
+                value={draft.apiKey}
+                onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
+                placeholder="Bearer token from imference.com"
+              />
+            </div>
+          )}
+
+          {draft.paymentMode === "x402" && (
+            <WalletSection
+              onChanged={(newAddress) => {
+                // Surgical merge: only walletAddress changes. A full
+                // settings refetch would clobber unsaved draft fields
+                // like paymentMode (the radio above).
+                setDraft((prev) => ({ ...prev, walletAddress: newAddress }));
+              }}
+            />
+          )}
+        </section>
+
+        <div className="grid gap-4 py-2">
           <div className="grid gap-2">
             <Label htmlFor="cloudModel">Cloud model_code</Label>
             <Input
               id="cloudModel"
               value={draft.cloudModel}
               onChange={(e) => setDraft({ ...draft, cloudModel: e.target.value })}
-              placeholder="e.g. sdxl-base"
+              placeholder="e.g. sdxl-base or anime-v1"
             />
           </div>
 

@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"imference-desktop-go/internal/logbus"
 	"imference-desktop-go/internal/types"
 )
 
@@ -42,20 +43,23 @@ type Manager struct {
 	scriptPath string
 	logDir     string
 	listener   StatusListener
+	bus        *logbus.Bus
 
 	mu     sync.RWMutex
 	status types.SidecarStatus
 	cmd    *exec.Cmd
+	job    *jobObject         // Windows Job Object — kills the child if parent dies any way
 	cancel context.CancelFunc // cancels the per-run context (kills the process)
 }
 
 // New builds an idle manager. scriptPath should point to sidecar/main.py.
 // logDir is where sidecar.log gets written.
-func New(scriptPath, logDir string, listener StatusListener) *Manager {
+func New(scriptPath, logDir string, listener StatusListener, bus *logbus.Bus) *Manager {
 	return &Manager{
 		scriptPath: scriptPath,
 		logDir:     logDir,
 		listener:   listener,
+		bus:        bus,
 		status:     types.SidecarStatus{State: "idle"},
 	}
 }
@@ -80,6 +84,15 @@ func (m *Manager) setStatus(next types.SidecarStatus) {
 	m.mu.Lock()
 	m.status = next
 	m.mu.Unlock()
+	level := logbus.LevelInfo
+	if next.State == "error" {
+		level = logbus.LevelError
+	}
+	m.bus.Publish(level, "sidecar", "state="+next.State, map[string]any{
+		"port":    next.Port,
+		"device":  next.Device,
+		"message": next.Message,
+	})
 	if m.listener != nil {
 		m.listener(next)
 	}
@@ -133,8 +146,33 @@ func (m *Manager) Start(parentCtx context.Context, pythonPath, sdxlPath string) 
 		return err
 	}
 
+	// Pin the child to a Windows Job Object with KillOnJobClose. Two reasons:
+	//   1. If wails dev dies any way (Ctrl+C, X button, Task Manager hard
+	//      kill, crash, BSOD), the kernel auto-closes our handles, the
+	//      job-close flag fires, and the python.exe is gone within ms — no
+	//      more 7 GB orphans grinding through inference after we're dead.
+	//   2. Our own Stop() can rely on `job.close()` instead of poking with
+	//      SIGTERM (a no-op on Windows) and then Kill (which works but skips
+	//      the job's clean teardown).
+	// No-op on non-Windows. If creating the job itself fails (rare), we log
+	// and continue — the sidecar still starts, just without the safety net.
+	job, jerr := newJobKillOnClose()
+	if jerr != nil {
+		m.bus.Warn("sidecar", "JobObject create failed; sidecar will become an orphan if parent crashes", map[string]any{
+			"err": jerr.Error(),
+		})
+	} else if aerr := job.assign(cmd.Process.Pid); aerr != nil {
+		m.bus.Warn("sidecar", "JobObject assign failed; orphan-risk on parent crash", map[string]any{
+			"err": aerr.Error(),
+			"pid": cmd.Process.Pid,
+		})
+		job.close()
+		job = nil
+	}
+
 	m.mu.Lock()
 	m.cmd = cmd
+	m.job = job
 	m.cancel = cancel
 	m.mu.Unlock()
 
@@ -156,6 +194,10 @@ func (m *Manager) Start(parentCtx context.Context, pythonPath, sdxlPath string) 
 		if m.cmd == cmd {
 			m.cmd = nil
 			m.cancel = nil
+			if m.job != nil {
+				m.job.close()
+				m.job = nil
+			}
 		}
 		m.mu.Unlock()
 	}()
@@ -176,11 +218,14 @@ func (m *Manager) Start(parentCtx context.Context, pythonPath, sdxlPath string) 
 	return nil
 }
 
-// Stop kills the running sidecar (SIGTERM, then SIGKILL after 3 s).
-// Safe to call when nothing is running.
+// Stop kills the running sidecar. On Windows, closing the Job Object
+// triggers JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE → child dies in ms. As a
+// belt-and-suspenders (and the non-Windows path), we still SIGTERM/Kill
+// with a 3 s grace. Safe to call when nothing is running.
 func (m *Manager) Stop() {
 	m.mu.Lock()
 	cmd := m.cmd
+	job := m.job
 	cancel := m.cancel
 	m.mu.Unlock()
 
@@ -191,6 +236,14 @@ func (m *Manager) Stop() {
 		return
 	}
 
+	// Fast path on Windows: closing the job kills the child immediately via
+	// the kernel. No-op elsewhere.
+	if job != nil {
+		job.close()
+	}
+
+	// Belt-and-suspenders: explicit SIGTERM (no-op on Windows since the job
+	// already did the work) then SIGKILL after the grace window.
 	_ = cmd.Process.Signal(syscall.SIGTERM)
 	done := make(chan struct{})
 	go func() {
@@ -206,6 +259,9 @@ func (m *Manager) Stop() {
 	if cancel != nil {
 		cancel()
 	}
+	m.mu.Lock()
+	m.job = nil
+	m.mu.Unlock()
 	if m.Status().State != "error" {
 		m.setStatus(types.SidecarStatus{State: "stopped"})
 	}

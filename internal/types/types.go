@@ -12,6 +12,9 @@ type Settings struct {
 	PythonPath string `json:"pythonPath"`
 	SDXLPath   string `json:"sdxlPath"`
 	CloudModel string `json:"cloudModel"`
+	// OutputDir overrides where generated images are auto-saved. When empty,
+	// defaults to imagesink.DefaultDir() (typically <home>/Pictures/Imference).
+	OutputDir string `json:"outputDir"`
 }
 
 // GenerationRequest is the unified frontend → Go payload for both modes.
@@ -34,6 +37,10 @@ type GenerationResult struct {
 	ImageBase64 string `json:"imageBase64"`
 	Seed        int    `json:"seed"`
 	Source      string `json:"source"` // "cloud" | "local"
+	// SavedPath is the absolute path to the auto-saved copy on disk. Empty
+	// string when save failed (the failure is logged but doesn't fail the
+	// generation — the in-memory base64 result is still usable).
+	SavedPath string `json:"savedPath"`
 }
 
 // SidecarStatus is broadcast via Wails events on the "sidecar:status" channel
@@ -45,4 +52,37 @@ type SidecarStatus struct {
 	Port    int    `json:"port,omitempty"`
 	Device  string `json:"device,omitempty"`
 	Message string `json:"message,omitempty"`
+}
+
+// PythonInfo is the result of DetectPython: which interpreter we picked, and
+// its self-reported version. Used by the frontend's installer panel.
+type PythonInfo struct {
+	Path    string `json:"path"`
+	Version string `json:"version"`
+}
+
+// EngineInfo reflects whether the bundled-engine venv exists and looks valid.
+// Computed on demand by GetEngineInfo — cheap, fast, can be called every time
+// the SettingsDialog opens.
+type EngineInfo struct {
+	Installed  bool   `json:"installed"`
+	VenvDir    string `json:"venvDir"`
+	PythonPath string `json:"pythonPath"`
+}
+
+// InstallProgress is emitted on the "install:progress" event channel during
+// InstallEngine. The frontend renders a phase label + percent bar from this,
+// and the final entry (Done=true or Error!="") lets it re-enable the button.
+type InstallProgress struct {
+	Phase string `json:"phase"` // detect | venv | torch | sidecar-deps | engine | done | error
+	// Message is a short human-readable string for the UI ("Downloading torch
+	// (~3 GB)…"). For verbose pip lines, callers should publish to logbus
+	// directly — those flow into the LogPanel and don't bloat this event.
+	Message string `json:"message"`
+	// PercentEstimate is 0–100, monotone within each long-running phase. Zero
+	// during indeterminate phases (detect, venv create) so the UI shows a
+	// barber-pole instead of a fake percent.
+	PercentEstimate int    `json:"percentEstimate"`
+	Done            bool   `json:"done"`
+	Error           string `json:"error,omitempty"`
 }

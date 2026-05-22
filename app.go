@@ -10,6 +10,9 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"imference-desktop-go/internal/cloud"
+	"imference-desktop-go/internal/imagesink"
+	"imference-desktop-go/internal/installer"
+	"imference-desktop-go/internal/logbus"
 	"imference-desktop-go/internal/settings"
 	"imference-desktop-go/internal/sidecar"
 	"imference-desktop-go/internal/types"
@@ -19,18 +22,22 @@ import (
 // `window.go.main.App.X(...)` Promise-returning function in the frontend,
 // with TypeScript types auto-generated under frontend/wailsjs/.
 //
-// All persistent state lives in the three substructs (settings, sidecar,
-// cloud). App's job is to wire requests + emit status events; it owns no
-// business logic.
+// All persistent state lives in the five substructs (settings, sidecar,
+// cloud, installer, bus). App's job is to wire requests + emit status events;
+// it owns no business logic.
 type App struct {
 	ctx context.Context
 
-	settings *settings.Store
-	sidecar  *sidecar.Manager
-	cloud    *cloud.Client
+	bus       *logbus.Bus
+	settings  *settings.Store
+	sidecar   *sidecar.Manager
+	cloud     *cloud.Client
+	installer *installer.Installer
 }
 
 func NewApp() *App {
+	bus := logbus.New()
+
 	store, err := settings.New()
 	if err != nil {
 		// Failing here would mean we can't find UserConfigDir on this OS —
@@ -49,10 +56,12 @@ func NewApp() *App {
 	}
 
 	a := &App{
-		settings: store,
-		cloud:    cloud.New(),
+		bus:       bus,
+		settings:  store,
+		cloud:     cloud.New(bus),
+		installer: installer.New(bus),
 	}
-	a.sidecar = sidecar.New(scriptPath, logDir, a.broadcastSidecarStatus)
+	a.sidecar = sidecar.New(scriptPath, logDir, a.broadcastSidecarStatus, bus)
 	return a
 }
 
@@ -62,6 +71,12 @@ func NewApp() *App {
 // "local: error" on first paint, prompting the user toward ⚙.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// Wire the bus emitter now that we have a wails context — every
+	// Publish() from this point streams to the renderer's <LogPanel/>.
+	a.bus.SetEmitter(func(eventName string, data ...any) {
+		runtime.EventsEmit(a.ctx, eventName, data...)
+	})
+	a.bus.Info("app", "startup", nil)
 	go func() {
 		s := a.settings.Get()
 		_ = a.sidecar.Start(a.ctx, s.PythonPath, s.SDXLPath)
@@ -72,6 +87,7 @@ func (a *App) startup(ctx context.Context) {
 // window close. We block long enough to SIGTERM the sidecar gracefully —
 // the manager's Stop() has its own 3 s SIGKILL deadline so this is bounded.
 func (a *App) onBeforeClose(_ context.Context) bool {
+	a.bus.Info("app", "onBeforeClose — stopping sidecar", nil)
 	a.sidecar.Stop()
 	return false
 }
@@ -98,9 +114,12 @@ func (a *App) SaveSettings(next types.Settings) (types.Settings, error) {
 	prev := a.settings.Get()
 	saved, err := a.settings.Save(next)
 	if err != nil {
+		a.bus.Error("app", "SaveSettings failed", map[string]any{"err": err.Error()})
 		return types.Settings{}, err
 	}
-	if settings.SidecarConfigChanged(prev, saved) {
+	restart := settings.SidecarConfigChanged(prev, saved)
+	a.bus.Info("app", "SaveSettings ok", map[string]any{"sidecarRestart": restart})
+	if restart {
 		go func() {
 			_ = a.sidecar.Restart(a.ctx, saved.PythonPath, saved.SDXLPath)
 		}()
@@ -114,6 +133,7 @@ func (a *App) GetSidecarStatus() types.SidecarStatus {
 
 func (a *App) RestartSidecar() error {
 	s := a.settings.Get()
+	a.bus.Info("app", "RestartSidecar requested", nil)
 	return a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath)
 }
 
@@ -123,39 +143,202 @@ func (a *App) RestartSidecar() error {
 func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult, error) {
 	s := a.settings.Get()
 	if s.APIKey == "" {
+		a.bus.Warn("app", "GenerateCloud: API key not set", nil)
 		return types.GenerationResult{}, errors.New("Cloud API key not set")
 	}
 	if s.CloudModel == "" {
+		a.bus.Warn("app", "GenerateCloud: model not set", nil)
 		return types.GenerationResult{}, errors.New("Cloud model not set")
 	}
-	return a.cloud.Generate(a.ctx, s.APIKey, s.CloudModel, req)
+	result, err := a.cloud.Generate(a.ctx, s.APIKey, s.CloudModel, req)
+	if err != nil {
+		return result, err
+	}
+	a.autoSave(&result)
+	return result, nil
 }
 
 // GenerateLocal dispatches to the running Python sidecar. The sidecar
 // itself is single-threaded (the Engine is stateful) so concurrent calls
 // queue up server-side; that's intentional for the POC.
 func (a *App) GenerateLocal(req types.GenerationRequest) (types.GenerationResult, error) {
-	return a.sidecar.Generate(a.ctx, req)
+	result, err := a.sidecar.Generate(a.ctx, req)
+	if err != nil {
+		return result, err
+	}
+	a.autoSave(&result)
+	return result, nil
 }
 
-// resolveSidecarScript finds sidecar/main.py relative to the running binary.
-// `wails dev` runs from the project root so a simple "sidecar/main.py" works;
-// `wails build` packs the binary into build/bin/ so we walk up to look for
-// the sidecar dir. POC ships dev-mode only — the prod branch is here for
-// completeness, not because we test it.
-func resolveSidecarScript() (string, error) {
+// autoSave writes the generated image to disk and stamps result.SavedPath.
+// A save failure is logged but never propagated — the user still gets the
+// base64 in memory and can manually save from the renderer if needed.
+func (a *App) autoSave(result *types.GenerationResult) {
+	dir := a.settings.Get().OutputDir
+	if dir == "" {
+		dir = imagesink.DefaultDir()
+	}
+	path, err := imagesink.Save(result.ImageBase64, result.Source, result.Seed, dir)
+	if err != nil {
+		a.bus.Warn("app", "auto-save failed", map[string]any{
+			"err": err.Error(),
+			"dir": dir,
+		})
+		return
+	}
+	result.SavedPath = path
+	a.bus.Info("app", "image saved", map[string]any{"path": path})
+}
+
+// ------------------------------------------------------------------------
+// Log bus surface
+// ------------------------------------------------------------------------
+
+// GetLogs returns the current ring buffer snapshot so the renderer can
+// seed its panel on mount. Subsequent entries arrive via the "log:entry"
+// event.
+func (a *App) GetLogs() []logbus.Entry {
+	return a.bus.Snapshot()
+}
+
+func (a *App) ClearLogs() {
+	a.bus.Clear()
+	a.bus.Info("app", "logs cleared by user", nil)
+}
+
+// LogFromFrontend lets the renderer push captured console.* / window.error
+// events into the same bus, so the LogPanel is a single source of truth.
+// Level is one of "trace" | "info" | "warn" | "error"; unknown → "info".
+func (a *App) LogFromFrontend(level, source, message string, data any) {
+	lvl := logbus.LevelInfo
+	switch logbus.Level(level) {
+	case logbus.LevelTrace, logbus.LevelInfo, logbus.LevelWarn, logbus.LevelError:
+		lvl = logbus.Level(level)
+	}
+	if source == "" {
+		source = "front"
+	}
+	a.bus.Publish(lvl, source, message, data)
+}
+
+// ------------------------------------------------------------------------
+// Installer surface — one-click bundled-engine setup
+// ------------------------------------------------------------------------
+
+// DetectPython runs the same probe the installer will use, but on demand —
+// the SettingsDialog calls this to surface "Python X.Y.Z found at …" before
+// the user even clicks Install.
+func (a *App) DetectPython() (types.PythonInfo, error) {
+	return installer.DetectPython(a.ctx)
+}
+
+// GetEngineInfo reports whether the bundled-engine venv exists and looks
+// runnable. Cheap; safe to call every time the dialog opens.
+func (a *App) GetEngineInfo() types.EngineInfo {
+	dir, err := engineVenvDir()
+	if err != nil {
+		return types.EngineInfo{}
+	}
+	return installer.EngineInfoFor(a.ctx, dir)
+}
+
+// InstallEngine kicks off the full 5-phase install in a goroutine and returns
+// immediately. Progress is streamed via the "install:progress" Wails event;
+// the renderer listens for {phase:"done"} or {phase:"error"} to know it's
+// finished. Only one install runs at a time — the Installer enforces this.
+func (a *App) InstallEngine() error {
+	venvDir, err := engineVenvDir()
+	if err != nil {
+		return err
+	}
+	reqs, err := resolveSidecarRequirements()
+	if err != nil {
+		return err
+	}
+
+	progress := make(chan types.InstallProgress, 16)
+
+	// Goroutine #1: drive the install.
+	go func() {
+		// Stop the running sidecar before touching the venv. On Windows,
+		// python.exe keeps torch's .pyd/.dll files mmap'd while it's alive,
+		// so the wipe in installer.recreateVenv() fails with "file in use".
+		// Idempotent: no-op when the sidecar isn't running.
+		a.bus.Info("app", "stopping sidecar before install (to release venv file locks)", nil)
+		a.sidecar.Stop()
+
+		err := a.installer.Install(a.ctx, installer.Options{
+			VenvDir:                 venvDir,
+			SidecarRequirementsPath: reqs,
+		}, progress)
+		if err != nil {
+			a.bus.Error("app", "InstallEngine failed", map[string]any{"err": err.Error()})
+			return
+		}
+		// On success, auto-fill pythonPath in settings — this triggers
+		// sidecar.Restart() via the existing SidecarConfigChanged logic in
+		// SaveSettings, so the user doesn't have to re-open the dialog.
+		s := a.settings.Get()
+		s.PythonPath = installer.VenvPython(venvDir)
+		if _, err := a.SaveSettings(s); err != nil {
+			a.bus.Error("app", "auto-fill pythonPath failed", map[string]any{"err": err.Error()})
+		}
+	}()
+
+	// Goroutine #2: forward progress events to the renderer.
+	go func() {
+		for p := range progress {
+			runtime.EventsEmit(a.ctx, "install:progress", p)
+		}
+	}()
+
+	return nil
+}
+
+// resolveSidecarDir finds the sidecar/ folder relative to the running binary.
+// `wails dev` runs from the project root so "sidecar/" is right there;
+// `wails build` packs the binary into build/bin/ so we walk up. POC ships
+// dev-mode only — the prod branch is here for completeness, not tested.
+func resolveSidecarDir() (string, error) {
 	candidates := []string{
-		filepath.Join("sidecar", "main.py"),                     // wails dev
-		filepath.Join("..", "..", "sidecar", "main.py"),         // wails build → build/bin/<exe>
+		"sidecar",                            // wails dev
+		filepath.Join("..", "..", "sidecar"), // wails build → build/bin/<exe>
 	}
 	for _, c := range candidates {
 		abs, err := filepath.Abs(c)
 		if err != nil {
 			continue
 		}
-		if _, err := os.Stat(abs); err == nil {
+		if _, err := os.Stat(filepath.Join(abs, "main.py")); err == nil {
 			return abs, nil
 		}
 	}
-	return "", fmt.Errorf("sidecar/main.py not found (tried %v)", candidates)
+	return "", fmt.Errorf("sidecar/ dir not found (tried %v)", candidates)
+}
+
+func resolveSidecarScript() (string, error) {
+	dir, err := resolveSidecarDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "main.py"), nil
+}
+
+func resolveSidecarRequirements() (string, error) {
+	dir, err := resolveSidecarDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "requirements.txt"), nil
+}
+
+// engineVenvDir is where the installer creates the bundled-engine venv.
+// Lives under UserCacheDir (= %LOCALAPPDATA% on Windows) because it's
+// regenerable cache, not roamable user config.
+func engineVenvDir() (string, error) {
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("locate UserCacheDir: %w", err)
+	}
+	return filepath.Join(cache, "imference-desktop-go", "engine-venv"), nil
 }

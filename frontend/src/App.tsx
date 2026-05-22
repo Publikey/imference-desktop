@@ -1,20 +1,34 @@
 import { useEffect, useState } from "react";
-import { Settings, Cloud, Cpu, Loader2 } from "lucide-react";
+import { Settings, Cloud, Cpu, Loader2, ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { LogPanel } from "@/components/LogPanel";
 import { api } from "@/lib/wails-bridge";
+import { installLogCapture } from "@/lib/log-capture";
 import type {
   AppSettings,
   GenerationResult,
+  LogEntry,
   SidecarStatus,
 } from "@/lib/types";
 
+// Module-load side effect: install console + window error hooks before any
+// component renders. The api wrapping itself happens inside wails-bridge.ts
+// so SettingsDialog and any future component that imports `api` get the
+// logged version automatically.
+installLogCapture();
+
+// POC defaults are dialed down for fast dev iteration — quality drops at
+// 512x512 (SDXL is trained at 1024) and below ~20 steps, but a 10-15s
+// generation beats a 1-2 min one when you're just verifying the pipeline.
+// Bump back to {1024, 1024, 28, 6.0} when you actually want a good image,
+// or surface as inputs in the UI later.
 const DEFAULT_PARAMS = {
-  width: 1024,
-  height: 1024,
-  numSteps: 28,
+  width: 512,
+  height: 512,
+  numSteps: 12,
   guidanceScale: 6.0,
 };
 
@@ -26,12 +40,29 @@ export default function App() {
   const [image, setImage] = useState<GenerationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);
+  const [errorLogCount, setErrorLogCount] = useState(0);
 
   useEffect(() => {
     void api.getSettings().then(setSettings);
     void api.getSidecarStatus().then(setSidecar);
     return api.onSidecarStatus(setSidecar);
   }, []);
+
+  // Header badge: tally of error-level entries since last panel open. Resets
+  // when the user opens the panel (they've now seen them).
+  useEffect(() => {
+    void api.getLogs().then((seed: LogEntry[]) => {
+      setErrorLogCount(seed.filter((e) => e.level === "error").length);
+    });
+    return api.onLogEntry((e) => {
+      if (e.level === "error") setErrorLogCount((n) => n + 1);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (logsOpen) setErrorLogCount(0);
+  }, [logsOpen]);
 
   const cloudReady = !!settings?.apiKey && !!settings?.cloudModel;
   const localReady = sidecar.state === "ready";
@@ -77,14 +108,31 @@ export default function App() {
           <h1 className="text-lg font-semibold">Imference Desktop</h1>
           <SidecarPill status={sidecar} />
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSettingsOpen(true)}
-          aria-label="Settings"
-        >
-          <Settings className="size-5" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setLogsOpen((o) => !o)}
+            aria-label="Logs"
+            className="relative gap-1.5"
+          >
+            <ScrollText className="size-4" />
+            Logs
+            {errorLogCount > 0 && (
+              <span className="bg-destructive text-destructive-foreground absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold">
+                {errorLogCount > 99 ? "99+" : errorLogCount}
+              </span>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Settings"
+          >
+            <Settings className="size-5" />
+          </Button>
+        </div>
       </header>
 
       <main className="mx-auto grid max-w-4xl gap-6 px-6 py-8">
@@ -150,9 +198,21 @@ export default function App() {
                   alt="Generated"
                   className="max-h-[600px] w-auto rounded-md"
                 />
-                <p className="text-muted-foreground text-xs">
-                  source: {image.source} · seed: {image.seed}
-                </p>
+                <div className="flex flex-col items-center gap-1 text-xs">
+                  <p className="text-muted-foreground">
+                    source: {image.source} · seed: {image.seed}
+                  </p>
+                  {image.savedPath ? (
+                    <p
+                      className="text-muted-foreground/80 max-w-[600px] truncate font-mono"
+                      title={image.savedPath}
+                    >
+                      saved: {image.savedPath}
+                    </p>
+                  ) : (
+                    <p className="text-yellow-600">not saved to disk</p>
+                  )}
+                </div>
               </div>
             ) : (
               <p className="text-muted-foreground py-12 text-center text-sm">
@@ -170,6 +230,8 @@ export default function App() {
           setSettings(next);
         }}
       />
+
+      <LogPanel open={logsOpen} onOpenChange={setLogsOpen} />
     </div>
   );
 }

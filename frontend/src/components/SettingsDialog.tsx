@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { api } from "@/lib/wails-bridge";
 import type { AppSettings } from "@/lib/types";
 
@@ -25,6 +26,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
     pythonPath: "",
     sdxlPath: "",
     cloudModel: "",
+    outputDir: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -32,6 +34,13 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
     if (!open) return;
     void api.getSettings().then(setDraft);
   }, [open]);
+
+  // LocalEngineSection auto-fills pythonPath via the Go side on successful
+  // install; pull the new value into our draft so the field reflects reality
+  // without the user needing to close+reopen the dialog.
+  const handleInstallDone = useCallback(() => {
+    void api.getSettings().then(setDraft);
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -46,13 +55,15 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
             Required for cloud and local generation. Saved to settings.json in your OS config dir.
           </DialogDescription>
         </DialogHeader>
+
+        <LocalEngineSection onInstallDone={handleInstallDone} />
 
         <div className="grid gap-4 py-2">
           <div className="grid gap-2">
@@ -77,12 +88,17 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="pythonPath">Python path (venv with imference-engine[runtime])</Label>
+            <Label htmlFor="pythonPath">
+              Python path
+              <span className="text-muted-foreground font-normal">
+                (auto-filled by Install — override here only if you want a custom venv)
+              </span>
+            </Label>
             <Input
               id="pythonPath"
               value={draft.pythonPath}
               onChange={(e) => setDraft({ ...draft, pythonPath: e.target.value })}
-              placeholder="C:\envs\imference\Scripts\python.exe"
+              placeholder="C:\Users\<you>\AppData\Local\imference-desktop-go\engine-venv\Scripts\python.exe"
             />
           </div>
 
@@ -93,6 +109,16 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
               value={draft.sdxlPath}
               onChange={(e) => setDraft({ ...draft, sdxlPath: e.target.value })}
               placeholder="C:\models\sdxl_base.safetensors"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="outputDir">Auto-save folder (optional)</Label>
+            <Input
+              id="outputDir"
+              value={draft.outputDir}
+              onChange={(e) => setDraft({ ...draft, outputDir: e.target.value })}
+              placeholder="Leave empty to use ~/Pictures/Imference"
             />
           </div>
         </div>

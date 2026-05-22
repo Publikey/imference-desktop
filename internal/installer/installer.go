@@ -1,0 +1,401 @@
+// Package installer creates a self-contained Python venv with imference-engine
+// and its CUDA-enabled torch installed. Used by App.InstallEngine to deliver
+// the one-click Local mode setup.
+//
+// The package is intentionally Wails-free: callers wire the progress channel
+// to runtime.EventsEmit themselves, and stdout/stderr from pip is published
+// to a logbus.Bus injected at construction time. Both decisions keep the
+// install logic unit-testable without spinning up a webview.
+package installer
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"imference-desktop-go/internal/logbus"
+	"imference-desktop-go/internal/types"
+)
+
+// EngineTarball is the pip-installable source. Branch can be retargeted to a
+// tag (refs/tags/v0.0.1) when stable releases exist; for the POC, main is fine.
+const EngineTarball = "imference-engine[runtime] @ https://github.com/Publikey/imference-engine/archive/refs/heads/main.tar.gz"
+
+// TorchIndexURL is the CUDA 12.4 wheel index. We use cu124 (not cu121) because
+// imference-engine's pyproject.toml pins torch>=2.6 in the [runtime] extra, and
+// the cu121 index stops at torch 2.5.x. If we used cu121, pip would later
+// uninstall our CUDA torch and pull the CPU torch 2.6+ from PyPI to satisfy
+// the engine's constraint. cu124 ships torch 2.6+ wheels and is compatible
+// with NVIDIA drivers shipped from late 2024 onwards.
+const TorchIndexURL = "https://download.pytorch.org/whl/cu124"
+
+// TorchSpec is the version constraint we install. Mirroring the engine's
+// pyproject.toml exactly so pip is satisfied in one shot — no later "found a
+// version that doesn't match, let me swap it" surprises in the engine phase.
+const TorchSpec = "torch>=2.6"
+
+type Options struct {
+	// VenvDir is where the engine venv lives. Recommended: os.UserCacheDir()/imference-desktop-go/engine-venv.
+	VenvDir string
+	// SidecarRequirementsPath points to sidecar/requirements.txt — used in the
+	// "sidecar-deps" phase. Caller computes via the same resolver as the
+	// sidecar script path (filepath.Join(app.GetAppPath(), "sidecar", "requirements.txt")).
+	SidecarRequirementsPath string
+}
+
+// Installer runs the 5-phase setup. Safe to instantiate but only one Install()
+// at a time per instance (callers should also serialize at the app layer).
+type Installer struct {
+	bus *logbus.Bus
+
+	mu      sync.Mutex
+	running bool
+}
+
+func New(bus *logbus.Bus) *Installer {
+	return &Installer{bus: bus}
+}
+
+// Install runs all phases sequentially. The progress channel is closed when
+// the function returns (success or failure). Caller may pass nil to skip
+// progress events and just rely on logbus / final error.
+func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- types.InstallProgress) error {
+	i.mu.Lock()
+	if i.running {
+		i.mu.Unlock()
+		return errors.New("installer: another install is already in progress")
+	}
+	i.running = true
+	i.mu.Unlock()
+
+	defer func() {
+		i.mu.Lock()
+		i.running = false
+		i.mu.Unlock()
+		if progress != nil {
+			close(progress)
+		}
+	}()
+
+	emit := func(p types.InstallProgress) {
+		if progress != nil {
+			// Non-blocking: drop events if nobody's listening. Prevents
+			// install from stalling if the renderer disconnects mid-run.
+			select {
+			case progress <- p:
+			default:
+			}
+		}
+	}
+
+	// ----- Phase 1: detect Python -----
+	emit(types.InstallProgress{Phase: "detect", Message: "Looking for Python 3.10+ on PATH…"})
+	i.bus.Info("installer", "detect phase start", nil)
+	py, err := DetectPython(ctx)
+	if err != nil {
+		i.bus.Error("installer", "detect failed", map[string]any{"err": err.Error()})
+		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
+		return err
+	}
+	i.bus.Info("installer", "detect ok", map[string]any{"path": py.Path, "version": py.Version})
+	emit(types.InstallProgress{
+		Phase:   "detect",
+		Message: fmt.Sprintf("Found Python %s at %s", py.Version, py.Path),
+	})
+
+	// ----- Phase 2: ensure venv (create if missing, reuse if healthy) -----
+	emit(types.InstallProgress{Phase: "venv", Message: "Checking venv at " + opts.VenvDir})
+	i.bus.Info("installer", "venv phase start", map[string]any{"dir": opts.VenvDir})
+	reused, err := i.ensureVenv(ctx, py.Path, opts.VenvDir)
+	if err != nil {
+		i.bus.Error("installer", "venv failed", map[string]any{"err": err.Error()})
+		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
+		return err
+	}
+	venvPython := venvPythonPath(opts.VenvDir)
+	venvMsg := "Venv created"
+	if reused {
+		venvMsg = "Venv already present, reusing"
+	}
+	i.bus.Info("installer", "venv ok", map[string]any{"python": venvPython, "reused": reused})
+	emit(types.InstallProgress{Phase: "venv", Message: venvMsg})
+
+	// ----- Phase 3: pip install torch CUDA -----
+	emit(types.InstallProgress{
+		Phase:   "torch",
+		Message: "Downloading torch (CUDA 12.4, ~3 GB) — this is the long one",
+	})
+	i.bus.Info("installer", "torch phase start", nil)
+	if err := i.runPip(ctx, venvPython, "torch", emit,
+		"install", "--upgrade", TorchSpec, "--index-url", TorchIndexURL,
+	); err != nil {
+		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
+		return err
+	}
+	emit(types.InstallProgress{Phase: "torch", Message: "torch installed", PercentEstimate: 100})
+
+	// ----- Phase 4: pip install sidecar deps (fastapi + uvicorn) -----
+	emit(types.InstallProgress{Phase: "sidecar-deps", Message: "Installing FastAPI + uvicorn"})
+	i.bus.Info("installer", "sidecar-deps phase start", map[string]any{"reqs": opts.SidecarRequirementsPath})
+	if err := i.runPip(ctx, venvPython, "sidecar-deps", emit,
+		"install", "-r", opts.SidecarRequirementsPath,
+	); err != nil {
+		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
+		return err
+	}
+	emit(types.InstallProgress{Phase: "sidecar-deps", Message: "Sidecar deps installed", PercentEstimate: 100})
+
+	// ----- Phase 5: pip install imference-engine -----
+	emit(types.InstallProgress{
+		Phase:   "engine",
+		Message: "Downloading imference-engine from GitHub",
+	})
+	i.bus.Info("installer", "engine phase start", map[string]any{"tarball": EngineTarball})
+	if err := i.runPip(ctx, venvPython, "engine", emit,
+		"install", EngineTarball,
+	); err != nil {
+		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
+		return err
+	}
+	emit(types.InstallProgress{Phase: "engine", Message: "imference-engine installed", PercentEstimate: 100})
+
+	// ----- Done -----
+	i.bus.Info("installer", "install complete", map[string]any{"python": venvPython})
+	emit(types.InstallProgress{
+		Phase:           "done",
+		Message:         "Engine ready at " + venvPython,
+		PercentEstimate: 100,
+		Done:            true,
+	})
+	return nil
+}
+
+// ensureVenv returns (reused, error). When the venv at `dir` already has a
+// working python.exe, it's reused — pip in the subsequent phases will say
+// "already satisfied" for cached deps, turning a Reinstall click into a ~30s
+// no-op instead of a 9 min rebuild. When the venv is missing or its python
+// can't even report --version, we wipe + recreate from scratch.
+//
+// To force a true fresh install (e.g. to refresh the engine code from main
+// when the version number hasn't bumped), delete the venv folder manually:
+//
+//	Remove-Item -Recurse "$env:LOCALAPPDATA\imference-desktop-go\engine-venv"
+//
+// then click Reinstall.
+func (i *Installer) ensureVenv(ctx context.Context, pythonPath, dir string) (bool, error) {
+	venvPython := venvPythonPath(dir)
+	if _, err := os.Stat(venvPython); err == nil {
+		checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		if probeErr := exec.CommandContext(checkCtx, venvPython, "--version").Run(); probeErr == nil {
+			i.bus.Info("installer", "reusing existing venv", map[string]any{"dir": dir})
+			return true, nil
+		}
+		i.bus.Warn("installer", "existing venv python is broken, wiping", map[string]any{"dir": dir})
+	}
+
+	if _, err := os.Stat(dir); err == nil {
+		i.bus.Info("installer", "wiping existing venv", map[string]any{"dir": dir})
+		if err := os.RemoveAll(dir); err != nil {
+			return false, fmt.Errorf("installer: wipe existing venv %s: %w", dir, err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+		return false, fmt.Errorf("installer: mkdir %s: %w", filepath.Dir(dir), err)
+	}
+
+	cmd := exec.CommandContext(ctx, pythonPath, "-m", "venv", dir)
+	cmd.SysProcAttr = hideWindowAttr()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		i.bus.Error("installer", "venv create failed", map[string]any{
+			"err":    err.Error(),
+			"output": string(out),
+		})
+		return false, fmt.Errorf("installer: create venv: %w (output: %s)", err, string(out))
+	}
+	return false, nil
+}
+
+// pipProgressRE matches lines like:
+//
+//	"Downloading torch-2.6.0+cu121-cp311-cp311-win_amd64.whl (2.7 GB)"
+//
+// and the live-progress lines pip prints during big downloads:
+//
+//	"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/2.7 GB 1.5 MB/s eta 0:14"
+//
+// We don't reliably get a percent from pip, so we estimate from the human-readable
+// fraction. Best-effort — when it fails we just emit Percent=0 and the UI shows
+// an indeterminate bar.
+var pipFractionRE = regexp.MustCompile(`(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\s*([KMGT]?B)`)
+
+// runPip executes `<venvPython> -m pip <args...>`, streams stdout/stderr line
+// by line to the logbus (trace level), and tries to parse progress percentages
+// out of pip's output to publish via emit().
+func (i *Installer) runPip(
+	ctx context.Context,
+	venvPython, phase string,
+	emit func(types.InstallProgress),
+	args ...string,
+) error {
+	allArgs := append([]string{"-m", "pip"}, args...)
+	cmd := exec.CommandContext(ctx, venvPython, allArgs...)
+	cmd.SysProcAttr = hideWindowAttr()
+	// Disable pip's animations so we get parseable per-line output.
+	cmd.Env = append(os.Environ(),
+		"PIP_PROGRESS_BAR=on",     // keep progress, but on a new line each tick
+		"PYTHONUNBUFFERED=1",      // flush per line
+		"PIP_DISABLE_PIP_VERSION_CHECK=1",
+	)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("installer: stdout pipe: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("installer: stderr pipe: %w", err)
+	}
+
+	i.bus.Info("installer", "running pip", map[string]any{"args": args})
+	start := time.Now()
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("installer: pip start: %w", err)
+	}
+
+	// Drain both streams in parallel — they get the same treatment.
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); i.consumePipLines(stdout, phase, emit) }()
+	go func() { defer wg.Done(); i.consumePipLines(stderr, phase, emit) }()
+	wg.Wait()
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("installer: pip %s failed: %w", phase, err)
+	}
+	i.bus.Info("installer", "pip ok", map[string]any{
+		"phase":    phase,
+		"duration": time.Since(start).String(),
+	})
+	return nil
+}
+
+func (i *Installer) consumePipLines(r io.Reader, phase string, emit func(types.InstallProgress)) {
+	scanner := bufio.NewScanner(r)
+	// pip download progress lines can be long-ish; bump the buffer.
+	scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
+	// Custom split: pip emits the live download progress with carriage returns
+	// (\r) instead of newlines so a single terminal line gets overwritten in
+	// place. Default ScanLines only sees \n, so during the ~5min torch download
+	// we'd hear nothing. Splitting on either character lets each \r-update
+	// surface as its own "line" — empty tokens get dropped by the consumer.
+	scanner.Split(scanLinesOrCRs)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		i.bus.Trace("installer", line, nil)
+		if pct, ok := parsePipPercent(line); ok {
+			emit(types.InstallProgress{
+				Phase:           phase,
+				Message:         truncate(line, 120),
+				PercentEstimate: pct,
+			})
+		}
+	}
+}
+
+// scanLinesOrCRs is a bufio.SplitFunc that treats either \r or \n as a line
+// terminator. Empty tokens are returned for consecutive separators (e.g. \r\n
+// produces a token then an empty token); the consumer must filter them.
+func scanLinesOrCRs(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	for i, b := range data {
+		if b == '\n' || b == '\r' {
+			return i + 1, data[:i], nil
+		}
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
+func parsePipPercent(line string) (int, bool) {
+	m := pipFractionRE.FindStringSubmatch(line)
+	if m == nil {
+		return 0, false
+	}
+	cur, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		return 0, false
+	}
+	tot, err := strconv.ParseFloat(m[2], 64)
+	if err != nil || tot == 0 {
+		return 0, false
+	}
+	pct := int((cur / tot) * 100)
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	return pct, true
+}
+
+// venvPythonPath returns the path to the venv's interpreter. On Windows venvs
+// the exe lives at Scripts/python.exe; on POSIX it's bin/python.
+func venvPythonPath(venvDir string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(venvDir, "Scripts", "python.exe")
+	}
+	return filepath.Join(venvDir, "bin", "python")
+}
+
+// VenvPython is the exported variant for callers (app.go) that need to read
+// the resolved interpreter path after a successful install.
+func VenvPython(venvDir string) string {
+	return venvPythonPath(venvDir)
+}
+
+// EngineInfoFor probes whether a venv at the given path looks usable. We don't
+// try to import imference_engine here — just check the interpreter exists, runs,
+// and reports a version. The sidecar's healthz handles the deeper validation.
+func EngineInfoFor(ctx context.Context, venvDir string) types.EngineInfo {
+	py := venvPythonPath(venvDir)
+	info := types.EngineInfo{VenvDir: venvDir, PythonPath: py}
+	if _, err := os.Stat(py); err != nil {
+		return info
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(probeCtx, py, "--version").Run(); err != nil {
+		return info
+	}
+	info.Installed = true
+	return info
+}
+
+func truncate(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
+}

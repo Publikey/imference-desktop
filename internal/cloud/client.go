@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"time"
 
+	"imference-desktop-go/internal/logbus"
 	"imference-desktop-go/internal/types"
 )
 
@@ -30,12 +31,14 @@ const (
 type Client struct {
 	base string
 	http *http.Client
+	bus  *logbus.Bus
 }
 
-func New() *Client {
+func New(bus *logbus.Bus) *Client {
 	return &Client{
 		base: defaultBase,
 		http: &http.Client{Timeout: 60 * time.Second}, // per-request timeouts override
+		bus:  bus,
 	}
 }
 
@@ -90,20 +93,34 @@ func (c *Client) Generate(
 	overallCtx, cancel := context.WithTimeout(ctx, overallTimeout)
 	defer cancel()
 
+	c.bus.Info("cloud", "Generate start", map[string]any{
+		"model":  model,
+		"prompt": truncate(req.Prompt, 80),
+		"width":  req.Width,
+		"height": req.Height,
+		"steps":  req.NumSteps,
+	})
+
 	requestID, err := c.postGenerate(overallCtx, apiKey, model, req)
 	if err != nil {
+		c.bus.Error("cloud", "postGenerate failed", map[string]any{"err": err.Error()})
 		return types.GenerationResult{}, err
 	}
+	c.bus.Info("cloud", "postGenerate ok", map[string]any{"request_id": requestID})
 
 	imageURL, seed, err := c.pollStatus(overallCtx, apiKey, requestID)
 	if err != nil {
+		c.bus.Error("cloud", "pollStatus failed", map[string]any{"err": err.Error()})
 		return types.GenerationResult{}, err
 	}
+	c.bus.Info("cloud", "pollStatus ok", map[string]any{"url": imageURL, "seed": seed})
 
-	b64, mime, err := downloadAsBase64(overallCtx, imageURL)
+	b64, mime, err := c.downloadAsBase64(overallCtx, imageURL)
 	if err != nil {
+		c.bus.Error("cloud", "download failed", map[string]any{"err": err.Error(), "url": imageURL})
 		return types.GenerationResult{}, fmt.Errorf("cloud: download image: %w", err)
 	}
+	c.bus.Info("cloud", "download ok", map[string]any{"bytes": len(b64) * 3 / 4, "mime": mime})
 
 	return types.GenerationResult{
 		ImageBase64: "data:" + mime + ";base64," + b64,
@@ -233,8 +250,10 @@ func (c *Client) fetchStatus(ctx context.Context, statusURL, apiKey string) (str
 // downloadAsBase64 fetches the Azure Blob URL and returns its base64
 // payload + mime type. Keeps the frontend's data: URL pipeline identical
 // between cloud and local modes.
-func downloadAsBase64(ctx context.Context, src string) (string, string, error) {
+func (c *Client) downloadAsBase64(ctx context.Context, src string) (string, string, error) {
+	c.bus.Trace("cloud", "GET "+src, nil)
 	r, _ := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
+	r.Header.Set("User-Agent", "imference-desktop-go/0.0.1")
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(r)
 	if err != nil {
@@ -242,7 +261,15 @@ func downloadAsBase64(ctx context.Context, src string) (string, string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("HTTP %d downloading image", resp.StatusCode)
+		// Surface a snippet of the body — Azure Blob returns useful XML
+		// (AuthenticationFailed, BlobNotFound, etc.) that beats a bare 404.
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		c.bus.Warn("cloud", "blob non-200", map[string]any{
+			"status":  resp.StatusCode,
+			"snippet": string(snippet),
+			"url":     src,
+		})
+		return "", "", fmt.Errorf("HTTP %d downloading image: %s", resp.StatusCode, string(snippet))
 	}
 	mime := resp.Header.Get("Content-Type")
 	if mime == "" {
@@ -253,4 +280,11 @@ func downloadAsBase64(ctx context.Context, src string) (string, string, error) {
 		return "", "", err
 	}
 	return base64.StdEncoding.EncodeToString(raw), mime, nil
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }

@@ -1,13 +1,10 @@
 package sidecar
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
 
 	"imference-desktop-go/internal/types"
@@ -15,107 +12,91 @@ import (
 
 // generateTimeout is generous because the first request after a sidecar boot
 // pays a hidden cost: ModelManager.get_or_load() reads the full .safetensors
-// (~5-7 GB for SDXL) from disk and copies it to VRAM, which can take 30s+ on
-// fast hardware and 2-3 min on slow disks. Subsequent requests on the same
-// model are fast. 30 min is a sanity bound — if a request actually hangs that
-// long, something's really broken (or torch fell back to CPU and is grinding
-// through ~30 min/step instead of ~1 s/step).
+// (~5-7 GB for SDXL) from disk and copies it to VRAM, which can take 30 s+
+// on fast hardware. Subsequent requests on the same model are fast. 30 min
+// is a sanity bound; anything longer suggests torch fell back to CPU.
 const generateTimeout = 30 * time.Minute
 
-// generateResponse mirrors sidecar/main.py's GenerateResponse.
-type generateResponse struct {
+// generatePayload is the inbound shape the sidecar expects. Keys mirror
+// the kwargs of imference_engine.Engine.generate, snake_case for Python.
+type generatePayload struct {
+	Prompt         string   `json:"prompt"`
+	NegativePrompt string   `json:"negative_prompt,omitempty"`
+	Width          int      `json:"width,omitempty"`
+	Height         int      `json:"height,omitempty"`
+	NumSteps       int      `json:"num_steps,omitempty"`
+	GuidanceScale  float64  `json:"guidance_scale,omitempty"`
+	Seed           *int     `json:"seed,omitempty"`
+}
+
+// generateResult mirrors what sidecar/main.py:generate returns.
+type generateResult struct {
 	Seeds  []int    `json:"seeds"`
 	Images []string `json:"images"`
 	Errors []string `json:"errors"`
+	Device string   `json:"device,omitempty"`
 }
 
-// errorBody is what FastAPI returns on HTTPException.
-type errorBody struct {
-	Detail any `json:"detail"`
-}
-
-// Generate POSTs to the running sidecar's /generate endpoint. Returns an
-// error if the sidecar isn't ready or the call fails.
+// Generate POSTs a generation request to the running Python sidecar via
+// stdio JSON-lines and waits for the matching response. Returns the
+// unified GenerationResult shape the rest of the app already speaks.
 func (m *Manager) Generate(ctx context.Context, req types.GenerationRequest) (types.GenerationResult, error) {
-	port := m.Port()
-	if port == 0 {
+	if m.Status().State != "ready" {
 		m.bus.Warn("sidecar", "Generate called but sidecar not ready", nil)
 		return types.GenerationResult{}, errors.New("sidecar: not ready")
 	}
 
+	payload := generatePayload{
+		Prompt:         req.Prompt,
+		NegativePrompt: req.NegativePrompt,
+		Width:          req.Width,
+		Height:         req.Height,
+		NumSteps:       req.NumSteps,
+		GuidanceScale:  req.GuidanceScale,
+		Seed:           req.Seed,
+	}
+
 	m.bus.Info("sidecar", "Generate start", map[string]any{
-		"port":   port,
-		"prompt": truncateStr(req.Prompt, 80),
+		"prompt": truncate(req.Prompt, 80),
 		"steps":  req.NumSteps,
 	})
 
-	buf, _ := json.Marshal(req)
 	callCtx, cancel := context.WithTimeout(ctx, generateTimeout)
 	defer cancel()
-
-	r, _ := http.NewRequestWithContext(
-		callCtx,
-		http.MethodPost,
-		fmt.Sprintf("http://127.0.0.1:%d/generate", port),
-		bytes.NewReader(buf),
-	)
-	r.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: generateTimeout + 5*time.Second}
 	start := time.Now()
-	resp, err := client.Do(r)
+
+	raw, err := m.Send(callCtx, payload)
 	if err != nil {
-		m.bus.Error("sidecar", "POST /generate transport error", map[string]any{"err": err.Error()})
-		return types.GenerationResult{}, fmt.Errorf("sidecar: POST /generate: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		// Bubble FastAPI's HTTPException detail when present; falls back to
-		// HTTP status for opaque errors. Pydantic 422 detail is a list, so
-		// we just stringify whatever shape arrives.
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		var parsed errorBody
-		_ = json.Unmarshal(body, &parsed)
-		m.bus.Error("sidecar", "POST /generate non-200", map[string]any{
-			"status": resp.StatusCode,
-			"detail": parsed.Detail,
+		m.bus.Error("sidecar", "Generate failed", map[string]any{
+			"err":      err.Error(),
+			"duration": time.Since(start).String(),
 		})
-		if parsed.Detail != nil {
-			return types.GenerationResult{}, fmt.Errorf("sidecar: HTTP %d: %v", resp.StatusCode, parsed.Detail)
-		}
-		return types.GenerationResult{}, fmt.Errorf("sidecar: HTTP %d: %s", resp.StatusCode, string(body))
+		return types.GenerationResult{}, fmt.Errorf("sidecar: %w", err)
 	}
 
-	var parsed generateResponse
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+	var res generateResult
+	if err := json.Unmarshal(raw, &res); err != nil {
 		m.bus.Error("sidecar", "parse response failed", map[string]any{"err": err.Error()})
 		return types.GenerationResult{}, fmt.Errorf("sidecar: parse response: %w", err)
 	}
-	if len(parsed.Images) == 0 || parsed.Images[0] == "" {
+
+	if len(res.Images) == 0 || res.Images[0] == "" {
 		msg := "sidecar returned no image"
-		if len(parsed.Errors) > 0 && parsed.Errors[0] != "" {
-			msg = parsed.Errors[0]
+		if len(res.Errors) > 0 && res.Errors[0] != "" {
+			msg = res.Errors[0]
 		}
 		m.bus.Error("sidecar", "no image returned", map[string]any{"msg": msg})
 		return types.GenerationResult{}, errors.New(msg)
 	}
 
 	m.bus.Info("sidecar", "Generate ok", map[string]any{
-		"seed":     parsed.Seeds[0],
+		"seed":     res.Seeds[0],
 		"duration": time.Since(start).String(),
 	})
 
 	return types.GenerationResult{
-		ImageBase64: "data:image/png;base64," + parsed.Images[0],
-		Seed:        parsed.Seeds[0],
+		ImageBase64: "data:image/png;base64," + res.Images[0],
+		Seed:        res.Seeds[0],
 		Source:      "local",
 	}, nil
-}
-
-func truncateStr(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
 }

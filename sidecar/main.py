@@ -1,18 +1,22 @@
-"""FastAPI sidecar for imference-desktop.
+"""Python sidecar for imference-desktop-go.
 
-Wraps imference_engine.Engine behind localhost HTTP so the Electron renderer
-can call it from JavaScript. POC scope: SDXL only, one model, no auth, bind
-on 127.0.0.1, no batching > 1.
+Long-running process spawned by the Go side. Communicates over stdin/stdout
+using runqy-python's JSON-lines protocol — same protocol the GPU workers
+(sdxl-multimodel-v2) use under Runqy in production. One subprocess = one
+loaded engine.
+
+Wire shape (set by runqy_python):
+  Go → Python (stdin)  : {"task_id": "...", "payload": {...}}
+  Python → Go (stdout) : {"task_id": "...", "result": {...}, "error": null, "retry": false}
+                         or {"status": "ready"} once the engine has loaded.
+  Python → Go (stderr) : free-form logs (everything written via `logging`).
+
+Logs from the engine and from this script land in stderr → the Go parent
+streams them into the in-app LogPanel automatically. No need for a separate
+log-tail endpoint.
 
 Boot config via env vars:
     IMFERENCE_LOCAL_SDXL_PATH   absolute path to a .safetensors checkpoint (required)
-    IMFERENCE_SIDECAR_PORT      TCP port to listen on (default 38000)
-    IMFERENCE_SIDECAR_HOST      bind host (default 127.0.0.1 — don't change)
-
-Run:
-    python -m uvicorn sidecar.main:app --host 127.0.0.1 --port 38000
-or:
-    python sidecar/main.py  (uses uvicorn.run with the env-var port)
 """
 from __future__ import annotations
 
@@ -21,94 +25,80 @@ import io
 import logging
 import os
 import sys
-from typing import Optional
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from runqy_python import load, run, task
 
+# Force all logging output to stderr so the JSON protocol on stdout stays
+# pristine. runqy_python._protect_stdout() also redirects sys.stdout to
+# stderr internally — this is belt-and-suspenders.
 logging.basicConfig(
+    stream=sys.stderr,
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    stream=sys.stdout,
 )
 logger = logging.getLogger("imference.sidecar")
 
 SDXL_MODEL_NAME = "sdxl"
 
-app = FastAPI(title="imference-desktop sidecar", version="0.0.1")
 
-# Engine is constructed at startup, not at import time, so uvicorn --reload doesn't
-# re-pay the 30s load cost on every code change.
-_engine = None
-
-
-def _get_engine():
-    global _engine
-    if _engine is None:
-        raise HTTPException(status_code=503, detail="engine not ready")
-    return _engine
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    global _engine
+@load
+def setup() -> dict:
+    """Loaded once before the first task. Initializes the engine and
+    registers the user's SDXL checkpoint. The returned dict becomes the
+    `context` argument passed to every @task call."""
     weights = os.environ.get("IMFERENCE_LOCAL_SDXL_PATH")
     if not weights:
-        # Fail loud so Electron can show a clean error in the toast rather than
-        # the sidecar appearing to start and then 503'ing on every request.
-        logger.error("IMFERENCE_LOCAL_SDXL_PATH not set; aborting startup")
+        # Raising from @load makes runqy_python emit {"status":"error",...}
+        # on stdout and exit 1 — the Go side surfaces that as a clean
+        # startup error in the UI.
         raise RuntimeError("IMFERENCE_LOCAL_SDXL_PATH not set")
     if not os.path.isfile(weights):
-        logger.error(f"IMFERENCE_LOCAL_SDXL_PATH points to a missing file: {weights}")
         raise RuntimeError(f"SDXL weights not found at {weights}")
 
+    # Lazy import — keeps the import chain off the critical path of stdout
+    # protection (and helps if the user has a half-broken engine venv).
     from imference_engine import Engine, RuntimeConfig
+
     logger.info(f"Loading engine with SDXL weights: {weights}")
     eng = Engine(runtime=RuntimeConfig(device="auto")).load()
     eng.register_model(SDXL_MODEL_NAME, backend="sdxl", weights_path=weights)
-    _engine = eng
-    logger.info("Sidecar ready")
+    logger.info(
+        f"Sidecar ready on {eng._device.torch_str if eng._device else 'unknown'} device"
+    )
+    # Stash the resolved device in the context so generate() can echo it
+    # for debugging without reaching into Engine private state.
+    return {
+        "engine": eng,
+        "device": eng._device.torch_str if eng._device else "unknown",
+    }
 
 
-@app.get("/healthz")
-def healthz() -> dict:
-    if _engine is None:
-        # 503 lets the Electron health-check poller distinguish "starting" from
-        # "down for good" — the spawn watchdog kills the process on its own timer.
-        raise HTTPException(status_code=503, detail="engine not ready")
-    device = _engine._device.torch_str if _engine._device else "unknown"
-    return {"ok": True, "device": device, "model": SDXL_MODEL_NAME}
+@task
+def generate(payload: dict, ctx: dict) -> dict:
+    """Handle one generation request. Payload mirrors the desktop's
+    GenerationRequest (camelCase preserved between Go and the renderer).
 
+    Returns a dict with seeds/images/errors arrays aligned by index.
+    """
+    engine = ctx["engine"]
 
-class GenerateRequest(BaseModel):
-    prompt: str = Field(..., min_length=1)
-    negative_prompt: Optional[str] = None
-    width: int = 1024
-    height: int = 1024
-    num_steps: int = 28
-    guidance_scale: float = 6.0
-    seed: Optional[int] = None
-
-
-class GenerateResponse(BaseModel):
-    seeds: list[int]
-    images: list[str]  # base64-encoded PNG, parallel to seeds
-    errors: list[str]  # parallel to seeds; "" if no error
-
-
-@app.post("/generate", response_model=GenerateResponse)
-def generate(req: GenerateRequest) -> GenerateResponse:
-    engine = _get_engine()
+    prompt = payload.get("prompt")
+    if not prompt:
+        # @task exceptions are surfaced as {error: traceback} on stdout —
+        # so the Go side sees a clear failure rather than a silent empty image.
+        raise ValueError("payload.prompt is required")
 
     result = engine.generate(
         model=SDXL_MODEL_NAME,
-        prompt=req.prompt,
-        negative_prompt=req.negative_prompt,
-        width=req.width,
-        height=req.height,
-        num_steps=req.num_steps,
-        guidance_scale=req.guidance_scale,
-        seed=req.seed,
+        prompt=prompt,
+        negative_prompt=payload.get("negative_prompt") or payload.get("negativePrompt"),
+        width=payload.get("width") or 1024,
+        height=payload.get("height") or 1024,
+        num_steps=payload.get("num_steps") or payload.get("numSteps") or 28,
+        guidance_scale=payload.get("guidance_scale")
+        or payload.get("guidanceScale")
+        or 6.0,
+        seed=payload.get("seed"),
         batch=1,
     )
 
@@ -125,16 +115,13 @@ def generate(req: GenerateRequest) -> GenerateResponse:
             images_b64.append(base64.b64encode(buf.getvalue()).decode("ascii"))
             error_strs.append("")
 
-    return GenerateResponse(
-        seeds=result.seeds,
-        images=images_b64,
-        errors=error_strs,
-    )
+    return {
+        "seeds": result.seeds,
+        "images": images_b64,
+        "errors": error_strs,
+        "device": ctx.get("device"),
+    }
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    port = int(os.environ.get("IMFERENCE_SIDECAR_PORT", "38000"))
-    host = os.environ.get("IMFERENCE_SIDECAR_HOST", "127.0.0.1")
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    run()

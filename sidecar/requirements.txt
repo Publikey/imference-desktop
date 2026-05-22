@@ -1,7 +1,4 @@
-fastapi>=0.115
-uvicorn[standard]>=0.32
-# imference-engine itself is installed from the sibling repo with the [runtime] extra:
-#   pip install -e "C:/git windows/imference-engine[runtime]"
-# Torch must be installed separately on Windows BEFORE imference-engine so pip
-# pulls the CUDA wheel, not the CPU one:
-#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+runqy-python>=0.2.2
+# imference-engine itself is installed by the desktop's bundled installer with
+# the [runtime] extra (pip install "imference-engine[runtime] @ <github>").
+# Torch CUDA must be present first — the installer's torch phase covers that.

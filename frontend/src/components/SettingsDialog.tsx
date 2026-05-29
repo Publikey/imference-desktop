@@ -64,7 +64,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
@@ -79,7 +79,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
           onModelSelected={handleInstallDone}
         />
 
-        <section className="border-border rounded-lg border p-4">
+        <section className="bg-card rounded-2xl border p-4 shadow-sm">
           <h3 className="mb-3 text-sm font-semibold">Cloud payment</h3>
           <div className="mb-4 grid gap-2">
             <Label className="text-xs">Mode</Label>
@@ -132,7 +132,8 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
           )}
         </section>
 
-        <div className="grid gap-4 py-2">
+        <section className="bg-card grid gap-4 rounded-2xl border p-4 shadow-sm">
+          <h3 className="text-sm font-semibold">Paths &amp; cloud model</h3>
           <div className="grid gap-2">
             <Label htmlFor="cloudModel">Cloud model_code</Label>
             <Input
@@ -154,7 +155,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
               id="pythonPath"
               value={draft.pythonPath}
               onChange={(e) => setDraft({ ...draft, pythonPath: e.target.value })}
-              placeholder="C:\Users\<you>\AppData\Local\imference-desktop-go\engine-venv\Scripts\python.exe"
+              placeholder="~/Library/Caches/imference-desktop-go/engine-venv/bin/python"
             />
           </div>
 
@@ -164,7 +165,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
               id="sdxlPath"
               value={draft.sdxlPath}
               onChange={(e) => setDraft({ ...draft, sdxlPath: e.target.value })}
-              placeholder="C:\models\sdxl_base.safetensors"
+              placeholder="Auto-filled when you pick a model above"
             />
           </div>
 
@@ -177,7 +178,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
               placeholder="Leave empty to use ~/Pictures/Imference"
             />
           </div>
-        </div>
+        </section>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>

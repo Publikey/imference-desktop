@@ -14,6 +14,29 @@ export type AppSettings = {
   paymentMode: PaymentMode;
   /** Mirror of the configured wallet's public address. Private key lives in OS keychain. */
   walletAddress: string;
+  /** Currently-selected local model (downloaded to sdxlPath). Null until chosen. */
+  localModel?: ModelInfo | null;
+};
+
+/** One locally-runnable model from the imference catalog (GET /api/models). */
+export type ModelInfo = {
+  modelCode: string;
+  name: string;
+  shortDescription: string;
+  mediumDescription: string;
+  image: string;
+  modelUrl: string;
+  promptPre: string;
+  promptNegative: string;
+  stepsDefault: number;
+  stepsMin: number;
+  stepsMax: number;
+  cfgDefault: number;
+  cfgMin: number;
+  cfgMax: number;
+  skipDefault: number;
+  schedulerDefault: string;
+  formatCode: string;
 };
 
 export type PaymentMode = "bearer" | "x402";
@@ -34,6 +57,9 @@ export type GenerationRequest = {
   numSteps: number;
   guidanceScale: number;
   seed?: number;
+  /** Usually injected server-side from the selected model; optional override. */
+  scheduler?: string;
+  clipSkip?: number;
 };
 
 export type GenerationResult = {
@@ -82,6 +108,7 @@ export type InstallPhase =
   | "sidecar-deps"
   | "engine"
   | "extras"
+  | "model"
   | "done"
   | "error";
 

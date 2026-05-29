@@ -1,15 +1,15 @@
-//go:build !windows
+//go:build !windows && !darwin
 
 package wallet
 
 import "errors"
 
-// On non-Windows the POC has no keychain backend (yet). The wallet
-// surface keeps the same API so callers don't need build tags, but
-// every operation reports ErrNoKeychainBackend so the renderer can
-// show a helpful message.
+// On platforms other than Windows and macOS the POC has no keychain backend
+// (Linux Secret Service is TODO). The wallet surface keeps the same API so
+// callers don't need build tags, but every operation reports errNoBackend so
+// the renderer can show a helpful message.
 
-var errNoBackend = errors.New("wallet: keychain backend not implemented on this OS (POC is Windows-only)")
+var errNoBackend = errors.New("wallet: keychain backend not implemented on this OS (Windows + macOS only)")
 
 func LoadFromKeychain() (*Wallet, error) { return nil, errNoBackend }
 func SaveToKeychain(_ *Wallet) error     { return errNoBackend }

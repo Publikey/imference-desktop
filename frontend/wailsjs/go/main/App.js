@@ -54,6 +54,10 @@ export function InstallEngine() {
   return window['go']['main']['App']['InstallEngine']();
 }
 
+export function ListLocalModels() {
+  return window['go']['main']['App']['ListLocalModels']();
+}
+
 export function LogFromFrontend(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['LogFromFrontend'](arg1, arg2, arg3, arg4);
 }
@@ -68,4 +72,8 @@ export function RestartSidecar() {
 
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
+}
+
+export function SelectLocalModel(arg1) {
+  return window['go']['main']['App']['SelectLocalModel'](arg1);
 }

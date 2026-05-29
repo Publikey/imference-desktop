@@ -7,15 +7,24 @@ import type { EngineInfo, InstallPhase, InstallProgress, PythonInfo } from "@/li
 const PHASE_LABEL: Record<InstallPhase, string> = {
   detect: "Detecting Python",
   venv: "Creating venv",
-  torch: "Downloading torch (CUDA)",
+  torch: "Downloading torch",
   "sidecar-deps": "Installing sidecar deps",
   engine: "Downloading imference-engine",
   extras: "Installing sd-embed (weighted prompts)",
+  model: "Downloading SDXL weights (~6.9 GB)",
   done: "Done",
   error: "Error",
 };
 
-const PHASE_ORDER: InstallPhase[] = ["detect", "venv", "torch", "sidecar-deps", "engine", "extras"];
+const PHASE_ORDER: InstallPhase[] = [
+  "detect",
+  "venv",
+  "torch",
+  "sidecar-deps",
+  "engine",
+  "extras",
+  "model",
+];
 
 type Props = {
   // Called after a successful install completes so the parent dialog can

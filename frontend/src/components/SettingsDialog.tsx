@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
+import { ModelPicker } from "@/components/ModelPicker";
 import { WalletSection } from "@/components/WalletSection";
 import { api } from "@/lib/wails-bridge";
 import type { AppSettings, PaymentMode } from "@/lib/types";
@@ -38,12 +39,17 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
     void api.getSettings().then(setDraft);
   }, [open]);
 
-  // LocalEngineSection auto-fills pythonPath via the Go side on successful
-  // install; pull the new value into our draft so the field reflects reality
-  // without the user needing to close+reopen the dialog.
+  // Both LocalEngineSection (install) and ModelPicker (model switch) mutate
+  // settings server-side directly (pythonPath/sdxlPath/localModel), bypassing
+  // this dialog's Save button. Refetch into our draft AND push up to the parent
+  // via onSaved so App's generation params (steps/cfg from the selected model)
+  // stay in sync without the user clicking Save or reopening the dialog.
   const handleInstallDone = useCallback(() => {
-    void api.getSettings().then(setDraft);
-  }, []);
+    void api.getSettings().then((next) => {
+      setDraft(next);
+      onSaved(next);
+    });
+  }, [onSaved]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -67,6 +73,11 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
         </DialogHeader>
 
         <LocalEngineSection onInstallDone={handleInstallDone} />
+
+        <ModelPicker
+          activeModelCode={draft.localModel?.modelCode ?? null}
+          onModelSelected={handleInstallDone}
+        />
 
         <section className="border-border rounded-lg border p-4">
           <h3 className="mb-3 text-sm font-semibold">Cloud payment</h3>

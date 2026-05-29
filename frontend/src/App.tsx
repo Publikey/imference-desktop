@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Settings, Cloud, Cpu, Loader2, ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +32,26 @@ const DEFAULT_PARAMS = {
   guidanceScale: 6.0,
 };
 
+// localParams derives generation params from the selected model's config. When
+// a model is chosen we honor its steps/cfg defaults and a resolution matching
+// its format_code (SDXL is trained at 1024). Falls back to the fast dev
+// defaults when no local model is selected. The model's prompt prefix, negative
+// prompt, scheduler and clip-skip are injected server-side in App.GenerateLocal.
+function localParams(model: AppSettings["localModel"]) {
+  if (!model) return DEFAULT_PARAMS;
+  const dims =
+    model.formatCode === "portrait"
+      ? { width: 832, height: 1216 }
+      : model.formatCode === "landscape"
+        ? { width: 1216, height: 832 }
+        : { width: 1024, height: 1024 }; // square / unknown
+  return {
+    ...dims,
+    numSteps: model.stepsDefault || 28,
+    guidanceScale: model.cfgDefault || 6.0,
+  };
+}
+
 export default function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [sidecar, setSidecar] = useState<SidecarStatus>({ state: "idle" });
@@ -42,6 +62,12 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
   const [errorLogCount, setErrorLogCount] = useState(0);
+
+  // Stable so SettingsDialog's handleInstallDone (and the child event
+  // subscriptions that depend on it) don't churn on every render.
+  const handleSettingsSaved = useCallback((next: AppSettings) => {
+    setSettings(next);
+  }, []);
 
   useEffect(() => {
     void api.getSettings().then(setSettings);
@@ -91,7 +117,7 @@ export default function App() {
     try {
       const result = await api.generateLocal({
         prompt: prompt.trim(),
-        ...DEFAULT_PARAMS,
+        ...localParams(settings?.localModel),
       });
       setImage(result);
     } catch (e) {
@@ -226,9 +252,7 @@ export default function App() {
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
-        onSaved={(next) => {
-          setSettings(next);
-        }}
+        onSaved={handleSettingsSaved}
       />
 
       <LogPanel open={logsOpen} onOpenChange={setLogsOpen} />

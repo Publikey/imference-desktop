@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"imference-desktop-go/internal/logbus"
+	"imference-desktop-go/internal/modelfetch"
 	"imference-desktop-go/internal/types"
 )
 
@@ -32,18 +33,42 @@ import (
 // tag (refs/tags/v0.0.1) when stable releases exist; for the POC, main is fine.
 const EngineTarball = "imference-engine[runtime] @ https://github.com/Publikey/imference-engine/archive/refs/heads/main.tar.gz"
 
-// TorchIndexURL is the CUDA 12.4 wheel index. We use cu124 (not cu121) because
-// imference-engine's pyproject.toml pins torch>=2.6 in the [runtime] extra, and
-// the cu121 index stops at torch 2.5.x. If we used cu121, pip would later
-// uninstall our CUDA torch and pull the CPU torch 2.6+ from PyPI to satisfy
-// the engine's constraint. cu124 ships torch 2.6+ wheels and is compatible
-// with NVIDIA drivers shipped from late 2024 onwards.
+// TorchIndexURL is the CUDA 12.4 wheel index used on Windows/Linux. We use
+// cu124 (not cu121) because imference-engine's pyproject.toml pins torch>=2.6
+// in the [runtime] extra, and the cu121 index stops at torch 2.5.x. If we used
+// cu121, pip would later uninstall our CUDA torch and pull the CPU torch 2.6+
+// from PyPI to satisfy the engine's constraint. cu124 ships torch 2.6+ wheels
+// and is compatible with NVIDIA drivers shipped from late 2024 onwards.
+//
+// NOT used on macOS — see torchInstallArgs(): the default PyPI wheels carry
+// Apple's MPS (Metal) backend, and the cu124 index has no darwin wheels at all.
 const TorchIndexURL = "https://download.pytorch.org/whl/cu124"
 
 // TorchSpec is the version constraint we install. Mirroring the engine's
 // pyproject.toml exactly so pip is satisfied in one shot — no later "found a
 // version that doesn't match, let me swap it" surprises in the engine phase.
 const TorchSpec = "torch>=2.6"
+
+// torchInstallArgs returns the `pip` arguments (and a UI message) for the torch
+// phase, varying by OS:
+//
+//   - macOS: the default PyPI wheels ship Apple's MPS (Metal) backend, so we
+//     install torch straight from PyPI with NO custom index. Pinning the cu124
+//     index here would fail — that index has no darwin wheels — and even a CPU
+//     fallback would lose GPU acceleration on Apple Silicon.
+//   - Windows/Linux: install the CUDA 12.4 build from the pytorch.org index.
+//
+// torchvision is intentionally not installed here; imference-engine[runtime]
+// pulls whatever it needs, and on macOS the matching MPS torchvision resolves
+// from PyPI in the engine phase.
+func torchInstallArgs() (args []string, message string) {
+	if runtime.GOOS == "darwin" {
+		return []string{"install", "--upgrade", TorchSpec},
+			"Downloading torch (Apple Silicon / MPS) from PyPI"
+	}
+	return []string{"install", "--upgrade", TorchSpec, "--index-url", TorchIndexURL},
+		"Downloading torch (CUDA 12.4, ~3 GB) — this is the long one"
+}
 
 // SDEmbedTarball is the GitHub archive URL for sd_embed (weighted prompt
 // embeddings + BREAK keyword). MUST be installed with --no-deps because
@@ -53,6 +78,22 @@ const TorchSpec = "torch>=2.6"
 // already in imference-engine[runtime].
 const SDEmbedTarball = "sd-embed @ https://github.com/xhinker/sd_embed/archive/refs/heads/main.tar.gz"
 
+// SDXLModelURL is the default single-file SDXL checkpoint the app downloads so
+// the user never has to hand-pick a .safetensors. Must point directly at a
+// .safetensors file (a 200 response with the raw bytes — not an HTML page or a
+// redirect to a login). The cache filename is derived from this URL's basename
+// in app.sdxlModelPath, so different models cache to different files.
+const SDXLModelURL = "https://gen-models.ml-cnd-gen.cc/sdxl/cyberrealisticPony_v130.safetensors"
+
+// sdxlModelMinBytes is the cross-launch reuse floor: an existing file at the
+// model path larger than this is treated as a complete prior download and
+// reused. It's deliberately a loose "this is plausibly a real multi-GB
+// checkpoint, not a saved error page or stub" sanity bound rather than an
+// exact size — true completeness of a fresh download is enforced separately by
+// modelfetch's Content-Length check. Kept model-agnostic so swapping
+// SDXLModelURL doesn't require retuning it.
+const sdxlModelMinBytes = 1_000_000_000
+
 type Options struct {
 	// VenvDir is where the engine venv lives. Recommended: os.UserCacheDir()/imference-desktop-go/engine-venv.
 	VenvDir string
@@ -60,6 +101,12 @@ type Options struct {
 	// "sidecar-deps" phase. Caller computes via the same resolver as the
 	// sidecar script path (filepath.Join(app.GetAppPath(), "sidecar", "requirements.txt")).
 	SidecarRequirementsPath string
+	// ModelURL / ModelPath drive the optional "model" phase: download the SDXL
+	// weights to ModelPath. When ModelPath is empty the phase is skipped (e.g.
+	// the user wants to supply their own checkpoint). ModelURL defaults to
+	// SDXLModelURL when empty but ModelPath is set.
+	ModelURL  string
+	ModelPath string
 }
 
 // Installer runs the 5-phase setup. Safe to instantiate but only one Install()
@@ -139,15 +186,11 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 	i.bus.Info("installer", "venv ok", map[string]any{"python": venvPython, "reused": reused})
 	emit(types.InstallProgress{Phase: "venv", Message: venvMsg})
 
-	// ----- Phase 3: pip install torch CUDA -----
-	emit(types.InstallProgress{
-		Phase:   "torch",
-		Message: "Downloading torch (CUDA 12.4, ~3 GB) — this is the long one",
-	})
-	i.bus.Info("installer", "torch phase start", nil)
-	if err := i.runPip(ctx, venvPython, "torch", emit,
-		"install", "--upgrade", TorchSpec, "--index-url", TorchIndexURL,
-	); err != nil {
+	// ----- Phase 3: pip install torch (CUDA on Win/Linux, MPS on macOS) -----
+	torchArgs, torchMsg := torchInstallArgs()
+	emit(types.InstallProgress{Phase: "torch", Message: torchMsg})
+	i.bus.Info("installer", "torch phase start", map[string]any{"os": runtime.GOOS, "args": torchArgs})
+	if err := i.runPip(ctx, venvPython, "torch", emit, torchArgs...); err != nil {
 		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
 		return err
 	}
@@ -200,6 +243,39 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 		emit(types.InstallProgress{Phase: "extras", Message: "sd-embed install failed (non-fatal)"})
 	} else {
 		emit(types.InstallProgress{Phase: "extras", Message: "sd-embed installed", PercentEstimate: 100})
+	}
+
+	// ----- Phase 7: download SDXL weights (optional) -----
+	// Skipped when the caller supplies no ModelPath (e.g. user brings their own
+	// checkpoint). The download is atomic + reuse-aware, so a Reinstall with the
+	// model already present is a fast no-op rather than a 7 GB re-pull.
+	if opts.ModelPath != "" {
+		modelURL := opts.ModelURL
+		if modelURL == "" {
+			modelURL = SDXLModelURL
+		}
+		emit(types.InstallProgress{Phase: "model", Message: "Downloading SDXL weights (~6.9 GB)"})
+		i.bus.Info("installer", "model phase start", map[string]any{"url": modelURL, "dest": opts.ModelPath})
+		reused, derr := modelfetch.New(i.bus).Fetch(ctx, modelURL, opts.ModelPath, sdxlModelMinBytes,
+			func(p modelfetch.Progress) {
+				emit(types.InstallProgress{
+					Phase:           "model",
+					Message:         fmt.Sprintf("Downloading SDXL weights — %s / %s", humanBytes(p.Downloaded), humanBytes(p.Total)),
+					PercentEstimate: p.Percent,
+				})
+			},
+		)
+		if derr != nil {
+			i.bus.Error("installer", "model download failed", map[string]any{"err": derr.Error()})
+			emit(types.InstallProgress{Phase: "error", Error: derr.Error(), Done: true})
+			return derr
+		}
+		msg := "SDXL weights downloaded"
+		if reused {
+			msg = "SDXL weights already present, reusing"
+		}
+		i.bus.Info("installer", "model ok", map[string]any{"reused": reused, "path": opts.ModelPath})
+		emit(types.InstallProgress{Phase: "model", Message: msg, PercentEstimate: 100})
 	}
 
 	// ----- Done -----
@@ -430,4 +506,22 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// humanBytes renders a byte count as a short human string ("6.9 GB"). Returns
+// "?" for a negative total (server sent no Content-Length).
+func humanBytes(n int64) string {
+	if n < 0 {
+		return "?"
+	}
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for x := n / unit; x >= unit; x /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
 }

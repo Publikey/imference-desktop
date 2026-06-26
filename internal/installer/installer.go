@@ -28,9 +28,37 @@ import (
 	"imference-desktop-go/internal/types"
 )
 
-// EngineTarball is the pip-installable source. Branch can be retargeted to a
-// tag (refs/tags/v0.0.1) when stable releases exist; for the POC, main is fine.
+// EngineTarball is the default pip-installable source (GitHub main branch).
+// Branch can be retargeted to a tag (refs/tags/v0.0.1) when stable releases
+// exist; for the POC, main is fine.
+//
+// For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
+// See resolveEngineSource() below.
 const EngineTarball = "imference-engine[runtime] @ https://github.com/Publikey/imference-engine/archive/refs/heads/main.tar.gz"
+
+// EngineSourceEnvVar lets a developer point the installer at a local
+// imference-engine checkout instead of the GitHub tarball. Set to an absolute
+// path (e.g. "C:\git windows\imference-engine") and the engine phase will
+// pip-install it in editable mode — code edits become visible after a sidecar
+// restart, no Reinstall needed.
+const EngineSourceEnvVar = "IMFERENCE_ENGINE_SOURCE"
+
+// resolveEngineSource picks between the local override and the GitHub default.
+// Returns the spec to pass to pip and whether it should be installed editable
+// (-e). Local override → editable, URL → regular install.
+func resolveEngineSource() (spec string, editable bool) {
+	override := strings.TrimSpace(os.Getenv(EngineSourceEnvVar))
+	if override == "" {
+		return EngineTarball, false
+	}
+	// Looks like a URL? Treat as remote install, no -e.
+	if strings.HasPrefix(override, "http://") || strings.HasPrefix(override, "https://") {
+		return override, false
+	}
+	// Local path → editable install with [runtime] extra. Pip accepts
+	// "path[extras]" syntax even on Windows paths with spaces.
+	return override + "[runtime]", true
+}
 
 // TorchIndexURL is the CUDA 12.4 wheel index. We use cu124 (not cu121) because
 // imference-engine's pyproject.toml pins torch>=2.6 in the [runtime] extra, and
@@ -165,14 +193,22 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 	emit(types.InstallProgress{Phase: "sidecar-deps", Message: "Sidecar deps installed", PercentEstimate: 100})
 
 	// ----- Phase 5: pip install imference-engine -----
-	emit(types.InstallProgress{
-		Phase:   "engine",
-		Message: "Downloading imference-engine from GitHub",
+	engineSpec, editable := resolveEngineSource()
+	engineMsg := "Downloading imference-engine from GitHub"
+	if editable {
+		engineMsg = "Installing imference-engine from local source (editable)"
+	}
+	emit(types.InstallProgress{Phase: "engine", Message: engineMsg})
+	i.bus.Info("installer", "engine phase start", map[string]any{
+		"spec":     engineSpec,
+		"editable": editable,
 	})
-	i.bus.Info("installer", "engine phase start", map[string]any{"tarball": EngineTarball})
-	if err := i.runPip(ctx, venvPython, "engine", emit,
-		"install", EngineTarball,
-	); err != nil {
+	pipArgs := []string{"install"}
+	if editable {
+		pipArgs = append(pipArgs, "-e")
+	}
+	pipArgs = append(pipArgs, engineSpec)
+	if err := i.runPip(ctx, venvPython, "engine", emit, pipArgs...); err != nil {
 		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
 		return err
 	}

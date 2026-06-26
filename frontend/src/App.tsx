@@ -20,16 +20,20 @@ import type {
 // logged version automatically.
 installLogCapture();
 
-// POC defaults are dialed down for fast dev iteration — quality drops at
-// 512x512 (SDXL is trained at 1024) and below ~20 steps, but a 10-15s
-// generation beats a 1-2 min one when you're just verifying the pipeline.
-// Bump back to {1024, 1024, 28, 6.0} when you actually want a good image,
-// or surface as inputs in the UI later.
+// Bumped to SDXL-native resolution (1024) + 20 steps to assess actual quality.
+// Was {512, 512, 12, 6.0} for fast pipeline-verification iteration. Either
+// keep these new defaults, or surface as inputs in the UI to let the user
+// trade speed vs quality per gen.
 const DEFAULT_PARAMS = {
-  width: 512,
-  height: 512,
-  numSteps: 12,
+  width: 1024,
+  height: 1024,
+  numSteps: 20,
   guidanceScale: 6.0,
+  // Critical on Illustrious / NoobAI / Pony-derived models — without this
+  // they emit watermarks, monochrome fragments, and generally low-quality
+  // outputs. Keep this as the floor and add prompt-specific tags via UI.
+  negativePrompt:
+    "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, monochrome",
 };
 
 export default function App() {

@@ -41,6 +41,11 @@ logger = logging.getLogger("imference.sidecar")
 SDXL_MODEL_NAME = "sdxl"
 
 
+def _env_bool(name: str) -> bool:
+    """Parse a truthy env var: 1 / true / yes (case-insensitive) → True."""
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 @load
 def setup() -> dict:
     """Loaded once before the first task. Initializes the engine and
@@ -59,8 +64,24 @@ def setup() -> dict:
     # protection (and helps if the user has a half-broken engine venv).
     from imference_engine import Engine, RuntimeConfig
 
+    # Perf knobs exposed via env vars until the desktop Settings dialog grows
+    # toggles for them. Both default off → behavior identical to the previous
+    # sidecar. To enable, set the env var in the shell that launches the app:
+    #   $env:IMFERENCE_USE_TINY_VAE = "1"        # ~10× faster VAE decode
+    #   $env:IMFERENCE_ENABLE_CPU_OFFLOAD = "1"  # peak VRAM ↓ ~40% on SDXL
+    use_tiny_vae = _env_bool("IMFERENCE_USE_TINY_VAE")
+    enable_cpu_offload = _env_bool("IMFERENCE_ENABLE_CPU_OFFLOAD")
+    logger.info(
+        f"Engine perf flags: use_tiny_vae={use_tiny_vae}, "
+        f"enable_cpu_offload={enable_cpu_offload}"
+    )
+
     logger.info(f"Loading engine with SDXL weights: {weights}")
-    eng = Engine(runtime=RuntimeConfig(device="auto")).load()
+    eng = Engine(runtime=RuntimeConfig(
+        device="auto",
+        use_tiny_vae=use_tiny_vae,
+        enable_cpu_offload=enable_cpu_offload,
+    )).load()
     eng.register_model(SDXL_MODEL_NAME, backend="sdxl", weights_path=weights)
     logger.info(
         f"Sidecar ready on {eng._device.torch_str if eng._device else 'unknown'} device"

@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -13,6 +16,7 @@ import (
 	"imference-desktop-go/internal/imagesink"
 	"imference-desktop-go/internal/installer"
 	"imference-desktop-go/internal/logbus"
+	"imference-desktop-go/internal/modelfetch"
 	"imference-desktop-go/internal/settings"
 	"imference-desktop-go/internal/sidecar"
 	"imference-desktop-go/internal/types"
@@ -182,12 +186,157 @@ func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult
 // itself is single-threaded (the Engine is stateful) so concurrent calls
 // queue up server-side; that's intentional for the POC.
 func (a *App) GenerateLocal(req types.GenerationRequest) (types.GenerationResult, error) {
+	a.applyLocalModelConfig(&req)
 	result, err := a.sidecar.Generate(a.ctx, req)
 	if err != nil {
 		return result, err
 	}
 	a.autoSave(&result)
 	return result, nil
+}
+
+// applyLocalModelConfig folds the selected model's catalog config into a local
+// generation request: prepends the model's quality-tag prefix, supplies its
+// default negative prompt / scheduler / clip-skip when the caller left them
+// unset. Numeric params (steps, cfg) come through the request from the UI,
+// which seeds them from the model's defaults. No-op when no model is selected.
+func (a *App) applyLocalModelConfig(req *types.GenerationRequest) {
+	m := a.settings.Get().LocalModel
+	if m == nil {
+		return
+	}
+	if m.PromptPre != "" {
+		req.Prompt = m.PromptPre + req.Prompt
+	}
+	if req.NegativePrompt == "" {
+		req.NegativePrompt = m.PromptNegative
+	}
+	if req.Scheduler == "" {
+		req.Scheduler = m.SchedulerDefault
+	}
+	if req.ClipSkip == nil && m.SkipDefault > 0 {
+		skip := m.SkipDefault
+		req.ClipSkip = &skip
+	}
+	a.bus.Info("app", "applied local model config", map[string]any{
+		"model":     m.ModelCode,
+		"scheduler": req.Scheduler,
+		"clipSkip":  m.SkipDefault,
+	})
+}
+
+// ------------------------------------------------------------------------
+// Model catalog + local model selection
+// ------------------------------------------------------------------------
+
+// ListLocalModels returns the imference catalog filtered to locally-runnable
+// models (those with downloadable weights). Public endpoint — works without an
+// API key, so the picker is usable on first run.
+func (a *App) ListLocalModels() ([]types.ModelInfo, error) {
+	return a.cloud.ListModels(a.ctx)
+}
+
+// SelectLocalModel downloads the chosen model's weights, deletes the previously
+// downloaded model (only after the new one lands), persists the selection, and
+// restarts the sidecar so the new weights load. Returns immediately; progress
+// streams on the "model:progress" event ({phase:"done"|"error"} terminates).
+func (a *App) SelectLocalModel(modelCode string) error {
+	models, err := a.cloud.ListModels(a.ctx)
+	if err != nil {
+		return err
+	}
+	var chosen *types.ModelInfo
+	for i := range models {
+		if models[i].ModelCode == modelCode {
+			chosen = &models[i]
+			break
+		}
+	}
+	if chosen == nil {
+		return fmt.Errorf("model %q not found in catalog (or it's cloud-only)", modelCode)
+	}
+
+	newPath, err := sdxlModelPath(chosen.ModelURL)
+	if err != nil {
+		return err
+	}
+	oldPath := a.settings.Get().SDXLPath
+
+	emit := func(p types.InstallProgress) {
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "model:progress", p)
+		}
+	}
+
+	go func() {
+		emit(types.InstallProgress{Phase: "model", Message: "Preparing " + chosen.Name})
+		a.bus.Info("app", "SelectLocalModel start", map[string]any{"model": chosen.ModelCode, "url": chosen.ModelURL})
+
+		// Stop the sidecar before downloading/deleting: the old .safetensors is
+		// mmap'd by the running engine, so we must release it first (and on
+		// Windows the file can't be deleted while open).
+		a.sidecar.Stop()
+
+		_, derr := modelfetch.New(a.bus).Fetch(a.ctx, chosen.ModelURL, newPath, modelReuseMinBytes,
+			func(p modelfetch.Progress) {
+				emit(types.InstallProgress{
+					Phase:           "model",
+					Message:         fmt.Sprintf("Downloading %s — %s / %s", chosen.Name, humanBytes(p.Downloaded), humanBytes(p.Total)),
+					PercentEstimate: p.Percent,
+				})
+			},
+		)
+		if derr != nil {
+			a.bus.Error("app", "SelectLocalModel download failed", map[string]any{"err": derr.Error()})
+			emit(types.InstallProgress{Phase: "error", Error: derr.Error(), Done: true})
+			return
+		}
+
+		// New weights are safely on disk — now reclaim the old model's space.
+		if oldPath != "" && oldPath != newPath {
+			a.deleteManagedModel(oldPath)
+		}
+
+		s := a.settings.Get()
+		s.SDXLPath = newPath
+		s.LocalModel = chosen
+		if _, serr := a.settings.Save(s); serr != nil {
+			a.bus.Error("app", "SelectLocalModel settings save failed", map[string]any{"err": serr.Error()})
+			emit(types.InstallProgress{Phase: "error", Error: serr.Error(), Done: true})
+			return
+		}
+
+		emit(types.InstallProgress{Phase: "model", Message: "Loading " + chosen.Name + " into the engine…", PercentEstimate: 100})
+		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath); rerr != nil {
+			a.bus.Warn("app", "SelectLocalModel sidecar restart failed", map[string]any{"err": rerr.Error()})
+			emit(types.InstallProgress{Phase: "error", Error: rerr.Error(), Done: true})
+			return
+		}
+		a.bus.Info("app", "SelectLocalModel done", map[string]any{"model": chosen.ModelCode})
+		emit(types.InstallProgress{Phase: "done", Message: chosen.Name + " ready", PercentEstimate: 100, Done: true})
+	}()
+
+	return nil
+}
+
+// deleteManagedModel removes a previously downloaded model file, but ONLY when
+// it lives inside our managed models directory — a guard so a user-supplied
+// SDXLPath pointing at their own checkpoint elsewhere is never deleted.
+func (a *App) deleteManagedModel(p string) {
+	dir, err := modelsDir()
+	if err != nil {
+		return
+	}
+	rel, err := filepath.Rel(dir, p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || strings.Contains(rel, string(filepath.Separator)+"..") {
+		a.bus.Warn("app", "refusing to delete model outside managed dir", map[string]any{"path": p})
+		return
+	}
+	if err := os.Remove(p); err != nil {
+		a.bus.Warn("app", "delete old model failed", map[string]any{"path": p, "err": err.Error()})
+		return
+	}
+	a.bus.Info("app", "deleted old local model", map[string]any{"path": p})
 }
 
 // autoSave writes the generated image to disk and stamps result.SavedPath.
@@ -275,6 +424,10 @@ func (a *App) InstallEngine() error {
 	if err != nil {
 		return err
 	}
+	modelPath, err := sdxlModelPath(installer.SDXLModelURL)
+	if err != nil {
+		return err
+	}
 
 	progress := make(chan types.InstallProgress, 16)
 
@@ -290,6 +443,7 @@ func (a *App) InstallEngine() error {
 		err := a.installer.Install(a.ctx, installer.Options{
 			VenvDir:                 venvDir,
 			SidecarRequirementsPath: reqs,
+			ModelPath:               modelPath, // triggers the SDXL download phase
 		}, progress)
 		if err != nil {
 			a.bus.Error("app", "InstallEngine failed", map[string]any{"err": err.Error()})
@@ -304,6 +458,10 @@ func (a *App) InstallEngine() error {
 		// which case path is unchanged but the sidecar is still stopped).
 		s := a.settings.Get()
 		s.PythonPath = installer.VenvPython(venvDir)
+			// The install flow downloaded (or reused) the SDXL weights at
+			// modelPath, so wire them in too — this is what lets the post-install
+			// sidecar restart succeed instead of failing "settings incomplete".
+			s.SDXLPath = modelPath
 		if _, err := a.settings.Save(s); err != nil {
 			a.bus.Error("app", "post-install settings save failed", map[string]any{"err": err.Error()})
 		}
@@ -481,4 +639,58 @@ func engineVenvDir() (string, error) {
 		return "", fmt.Errorf("locate UserCacheDir: %w", err)
 	}
 	return filepath.Join(cache, "imference-desktop-go", "engine-venv"), nil
+}
+
+// modelReuseMinBytes is the cross-launch reuse floor for downloaded weights —
+// an existing model file larger than this is treated as a complete prior
+// download. Loose "this is plausibly a real multi-GB checkpoint, not a stub"
+// bound; true completeness of a fresh download is enforced by modelfetch.
+const modelReuseMinBytes = 1_000_000_000
+
+// modelsDir is where the app caches downloaded model weights. Under
+// UserCacheDir (alongside the engine venv) because they're large, regenerable
+// assets — re-downloadable, not roamable user config.
+func modelsDir() (string, error) {
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("locate UserCacheDir: %w", err)
+	}
+	return filepath.Join(cache, "imference-desktop-go", "models"), nil
+}
+
+// sdxlModelPath is the local cache path for a model given its download URL.
+// The filename is derived from the URL's basename so that each distinct model
+// gets its own cache file. This matters: the reuse check is by path+size, so a
+// fixed filename would make swapping models silently re-serve a previously
+// downloaded model that happens to sit at the same path.
+func sdxlModelPath(modelURL string) (string, error) {
+	dir, err := modelsDir()
+	if err != nil {
+		return "", err
+	}
+	name := "model.safetensors" // fallback when the URL has no usable basename
+	if u, perr := url.Parse(modelURL); perr == nil {
+		if base := path.Base(u.Path); base != "" && base != "." && base != "/" && strings.HasSuffix(base, ".safetensors") {
+			name = base
+		}
+	}
+	return filepath.Join(dir, name), nil
+}
+
+// humanBytes renders a byte count as a short string ("6.9 GB"); "?" for a
+// negative total (server sent no Content-Length).
+func humanBytes(n int64) string {
+	if n < 0 {
+		return "?"
+	}
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for x := n / unit; x >= unit; x /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
 }

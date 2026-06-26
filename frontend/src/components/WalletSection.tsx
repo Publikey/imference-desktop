@@ -136,7 +136,7 @@ export function WalletSection({ onChanged }: Props) {
   }
 
   return (
-    <section className="border-border rounded-lg border p-4">
+    <section className="bg-card rounded-2xl border p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
         <Wallet className="size-4" />
         <h3 className="text-sm font-semibold">Wallet (Base mainnet · USDC)</h3>
@@ -203,9 +203,9 @@ export function WalletSection({ onChanged }: Props) {
       )}
 
       <p className="text-muted-foreground/70 mt-3 text-[11px] leading-snug italic">
-        This wallet's private key lives in Windows Credential Manager on this machine. Treat it
-        as a burner: only fund what you're OK losing. Use "Export private key" to back it up
-        before relying on it.
+        This wallet's private key lives in your OS keychain on this machine (Windows Credential
+        Manager / macOS login keychain). Treat it as a burner: only fund what you're OK losing.
+        Use "Export private key" to back it up before relying on it.
       </p>
     </section>
   );

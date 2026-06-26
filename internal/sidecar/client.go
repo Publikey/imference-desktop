@@ -20,13 +20,15 @@ const generateTimeout = 30 * time.Minute
 // generatePayload is the inbound shape the sidecar expects. Keys mirror
 // the kwargs of imference_engine.Engine.generate, snake_case for Python.
 type generatePayload struct {
-	Prompt         string   `json:"prompt"`
-	NegativePrompt string   `json:"negative_prompt,omitempty"`
-	Width          int      `json:"width,omitempty"`
-	Height         int      `json:"height,omitempty"`
-	NumSteps       int      `json:"num_steps,omitempty"`
-	GuidanceScale  float64  `json:"guidance_scale,omitempty"`
-	Seed           *int     `json:"seed,omitempty"`
+	Prompt         string  `json:"prompt"`
+	NegativePrompt string  `json:"negative_prompt,omitempty"`
+	Width          int     `json:"width,omitempty"`
+	Height         int     `json:"height,omitempty"`
+	NumSteps       int     `json:"num_steps,omitempty"`
+	GuidanceScale  float64 `json:"guidance_scale,omitempty"`
+	Seed           *int    `json:"seed,omitempty"`
+	Scheduler      string  `json:"scheduler,omitempty"`
+	ClipSkip       *int    `json:"clip_skip,omitempty"`
 }
 
 // generateResult mirrors what sidecar/main.py:generate returns.
@@ -54,6 +56,8 @@ func (m *Manager) Generate(ctx context.Context, req types.GenerationRequest) (ty
 		NumSteps:       req.NumSteps,
 		GuidanceScale:  req.GuidanceScale,
 		Seed:           req.Seed,
+		Scheduler:      req.Scheduler,
+		ClipSkip:       req.ClipSkip,
 	}
 
 	m.bus.Info("sidecar", "Generate start", map[string]any{

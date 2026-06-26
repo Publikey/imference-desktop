@@ -17,10 +17,12 @@ import {
   GetWalletInfo,
   ImportWallet,
   InstallEngine,
+  ListLocalModels,
   LogFromFrontend,
   RefreshWalletBalance,
   RestartSidecar,
   SaveSettings,
+  SelectLocalModel,
 } from "../../wailsjs/go/main/App";
 import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
 import type {
@@ -31,6 +33,7 @@ import type {
   InstallProgress,
   LogEntry,
   LogLevel,
+  ModelInfo,
   PythonInfo,
   SidecarStatus,
   WalletInfo,
@@ -41,7 +44,10 @@ import type {
 // without polluting every callsite.
 const raw = {
   getSettings: GetSettings as () => Promise<AppSettings>,
-  saveSettings: SaveSettings as (next: AppSettings) => Promise<AppSettings>,
+  // Cast through `unknown`: the generated arg type (the `Settings` class, which
+  // carries a `convertValues` method) doesn't structurally overlap with the
+  // plain `AppSettings` type on the contravariant parameter position.
+  saveSettings: SaveSettings as unknown as (next: AppSettings) => Promise<AppSettings>,
   getSidecarStatus: GetSidecarStatus as () => Promise<SidecarStatus>,
   restartSidecar: RestartSidecar as () => Promise<void>,
   generateCloud: GenerateCloud as (req: GenerationRequest) => Promise<GenerationResult>,
@@ -63,6 +69,10 @@ const raw = {
   getEngineInfo: GetEngineInfo as () => Promise<EngineInfo>,
   installEngine: InstallEngine as () => Promise<void>,
 
+  // Model catalog + local model selection
+  listLocalModels: ListLocalModels as () => Promise<ModelInfo[]>,
+  selectLocalModel: SelectLocalModel as (modelCode: string) => Promise<void>,
+
   // Wallet (x402 mode)
   getWalletInfo: GetWalletInfo as () => Promise<WalletInfo>,
   refreshWalletBalance: RefreshWalletBalance as () => Promise<string>,
@@ -82,6 +92,10 @@ const raw = {
     EventsOn("install:progress", (p: InstallProgress) => cb(p));
     return () => EventsOff("install:progress");
   },
+  onModelProgress: (cb: (p: InstallProgress) => void): (() => void) => {
+    EventsOn("model:progress", (p: InstallProgress) => cb(p));
+    return () => EventsOff("model:progress");
+  },
 };
 
 const NO_WRAP = new Set([
@@ -89,6 +103,7 @@ const NO_WRAP = new Set([
   "onSidecarStatus",
   "onLogEntry",
   "onInstallProgress",
+  "onModelProgress",
 ]);
 
 function wrap<K extends keyof typeof raw>(key: K, fn: (typeof raw)[K]): (typeof raw)[K] {

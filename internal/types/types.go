@@ -23,6 +23,34 @@ type Settings struct {
 	// the keychain yet. The private key itself NEVER lives in this file —
 	// it's in the OS keychain (Windows Credential Manager).
 	WalletAddress string `json:"walletAddress"`
+	// LocalModel is the currently-selected local model (chosen from the
+	// imference catalog and downloaded to SDXLPath). Nil until the user picks
+	// one. Its config drives local generation defaults — see App.GenerateLocal.
+	LocalModel *ModelInfo `json:"localModel,omitempty"`
+}
+
+// ModelInfo is one entry from imference.com/api/models, trimmed to the fields
+// the desktop app uses. Doubles as the JSON contract for the frontend model
+// picker. Only models with a non-empty ModelURL can run locally — the rest are
+// cloud-only / proprietary (Flux, GPT-Image, Veo, Wan video, …).
+type ModelInfo struct {
+	ModelCode         string  `json:"modelCode"`
+	Name              string  `json:"name"`
+	ShortDescription  string  `json:"shortDescription"`
+	MediumDescription string  `json:"mediumDescription"`
+	Image             string  `json:"image"`    // thumbnail URL
+	ModelURL          string  `json:"modelUrl"` // downloadable .safetensors ("" = cloud-only)
+	PromptPre         string  `json:"promptPre"`
+	PromptNegative    string  `json:"promptNegative"`
+	StepsDefault      int     `json:"stepsDefault"`
+	StepsMin          int     `json:"stepsMin"`
+	StepsMax          int     `json:"stepsMax"`
+	CfgDefault        float64 `json:"cfgDefault"`
+	CfgMin            float64 `json:"cfgMin"`
+	CfgMax            float64 `json:"cfgMax"`
+	SkipDefault       int     `json:"skipDefault"` // clip-skip
+	SchedulerDefault  string  `json:"schedulerDefault"`
+	FormatCode        string  `json:"formatCode"`
 }
 
 // WalletInfo is what the renderer sees when it asks about the wallet
@@ -46,6 +74,11 @@ type GenerationRequest struct {
 	GuidanceScale  float64 `json:"guidanceScale"`
 	// Seed is a pointer so the JSON can carry null (= random) vs 0 (= explicit zero).
 	Seed *int `json:"seed,omitempty"`
+	// Scheduler and ClipSkip are usually injected server-side from the selected
+	// LocalModel's config (App.GenerateLocal) rather than set by the renderer,
+	// but the fields exist so a caller can override. Empty/nil → engine default.
+	Scheduler string `json:"scheduler,omitempty"`
+	ClipSkip  *int   `json:"clipSkip,omitempty"`
 }
 
 // GenerationResult is the unified Go → frontend response. Same shape for

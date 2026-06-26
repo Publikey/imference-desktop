@@ -78,6 +78,85 @@ type statusErrorBody struct {
 	Error string `json:"error"`
 }
 
+// apiModel mirrors one entry of GET /api/models on the wire (snake_case). We
+// map it to types.ModelInfo (camelCase) so the frontend gets native-feeling
+// keys and the rest of the app doesn't depend on the server's casing.
+type apiModel struct {
+	ModelCode         string  `json:"model_code"`
+	Name              string  `json:"name"`
+	ShortDescription  string  `json:"short_description"`
+	MediumDescription string  `json:"medium_description"`
+	Image             string  `json:"image"`
+	ModelURL          string  `json:"model_url"`
+	PromptPre         string  `json:"prompt_pre"`
+	PromptNegative    string  `json:"prompt_negative"`
+	StepsDefault      int     `json:"steps_default"`
+	StepsMin          int     `json:"steps_min"`
+	StepsMax          int     `json:"steps_max"`
+	CfgDefault        float64 `json:"cfg_default"`
+	CfgMin            float64 `json:"cfg_min"`
+	CfgMax            float64 `json:"cfg_max"`
+	SkipDefault       int     `json:"skip_default"`
+	SchedulerDefault  string  `json:"scheduler_default"`
+	FormatCode        string  `json:"format_code"`
+}
+
+// ListModels fetches the imference model catalog and returns only the
+// locally-runnable models — those with a downloadable model_url. The endpoint
+// is public (no auth), so this works before the user configures an API key.
+func (c *Client) ListModels(ctx context.Context) ([]types.ModelInfo, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+
+	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+"/api/models", nil)
+	r.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(r)
+	if err != nil {
+		return nil, fmt.Errorf("cloud: GET /api/models: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("cloud: /api/models HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var parsed struct {
+		Models []apiModel `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, fmt.Errorf("cloud: parse /api/models: %w", err)
+	}
+
+	out := make([]types.ModelInfo, 0, len(parsed.Models))
+	for _, m := range parsed.Models {
+		if m.ModelURL == "" {
+			continue // cloud-only model — can't run locally, skip from the picker
+		}
+		out = append(out, types.ModelInfo{
+			ModelCode:         m.ModelCode,
+			Name:              m.Name,
+			ShortDescription:  m.ShortDescription,
+			MediumDescription: m.MediumDescription,
+			Image:             m.Image,
+			ModelURL:          m.ModelURL,
+			PromptPre:         m.PromptPre,
+			PromptNegative:    m.PromptNegative,
+			StepsDefault:      m.StepsDefault,
+			StepsMin:          m.StepsMin,
+			StepsMax:          m.StepsMax,
+			CfgDefault:        m.CfgDefault,
+			CfgMin:            m.CfgMin,
+			CfgMax:            m.CfgMax,
+			SkipDefault:       m.SkipDefault,
+			SchedulerDefault:  m.SchedulerDefault,
+			FormatCode:        m.FormatCode,
+		})
+	}
+	c.bus.Info("cloud", "ListModels ok", map[string]any{"total": len(parsed.Models), "local": len(out)})
+	return out, nil
+}
+
 // Generate runs the full POST → poll → download → base64 dance and returns
 // a unified GenerationResult ready for the frontend.
 func (c *Client) Generate(

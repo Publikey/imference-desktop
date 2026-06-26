@@ -119,6 +119,10 @@ def generate(payload: dict, ctx: dict) -> dict:
         guidance_scale=payload.get("guidance_scale")
         or payload.get("guidanceScale")
         or 6.0,
+        # Per-model config (clip-skip + scheduler) injected by the Go side from
+        # the selected model's catalog entry. None → engine uses its defaults.
+        clip_skip=payload.get("clip_skip") or payload.get("clipSkip"),
+        scheduler=payload.get("scheduler") or payload.get("schedulerDefault"),
         seed=payload.get("seed"),
         batch=1,
     )

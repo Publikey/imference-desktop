@@ -23,6 +23,10 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --radius: 0.625rem;
+  /* Signature brand gradient — the one spot of color in an otherwise neutral
+     app. Indigo → violet, tuned for a creative/imaginative feel. */
+  --brand-from: oklch(0.58 0.2 280);
+  --brand-to: oklch(0.62 0.23 330);
 }
 
 .dark {
@@ -44,6 +48,9 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  /* Slightly brighter brand on dark so it still reads as vivid, not muddy. */
+  --brand-from: oklch(0.66 0.19 280);
+  --brand-to: oklch(0.69 0.22 330);
 }
 
 @theme inline {
@@ -75,8 +82,189 @@
   * {
     @apply border-border;
   }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
   body {
     @apply bg-background text-foreground;
-    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-family:
+      ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv11", "ss01";
+    /* Neutral vignette only — the tinted brand aurora is an animated layer
+       (.aurora) rendered in the app so its blooms can drift. */
+    background-image: radial-gradient(
+      120% 80% at 50% -10%,
+      color-mix(in oklch, var(--foreground) 3%, transparent),
+      transparent 60%
+    );
+    background-attachment: fixed;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--foreground) 14%, transparent);
+  }
+  /* Quiet, thin scrollbars — the chrome should disappear. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 18%, transparent) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--foreground) 16%, transparent);
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--foreground) 28%, transparent);
+  }
+}
+
+@layer components {
+  /* Brand gradient fill — app mark, primary CTA. */
+  .brand-surface {
+    background-image: linear-gradient(135deg, var(--brand-from), var(--brand-to));
+  }
+  /* Brand gradient as text — for a single accent word. */
+  .brand-text {
+    background-image: linear-gradient(120deg, var(--brand-from), var(--brand-to));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  /* The primary action: gradient pill with a soft colored glow that lifts on
+     hover (Doherty-fast feedback, premium feel). */
+  .btn-brand {
+    background-image: linear-gradient(135deg, var(--brand-from), var(--brand-to));
+    color: white;
+    box-shadow: 0 8px 24px -8px color-mix(in oklch, var(--brand-to) 65%, transparent);
+    transition:
+      filter 0.15s ease,
+      box-shadow 0.2s ease,
+      transform 0.1s ease;
+  }
+  .btn-brand:hover:not(:disabled) {
+    filter: brightness(1.07) saturate(1.05);
+    box-shadow: 0 12px 30px -8px color-mix(in oklch, var(--brand-to) 75%, transparent);
+  }
+  .btn-brand:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+  /* Composer surface: layered shadow at rest, brand focus glow when active. */
+  .composer {
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.04),
+      0 12px 36px -16px rgba(0, 0, 0, 0.18);
+    transition:
+      box-shadow 0.25s ease,
+      border-color 0.25s ease;
+  }
+  .composer:focus-within {
+    border-color: transparent;
+    box-shadow:
+      0 0 0 2px color-mix(in oklch, var(--brand-from) 50%, transparent),
+      0 16px 44px -18px color-mix(in oklch, var(--brand-to) 45%, rgba(0, 0, 0, 0.22));
+  }
+  /* Soft brand bloom behind the empty-canvas icon. */
+  .canvas-glow {
+    background: radial-gradient(
+      58% 50% at 50% 42%,
+      color-mix(in oklch, var(--brand-from) 16%, transparent),
+      transparent 70%
+    );
+  }
+}
+
+/* ---- Animated brand aurora ------------------------------------------------
+   A few large, heavily-blurred gradient blobs that drift + breathe behind the
+   content. transform/opacity only → GPU-composited, no layout/paint churn.
+   Kept low-opacity and slow so it reads as ambient light, not motion. */
+.aurora {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.5;
+  will-change: transform;
+}
+.dark .aurora-blob {
+  opacity: 0.42;
+  filter: blur(100px);
+}
+.aurora-blob-1 {
+  width: 42rem;
+  height: 42rem;
+  top: -16rem;
+  left: -10rem;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklch, var(--brand-from) 60%, transparent),
+    transparent 70%
+  );
+  animation: aurora-1 26s ease-in-out infinite alternate;
+}
+.aurora-blob-2 {
+  width: 40rem;
+  height: 40rem;
+  top: -18rem;
+  right: -12rem;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklch, var(--brand-to) 58%, transparent),
+    transparent 70%
+  );
+  animation: aurora-2 32s ease-in-out infinite alternate;
+}
+.aurora-blob-3 {
+  width: 34rem;
+  height: 34rem;
+  top: 8rem;
+  left: 38%;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklch, var(--brand-from) 38%, var(--brand-to)),
+    transparent 70%
+  );
+  opacity: 0.28;
+  animation: aurora-3 38s ease-in-out infinite alternate;
+}
+@keyframes aurora-1 {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(7rem, 4rem, 0) scale(1.18);
+  }
+}
+@keyframes aurora-2 {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+  to {
+    transform: translate3d(-6rem, 5rem, 0) scale(0.92);
+  }
+}
+@keyframes aurora-3 {
+  from {
+    transform: translate3d(0, 0, 0) scale(0.9);
+  }
+  to {
+    transform: translate3d(-5rem, -4rem, 0) scale(1.2);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob {
+    animation: none;
   }
 }

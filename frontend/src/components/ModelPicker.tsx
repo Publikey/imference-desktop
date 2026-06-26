@@ -77,7 +77,7 @@ export function ModelPicker({ activeModelCode, onModelSelected }: Props) {
   };
 
   return (
-    <section className="border-border rounded-lg border p-4">
+    <section className="bg-card rounded-2xl border p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold">Local model</h3>
         {activeModelCode && (

@@ -27,6 +27,22 @@ export namespace logbus {
 
 export namespace types {
 	
+	export class CreditInfo {
+	    configured: boolean;
+	    credits: number;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CreditInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.configured = source["configured"];
+	        this.credits = source["credits"];
+	        this.error = source["error"];
+	    }
+	}
 	export class EngineInfo {
 	    installed: boolean;
 	    venvDir: string;

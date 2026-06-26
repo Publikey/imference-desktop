@@ -26,6 +26,10 @@ export function GenerateWallet() {
   return window['go']['main']['App']['GenerateWallet']();
 }
 
+export function GetCreditBalance(arg1) {
+  return window['go']['main']['App']['GetCreditBalance'](arg1);
+}
+
 export function GetEngineInfo() {
   return window['go']['main']['App']['GetEngineInfo']();
 }

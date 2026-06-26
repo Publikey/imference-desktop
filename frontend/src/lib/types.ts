@@ -52,6 +52,12 @@ export type WalletInfo = {
   error?: string;
 };
 
+export type CreditInfo = {
+  configured: boolean;
+  credits: number;
+  error?: string;
+};
+
 export type GenerationRequest = {
   prompt: string;
   negativePrompt?: string;

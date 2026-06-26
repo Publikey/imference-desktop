@@ -69,6 +69,16 @@ type WalletInfo struct {
 	Error       string `json:"error,omitempty"`
 }
 
+// CreditInfo is the renderer's view of the cloud account's remaining credits,
+// fetched with the Bearer API key (the "API key (credit)" payment mode). Mirrors
+// the balance readout the imference web app shows. Configured is false when no
+// key is set, so the Settings UI can prompt for a key instead of showing an error.
+type CreditInfo struct {
+	Configured bool    `json:"configured"`      // true when an API key was available to query
+	Credits    float64 `json:"credits"`         // remaining credit balance
+	Error      string  `json:"error,omitempty"` // populated on a failed lookup (bad key, network)
+}
+
 // GenerationRequest is the unified frontend → Go payload for both modes.
 // Mirrors imference-desktop/src/renderer/src/lib/types.ts GenerationParams.
 type GenerationRequest struct {

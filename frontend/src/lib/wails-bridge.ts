@@ -10,6 +10,7 @@ import {
   GenerateCloud,
   GenerateLocal,
   GenerateWallet,
+  GetCreditBalance,
   GetEngineInfo,
   GetLogs,
   GetSettings,
@@ -29,6 +30,7 @@ import {
 import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
 import type {
   AppSettings,
+  CreditInfo,
   EngineInfo,
   GenerationRequest,
   GenerationResult,
@@ -54,6 +56,9 @@ const raw = {
   restartSidecar: RestartSidecar as () => Promise<void>,
   generateCloud: GenerateCloud as (req: GenerationRequest) => Promise<GenerationResult>,
   generateLocal: GenerateLocal as (req: GenerationRequest) => Promise<GenerationResult>,
+  // Pass the (possibly unsaved draft) API key; Go falls back to the saved one
+  // when "" is given. The key arg is redacted from logs in sanitize() below.
+  getCreditBalance: GetCreditBalance as (apiKey: string) => Promise<CreditInfo>,
 
   getLogs: GetLogs as () => Promise<LogEntry[]>,
   clearLogs: ClearLogs as () => Promise<void>,
@@ -136,6 +141,10 @@ function sanitize(method: string, args: unknown[]): unknown {
   if (method === "saveSettings" && args[0] && typeof args[0] === "object") {
     const s = args[0] as Record<string, unknown>;
     return { ...s, apiKey: s.apiKey ? "***" : "" };
+  }
+  // getCreditBalance(apiKey): never log the key itself.
+  if (method === "getCreditBalance") {
+    return [args[0] ? "***" : ""];
   }
   return args;
 }

@@ -191,6 +191,49 @@ func (c *Client) fetchCatalog(ctx context.Context) ([]apiModel, error) {
 	return parsed.Models, nil
 }
 
+// creditsPath is the account credit-balance endpoint — the same one the
+// imference web app calls (GET /credits/balance, Bearer auth, → {"credits": N}).
+const creditsPath = "/credits/balance"
+
+// creditsResponse is the wire shape of creditsPath: a flat {"credits": 100}.
+type creditsResponse struct {
+	Credits float64 `json:"credits"`
+}
+
+// GetCredits fetches the remaining credit balance for a Bearer API key. The
+// caller passes the key explicitly (the Settings UI checks the key the user
+// just typed, before it's necessarily saved). A non-200 surfaces the server's
+// body so an invalid/expired key shows a useful message.
+func (c *Client) GetCredits(ctx context.Context, apiKey string) (float64, error) {
+	if apiKey == "" {
+		return 0, errors.New("cloud: API key not set")
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+
+	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+creditsPath, nil)
+	r.Header.Set("Authorization", "Bearer "+apiKey)
+	r.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(r)
+	if err != nil {
+		return 0, fmt.Errorf("cloud: GET %s: %w", creditsPath, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return 0, fmt.Errorf("cloud: %s HTTP %d: %s", creditsPath, resp.StatusCode, string(body))
+	}
+
+	var parsed creditsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return 0, fmt.Errorf("cloud: parse %s: %w", creditsPath, err)
+	}
+	c.bus.Info("cloud", "GetCredits ok", map[string]any{"credits": parsed.Credits})
+	return parsed.Credits, nil
+}
+
 // Generate runs the full POST → poll → download → base64 dance and returns
 // a unified GenerationResult ready for the frontend.
 func (c *Client) Generate(

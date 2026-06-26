@@ -142,6 +142,27 @@ func (a *App) RestartSidecar() error {
 	return a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath)
 }
 
+// GetCreditBalance reports the cloud account's remaining credits for the
+// "API key (credit)" payment mode — the same balance the imference web app
+// shows. The renderer passes the key it currently has in the dialog (which may
+// be an unsaved draft); when empty we fall back to the saved key. Returns
+// Configured=false with no error when neither yields a key, so the UI can
+// prompt for one instead of flashing an error.
+func (a *App) GetCreditBalance(apiKey string) types.CreditInfo {
+	if apiKey == "" {
+		apiKey = a.settings.Get().APIKey
+	}
+	if apiKey == "" {
+		return types.CreditInfo{Configured: false}
+	}
+	credits, err := a.cloud.GetCredits(a.ctx, apiKey)
+	if err != nil {
+		a.bus.Warn("app", "GetCreditBalance failed", map[string]any{"err": err.Error()})
+		return types.CreditInfo{Configured: true, Error: err.Error()}
+	}
+	return types.CreditInfo{Configured: true, Credits: credits}
+}
+
 // GenerateCloud is the only HTTP surface to imference.com. Frontend never
 // touches the network directly — keeps auth-key/wallet handling in Go and
 // gives us a single point to add retries / progress events later.

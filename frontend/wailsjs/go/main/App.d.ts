@@ -15,6 +15,8 @@ export function GenerateLocal(arg1:types.GenerationRequest):Promise<types.Genera
 
 export function GenerateWallet():Promise<string>;
 
+export function GetCreditBalance(arg1:string):Promise<types.CreditInfo>;
+
 export function GetEngineInfo():Promise<types.EngineInfo>;
 
 export function GetLogs():Promise<Array<logbus.Entry>>;

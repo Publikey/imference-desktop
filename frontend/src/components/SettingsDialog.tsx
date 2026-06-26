@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { WalletSection } from "@/components/WalletSection";
+import { CreditSection } from "@/components/CreditSection";
 import { api } from "@/lib/wails-bridge";
 import type { AppSettings, PaymentMode } from "@/lib/types";
 
@@ -111,6 +112,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
                 onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
                 placeholder="Bearer token from imference.com"
               />
+              <CreditSection apiKey={draft.apiKey} />
             </div>
           )}
 

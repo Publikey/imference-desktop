@@ -16,6 +16,9 @@ export type AppSettings = {
   walletAddress: string;
   /** Currently-selected local model (downloaded to sdxlPath). Null until chosen. */
   localModel?: ModelInfo | null;
+  /** Full catalog entry for the selected cloud model (cloudModel holds its code).
+   *  Drives the form selector's details + cloud generation params. Null until chosen. */
+  cloudModelInfo?: ModelInfo | null;
 };
 
 /** One locally-runnable model from the imference catalog (GET /api/models). */

@@ -27,6 +27,12 @@ type Settings struct {
 	// imference catalog and downloaded to SDXLPath). Nil until the user picks
 	// one. Its config drives local generation defaults — see App.GenerateLocal.
 	LocalModel *ModelInfo `json:"localModel,omitempty"`
+	// CloudModelInfo is the full catalog entry for the selected cloud model
+	// (CloudModel holds just its code, the value actually sent to the server).
+	// Stored so the form selector can show the model's details and seed cloud
+	// generation params (steps/cfg/resolution) the same way LocalModel does.
+	// Nil until the user picks a cloud model from the form.
+	CloudModelInfo *ModelInfo `json:"cloudModelInfo,omitempty"`
 }
 
 // ModelInfo is one entry from imference.com/api/models, trimmed to the fields

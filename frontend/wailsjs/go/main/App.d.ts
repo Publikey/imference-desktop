@@ -29,6 +29,8 @@ export function ImportWallet(arg1:string):Promise<string>;
 
 export function InstallEngine():Promise<void>;
 
+export function ListCloudModels():Promise<Array<types.ModelInfo>>;
+
 export function ListLocalModels():Promise<Array<types.ModelInfo>>;
 
 export function LogFromFrontend(arg1:string,arg2:string,arg3:string,arg4:any):Promise<void>;
@@ -38,5 +40,7 @@ export function RefreshWalletBalance():Promise<string>;
 export function RestartSidecar():Promise<void>;
 
 export function SaveSettings(arg1:types.Settings):Promise<types.Settings>;
+
+export function SelectCloudModel(arg1:string):Promise<void>;
 
 export function SelectLocalModel(arg1:string):Promise<void>;

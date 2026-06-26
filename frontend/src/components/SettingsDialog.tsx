@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
-import { ModelPicker } from "@/components/ModelPicker";
 import { WalletSection } from "@/components/WalletSection";
 import { api } from "@/lib/wails-bridge";
 import type { AppSettings, PaymentMode } from "@/lib/types";
@@ -39,11 +38,11 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
     void api.getSettings().then(setDraft);
   }, [open]);
 
-  // Both LocalEngineSection (install) and ModelPicker (model switch) mutate
-  // settings server-side directly (pythonPath/sdxlPath/localModel), bypassing
-  // this dialog's Save button. Refetch into our draft AND push up to the parent
-  // via onSaved so App's generation params (steps/cfg from the selected model)
-  // stay in sync without the user clicking Save or reopening the dialog.
+  // LocalEngineSection (install) mutates settings server-side directly
+  // (pythonPath/sdxlPath), bypassing this dialog's Save button. Refetch into our
+  // draft AND push up to the parent via onSaved so generation params stay in
+  // sync without the user clicking Save or reopening the dialog. (Model
+  // selection now lives in the form's ModelBar, not here.)
   const handleInstallDone = useCallback(() => {
     void api.getSettings().then((next) => {
       setDraft(next);
@@ -73,11 +72,6 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
         </DialogHeader>
 
         <LocalEngineSection onInstallDone={handleInstallDone} />
-
-        <ModelPicker
-          activeModelCode={draft.localModel?.modelCode ?? null}
-          onModelSelected={handleInstallDone}
-        />
 
         <section className="bg-card rounded-2xl border p-4 shadow-sm">
           <h3 className="mb-3 text-sm font-semibold">Cloud payment</h3>
@@ -133,16 +127,10 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
         </section>
 
         <section className="bg-card grid gap-4 rounded-2xl border p-4 shadow-sm">
-          <h3 className="text-sm font-semibold">Paths &amp; cloud model</h3>
-          <div className="grid gap-2">
-            <Label htmlFor="cloudModel">Cloud model_code</Label>
-            <Input
-              id="cloudModel"
-              value={draft.cloudModel}
-              onChange={(e) => setDraft({ ...draft, cloudModel: e.target.value })}
-              placeholder="e.g. sdxl-base or anime-v1"
-            />
-          </div>
+          <h3 className="text-sm font-semibold">Paths</h3>
+          <p className="text-muted-foreground -mt-2 text-xs">
+            The cloud and local models are now chosen from the form, above the prompt.
+          </p>
 
           <div className="grid gap-2">
             <Label htmlFor="pythonPath">

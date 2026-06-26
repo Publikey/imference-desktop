@@ -54,6 +54,10 @@ export function InstallEngine() {
   return window['go']['main']['App']['InstallEngine']();
 }
 
+export function ListCloudModels() {
+  return window['go']['main']['App']['ListCloudModels']();
+}
+
 export function ListLocalModels() {
   return window['go']['main']['App']['ListLocalModels']();
 }
@@ -72,6 +76,10 @@ export function RestartSidecar() {
 
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
+}
+
+export function SelectCloudModel(arg1) {
+  return window['go']['main']['App']['SelectCloudModel'](arg1);
 }
 
 export function SelectLocalModel(arg1) {

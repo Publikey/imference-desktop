@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { ModelBar } from "@/components/ModelBar";
 import { LogPanel } from "@/components/LogPanel";
 import { api } from "@/lib/wails-bridge";
 import { installLogCapture } from "@/lib/log-capture";
@@ -20,6 +21,7 @@ import type {
   AppSettings,
   GenerationResult,
   LogEntry,
+  ModelInfo,
   SidecarStatus,
 } from "@/lib/types";
 
@@ -41,12 +43,14 @@ const DEFAULT_PARAMS = {
 
 type Mode = "local" | "cloud";
 
-// localParams derives generation params from the selected model's config. When
-// a model is chosen we honor its steps/cfg defaults and a resolution matching
-// its format_code (SDXL is trained at 1024). Falls back to the fast dev
-// defaults when no local model is selected. The model's prompt prefix, negative
-// prompt, scheduler and clip-skip are injected server-side in App.GenerateLocal.
-function localParams(model: AppSettings["localModel"]) {
+// modelParams derives generation params from the selected model's config (used
+// for both local and cloud — each mode passes its own selected model). When a
+// model is chosen we honor its steps/cfg defaults and a resolution matching its
+// format_code (SDXL is trained at 1024). Falls back to the fast dev defaults
+// when no model is selected. The model's prompt prefix, negative prompt,
+// scheduler and clip-skip are injected server-side (local: App.GenerateLocal;
+// cloud: the imference server already knows the model's config).
+function modelParams(model: ModelInfo | null | undefined) {
   if (!model) return DEFAULT_PARAMS;
   const dims =
     model.formatCode === "portrait"
@@ -119,10 +123,13 @@ export default function App() {
       try {
         const result =
           which === "cloud"
-            ? await api.generateCloud({ prompt: prompt.trim(), ...DEFAULT_PARAMS })
+            ? await api.generateCloud({
+                prompt: prompt.trim(),
+                ...modelParams(settings?.cloudModelInfo),
+              })
             : await api.generateLocal({
                 prompt: prompt.trim(),
-                ...localParams(settings?.localModel),
+                ...modelParams(settings?.localModel),
               });
         setImage(result);
       } catch (e) {
@@ -131,7 +138,7 @@ export default function App() {
         setRunning(null);
       }
     },
-    [prompt, running, settings?.localModel]
+    [prompt, running, settings?.localModel, settings?.cloudModelInfo]
   );
 
   const generate = () => {
@@ -142,18 +149,20 @@ export default function App() {
   // Hint shown under the composer: what this generation will use.
   const contextHint = useMemo(() => {
     if (mode === "cloud") {
-      return cloudReady ? `Cloud · ${settings?.cloudModel}` : "Cloud not configured — open Settings";
+      if (!settings?.apiKey) return "Cloud not configured — add an API key in Settings";
+      const c = settings?.cloudModelInfo;
+      return c ? `${c.name} · ${c.stepsDefault} steps` : "Pick a cloud model above";
     }
     if (!localReady) {
       return sidecar.state === "error"
         ? "Local engine error — see Logs"
         : sidecar.state === "starting"
           ? "Local engine starting…"
-          : "Local engine not ready — open Settings";
+          : "Local engine not ready — install it in Settings";
     }
     const m = settings?.localModel;
-    return m ? `${m.name} · ${m.stepsDefault} steps` : "No model selected — open Settings";
-  }, [mode, cloudReady, localReady, sidecar.state, settings?.cloudModel, settings?.localModel]);
+    return m ? `${m.name} · ${m.stepsDefault} steps` : "Pick a model above";
+  }, [mode, localReady, sidecar.state, settings?.apiKey, settings?.cloudModelInfo, settings?.localModel]);
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
@@ -181,6 +190,12 @@ export default function App() {
           </div>
 
           {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
+
+          <ModelBar
+            mode={mode}
+            settings={settings}
+            onModelSwitched={handleSettingsSaved}
+          />
 
           <Composer
             prompt={prompt}

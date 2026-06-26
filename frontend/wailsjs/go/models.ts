@@ -156,6 +156,7 @@ export namespace types {
 	    paymentMode: string;
 	    walletAddress: string;
 	    localModel?: ModelInfo;
+	    cloudModelInfo?: ModelInfo;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -171,6 +172,7 @@ export namespace types {
 	        this.paymentMode = source["paymentMode"];
 	        this.walletAddress = source["walletAddress"];
 	        this.localModel = this.convertValues(source["localModel"], ModelInfo);
+	        this.cloudModelInfo = this.convertValues(source["cloudModelInfo"], ModelInfo);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

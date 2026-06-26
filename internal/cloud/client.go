@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"imference-desktop-go/internal/logbus"
@@ -28,12 +29,21 @@ const (
 	statusTimeout  = 10 * time.Second
 	pollInterval   = 1 * time.Second
 	overallTimeout = 120 * time.Second
+	catalogTTL     = 5 * time.Minute // the model catalog is effectively static per session
 )
 
 type Client struct {
 	base string
 	http *http.Client
 	bus  *logbus.Bus
+
+	// catalog caches the full (unfiltered) /api/models response. The catalog
+	// rarely changes during a session, yet it's hit on every list AND every
+	// model-select (which looks one entry up by code). One fetch serves them
+	// all until the TTL lapses. Guarded by catalogMu.
+	catalogMu      sync.Mutex
+	catalog        []apiModel
+	catalogFetched time.Time
 }
 
 func New(bus *logbus.Bus) *Client {
@@ -101,10 +111,58 @@ type apiModel struct {
 	FormatCode        string  `json:"format_code"`
 }
 
-// ListModels fetches the imference model catalog and returns only the
-// locally-runnable models — those with a downloadable model_url. The endpoint
-// is public (no auth), so this works before the user configures an API key.
-func (c *Client) ListModels(ctx context.Context) ([]types.ModelInfo, error) {
+// ListModels fetches the imference model catalog. When localOnly is true it
+// returns only the locally-runnable models — those with a downloadable
+// model_url; otherwise it returns the full catalog (cloud can run any model
+// code, including the proprietary cloud-only ones). The endpoint is public (no
+// auth), so this works before the user configures an API key.
+func (c *Client) ListModels(ctx context.Context, localOnly bool) ([]types.ModelInfo, error) {
+	models, err := c.fetchCatalog(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]types.ModelInfo, 0, len(models))
+	for _, m := range models {
+		if localOnly && m.ModelURL == "" {
+			continue // cloud-only model — can't run locally, skip from the local picker
+		}
+		out = append(out, types.ModelInfo{
+			ModelCode:         m.ModelCode,
+			Name:              m.Name,
+			ShortDescription:  m.ShortDescription,
+			MediumDescription: m.MediumDescription,
+			Image:             m.Image,
+			ModelURL:          m.ModelURL,
+			PromptPre:         m.PromptPre,
+			PromptNegative:    m.PromptNegative,
+			StepsDefault:      m.StepsDefault,
+			StepsMin:          m.StepsMin,
+			StepsMax:          m.StepsMax,
+			CfgDefault:        m.CfgDefault,
+			CfgMin:            m.CfgMin,
+			CfgMax:            m.CfgMax,
+			SkipDefault:       m.SkipDefault,
+			SchedulerDefault:  m.SchedulerDefault,
+			FormatCode:        m.FormatCode,
+		})
+	}
+	c.bus.Info("cloud", "ListModels ok", map[string]any{"total": len(models), "returned": len(out), "localOnly": localOnly})
+	return out, nil
+}
+
+// fetchCatalog returns the full (unfiltered) /api/models response, served from
+// an in-memory cache when a prior fetch is still within catalogTTL. A single
+// fetch therefore backs every list and model-select within a session. The
+// catalog is public (no auth), so this works before the user configures a key.
+func (c *Client) fetchCatalog(ctx context.Context) ([]apiModel, error) {
+	c.catalogMu.Lock()
+	defer c.catalogMu.Unlock()
+
+	if c.catalog != nil && time.Since(c.catalogFetched) < catalogTTL {
+		return c.catalog, nil
+	}
+
 	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
 
@@ -128,33 +186,9 @@ func (c *Client) ListModels(ctx context.Context) ([]types.ModelInfo, error) {
 		return nil, fmt.Errorf("cloud: parse /api/models: %w", err)
 	}
 
-	out := make([]types.ModelInfo, 0, len(parsed.Models))
-	for _, m := range parsed.Models {
-		if m.ModelURL == "" {
-			continue // cloud-only model — can't run locally, skip from the picker
-		}
-		out = append(out, types.ModelInfo{
-			ModelCode:         m.ModelCode,
-			Name:              m.Name,
-			ShortDescription:  m.ShortDescription,
-			MediumDescription: m.MediumDescription,
-			Image:             m.Image,
-			ModelURL:          m.ModelURL,
-			PromptPre:         m.PromptPre,
-			PromptNegative:    m.PromptNegative,
-			StepsDefault:      m.StepsDefault,
-			StepsMin:          m.StepsMin,
-			StepsMax:          m.StepsMax,
-			CfgDefault:        m.CfgDefault,
-			CfgMin:            m.CfgMin,
-			CfgMax:            m.CfgMax,
-			SkipDefault:       m.SkipDefault,
-			SchedulerDefault:  m.SchedulerDefault,
-			FormatCode:        m.FormatCode,
-		})
-	}
-	c.bus.Info("cloud", "ListModels ok", map[string]any{"total": len(parsed.Models), "local": len(out)})
-	return out, nil
+	c.catalog = parsed.Models
+	c.catalogFetched = time.Now()
+	return parsed.Models, nil
 }
 
 // Generate runs the full POST → poll → download → base64 dance and returns
@@ -518,10 +552,13 @@ func (c *Client) fetchStatus(ctx context.Context, statusURL, apiKey string) (str
 // between cloud and local modes.
 func (c *Client) downloadAsBase64(ctx context.Context, src string) (string, string, error) {
 	c.bus.Trace("cloud", "GET "+src, nil)
-	r, _ := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
+	// Bound the download to 30s via context, but reuse the shared client so we
+	// keep connection pooling / keep-alive instead of allocating a fresh one.
+	dlCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	r, _ := http.NewRequestWithContext(dlCtx, http.MethodGet, src, nil)
 	r.Header.Set("User-Agent", "imference-desktop-go/0.0.1")
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(r)
+	resp, err := c.http.Do(r)
 	if err != nil {
 		return "", "", err
 	}

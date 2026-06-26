@@ -17,11 +17,13 @@ import {
   GetWalletInfo,
   ImportWallet,
   InstallEngine,
+  ListCloudModels,
   ListLocalModels,
   LogFromFrontend,
   RefreshWalletBalance,
   RestartSidecar,
   SaveSettings,
+  SelectCloudModel,
   SelectLocalModel,
 } from "../../wailsjs/go/main/App";
 import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
@@ -69,9 +71,11 @@ const raw = {
   getEngineInfo: GetEngineInfo as () => Promise<EngineInfo>,
   installEngine: InstallEngine as () => Promise<void>,
 
-  // Model catalog + local model selection
+  // Model catalog + model selection (local downloads weights; cloud is instant)
   listLocalModels: ListLocalModels as () => Promise<ModelInfo[]>,
+  listCloudModels: ListCloudModels as () => Promise<ModelInfo[]>,
   selectLocalModel: SelectLocalModel as (modelCode: string) => Promise<void>,
+  selectCloudModel: SelectCloudModel as (modelCode: string) => Promise<void>,
 
   // Wallet (x402 mode)
   getWalletInfo: GetWalletInfo as () => Promise<WalletInfo>,

@@ -45,6 +45,28 @@ const DEFAULT_PARAMS = {
     "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, monochrome",
 };
 
+type Mode = "local" | "cloud";
+
+// localParams derives generation params from the selected model's config. When
+// a model is chosen we honor its steps/cfg defaults and a resolution matching
+// its format_code (SDXL is trained at 1024). Falls back to the fast dev
+// defaults when no local model is selected. The model's prompt prefix, negative
+// prompt, scheduler and clip-skip are injected server-side in App.GenerateLocal.
+function localParams(model: AppSettings["localModel"]) {
+  if (!model) return DEFAULT_PARAMS;
+  const dims =
+    model.formatCode === "portrait"
+      ? { width: 832, height: 1216 }
+      : model.formatCode === "landscape"
+        ? { width: 1216, height: 832 }
+        : { width: 1024, height: 1024 }; // square / unknown
+  return {
+    ...dims,
+    numSteps: model.stepsDefault || 28,
+    guidanceScale: model.cfgDefault || 6.0,
+  };
+}
+
 export default function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [sidecar, setSidecar] = useState<SidecarStatus>({ state: "idle" });

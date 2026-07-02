@@ -17,17 +17,20 @@ import {
   GetWalletInfo,
   ImportWallet,
   InstallEngine,
+  ListCloudModels,
   ListLocalModels,
   LogFromFrontend,
   RefreshWalletBalance,
   RestartSidecar,
   SaveSettings,
   SelectLocalModel,
+  SetCloudModel,
 } from "../../wailsjs/go/main/App";
 import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
 import type {
   AppSettings,
   EngineInfo,
+  GenerateProgress,
   GenerationRequest,
   GenerationResult,
   InstallProgress,
@@ -72,6 +75,10 @@ const raw = {
   // Model catalog + local model selection
   listLocalModels: ListLocalModels as () => Promise<ModelInfo[]>,
   selectLocalModel: SelectLocalModel as (modelCode: string) => Promise<void>,
+  // Cloud model: full catalog + persist the chosen model_code (lives in the
+  // main view's dropdown rather than Settings).
+  listCloudModels: ListCloudModels as () => Promise<ModelInfo[]>,
+  setCloudModel: SetCloudModel as (modelCode: string) => Promise<void>,
 
   // Wallet (x402 mode)
   getWalletInfo: GetWalletInfo as () => Promise<WalletInfo>,
@@ -96,6 +103,10 @@ const raw = {
     EventsOn("model:progress", (p: InstallProgress) => cb(p));
     return () => EventsOff("model:progress");
   },
+  onGenerateProgress: (cb: (p: GenerateProgress) => void): (() => void) => {
+    EventsOn("generate:progress", (p: GenerateProgress) => cb(p));
+    return () => EventsOff("generate:progress");
+  },
 };
 
 const NO_WRAP = new Set([
@@ -104,6 +115,7 @@ const NO_WRAP = new Set([
   "onLogEntry",
   "onInstallProgress",
   "onModelProgress",
+  "onGenerateProgress",
 ]);
 
 function wrap<K extends keyof typeof raw>(key: K, fn: (typeof raw)[K]): (typeof raw)[K] {

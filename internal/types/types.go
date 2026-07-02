@@ -27,6 +27,56 @@ type Settings struct {
 	// imference catalog and downloaded to SDXLPath). Nil until the user picks
 	// one. Its config drives local generation defaults — see App.GenerateLocal.
 	LocalModel *ModelInfo `json:"localModel,omitempty"`
+	// EngineRuntime holds host-machine tuning for the engine (device, VAE mode,
+	// offload, model-residency caps, WAN quantization). Applied as env vars when
+	// the sidecar starts. NOT generation params — those live in the generation UI.
+	EngineRuntime EngineRuntimeSettings `json:"engineRuntime"`
+}
+
+// EngineRuntimeSettings mirrors the engine's RuntimeConfig / WanRuntimeConfig
+// knobs (read via from_env on the Python side). Empty/zero = "engine default"
+// (host-adaptive auto), so the Go side only forwards a var the user actually
+// changed. These tune how the host runs models; they are not per-generation
+// parameters (width/steps/cfg).
+// EngineRuntimeSettings holds per-backend host-tuning. SDXL and Z-Image each get
+// their own block even though they share the engine's IMAGE_* env contract: only
+// one image backend is loaded per sidecar (chosen by the model's im_engine), so
+// the manager emits IMAGE_* from the block matching the active backend.
+type EngineRuntimeSettings struct {
+	Sdxl   ImageRuntimeSettings `json:"sdxl"`
+	Zimage ZImageRuntimeSettings `json:"zimage"`
+	Wan    WanRuntimeSettings   `json:"wan"`
+}
+
+// ImageRuntimeSettings tunes the SDXL backend (IMAGE_* env contract).
+type ImageRuntimeSettings struct {
+	Device           string `json:"device,omitempty"`           // "" / "auto" | cuda | cuda:N | mps | cpu
+	UseTinyVAE       bool   `json:"useTinyVae,omitempty"`       // SDXL TAESDxl — ~10× faster VAE decode
+	EnableCPUOffload bool   `json:"enableCpuOffload,omitempty"` // peak VRAM ↓ (≤8 GB), ~10–30% slower
+	MaxGPUModels     string `json:"maxGpuModels,omitempty"`     // "" / "auto" / int
+	MaxCPUModels     string `json:"maxCpuModels,omitempty"`     // "" / "auto" / int
+}
+
+// ZImageRuntimeSettings tunes the Z-Image backend (same IMAGE_* env contract).
+// No UseTinyVAE: Tiny VAE (TAESDxl) is SDXL-only and ignored by Z-Image.
+type ZImageRuntimeSettings struct {
+	Device           string `json:"device,omitempty"`
+	EnableCPUOffload bool   `json:"enableCpuOffload,omitempty"`
+	MaxGPUModels     string `json:"maxGpuModels,omitempty"`
+	MaxCPUModels     string `json:"maxCpuModels,omitempty"`
+}
+
+// WanRuntimeSettings tunes the WAN video backend (WAN_* env contract). Applies
+// once the video backend is enabled; ignored by the image backends. The two
+// bool knobs are pointers because the engine defaults them to true — nil means
+// "leave at engine default", *false means the user explicitly disabled it.
+type WanRuntimeSettings struct {
+	Device           string `json:"device,omitempty"`
+	MemoryProfile    string `json:"memoryProfile,omitempty"`    // "" / "auto" | gguf_q8 | gguf_q6 | gguf_q5 | gguf_q4
+	TextEncoderQuant string `json:"textEncoderQuant,omitempty"` // "" / int8 | none
+	VAETiling        *bool  `json:"vaeTiling,omitempty"`        // engine default true
+	EnableOffload    *bool  `json:"enableOffload,omitempty"`    // engine default true
+	MaxResident      string `json:"maxResident,omitempty"`      // "" / int
 }
 
 // ModelInfo is one entry from imference.com/api/models, trimmed to the fields
@@ -51,6 +101,17 @@ type ModelInfo struct {
 	SkipDefault       int     `json:"skipDefault"` // clip-skip
 	SchedulerDefault  string  `json:"schedulerDefault"`
 	FormatCode        string  `json:"formatCode"`
+	// BackendType is the internal engine backend, normalized from the catalog's
+	// im_engine field: "sdxl" | "zimage" | "wan". (im_engine "external" and null
+	// are filtered out upstream in cloud.ListModels — not locally runnable.)
+	BackendType string `json:"backendType,omitempty"`
+	// BaseModel is the HF repo id of the shared base-components a backend needs
+	// (Z-Image finetunes, e.g. "Tongyi-MAI/Z-Image-Turbo"). Empty for
+	// self-contained SDXL single-file checkpoints. Resolved offline via the CDN.
+	BaseModel string `json:"baseModel,omitempty"`
+	// ShiftDefault is the Z-Image flow-matching shift (3.0≈480p, 5.0≈720p),
+	// passed as backend_options={"shift": …}. Ignored by SDXL. 0 → engine default.
+	ShiftDefault float64 `json:"shiftDefault,omitempty"`
 }
 
 // WalletInfo is what the renderer sees when it asks about the wallet
@@ -79,6 +140,14 @@ type GenerationRequest struct {
 	// but the fields exist so a caller can override. Empty/nil → engine default.
 	Scheduler string `json:"scheduler,omitempty"`
 	ClipSkip  *int   `json:"clipSkip,omitempty"`
+	// SourceImage enables img2img: a base64 source the engine denoises from
+	// instead of pure noise. May be a data-URL ("data:image/png;base64,…") or
+	// raw base64 — the sidecar client strips any data-URL prefix. Empty = text2img.
+	SourceImage string `json:"sourceImage,omitempty"`
+	// Strength is the img2img denoising strength (0 = keep source, 1 = ignore it).
+	// Only meaningful with SourceImage set. 0/unset → engine default (0.75). In
+	// img2img the output size is derived from the source image (Width/Height ignored).
+	Strength float64 `json:"strength,omitempty"`
 }
 
 // GenerationResult is the unified Go → frontend response. Same shape for
@@ -92,6 +161,16 @@ type GenerationResult struct {
 	// string when save failed (the failure is logged but doesn't fail the
 	// generation — the in-memory base64 result is still usable).
 	SavedPath string `json:"savedPath"`
+}
+
+// GenerateProgress is broadcast on the "generate:progress" event channel during
+// a local generation — one per denoise step, parsed from the engine's stderr
+// progress bar. Lets the UI show a real progress bar instead of an opaque
+// "Generating…". Cloud generation doesn't emit these (no per-step feedback).
+type GenerateProgress struct {
+	Step    int `json:"step"`
+	Total   int `json:"total"`
+	Percent int `json:"percent"`
 }
 
 // SidecarStatus is broadcast via Wails events on the "sidecar:status" channel

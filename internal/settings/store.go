@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 
 	"imference-desktop-go/internal/types"
@@ -97,8 +98,12 @@ func (s *Store) Save(next types.Settings) (types.Settings, error) {
 }
 
 // SidecarConfigChanged tells the caller whether a Save() should trigger a
-// sidecar restart. Only pythonPath and sdxlPath matter — apiKey and
-// cloudModel are read fresh on every cloud request.
+// sidecar restart. pythonPath/sdxlPath change the interpreter or weights, and
+// the engine-runtime knobs only take effect at engine load() — all three need a
+// restart. apiKey and cloudModel are read fresh on every cloud request, so they
+// don't. (LocalModel changes go through SelectLocalModel, which restarts itself.)
 func SidecarConfigChanged(prev, next types.Settings) bool {
-	return prev.PythonPath != next.PythonPath || prev.SDXLPath != next.SDXLPath
+	return prev.PythonPath != next.PythonPath ||
+		prev.SDXLPath != next.SDXLPath ||
+		!reflect.DeepEqual(prev.EngineRuntime, next.EngineRuntime)
 }

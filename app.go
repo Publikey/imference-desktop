@@ -67,6 +67,7 @@ func NewApp() *App {
 		installer: installer.New(bus),
 	}
 	a.sidecar = sidecar.New(scriptPath, logDir, a.broadcastSidecarStatus, bus)
+	a.sidecar.SetProgressListener(a.broadcastGenerateProgress)
 	return a
 }
 
@@ -83,9 +84,39 @@ func (a *App) startup(ctx context.Context) {
 	})
 	a.bus.Info("app", "startup", nil)
 	go func() {
-		s := a.settings.Get()
-		_ = a.sidecar.Start(a.ctx, s.PythonPath, s.SDXLPath)
+		s := a.clearStaleLocalModel()
+		if s.PythonPath == "" || s.SDXLPath == "" {
+			// Engine not installed or no model selected yet — don't spawn the
+			// sidecar (it would just error). The UI shows a setup prompt; the
+			// sidecar stays "idle".
+			a.bus.Info("app", "sidecar not started — engine not installed or no model selected", nil)
+			return
+		}
+		_ = a.sidecar.Start(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime)
 	}()
+}
+
+// clearStaleLocalModel drops a persisted model selection whose weights file no
+// longer exists (e.g. the cache dir was wiped or the file deleted) — the
+// settings.json lives under UserConfigDir and survives a UserCacheDir wipe, so a
+// clean reinstall can inherit a dangling SDXLPath. Returns the current settings,
+// with SDXLPath + LocalModel cleared and saved when they were stale, so the app
+// never tries to load a missing checkpoint (which surfaced as "Local error").
+func (a *App) clearStaleLocalModel() types.Settings {
+	s := a.settings.Get()
+	if s.SDXLPath == "" {
+		return s
+	}
+	if _, err := os.Stat(s.SDXLPath); err == nil {
+		return s // weights present — selection is valid
+	}
+	a.bus.Warn("app", "selected model weights missing; clearing stale selection", map[string]any{"path": s.SDXLPath})
+	s.SDXLPath = ""
+	s.LocalModel = nil
+	if _, err := a.settings.Save(s); err != nil {
+		a.bus.Error("app", "clear stale model save failed", map[string]any{"err": err.Error()})
+	}
+	return s
 }
 
 // onBeforeClose runs when the user clicks the X. Returning false lets the
@@ -102,6 +133,13 @@ func (a *App) broadcastSidecarStatus(s types.SidecarStatus) {
 		return // Wails hasn't called startup yet — nothing to emit to.
 	}
 	runtime.EventsEmit(a.ctx, "sidecar:status", s)
+}
+
+func (a *App) broadcastGenerateProgress(p types.GenerateProgress) {
+	if a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, "generate:progress", p)
 }
 
 // ------------------------------------------------------------------------
@@ -126,7 +164,7 @@ func (a *App) SaveSettings(next types.Settings) (types.Settings, error) {
 	a.bus.Info("app", "SaveSettings ok", map[string]any{"sidecarRestart": restart})
 	if restart {
 		go func() {
-			_ = a.sidecar.Restart(a.ctx, saved.PythonPath, saved.SDXLPath)
+			_ = a.sidecar.Restart(a.ctx, saved.PythonPath, saved.SDXLPath, saved.LocalModel, saved.EngineRuntime)
 		}()
 	}
 	return saved, nil
@@ -139,7 +177,7 @@ func (a *App) GetSidecarStatus() types.SidecarStatus {
 func (a *App) RestartSidecar() error {
 	s := a.settings.Get()
 	a.bus.Info("app", "RestartSidecar requested", nil)
-	return a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath)
+	return a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime)
 }
 
 // GenerateCloud is the only HTTP surface to imference.com. Frontend never
@@ -211,17 +249,23 @@ func (a *App) applyLocalModelConfig(req *types.GenerationRequest) {
 	if req.NegativePrompt == "" {
 		req.NegativePrompt = m.PromptNegative
 	}
-	if req.Scheduler == "" {
-		req.Scheduler = m.SchedulerDefault
-	}
-	if req.ClipSkip == nil && m.SkipDefault > 0 {
-		skip := m.SkipDefault
-		req.ClipSkip = &skip
+	// Z-Image has no CLIP tokenizer and a fixed flow-matching scheduler, so the
+	// engine ignores scheduler/clip-skip for it — don't inject them. SDXL keeps
+	// the model's catalog defaults when the caller left them unset.
+	if m.BackendType != "zimage" {
+		if req.Scheduler == "" {
+			req.Scheduler = m.SchedulerDefault
+		}
+		if req.ClipSkip == nil && m.SkipDefault > 0 {
+			skip := m.SkipDefault
+			req.ClipSkip = &skip
+		}
 	}
 	a.bus.Info("app", "applied local model config", map[string]any{
 		"model":     m.ModelCode,
+		"backend":   m.BackendType,
 		"scheduler": req.Scheduler,
-		"clipSkip":  m.SkipDefault,
+		"clipSkip":  req.ClipSkip,
 	})
 }
 
@@ -234,6 +278,24 @@ func (a *App) applyLocalModelConfig(req *types.GenerationRequest) {
 // API key, so the picker is usable on first run.
 func (a *App) ListLocalModels() ([]types.ModelInfo, error) {
 	return a.cloud.ListModels(a.ctx)
+}
+
+// ListCloudModels returns the full catalog (unfiltered) for the cloud model
+// dropdown in the main view — cloud generation can run any model, including
+// cloud-only / external ones the local picker hides.
+func (a *App) ListCloudModels() ([]types.ModelInfo, error) {
+	return a.cloud.ListAllModels(a.ctx)
+}
+
+// SetCloudModel persists the selected cloud model_code. Lives here (not the
+// Settings dialog) so the main view can switch the cloud model quickly during
+// testing. No sidecar restart — cloud config is read fresh on each request.
+func (a *App) SetCloudModel(modelCode string) error {
+	s := a.settings.Get()
+	s.CloudModel = modelCode
+	_, err := a.settings.Save(s)
+	a.bus.Info("app", "SetCloudModel", map[string]any{"model": modelCode})
+	return err
 }
 
 // SelectLocalModel downloads the chosen model's weights, deletes the previously
@@ -307,7 +369,7 @@ func (a *App) SelectLocalModel(modelCode string) error {
 		}
 
 		emit(types.InstallProgress{Phase: "model", Message: "Loading " + chosen.Name + " into the engine…", PercentEstimate: 100})
-		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath); rerr != nil {
+		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime); rerr != nil {
 			a.bus.Warn("app", "SelectLocalModel sidecar restart failed", map[string]any{"err": rerr.Error()})
 			emit(types.InstallProgress{Phase: "error", Error: rerr.Error(), Done: true})
 			return
@@ -424,10 +486,6 @@ func (a *App) InstallEngine() error {
 	if err != nil {
 		return err
 	}
-	modelPath, err := sdxlModelPath(installer.SDXLModelURL)
-	if err != nil {
-		return err
-	}
 
 	progress := make(chan types.InstallProgress, 16)
 
@@ -440,10 +498,12 @@ func (a *App) InstallEngine() error {
 		a.bus.Info("app", "stopping sidecar before install (to release venv file locks)", nil)
 		a.sidecar.Stop()
 
+		// No ModelPath: the engine install no longer bundles a default checkpoint.
+		// Model weights are downloaded on demand when the user picks one from the
+		// catalog (SelectLocalModel), keyed by its im_engine backend.
 		err := a.installer.Install(a.ctx, installer.Options{
 			VenvDir:                 venvDir,
 			SidecarRequirementsPath: reqs,
-			ModelPath:               modelPath, // triggers the SDXL download phase
 		}, progress)
 		if err != nil {
 			a.bus.Error("app", "InstallEngine failed", map[string]any{"err": err.Error()})
@@ -458,21 +518,31 @@ func (a *App) InstallEngine() error {
 		// which case path is unchanged but the sidecar is still stopped).
 		s := a.settings.Get()
 		s.PythonPath = installer.VenvPython(venvDir)
-			// The install flow downloaded (or reused) the SDXL weights at
-			// modelPath, so wire them in too — this is what lets the post-install
-			// sidecar restart succeed instead of failing "settings incomplete".
-			s.SDXLPath = modelPath
+		// A reinstall keeps a valid prior model, but a from-scratch install (cache
+		// dir wiped) can inherit a dangling SDXLPath from the surviving
+		// settings.json — drop it so we don't try to load missing weights.
+		if s.SDXLPath != "" {
+			if _, err := os.Stat(s.SDXLPath); err != nil {
+				a.bus.Warn("app", "post-install: selected model weights missing; clearing", map[string]any{"path": s.SDXLPath})
+				s.SDXLPath = ""
+				s.LocalModel = nil
+			}
+		}
 		if _, err := a.settings.Save(s); err != nil {
 			a.bus.Error("app", "post-install settings save failed", map[string]any{"err": err.Error()})
 		}
 
-		// Always restart the sidecar after a successful install — the
-		// pre-install Stop() left it in "stopped" state and nothing else
-		// will revive it. Avoids the "local: stopped" pill that lingered
-		// indefinitely on reinstall-with-same-pythonPath previously.
-		a.bus.Info("app", "restarting sidecar after install", nil)
-		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath); rerr != nil {
-			a.bus.Warn("app", "post-install sidecar restart failed", map[string]any{"err": rerr.Error()})
+		// Restart the sidecar after install only when a valid model is already
+		// configured — the pre-install Stop() left it "stopped". With no model
+		// yet, starting would just fail "settings incomplete"; the upcoming model
+		// selection (SelectLocalModel) restarts it once weights are on disk.
+		if s.SDXLPath == "" {
+			a.bus.Info("app", "install complete; awaiting model selection before sidecar start", nil)
+		} else {
+			a.bus.Info("app", "restarting sidecar after install", nil)
+			if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime); rerr != nil {
+				a.bus.Warn("app", "post-install sidecar restart failed", map[string]any{"err": rerr.Error()})
+			}
 		}
 	}()
 

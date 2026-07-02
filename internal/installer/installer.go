@@ -29,13 +29,15 @@ import (
 	"imference-desktop-go/internal/types"
 )
 
-// EngineTarball is the default pip-installable source (GitHub main branch).
-// Branch can be retargeted to a tag (refs/tags/v0.0.1) when stable releases
-// exist; for the POC, main is fine.
+// EngineTarball is the default pip-installable source, pinned to a tagged
+// release for reproducible installs. Bump this when adopting a newer engine
+// release (and adapt the sidecar/Go to any API changes first). Using a fixed
+// tag — not refs/heads/main — so the desktop never silently picks up a drifting
+// main that could break the sidecar.
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[runtime] @ https://github.com/Publikey/imference-engine/archive/refs/heads/main.tar.gz"
+const EngineTarball = "imference-engine[runtime] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.2.1.tar.gz"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute
@@ -56,9 +58,12 @@ func resolveEngineSource() (spec string, editable bool) {
 	if strings.HasPrefix(override, "http://") || strings.HasPrefix(override, "https://") {
 		return override, false
 	}
-	// Local path → editable install with [runtime] extra. Pip accepts
-	// "path[extras]" syntax even on Windows paths with spaces.
-	return override + "[runtime]", true
+	// Local path → editable install with the per-backend image extras. Pip
+	// accepts "path[extras]" syntax even on Windows paths with spaces. We install
+	// both SDXL and Z-Image (identical deps, resolved once). The pinned GitHub
+	// tarball (EngineTarball) still uses [runtime] because tag v0.2.1 predates the
+	// [sdxl]/[zimage] split — flip EngineTarball to [sdxl,zimage] at the v0.2.2 bump.
+	return override + "[sdxl,zimage]", true
 }
 
 // TorchIndexURL is the CUDA 12.4 wheel index. We use cu124 (not cu121) because

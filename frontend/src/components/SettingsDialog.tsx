@@ -11,10 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
-import { ModelPicker } from "@/components/ModelPicker";
 import { WalletSection } from "@/components/WalletSection";
+import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
 import { api } from "@/lib/wails-bridge";
-import type { AppSettings, PaymentMode } from "@/lib/types";
+import type { AppSettings, EngineRuntimeSettings, PaymentMode } from "@/lib/types";
 
 type Props = {
   open: boolean;
@@ -31,6 +31,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
     outputDir: "",
     paymentMode: "bearer",
     walletAddress: "",
+    engineRuntime: { sdxl: {}, zimage: {}, wan: {} },
   });
   const [saving, setSaving] = useState(false);
 
@@ -39,11 +40,10 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
     void api.getSettings().then(setDraft);
   }, [open]);
 
-  // Both LocalEngineSection (install) and ModelPicker (model switch) mutate
-  // settings server-side directly (pythonPath/sdxlPath/localModel), bypassing
-  // this dialog's Save button. Refetch into our draft AND push up to the parent
-  // via onSaved so App's generation params (steps/cfg from the selected model)
-  // stay in sync without the user clicking Save or reopening the dialog.
+  // LocalEngineSection (install) mutates settings server-side directly
+  // (pythonPath), bypassing this dialog's Save button. Refetch into our draft
+  // AND push up to the parent via onSaved so the app stays in sync without the
+  // user clicking Save or reopening the dialog.
   const handleInstallDone = useCallback(() => {
     void api.getSettings().then((next) => {
       setDraft(next);
@@ -74,9 +74,11 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
 
         <LocalEngineSection onInstallDone={handleInstallDone} />
 
-        <ModelPicker
-          activeModelCode={draft.localModel?.modelCode ?? null}
-          onModelSelected={handleInstallDone}
+        <EngineRuntimeSection
+          value={draft.engineRuntime}
+          onChange={(next: EngineRuntimeSettings) =>
+            setDraft((d) => ({ ...d, engineRuntime: next }))
+          }
         />
 
         <section className="bg-card rounded-2xl border p-4 shadow-sm">
@@ -133,17 +135,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
         </section>
 
         <section className="bg-card grid gap-4 rounded-2xl border p-4 shadow-sm">
-          <h3 className="text-sm font-semibold">Paths &amp; cloud model</h3>
-          <div className="grid gap-2">
-            <Label htmlFor="cloudModel">Cloud model_code</Label>
-            <Input
-              id="cloudModel"
-              value={draft.cloudModel}
-              onChange={(e) => setDraft({ ...draft, cloudModel: e.target.value })}
-              placeholder="e.g. sdxl-base or anime-v1"
-            />
-          </div>
-
+          <h3 className="text-sm font-semibold">Paths</h3>
           <div className="grid gap-2">
             <Label htmlFor="pythonPath">
               Python path
@@ -159,15 +151,8 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
             />
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="sdxlPath">Local SDXL .safetensors</Label>
-            <Input
-              id="sdxlPath"
-              value={draft.sdxlPath}
-              onChange={(e) => setDraft({ ...draft, sdxlPath: e.target.value })}
-              placeholder="Auto-filled when you pick a model above"
-            />
-          </div>
+          {/* The local model's .safetensors path is managed automatically by the
+              model dropdown (download on Run) — not a user-facing setting. */}
 
           <div className="grid gap-2">
             <Label htmlFor="outputDir">Auto-save folder (optional)</Label>

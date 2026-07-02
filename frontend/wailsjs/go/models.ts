@@ -43,6 +43,100 @@ export namespace types {
 	        this.pythonPath = source["pythonPath"];
 	    }
 	}
+	export class WanRuntimeSettings {
+	    device?: string;
+	    memoryProfile?: string;
+	    textEncoderQuant?: string;
+	    vaeTiling?: boolean;
+	    enableOffload?: boolean;
+	    maxResident?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WanRuntimeSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.device = source["device"];
+	        this.memoryProfile = source["memoryProfile"];
+	        this.textEncoderQuant = source["textEncoderQuant"];
+	        this.vaeTiling = source["vaeTiling"];
+	        this.enableOffload = source["enableOffload"];
+	        this.maxResident = source["maxResident"];
+	    }
+	}
+	export class ZImageRuntimeSettings {
+	    device?: string;
+	    enableCpuOffload?: boolean;
+	    maxGpuModels?: string;
+	    maxCpuModels?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ZImageRuntimeSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.device = source["device"];
+	        this.enableCpuOffload = source["enableCpuOffload"];
+	        this.maxGpuModels = source["maxGpuModels"];
+	        this.maxCpuModels = source["maxCpuModels"];
+	    }
+	}
+	export class ImageRuntimeSettings {
+	    device?: string;
+	    useTinyVae?: boolean;
+	    enableCpuOffload?: boolean;
+	    maxGpuModels?: string;
+	    maxCpuModels?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImageRuntimeSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.device = source["device"];
+	        this.useTinyVae = source["useTinyVae"];
+	        this.enableCpuOffload = source["enableCpuOffload"];
+	        this.maxGpuModels = source["maxGpuModels"];
+	        this.maxCpuModels = source["maxCpuModels"];
+	    }
+	}
+	export class EngineRuntimeSettings {
+	    sdxl: ImageRuntimeSettings;
+	    zimage: ZImageRuntimeSettings;
+	    wan: WanRuntimeSettings;
+	
+	    static createFrom(source: any = {}) {
+	        return new EngineRuntimeSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sdxl = this.convertValues(source["sdxl"], ImageRuntimeSettings);
+	        this.zimage = this.convertValues(source["zimage"], ZImageRuntimeSettings);
+	        this.wan = this.convertValues(source["wan"], WanRuntimeSettings);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class GenerationRequest {
 	    prompt: string;
 	    negativePrompt?: string;
@@ -53,6 +147,8 @@ export namespace types {
 	    seed?: number;
 	    scheduler?: string;
 	    clipSkip?: number;
+	    sourceImage?: string;
+	    strength?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new GenerationRequest(source);
@@ -69,6 +165,8 @@ export namespace types {
 	        this.seed = source["seed"];
 	        this.scheduler = source["scheduler"];
 	        this.clipSkip = source["clipSkip"];
+	        this.sourceImage = source["sourceImage"];
+	        this.strength = source["strength"];
 	    }
 	}
 	export class GenerationResult {
@@ -89,6 +187,7 @@ export namespace types {
 	        this.savedPath = source["savedPath"];
 	    }
 	}
+	
 	export class ModelInfo {
 	    modelCode: string;
 	    name: string;
@@ -107,6 +206,9 @@ export namespace types {
 	    skipDefault: number;
 	    schedulerDefault: string;
 	    formatCode: string;
+	    backendType?: string;
+	    baseModel?: string;
+	    shiftDefault?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ModelInfo(source);
@@ -131,6 +233,9 @@ export namespace types {
 	        this.skipDefault = source["skipDefault"];
 	        this.schedulerDefault = source["schedulerDefault"];
 	        this.formatCode = source["formatCode"];
+	        this.backendType = source["backendType"];
+	        this.baseModel = source["baseModel"];
+	        this.shiftDefault = source["shiftDefault"];
 	    }
 	}
 	export class PythonInfo {
@@ -156,6 +261,7 @@ export namespace types {
 	    paymentMode: string;
 	    walletAddress: string;
 	    localModel?: ModelInfo;
+	    engineRuntime: EngineRuntimeSettings;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -171,6 +277,7 @@ export namespace types {
 	        this.paymentMode = source["paymentMode"];
 	        this.walletAddress = source["walletAddress"];
 	        this.localModel = this.convertValues(source["localModel"], ModelInfo);
+	        this.engineRuntime = this.convertValues(source["engineRuntime"], EngineRuntimeSettings);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -229,6 +336,7 @@ export namespace types {
 	        this.error = source["error"];
 	    }
 	}
+	
 
 }
 

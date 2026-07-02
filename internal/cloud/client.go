@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"imference-desktop-go/internal/logbus"
@@ -99,12 +100,35 @@ type apiModel struct {
 	SkipDefault       int     `json:"skip_default"`
 	SchedulerDefault  string  `json:"scheduler_default"`
 	FormatCode        string  `json:"format_code"`
+	// ImEngine is the catalog's engine discriminator: "sdxl" | "zimage" |
+	// "wan22" | "external" | null. We map it to the internal backend name and
+	// skip the ones that aren't locally runnable here (external / null).
+	ImEngine     string  `json:"im_engine"`
+	BaseModel    string  `json:"base_model"`
+	ShiftDefault float64 `json:"shift_default"`
 }
 
-// ListModels fetches the imference model catalog and returns only the
-// locally-runnable models — those with a downloadable model_url. The endpoint
-// is public (no auth), so this works before the user configures an API key.
-func (c *Client) ListModels(ctx context.Context) ([]types.ModelInfo, error) {
+// normalizeEngine maps the catalog's im_engine value to the internal backend
+// name the sidecar understands. Returns "" for values the desktop can't run
+// locally — null/empty, or "external" (a remote-API model handled elsewhere) —
+// so the caller skips them from the local picker.
+func normalizeEngine(imEngine string) string {
+	switch strings.ToLower(strings.TrimSpace(imEngine)) {
+	case "sdxl":
+		return "sdxl"
+	case "zimage":
+		return "zimage"
+	case "wan22", "wan":
+		return "wan"
+	default:
+		return "" // "external" (later) and null/empty
+	}
+}
+
+// fetchCatalog GETs the public /api/models endpoint (no auth) and returns the
+// raw entries. Shared by ListModels (local picker) and ListAllModels (cloud
+// dropdown).
+func (c *Client) fetchCatalog(ctx context.Context) ([]apiModel, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
 
@@ -127,33 +151,85 @@ func (c *Client) ListModels(ctx context.Context) ([]types.ModelInfo, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
 		return nil, fmt.Errorf("cloud: parse /api/models: %w", err)
 	}
+	return parsed.Models, nil
+}
 
-	out := make([]types.ModelInfo, 0, len(parsed.Models))
-	for _, m := range parsed.Models {
+// defaultZImageBase is the shared base-components repo (tokenizer + Qwen text
+// encoder + VAE) used for Z-Image checkpoints that ship transformer-only — which
+// is the common case. Used only as a fallback when the catalog doesn't carry a
+// per-model base_model yet; a non-empty catalog base_model always wins.
+const defaultZImageBase = "Tongyi-MAI/Z-Image-Turbo"
+
+// toModelInfo maps a wire entry to the app's camelCase ModelInfo, normalizing
+// im_engine to the internal backend name.
+func toModelInfo(m apiModel) types.ModelInfo {
+	backend := normalizeEngine(m.ImEngine)
+	baseModel := m.BaseModel
+	// Z-Image finetunes need a base repo for their shared text_encoder/VAE. Until
+	// the catalog exposes base_model per model, default it so the load doesn't
+	// fall into the (transformer-only-incompatible) self-contained path.
+	if backend == "zimage" && baseModel == "" {
+		baseModel = defaultZImageBase
+	}
+	return types.ModelInfo{
+		ModelCode:         m.ModelCode,
+		Name:              m.Name,
+		ShortDescription:  m.ShortDescription,
+		MediumDescription: m.MediumDescription,
+		Image:             m.Image,
+		ModelURL:          m.ModelURL,
+		PromptPre:         m.PromptPre,
+		PromptNegative:    m.PromptNegative,
+		StepsDefault:      m.StepsDefault,
+		StepsMin:          m.StepsMin,
+		StepsMax:          m.StepsMax,
+		CfgDefault:        m.CfgDefault,
+		CfgMin:            m.CfgMin,
+		CfgMax:            m.CfgMax,
+		SkipDefault:       m.SkipDefault,
+		SchedulerDefault:  m.SchedulerDefault,
+		FormatCode:        m.FormatCode,
+		BackendType:       backend,
+		BaseModel:         baseModel,
+		ShiftDefault:      m.ShiftDefault,
+	}
+}
+
+// ListModels returns only the locally-runnable models — those with a
+// downloadable model_url AND a known local im_engine (sdxl/zimage/wan). Drives
+// the local model picker.
+func (c *Client) ListModels(ctx context.Context) ([]types.ModelInfo, error) {
+	models, err := c.fetchCatalog(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]types.ModelInfo, 0, len(models))
+	for _, m := range models {
 		if m.ModelURL == "" {
 			continue // cloud-only model — can't run locally, skip from the picker
 		}
-		out = append(out, types.ModelInfo{
-			ModelCode:         m.ModelCode,
-			Name:              m.Name,
-			ShortDescription:  m.ShortDescription,
-			MediumDescription: m.MediumDescription,
-			Image:             m.Image,
-			ModelURL:          m.ModelURL,
-			PromptPre:         m.PromptPre,
-			PromptNegative:    m.PromptNegative,
-			StepsDefault:      m.StepsDefault,
-			StepsMin:          m.StepsMin,
-			StepsMax:          m.StepsMax,
-			CfgDefault:        m.CfgDefault,
-			CfgMin:            m.CfgMin,
-			CfgMax:            m.CfgMax,
-			SkipDefault:       m.SkipDefault,
-			SchedulerDefault:  m.SchedulerDefault,
-			FormatCode:        m.FormatCode,
-		})
+		if normalizeEngine(m.ImEngine) == "" {
+			continue // im_engine null (ignore) or "external" (handled later) — not local
+		}
+		out = append(out, toModelInfo(m))
 	}
-	c.bus.Info("cloud", "ListModels ok", map[string]any{"total": len(parsed.Models), "local": len(out)})
+	c.bus.Info("cloud", "ListModels ok", map[string]any{"total": len(models), "local": len(out)})
+	return out, nil
+}
+
+// ListAllModels returns the full catalog, unfiltered — every model regardless of
+// im_engine or model_url. Drives the cloud model dropdown in the main view,
+// where any model (including cloud-only / external ones) is selectable.
+func (c *Client) ListAllModels(ctx context.Context) ([]types.ModelInfo, error) {
+	models, err := c.fetchCatalog(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]types.ModelInfo, 0, len(models))
+	for _, m := range models {
+		out = append(out, toModelInfo(m))
+	}
+	c.bus.Info("cloud", "ListAllModels ok", map[string]any{"total": len(out)})
 	return out, nil
 }
 

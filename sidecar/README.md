@@ -39,7 +39,7 @@ C:\envs\imference\Scripts\Activate.ps1
 pip install torch --index-url https://download.pytorch.org/whl/cu124
 
 # 3. imference-engine with runtime extras
-pip install "imference-engine[runtime] @ https://github.com/Publikey/imference-engine/archive/refs/heads/main.tar.gz"
+pip install "imference-engine[runtime] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.2.1.tar.gz"
 
 # 4. Sidecar deps (runqy-python)
 pip install -r "C:\git windows\imference-desktop-go\sidecar\requirements.txt"

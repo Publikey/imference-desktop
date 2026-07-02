@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { WalletSection } from "@/components/WalletSection";
 import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
+import { CreditSection } from "@/components/CreditSection";
 import { api } from "@/lib/wails-bridge";
 import type { AppSettings, EngineRuntimeSettings, PaymentMode } from "@/lib/types";
 
@@ -43,7 +44,8 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
   // LocalEngineSection (install) mutates settings server-side directly
   // (pythonPath), bypassing this dialog's Save button. Refetch into our draft
   // AND push up to the parent via onSaved so the app stays in sync without the
-  // user clicking Save or reopening the dialog.
+  // user clicking Save or reopening the dialog. (Model selection now lives in
+  // the form's ModelBar, not here.)
   const handleInstallDone = useCallback(() => {
     void api.getSettings().then((next) => {
       setDraft(next);
@@ -119,6 +121,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
                 onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
                 placeholder="Bearer token from imference.com"
               />
+              <CreditSection apiKey={draft.apiKey} />
             </div>
           )}
 
@@ -136,6 +139,10 @@ export function SettingsDialog({ open, onOpenChange, onSaved }: Props) {
 
         <section className="bg-card grid gap-4 rounded-2xl border p-4 shadow-sm">
           <h3 className="text-sm font-semibold">Paths</h3>
+          <p className="text-muted-foreground -mt-2 text-xs">
+            The cloud and local models are now chosen from the form, above the prompt.
+          </p>
+
           <div className="grid gap-2">
             <Label htmlFor="pythonPath">
               Python path

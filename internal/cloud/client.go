@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"imference-desktop-go/internal/logbus"
@@ -29,12 +30,21 @@ const (
 	statusTimeout  = 10 * time.Second
 	pollInterval   = 1 * time.Second
 	overallTimeout = 120 * time.Second
+	catalogTTL     = 5 * time.Minute // the model catalog is effectively static per session
 )
 
 type Client struct {
 	base string
 	http *http.Client
 	bus  *logbus.Bus
+
+	// catalog caches the full (unfiltered) /api/models response. The catalog
+	// rarely changes during a session, yet it's hit on every list AND every
+	// model-select (which looks one entry up by code). One fetch serves them
+	// all until the TTL lapses. Guarded by catalogMu.
+	catalogMu      sync.Mutex
+	catalog        []apiModel
+	catalogFetched time.Time
 }
 
 func New(bus *logbus.Bus) *Client {
@@ -101,8 +111,8 @@ type apiModel struct {
 	SchedulerDefault  string  `json:"scheduler_default"`
 	FormatCode        string  `json:"format_code"`
 	// ImEngine is the catalog's engine discriminator: "sdxl" | "zimage" |
-	// "wan22" | "external" | null. We map it to the internal backend name and
-	// skip the ones that aren't locally runnable here (external / null).
+	// "wan22" | "external" | null. Mapped to the internal backend name; the
+	// local picker skips the ones that aren't locally runnable (external / null).
 	ImEngine     string  `json:"im_engine"`
 	BaseModel    string  `json:"base_model"`
 	ShiftDefault float64 `json:"shift_default"`
@@ -110,8 +120,7 @@ type apiModel struct {
 
 // normalizeEngine maps the catalog's im_engine value to the internal backend
 // name the sidecar understands. Returns "" for values the desktop can't run
-// locally — null/empty, or "external" (a remote-API model handled elsewhere) —
-// so the caller skips them from the local picker.
+// locally — null/empty, or "external" (a remote-API model handled elsewhere).
 func normalizeEngine(imEngine string) string {
 	switch strings.ToLower(strings.TrimSpace(imEngine)) {
 	case "sdxl":
@@ -125,49 +134,17 @@ func normalizeEngine(imEngine string) string {
 	}
 }
 
-// fetchCatalog GETs the public /api/models endpoint (no auth) and returns the
-// raw entries. Shared by ListModels (local picker) and ListAllModels (cloud
-// dropdown).
-func (c *Client) fetchCatalog(ctx context.Context) ([]apiModel, error) {
-	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
-	defer cancel()
-
-	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+"/api/models", nil)
-	r.Header.Set("Accept", "application/json")
-
-	resp, err := c.http.Do(r)
-	if err != nil {
-		return nil, fmt.Errorf("cloud: GET /api/models: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("cloud: /api/models HTTP %d: %s", resp.StatusCode, string(body))
-	}
-
-	var parsed struct {
-		Models []apiModel `json:"models"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return nil, fmt.Errorf("cloud: parse /api/models: %w", err)
-	}
-	return parsed.Models, nil
-}
-
 // defaultZImageBase is the shared base-components repo (tokenizer + Qwen text
-// encoder + VAE) used for Z-Image checkpoints that ship transformer-only — which
-// is the common case. Used only as a fallback when the catalog doesn't carry a
-// per-model base_model yet; a non-empty catalog base_model always wins.
+// encoder + VAE) for Z-Image checkpoints that ship transformer-only (the common
+// case). Fallback only when the catalog carries no per-model base_model; a
+// non-empty catalog base_model always wins.
 const defaultZImageBase = "Tongyi-MAI/Z-Image-Turbo"
 
 // toModelInfo maps a wire entry to the app's camelCase ModelInfo, normalizing
-// im_engine to the internal backend name.
+// im_engine to the internal backend name and defaulting the Z-Image base repo.
 func toModelInfo(m apiModel) types.ModelInfo {
 	backend := normalizeEngine(m.ImEngine)
 	baseModel := m.BaseModel
-	// Z-Image finetunes need a base repo for their shared text_encoder/VAE. Until
-	// the catalog exposes base_model per model, default it so the load doesn't
-	// fall into the (transformer-only-incompatible) self-contained path.
 	if backend == "zimage" && baseModel == "" {
 		baseModel = defaultZImageBase
 	}
@@ -195,42 +172,114 @@ func toModelInfo(m apiModel) types.ModelInfo {
 	}
 }
 
-// ListModels returns only the locally-runnable models — those with a
-// downloadable model_url AND a known local im_engine (sdxl/zimage/wan). Drives
-// the local model picker.
-func (c *Client) ListModels(ctx context.Context) ([]types.ModelInfo, error) {
+// ListModels fetches the imference model catalog. When localOnly is true it
+// returns only the locally-runnable models — those with a downloadable
+// model_url; otherwise it returns the full catalog (cloud can run any model
+// code, including the proprietary cloud-only ones). The endpoint is public (no
+// auth), so this works before the user configures an API key.
+func (c *Client) ListModels(ctx context.Context, localOnly bool) ([]types.ModelInfo, error) {
 	models, err := c.fetchCatalog(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]types.ModelInfo, 0, len(models))
 	for _, m := range models {
-		if m.ModelURL == "" {
-			continue // cloud-only model — can't run locally, skip from the picker
-		}
-		if normalizeEngine(m.ImEngine) == "" {
-			continue // im_engine null (ignore) or "external" (handled later) — not local
+		if localOnly {
+			if m.ModelURL == "" {
+				continue // cloud-only model — can't run locally
+			}
+			if normalizeEngine(m.ImEngine) == "" {
+				continue // im_engine null (ignore) or "external" — not a local backend
+			}
 		}
 		out = append(out, toModelInfo(m))
 	}
-	c.bus.Info("cloud", "ListModels ok", map[string]any{"total": len(models), "local": len(out)})
+	c.bus.Info("cloud", "ListModels ok", map[string]any{"total": len(models), "returned": len(out), "localOnly": localOnly})
 	return out, nil
 }
 
-// ListAllModels returns the full catalog, unfiltered — every model regardless of
-// im_engine or model_url. Drives the cloud model dropdown in the main view,
-// where any model (including cloud-only / external ones) is selectable.
-func (c *Client) ListAllModels(ctx context.Context) ([]types.ModelInfo, error) {
-	models, err := c.fetchCatalog(ctx)
+// fetchCatalog returns the full (unfiltered) /api/models response, served from
+// an in-memory cache when a prior fetch is still within catalogTTL. A single
+// fetch therefore backs every list and model-select within a session. The
+// catalog is public (no auth), so this works before the user configures a key.
+func (c *Client) fetchCatalog(ctx context.Context) ([]apiModel, error) {
+	c.catalogMu.Lock()
+	defer c.catalogMu.Unlock()
+
+	if c.catalog != nil && time.Since(c.catalogFetched) < catalogTTL {
+		return c.catalog, nil
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+
+	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+"/api/models", nil)
+	r.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(r)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cloud: GET /api/models: %w", err)
 	}
-	out := make([]types.ModelInfo, 0, len(models))
-	for _, m := range models {
-		out = append(out, toModelInfo(m))
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("cloud: /api/models HTTP %d: %s", resp.StatusCode, string(body))
 	}
-	c.bus.Info("cloud", "ListAllModels ok", map[string]any{"total": len(out)})
-	return out, nil
+
+	var parsed struct {
+		Models []apiModel `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, fmt.Errorf("cloud: parse /api/models: %w", err)
+	}
+
+	c.catalog = parsed.Models
+	c.catalogFetched = time.Now()
+	return parsed.Models, nil
+}
+
+// creditsPath is the account credit-balance endpoint — the same one the
+// imference web app calls (GET /credits/balance, Bearer auth, → {"credits": N}).
+const creditsPath = "/credits/balance"
+
+// creditsResponse is the wire shape of creditsPath: a flat {"credits": 100}.
+type creditsResponse struct {
+	Credits float64 `json:"credits"`
+}
+
+// GetCredits fetches the remaining credit balance for a Bearer API key. The
+// caller passes the key explicitly (the Settings UI checks the key the user
+// just typed, before it's necessarily saved). A non-200 surfaces the server's
+// body so an invalid/expired key shows a useful message.
+func (c *Client) GetCredits(ctx context.Context, apiKey string) (float64, error) {
+	if apiKey == "" {
+		return 0, errors.New("cloud: API key not set")
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+
+	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+creditsPath, nil)
+	r.Header.Set("Authorization", "Bearer "+apiKey)
+	r.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(r)
+	if err != nil {
+		return 0, fmt.Errorf("cloud: GET %s: %w", creditsPath, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return 0, fmt.Errorf("cloud: %s HTTP %d: %s", creditsPath, resp.StatusCode, string(body))
+	}
+
+	var parsed creditsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return 0, fmt.Errorf("cloud: parse %s: %w", creditsPath, err)
+	}
+	c.bus.Info("cloud", "GetCredits ok", map[string]any{"credits": parsed.Credits})
+	return parsed.Credits, nil
 }
 
 // Generate runs the full POST → poll → download → base64 dance and returns
@@ -594,10 +643,13 @@ func (c *Client) fetchStatus(ctx context.Context, statusURL, apiKey string) (str
 // between cloud and local modes.
 func (c *Client) downloadAsBase64(ctx context.Context, src string) (string, string, error) {
 	c.bus.Trace("cloud", "GET "+src, nil)
-	r, _ := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
+	// Bound the download to 30s via context, but reuse the shared client so we
+	// keep connection pooling / keep-alive instead of allocating a fresh one.
+	dlCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	r, _ := http.NewRequestWithContext(dlCtx, http.MethodGet, src, nil)
 	r.Header.Set("User-Agent", "imference-desktop-go/0.0.1")
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(r)
+	resp, err := c.http.Do(r)
 	if err != nil {
 		return "", "", err
 	}

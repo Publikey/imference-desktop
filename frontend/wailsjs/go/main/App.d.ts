@@ -15,6 +15,8 @@ export function GenerateLocal(arg1:types.GenerationRequest):Promise<types.Genera
 
 export function GenerateWallet():Promise<string>;
 
+export function GetCreditBalance(arg1:string):Promise<types.CreditInfo>;
+
 export function GetEngineInfo():Promise<types.EngineInfo>;
 
 export function GetLogs():Promise<Array<logbus.Entry>>;
@@ -41,6 +43,6 @@ export function RestartSidecar():Promise<void>;
 
 export function SaveSettings(arg1:types.Settings):Promise<types.Settings>;
 
-export function SelectLocalModel(arg1:string):Promise<void>;
+export function SelectCloudModel(arg1:string):Promise<void>;
 
-export function SetCloudModel(arg1:string):Promise<void>;
+export function SelectLocalModel(arg1:string):Promise<void>;

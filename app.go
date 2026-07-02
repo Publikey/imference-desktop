@@ -180,6 +180,27 @@ func (a *App) RestartSidecar() error {
 	return a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime)
 }
 
+// GetCreditBalance reports the cloud account's remaining credits for the
+// "API key (credit)" payment mode — the same balance the imference web app
+// shows. The renderer passes the key it currently has in the dialog (which may
+// be an unsaved draft); when empty we fall back to the saved key. Returns
+// Configured=false with no error when neither yields a key, so the UI can
+// prompt for one instead of flashing an error.
+func (a *App) GetCreditBalance(apiKey string) types.CreditInfo {
+	if apiKey == "" {
+		apiKey = a.settings.Get().APIKey
+	}
+	if apiKey == "" {
+		return types.CreditInfo{Configured: false}
+	}
+	credits, err := a.cloud.GetCredits(a.ctx, apiKey)
+	if err != nil {
+		a.bus.Warn("app", "GetCreditBalance failed", map[string]any{"err": err.Error()})
+		return types.CreditInfo{Configured: true, Error: err.Error()}
+	}
+	return types.CreditInfo{Configured: true, Credits: credits}
+}
+
 // GenerateCloud is the only HTTP surface to imference.com. Frontend never
 // touches the network directly — keeps auth-key/wallet handling in Go and
 // gives us a single point to add retries / progress events later.
@@ -277,25 +298,44 @@ func (a *App) applyLocalModelConfig(req *types.GenerationRequest) {
 // models (those with downloadable weights). Public endpoint — works without an
 // API key, so the picker is usable on first run.
 func (a *App) ListLocalModels() ([]types.ModelInfo, error) {
-	return a.cloud.ListModels(a.ctx)
+	return a.cloud.ListModels(a.ctx, true)
 }
 
-// ListCloudModels returns the full catalog (unfiltered) for the cloud model
-// dropdown in the main view — cloud generation can run any model, including
-// cloud-only / external ones the local picker hides.
+// ListCloudModels returns the full imference catalog (cloud can run any model
+// code, including the proprietary cloud-only ones the local picker hides).
+// Public endpoint — works without an API key.
 func (a *App) ListCloudModels() ([]types.ModelInfo, error) {
-	return a.cloud.ListAllModels(a.ctx)
+	return a.cloud.ListModels(a.ctx, false)
 }
 
-// SetCloudModel persists the selected cloud model_code. Lives here (not the
-// Settings dialog) so the main view can switch the cloud model quickly during
-// testing. No sidecar restart — cloud config is read fresh on each request.
-func (a *App) SetCloudModel(modelCode string) error {
+// SelectCloudModel records which catalog model cloud generation should use.
+// Unlike SelectLocalModel this is instant — no weights to download, no sidecar
+// to restart: it just persists the model code (sent to the server) plus the
+// full catalog entry (so the form can show details and seed generation params).
+func (a *App) SelectCloudModel(modelCode string) error {
+	models, err := a.cloud.ListModels(a.ctx, false)
+	if err != nil {
+		return err
+	}
+	var chosen *types.ModelInfo
+	for i := range models {
+		if models[i].ModelCode == modelCode {
+			chosen = &models[i]
+			break
+		}
+	}
+	if chosen == nil {
+		return fmt.Errorf("model %q not found in catalog", modelCode)
+	}
+
 	s := a.settings.Get()
-	s.CloudModel = modelCode
-	_, err := a.settings.Save(s)
-	a.bus.Info("app", "SetCloudModel", map[string]any{"model": modelCode})
-	return err
+	s.CloudModel = chosen.ModelCode
+	s.CloudModelInfo = chosen
+	if _, serr := a.settings.Save(s); serr != nil {
+		return serr
+	}
+	a.bus.Info("app", "SelectCloudModel", map[string]any{"model": chosen.ModelCode})
+	return nil
 }
 
 // SelectLocalModel downloads the chosen model's weights, deletes the previously
@@ -303,7 +343,7 @@ func (a *App) SetCloudModel(modelCode string) error {
 // restarts the sidecar so the new weights load. Returns immediately; progress
 // streams on the "model:progress" event ({phase:"done"|"error"} terminates).
 func (a *App) SelectLocalModel(modelCode string) error {
-	models, err := a.cloud.ListModels(a.ctx)
+	models, err := a.cloud.ListModels(a.ctx, true)
 	if err != nil {
 		return err
 	}

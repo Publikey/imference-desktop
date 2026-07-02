@@ -27,6 +27,22 @@ export namespace logbus {
 
 export namespace types {
 	
+	export class CreditInfo {
+	    configured: boolean;
+	    credits: number;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CreditInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.configured = source["configured"];
+	        this.credits = source["credits"];
+	        this.error = source["error"];
+	    }
+	}
 	export class EngineInfo {
 	    installed: boolean;
 	    venvDir: string;
@@ -262,6 +278,7 @@ export namespace types {
 	    walletAddress: string;
 	    localModel?: ModelInfo;
 	    engineRuntime: EngineRuntimeSettings;
+	    cloudModelInfo?: ModelInfo;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -278,6 +295,7 @@ export namespace types {
 	        this.walletAddress = source["walletAddress"];
 	        this.localModel = this.convertValues(source["localModel"], ModelInfo);
 	        this.engineRuntime = this.convertValues(source["engineRuntime"], EngineRuntimeSettings);
+	        this.cloudModelInfo = this.convertValues(source["cloudModelInfo"], ModelInfo);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

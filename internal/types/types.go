@@ -31,21 +31,22 @@ type Settings struct {
 	// offload, model-residency caps, WAN quantization). Applied as env vars when
 	// the sidecar starts. NOT generation params — those live in the generation UI.
 	EngineRuntime EngineRuntimeSettings `json:"engineRuntime"`
+	// CloudModelInfo is the full catalog entry for the selected cloud model
+	// (CloudModel holds just its code, the value actually sent to the server).
+	// Stored so the form selector can show the model's details and seed cloud
+	// generation params (steps/cfg/resolution) the same way LocalModel does.
+	// Nil until the user picks a cloud model from the form.
+	CloudModelInfo *ModelInfo `json:"cloudModelInfo,omitempty"`
 }
 
-// EngineRuntimeSettings mirrors the engine's RuntimeConfig / WanRuntimeConfig
-// knobs (read via from_env on the Python side). Empty/zero = "engine default"
-// (host-adaptive auto), so the Go side only forwards a var the user actually
-// changed. These tune how the host runs models; they are not per-generation
-// parameters (width/steps/cfg).
 // EngineRuntimeSettings holds per-backend host-tuning. SDXL and Z-Image each get
 // their own block even though they share the engine's IMAGE_* env contract: only
 // one image backend is loaded per sidecar (chosen by the model's im_engine), so
 // the manager emits IMAGE_* from the block matching the active backend.
 type EngineRuntimeSettings struct {
-	Sdxl   ImageRuntimeSettings `json:"sdxl"`
+	Sdxl   ImageRuntimeSettings  `json:"sdxl"`
 	Zimage ZImageRuntimeSettings `json:"zimage"`
-	Wan    WanRuntimeSettings   `json:"wan"`
+	Wan    WanRuntimeSettings    `json:"wan"`
 }
 
 // ImageRuntimeSettings tunes the SDXL backend (IMAGE_* env contract).
@@ -122,6 +123,16 @@ type WalletInfo struct {
 	BalanceUSDC string `json:"balanceUSDC"` // human string ("1.234"), atomic / 10^6
 	Network     string `json:"network"`     // always "base-mainnet" in this POC
 	Error       string `json:"error,omitempty"`
+}
+
+// CreditInfo is the renderer's view of the cloud account's remaining credits,
+// fetched with the Bearer API key (the "API key (credit)" payment mode). Mirrors
+// the balance readout the imference web app shows. Configured is false when no
+// key is set, so the Settings UI can prompt for a key instead of showing an error.
+type CreditInfo struct {
+	Configured bool    `json:"configured"`      // true when an API key was available to query
+	Credits    float64 `json:"credits"`         // remaining credit balance
+	Error      string  `json:"error,omitempty"` // populated on a failed lookup (bad key, network)
 }
 
 // GenerationRequest is the unified frontend → Go payload for both modes.

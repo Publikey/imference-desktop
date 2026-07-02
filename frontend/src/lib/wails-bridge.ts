@@ -10,6 +10,7 @@ import {
   GenerateCloud,
   GenerateLocal,
   GenerateWallet,
+  GetCreditBalance,
   GetEngineInfo,
   GetLogs,
   GetSettings,
@@ -23,12 +24,13 @@ import {
   RefreshWalletBalance,
   RestartSidecar,
   SaveSettings,
+  SelectCloudModel,
   SelectLocalModel,
-  SetCloudModel,
 } from "../../wailsjs/go/main/App";
 import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
 import type {
   AppSettings,
+  CreditInfo,
   EngineInfo,
   GenerateProgress,
   GenerationRequest,
@@ -55,6 +57,9 @@ const raw = {
   restartSidecar: RestartSidecar as () => Promise<void>,
   generateCloud: GenerateCloud as (req: GenerationRequest) => Promise<GenerationResult>,
   generateLocal: GenerateLocal as (req: GenerationRequest) => Promise<GenerationResult>,
+  // Pass the (possibly unsaved draft) API key; Go falls back to the saved one
+  // when "" is given. The key arg is redacted from logs in sanitize() below.
+  getCreditBalance: GetCreditBalance as (apiKey: string) => Promise<CreditInfo>,
 
   getLogs: GetLogs as () => Promise<LogEntry[]>,
   clearLogs: ClearLogs as () => Promise<void>,
@@ -72,13 +77,12 @@ const raw = {
   getEngineInfo: GetEngineInfo as () => Promise<EngineInfo>,
   installEngine: InstallEngine as () => Promise<void>,
 
-  // Model catalog + local model selection
+  // Model catalog + model selection (local downloads weights; cloud is instant)
   listLocalModels: ListLocalModels as () => Promise<ModelInfo[]>,
-  selectLocalModel: SelectLocalModel as (modelCode: string) => Promise<void>,
-  // Cloud model: full catalog + persist the chosen model_code (lives in the
-  // main view's dropdown rather than Settings).
   listCloudModels: ListCloudModels as () => Promise<ModelInfo[]>,
-  setCloudModel: SetCloudModel as (modelCode: string) => Promise<void>,
+  selectLocalModel: SelectLocalModel as (modelCode: string) => Promise<void>,
+  // Cloud model: pick from the full catalog; persists code + full entry.
+  selectCloudModel: SelectCloudModel as (modelCode: string) => Promise<void>,
 
   // Wallet (x402 mode)
   getWalletInfo: GetWalletInfo as () => Promise<WalletInfo>,
@@ -144,6 +148,10 @@ function sanitize(method: string, args: unknown[]): unknown {
   if (method === "saveSettings" && args[0] && typeof args[0] === "object") {
     const s = args[0] as Record<string, unknown>;
     return { ...s, apiKey: s.apiKey ? "***" : "" };
+  }
+  // getCreditBalance(apiKey): never log the key itself.
+  if (method === "getCreditBalance") {
+    return [args[0] ? "***" : ""];
   }
   return args;
 }

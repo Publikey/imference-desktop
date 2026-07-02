@@ -26,6 +26,10 @@ export function GenerateWallet() {
   return window['go']['main']['App']['GenerateWallet']();
 }
 
+export function GetCreditBalance(arg1) {
+  return window['go']['main']['App']['GetCreditBalance'](arg1);
+}
+
 export function GetEngineInfo() {
   return window['go']['main']['App']['GetEngineInfo']();
 }
@@ -78,10 +82,10 @@ export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
 }
 
-export function SelectLocalModel(arg1) {
-  return window['go']['main']['App']['SelectLocalModel'](arg1);
+export function SelectCloudModel(arg1) {
+  return window['go']['main']['App']['SelectCloudModel'](arg1);
 }
 
-export function SetCloudModel(arg1) {
-  return window['go']['main']['App']['SetCloudModel'](arg1);
+export function SelectLocalModel(arg1) {
+  return window['go']['main']['App']['SelectLocalModel'](arg1);
 }

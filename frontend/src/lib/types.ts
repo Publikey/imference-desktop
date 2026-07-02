@@ -18,6 +18,9 @@ export type AppSettings = {
   localModel?: ModelInfo | null;
   /** Host-machine tuning for the engine (device, VAE mode, offload, residency caps, WAN quant). */
   engineRuntime?: EngineRuntimeSettings;
+  /** Full catalog entry for the selected cloud model (cloudModel holds its code).
+   *  Drives the form selector's details + cloud generation params. Null until chosen. */
+  cloudModelInfo?: ModelInfo | null;
 };
 
 /** Host-tuning knobs for the SDXL backend (IMAGE_* env contract). */
@@ -95,6 +98,12 @@ export type WalletInfo = {
   address: string;
   balanceUSDC: string;
   network: string;
+  error?: string;
+};
+
+export type CreditInfo = {
+  configured: boolean;
+  credits: number;
   error?: string;
 };
 

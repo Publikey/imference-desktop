@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { ModelBar } from "@/components/ModelBar";
 import { LogPanel } from "@/components/LogPanel";
 import { api } from "@/lib/wails-bridge";
 import { installLogCapture } from "@/lib/log-capture";
@@ -32,30 +33,26 @@ import type {
 // logged version automatically.
 installLogCapture();
 
-// Bumped to SDXL-native resolution (1024) + 20 steps to assess actual quality.
-// Was {512, 512, 12, 6.0} for fast pipeline-verification iteration. Either
-// keep these new defaults, or surface as inputs in the UI to let the user
-// trade speed vs quality per gen.
+// POC defaults are dialed down for fast dev iteration — quality drops at
+// 512x512 (SDXL is trained at 1024) and below ~20 steps, but a 10-15s
+// generation beats a 1-2 min one when you're just verifying the pipeline.
 const DEFAULT_PARAMS = {
-  width: 1024,
-  height: 1024,
-  numSteps: 20,
+  width: 512,
+  height: 512,
+  numSteps: 12,
   guidanceScale: 6.0,
-  // Critical on Illustrious / NoobAI / Pony-derived models — without this
-  // they emit watermarks, monochrome fragments, and generally low-quality
-  // outputs. Keep this as the floor and add prompt-specific tags via UI.
-  negativePrompt:
-    "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, monochrome",
 };
 
 type Mode = "local" | "cloud";
 
-// localParams derives generation params from the selected model's config. When
-// a model is chosen we honor its steps/cfg defaults and a resolution matching
-// its format_code (SDXL is trained at 1024). Falls back to the fast dev
-// defaults when no local model is selected. The model's prompt prefix, negative
-// prompt, scheduler and clip-skip are injected server-side in App.GenerateLocal.
-function localParams(model: AppSettings["localModel"]) {
+// modelParams derives generation params from the selected model's config (used
+// for both local and cloud — each mode passes its own selected model). When a
+// model is chosen we honor its steps/cfg defaults and a resolution matching its
+// format_code (SDXL is trained at 1024). Falls back to the fast dev defaults
+// when no model is selected. The model's prompt prefix, negative prompt,
+// scheduler and clip-skip are injected server-side (local: App.GenerateLocal;
+// cloud: the imference server already knows the model's config).
+function modelParams(model: ModelInfo | null | undefined) {
   if (!model) return DEFAULT_PARAMS;
   const dims =
     model.formatCode === "portrait"
@@ -85,81 +82,29 @@ export default function App() {
   // the cloud path ignores them. null source → plain text2img.
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [strength, setStrength] = useState(0.6);
-  // Cloud model dropdown (lives here, not in Settings). Full catalog; the chosen
-  // model_code is persisted server-side via setCloudModel and mirrored locally.
-  const [cloudModels, setCloudModels] = useState<ModelInfo[]>([]);
-  // Local model dropdown. The chosen model_code is downloaded + loaded with its
-  // own engine (im_engine) lazily — on Run, not on selection — so browsing the
-  // list never pulls GBs. loadingMsg surfaces that download/load progress.
-  const [localModels, setLocalModels] = useState<ModelInfo[]>([]);
-  const [localModelCode, setLocalModelCode] = useState("");
-  const [loadingMsg, setLoadingMsg] = useState<string | null>(null);
-  // Whether the local engine venv is installed — drives a clean "not installed"
-  // state instead of a scary "Local error". Assume true initially to avoid a
-  // flash before the first probe resolves.
+  // Clean "not installed" state instead of a scary "Local error". Assume true
+  // initially to avoid a flash before the first probe resolves.
   const [engineInstalled, setEngineInstalled] = useState(true);
   // Per-step inference progress (local only), from the "generate:progress" event.
   const [progress, setProgress] = useState<GenerateProgress | null>(null);
 
   useEffect(() => api.onGenerateProgress(setProgress), []);
 
-  useEffect(() => {
-    void api.listCloudModels().then(setCloudModels).catch(() => setCloudModels([]));
-    void api.listLocalModels().then(setLocalModels).catch(() => setLocalModels([]));
-    void api.getEngineInfo().then((i) => setEngineInstalled(i.installed)).catch(() => {});
-  }, []);
-
-  // Re-check install state whenever the sidecar transitions (e.g. after an
-  // install completes) so the header stops saying "not installed".
-  useEffect(() => {
-    void api.getEngineInfo().then((i) => setEngineInstalled(i.installed)).catch(() => {});
-  }, [sidecar.state]);
-
-  const onCloudModelChange = useCallback((code: string) => {
-    setSettings((s) => (s ? { ...s, cloudModel: code } : s));
-    void api.setCloudModel(code);
-  }, []);
-
-  // Selection only records intent — the actual download + sidecar reload happens
-  // on Run (ensureLocalModel).
-  const onLocalModelChange = useCallback((code: string) => setLocalModelCode(code), []);
-
-  // ensureLocalModel downloads the chosen model's weights and restarts the
-  // sidecar with the right backend (im_engine), resolving once it's ready.
-  // SelectLocalModel is event-driven (model:progress) and emits "done" only
-  // after the sidecar restart has completed, so awaiting "done" == ready.
-  const ensureLocalModel = useCallback((code: string) => {
-    return new Promise<void>((resolve, reject) => {
-      const off = api.onModelProgress((p) => {
-        if (p.message) setLoadingMsg(p.message);
-        if (p.phase === "done") {
-          off();
-          resolve();
-        } else if (p.phase === "error") {
-          off();
-          reject(new Error(p.error || "model download failed"));
-        }
-      });
-      void api.selectLocalModel(code).catch((e) => {
-        off();
-        reject(e instanceof Error ? e : new Error(String(e)));
-      });
-    });
-  }, []);
-
   const handleSettingsSaved = useCallback((next: AppSettings) => {
     setSettings(next);
   }, []);
 
   useEffect(() => {
-    void api.getSettings().then((s) => {
-      setSettings(s);
-      // Preselect the currently-loaded local model in the dropdown.
-      setLocalModelCode((cur) => cur || s.localModel?.modelCode || "");
-    });
+    void api.getSettings().then(setSettings);
     void api.getSidecarStatus().then(setSidecar);
+    void api.getEngineInfo().then((i) => setEngineInstalled(i.installed)).catch(() => {});
     return api.onSidecarStatus(setSidecar);
   }, []);
+
+  // Re-check install state on every sidecar transition (e.g. after install).
+  useEffect(() => {
+    void api.getEngineInfo().then((i) => setEngineInstalled(i.installed)).catch(() => {});
+  }, [sidecar.state]);
 
   // Header badge: tally of error-level entries since last panel open.
   useEffect(() => {
@@ -186,10 +131,7 @@ export default function App() {
     if (!localReady && cloudReady) setMode("cloud");
   }, [localReady, cloudReady, running]);
 
-  // Local is "runnable" as soon as a model is picked — the weights download +
-  // engine load happen on Run, so we don't gate on the sidecar already being
-  // ready (unlike before).
-  const modeReady = mode === "cloud" ? cloudReady : !!localModelCode;
+  const modeReady = mode === "cloud" ? cloudReady : localReady;
   const canGenerate = modeReady && !!prompt.trim() && running === null;
 
   const run = useCallback(
@@ -199,48 +141,25 @@ export default function App() {
       setError(null);
       setProgress(null);
       try {
-        if (which === "cloud") {
-          setImage(await api.generateCloud({ prompt: prompt.trim(), ...DEFAULT_PARAMS }));
-          return;
-        }
-        // Local: ensure the chosen model is downloaded + loaded with its engine
-        // first. Skip only when it's already the loaded, ready model AND its
-        // engine config still matches the catalog — so a catalog change
-        // (backend/base_model/shift) self-heals via a reload instead of running
-        // a stale sidecar.
-        if (!localModelCode) throw new Error("Select a local model first");
-        let model = settings?.localModel ?? null;
-        const fresh = localModels.find((m) => m.modelCode === localModelCode);
-        const configMatches =
-          localModelCode === model?.modelCode &&
-          (!fresh ||
-            (fresh.backendType === model?.backendType &&
-              fresh.baseModel === model?.baseModel &&
-              fresh.shiftDefault === model?.shiftDefault));
-        const alreadyLoaded = configMatches && localReady;
-        if (!alreadyLoaded) {
-          setLoadingMsg("Preparing model…");
-          await ensureLocalModel(localModelCode);
-          const next = await api.getSettings();
-          setSettings(next);
-          model = next.localModel ?? null;
-        }
-        setLoadingMsg(null);
-        setImage(
-          await api.generateLocal({
-            prompt: prompt.trim(),
-            ...localParams(model),
-            ...(sourceImage ? { sourceImage, strength } : {}),
-          })
-        );
+        const result =
+          which === "cloud"
+            ? await api.generateCloud({
+                prompt: prompt.trim(),
+                ...modelParams(settings?.cloudModelInfo),
+              })
+            : await api.generateLocal({
+                prompt: prompt.trim(),
+                ...modelParams(settings?.localModel),
+                ...(sourceImage ? { sourceImage, strength } : {}),
+              });
+        setImage(result);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
-        setLoadingMsg(null);
         setRunning(null);
       }
     },
-    [prompt, running, settings, localReady, localModelCode, localModels, ensureLocalModel, sourceImage, strength]
+    [prompt, running, settings?.localModel, settings?.cloudModelInfo, sourceImage, strength]
   );
 
   const generate = () => {
@@ -250,20 +169,22 @@ export default function App() {
 
   // Hint shown under the composer: what this generation will use.
   const contextHint = useMemo(() => {
-    if (loadingMsg) return loadingMsg;
     if (mode === "cloud") {
-      return cloudReady ? `Cloud · ${settings?.cloudModel}` : "Cloud not configured — open Settings";
+      if (!settings?.apiKey) return "Cloud not configured — add an API key in Settings";
+      const c = settings?.cloudModelInfo;
+      return c ? `${c.name} · ${c.stepsDefault} steps` : "Pick a cloud model above";
     }
     if (!engineInstalled) return "Local engine not installed — open Settings";
-    if (sidecar.state === "error") return "Local engine error — see Logs";
-    if (!localModelCode) {
-      return localModels.length ? "Pick a local model below" : "No local models available";
+    if (!localReady) {
+      return sidecar.state === "error"
+        ? "Local engine error — see Logs"
+        : sidecar.state === "starting"
+          ? "Local engine starting…"
+          : "Local engine not ready — pick a model above";
     }
-    const m = localModels.find((x) => x.modelCode === localModelCode);
-    const name = m?.name ?? localModelCode;
-    const loaded = settings?.localModel?.modelCode === localModelCode && localReady;
-    return loaded ? `${name} · ready` : `${name} · downloads & loads on Run`;
-  }, [loadingMsg, mode, cloudReady, localReady, sidecar.state, settings?.cloudModel, settings?.localModel, localModelCode, localModels, engineInstalled]);
+    const m = settings?.localModel;
+    return m ? `${m.name} · ${m.stepsDefault} steps` : "Pick a model above";
+  }, [mode, localReady, sidecar.state, settings?.apiKey, settings?.cloudModelInfo, settings?.localModel, engineInstalled]);
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
@@ -293,6 +214,12 @@ export default function App() {
 
           {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
+          <ModelBar
+            mode={mode}
+            settings={settings}
+            onModelSwitched={handleSettingsSaved}
+          />
+
           <Composer
             prompt={prompt}
             onPromptChange={setPrompt}
@@ -308,20 +235,9 @@ export default function App() {
             onSourceImageChange={setSourceImage}
             strength={strength}
             onStrengthChange={setStrength}
-            cloudModels={cloudModels}
-            cloudModel={settings?.cloudModel ?? ""}
-            onCloudModelChange={onCloudModelChange}
-            localModels={localModels}
-            localModel={localModelCode}
-            onLocalModelChange={onLocalModelChange}
           />
 
-          <ResultCanvas
-            image={image}
-            running={running}
-            progress={progress}
-            statusMsg={loadingMsg}
-          />
+          <ResultCanvas image={image} running={running} progress={progress} />
         </div>
       </main>
 
@@ -394,8 +310,8 @@ function Header({
 }
 
 function StatusDot({ status, engineInstalled }: { status: SidecarStatus; engineInstalled: boolean }) {
-  // "Not installed" is a setup state, not an error — show it neutrally (and take
-  // precedence over idle/error, which is just the sidecar not running yet).
+  // "Not installed" is a setup state, not an error — show it neutrally and ahead
+  // of idle/error (the sidecar just isn't running yet).
   const { dot, label, title } =
     status.state === "ready"
       ? { dot: "bg-emerald-500", label: `Local ready · ${status.device}`, title: undefined }
@@ -438,12 +354,6 @@ function Composer({
   onSourceImageChange,
   strength,
   onStrengthChange,
-  cloudModels,
-  cloudModel,
-  onCloudModelChange,
-  localModels,
-  localModel,
-  onLocalModelChange,
 }: {
   prompt: string;
   onPromptChange: (v: string) => void;
@@ -459,12 +369,6 @@ function Composer({
   onSourceImageChange: (v: string | null) => void;
   strength: number;
   onStrengthChange: (v: number) => void;
-  cloudModels: ModelInfo[];
-  cloudModel: string;
-  onCloudModelChange: (code: string) => void;
-  localModels: ModelInfo[];
-  localModel: string;
-  onLocalModelChange: (code: string) => void;
 }) {
   const onKeyDown = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -484,25 +388,11 @@ function Composer({
         className="placeholder:text-muted-foreground/70 block max-h-60 min-h-24 w-full resize-none rounded-t-[26px] border-0 bg-transparent px-5 pt-4 pb-2 text-[15px] leading-relaxed outline-none"
       />
       {mode === "local" && (
-        <>
-          <LocalModelBar
-            models={localModels}
-            value={localModel}
-            onChange={onLocalModelChange}
-          />
-          <Img2ImgBar
-            sourceImage={sourceImage}
-            onSourceImageChange={onSourceImageChange}
-            strength={strength}
-            onStrengthChange={onStrengthChange}
-          />
-        </>
-      )}
-      {mode === "cloud" && (
-        <CloudModelBar
-          models={cloudModels}
-          value={cloudModel}
-          onChange={onCloudModelChange}
+        <Img2ImgBar
+          sourceImage={sourceImage}
+          onSourceImageChange={onSourceImageChange}
+          strength={strength}
+          onStrengthChange={onStrengthChange}
         />
       )}
       <div className="flex items-center justify-between gap-3 px-3 pt-1 pb-3">
@@ -614,74 +504,6 @@ function Img2ImgBar({
   );
 }
 
-// Local model selector inside the composer (local mode only). Lists the
-// locally-runnable catalog. Picking a model is cheap — the weights download and
-// the sidecar reload with the model's engine happen lazily on Run.
-function LocalModelBar({
-  models,
-  value,
-  onChange,
-}: {
-  models: ModelInfo[];
-  value: string;
-  onChange: (code: string) => void;
-}) {
-  const engineTag = (m: ModelInfo) =>
-    m.backendType === "zimage" ? "Z-Image" : m.backendType === "wan" ? "WAN" : "SDXL";
-  return (
-    <div className="border-border/60 mx-3 mt-1 flex items-center gap-2 border-t pt-2">
-      <Cpu className="text-muted-foreground size-3.5 shrink-0" />
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="border-input bg-background h-8 min-w-0 flex-1 rounded-md border px-2 text-xs"
-      >
-        <option value="" disabled>
-          {models.length ? "Select a local model…" : "Loading models…"}
-        </option>
-        {models.map((m) => (
-          <option key={m.modelCode} value={m.modelCode}>
-            {m.name} · {engineTag(m)}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-// Cloud model selector inside the composer (cloud mode only). Simple dropdown
-// over the full catalog — moved out of Settings so models can be swapped quickly
-// while testing. Selection is persisted server-side (api.setCloudModel).
-function CloudModelBar({
-  models,
-  value,
-  onChange,
-}: {
-  models: ModelInfo[];
-  value: string;
-  onChange: (code: string) => void;
-}) {
-  return (
-    <div className="border-border/60 mx-3 mt-1 flex items-center gap-2 border-t pt-2">
-      <Cloud className="text-muted-foreground size-3.5 shrink-0" />
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="border-input bg-background h-8 min-w-0 flex-1 rounded-md border px-2 text-xs"
-      >
-        <option value="" disabled>
-          {models.length ? "Select a cloud model…" : "Loading models…"}
-        </option>
-        {models.map((m) => (
-          <option key={m.modelCode} value={m.modelCode}>
-            {m.name} ({m.modelCode})
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
 function ModeSwitch({
   mode,
   onModeChange,
@@ -758,18 +580,15 @@ function ResultCanvas({
   image,
   running,
   progress,
-  statusMsg,
 }: {
   image: GenerationResult | null;
   running: Mode | null;
   progress: GenerateProgress | null;
-  statusMsg: string | null;
 }) {
   if (running) {
     const pct = progress && progress.total > 0 ? progress.percent : null;
-    const label = statusMsg
-      ? statusMsg
-      : progress && progress.total > 0
+    const label =
+      progress && progress.total > 0
         ? `Generating… step ${progress.step}/${progress.total}`
         : "Generating…";
     return (

@@ -2,13 +2,24 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/gif"  // register decoders for image.DecodeConfig (dimensions)
+	_ "image/jpeg" //
+	_ "image/png"  //
+	"mime"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -38,6 +49,13 @@ type App struct {
 	sidecar   *sidecar.Manager
 	cloud     *cloud.Client
 	installer *installer.Installer
+
+	// gallery metadata cache (name → sidecar meta) for cheap filtering/facets.
+	// The sidecars remain the source of truth; this is a derived, invalidated
+	// cache — rebuilt on demand, dropped whenever a save/delete changes the set.
+	galleryMu    sync.Mutex
+	galleryCache map[string]*types.GenerationMeta
+	galleryValid bool
 }
 
 func NewApp() *App {
@@ -67,6 +85,7 @@ func NewApp() *App {
 		installer: installer.New(bus),
 	}
 	a.sidecar = sidecar.New(scriptPath, logDir, a.broadcastSidecarStatus, bus)
+	a.sidecar.SetProgressListener(a.broadcastGenerateProgress)
 	return a
 }
 
@@ -83,9 +102,35 @@ func (a *App) startup(ctx context.Context) {
 	})
 	a.bus.Info("app", "startup", nil)
 	go func() {
-		s := a.settings.Get()
-		_ = a.sidecar.Start(a.ctx, s.PythonPath, s.SDXLPath)
+		// Clean up a stale model selection, but DON'T auto-start the local engine
+		// — it's spawned on demand from the home-screen engine control. Cloud-only
+		// users no longer pay for a local engine (GPU/RAM) they won't use.
+		_ = a.clearStaleLocalModel()
+		a.bus.Info("app", "sidecar left stopped at startup — start it from the engine control", nil)
 	}()
+}
+
+// clearStaleLocalModel drops a persisted model selection whose weights file no
+// longer exists (e.g. the cache dir was wiped or the file deleted) — the
+// settings.json lives under UserConfigDir and survives a UserCacheDir wipe, so a
+// clean reinstall can inherit a dangling SDXLPath. Returns the current settings,
+// with SDXLPath + LocalModel cleared and saved when they were stale, so the app
+// never tries to load a missing checkpoint (which surfaced as "Local error").
+func (a *App) clearStaleLocalModel() types.Settings {
+	s := a.settings.Get()
+	if s.SDXLPath == "" {
+		return s
+	}
+	if _, err := os.Stat(s.SDXLPath); err == nil {
+		return s // weights present — selection is valid
+	}
+	a.bus.Warn("app", "selected model weights missing; clearing stale selection", map[string]any{"path": s.SDXLPath})
+	s.SDXLPath = ""
+	s.LocalModel = nil
+	if _, err := a.settings.Save(s); err != nil {
+		a.bus.Error("app", "clear stale model save failed", map[string]any{"err": err.Error()})
+	}
+	return s
 }
 
 // onBeforeClose runs when the user clicks the X. Returning false lets the
@@ -104,6 +149,13 @@ func (a *App) broadcastSidecarStatus(s types.SidecarStatus) {
 	runtime.EventsEmit(a.ctx, "sidecar:status", s)
 }
 
+func (a *App) broadcastGenerateProgress(p types.GenerateProgress) {
+	if a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, "generate:progress", p)
+}
+
 // ------------------------------------------------------------------------
 // Bound methods (visible to the renderer as window.go.main.App.<Method>)
 // ------------------------------------------------------------------------
@@ -113,8 +165,10 @@ func (a *App) GetSettings() types.Settings {
 }
 
 // SaveSettings overwrites settings on disk and restarts the sidecar in the
-// background if the Python or SDXL paths changed. Returns the new settings
-// for the renderer to re-sync its local state.
+// background if a sidecar-affecting field changed — but ONLY when the engine is
+// currently running. When it's stopped (the default now — the engine starts on
+// demand), we just persist; the new config applies at the next manual Start.
+// This keeps settings edits (incl. auto-save) from spinning the engine up.
 func (a *App) SaveSettings(next types.Settings) (types.Settings, error) {
 	prev := a.settings.Get()
 	saved, err := a.settings.Save(next)
@@ -122,11 +176,11 @@ func (a *App) SaveSettings(next types.Settings) (types.Settings, error) {
 		a.bus.Error("app", "SaveSettings failed", map[string]any{"err": err.Error()})
 		return types.Settings{}, err
 	}
-	restart := settings.SidecarConfigChanged(prev, saved)
+	restart := settings.SidecarConfigChanged(prev, saved) && a.sidecar.Status().State == "ready"
 	a.bus.Info("app", "SaveSettings ok", map[string]any{"sidecarRestart": restart})
 	if restart {
 		go func() {
-			_ = a.sidecar.Restart(a.ctx, saved.PythonPath, saved.SDXLPath)
+			_ = a.sidecar.Restart(a.ctx, saved.PythonPath, saved.SDXLPath, saved.LocalModel, saved.EngineRuntime)
 		}()
 	}
 	return saved, nil
@@ -139,7 +193,43 @@ func (a *App) GetSidecarStatus() types.SidecarStatus {
 func (a *App) RestartSidecar() error {
 	s := a.settings.Get()
 	a.bus.Info("app", "RestartSidecar requested", nil)
-	return a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath)
+	return a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime)
+}
+
+// StartSidecar boots the local engine on demand (home-screen engine control),
+// loading the currently-selected model. No-op if already starting/ready; errors
+// if the engine isn't installed or no model has been downloaded yet.
+func (a *App) StartSidecar() error {
+	s := a.settings.Get()
+	a.bus.Info("app", "StartSidecar requested", nil)
+	return a.sidecar.Start(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime)
+}
+
+// StopSidecar shuts the local engine down to free GPU/RAM.
+func (a *App) StopSidecar() error {
+	a.bus.Info("app", "StopSidecar requested", nil)
+	return a.sidecar.Stop()
+}
+
+// GetCreditBalance reports the cloud account's remaining credits for the
+// "API key (credit)" payment mode — the same balance the imference web app
+// shows. The renderer passes the key it currently has in the dialog (which may
+// be an unsaved draft); when empty we fall back to the saved key. Returns
+// Configured=false with no error when neither yields a key, so the UI can
+// prompt for one instead of flashing an error.
+func (a *App) GetCreditBalance(apiKey string) types.CreditInfo {
+	if apiKey == "" {
+		apiKey = a.settings.Get().APIKey
+	}
+	if apiKey == "" {
+		return types.CreditInfo{Configured: false}
+	}
+	credits, err := a.cloud.GetCredits(a.ctx, apiKey)
+	if err != nil {
+		a.bus.Warn("app", "GetCreditBalance failed", map[string]any{"err": err.Error()})
+		return types.CreditInfo{Configured: true, Error: err.Error()}
+	}
+	return types.CreditInfo{Configured: true, Credits: credits}
 }
 
 // GenerateCloud is the only HTTP surface to imference.com. Frontend never
@@ -178,7 +268,7 @@ func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult
 	if err != nil {
 		return result, err
 	}
-	a.autoSave(&result)
+	a.autoSave(&result, cloudMeta(req, s.CloudModelInfo))
 	return result, nil
 }
 
@@ -191,37 +281,75 @@ func (a *App) GenerateLocal(req types.GenerationRequest) (types.GenerationResult
 	if err != nil {
 		return result, err
 	}
-	a.autoSave(&result)
+	a.autoSave(&result, genMeta(req, a.settings.Get().LocalModel))
 	return result, nil
 }
 
-// applyLocalModelConfig folds the selected model's catalog config into a local
-// generation request: prepends the model's quality-tag prefix, supplies its
-// default negative prompt / scheduler / clip-skip when the caller left them
-// unset. Numeric params (steps, cfg) come through the request from the UI,
-// which seeds them from the model's defaults. No-op when no model is selected.
+// genMeta / cloudMeta build the generation metadata from a request + the model
+// that produced it (shared shape; the source/seed/createdAt are filled by
+// autoSave). model may be nil (no catalog entry).
+func genMeta(req types.GenerationRequest, model *types.ModelInfo) types.GenerationMeta {
+	m := types.GenerationMeta{
+		Prompt:         req.Prompt,
+		NegativePrompt: req.NegativePrompt,
+		Width:          req.Width,
+		Height:         req.Height,
+		NumSteps:       req.NumSteps,
+		GuidanceScale:  req.GuidanceScale,
+		Scheduler:      req.Scheduler,
+		ClipSkip:       req.ClipSkip,
+		Img2Img:        req.SourceImage != "",
+		Strength:       req.Strength,
+	}
+	if model != nil {
+		m.ModelCode = model.ModelCode
+		m.ModelName = model.Name
+		m.Engine = model.BackendType
+		m.FormatCode = model.FormatCode
+	}
+	return m
+}
+
+func cloudMeta(req types.GenerationRequest, model *types.ModelInfo) types.GenerationMeta {
+	// Cloud img2img isn't wired, so drop the img2img fields; otherwise identical.
+	m := genMeta(req, model)
+	m.Img2Img = false
+	m.Strength = 0
+	return m
+}
+
+// applyLocalModelConfig fills the selected model's default negative prompt /
+// scheduler / clip-skip when the caller left them unset. The quality-tag prefix
+// (prompt_pre) and numeric params (steps, cfg) come through the request already,
+// composed/seeded by the renderer. No-op when no model is selected.
 func (a *App) applyLocalModelConfig(req *types.GenerationRequest) {
 	m := a.settings.Get().LocalModel
 	if m == nil {
 		return
 	}
-	if m.PromptPre != "" {
-		req.Prompt = m.PromptPre + req.Prompt
-	}
+	// NOTE: the quality-tag prefix (prompt_pre) is composed client-side now (the
+	// renderer's editable "Quality tags" field), so we do NOT prepend it here —
+	// doing so would double it. Same client-side composition as the cloud path.
 	if req.NegativePrompt == "" {
 		req.NegativePrompt = m.PromptNegative
 	}
-	if req.Scheduler == "" {
-		req.Scheduler = m.SchedulerDefault
-	}
-	if req.ClipSkip == nil && m.SkipDefault > 0 {
-		skip := m.SkipDefault
-		req.ClipSkip = &skip
+	// Z-Image has no CLIP tokenizer and a fixed flow-matching scheduler, so the
+	// engine ignores scheduler/clip-skip for it — don't inject them. SDXL keeps
+	// the model's catalog defaults when the caller left them unset.
+	if m.BackendType != "zimage" {
+		if req.Scheduler == "" {
+			req.Scheduler = m.SchedulerDefault
+		}
+		if req.ClipSkip == nil && m.SkipDefault > 0 {
+			skip := m.SkipDefault
+			req.ClipSkip = &skip
+		}
 	}
 	a.bus.Info("app", "applied local model config", map[string]any{
 		"model":     m.ModelCode,
+		"backend":   m.BackendType,
 		"scheduler": req.Scheduler,
-		"clipSkip":  m.SkipDefault,
+		"clipSkip":  req.ClipSkip,
 	})
 }
 
@@ -233,7 +361,44 @@ func (a *App) applyLocalModelConfig(req *types.GenerationRequest) {
 // models (those with downloadable weights). Public endpoint — works without an
 // API key, so the picker is usable on first run.
 func (a *App) ListLocalModels() ([]types.ModelInfo, error) {
-	return a.cloud.ListModels(a.ctx)
+	return a.cloud.ListModels(a.ctx, true)
+}
+
+// ListCloudModels returns the full imference catalog (cloud can run any model
+// code, including the proprietary cloud-only ones the local picker hides).
+// Public endpoint — works without an API key.
+func (a *App) ListCloudModels() ([]types.ModelInfo, error) {
+	return a.cloud.ListModels(a.ctx, false)
+}
+
+// SelectCloudModel records which catalog model cloud generation should use.
+// Unlike SelectLocalModel this is instant — no weights to download, no sidecar
+// to restart: it just persists the model code (sent to the server) plus the
+// full catalog entry (so the form can show details and seed generation params).
+func (a *App) SelectCloudModel(modelCode string) error {
+	models, err := a.cloud.ListModels(a.ctx, false)
+	if err != nil {
+		return err
+	}
+	var chosen *types.ModelInfo
+	for i := range models {
+		if models[i].ModelCode == modelCode {
+			chosen = &models[i]
+			break
+		}
+	}
+	if chosen == nil {
+		return fmt.Errorf("model %q not found in catalog", modelCode)
+	}
+
+	s := a.settings.Get()
+	s.CloudModel = chosen.ModelCode
+	s.CloudModelInfo = chosen
+	if _, serr := a.settings.Save(s); serr != nil {
+		return serr
+	}
+	a.bus.Info("app", "SelectCloudModel", map[string]any{"model": chosen.ModelCode})
+	return nil
 }
 
 // SelectLocalModel downloads the chosen model's weights, deletes the previously
@@ -241,7 +406,7 @@ func (a *App) ListLocalModels() ([]types.ModelInfo, error) {
 // restarts the sidecar so the new weights load. Returns immediately; progress
 // streams on the "model:progress" event ({phase:"done"|"error"} terminates).
 func (a *App) SelectLocalModel(modelCode string) error {
-	models, err := a.cloud.ListModels(a.ctx)
+	models, err := a.cloud.ListModels(a.ctx, true)
 	if err != nil {
 		return err
 	}
@@ -307,7 +472,7 @@ func (a *App) SelectLocalModel(modelCode string) error {
 		}
 
 		emit(types.InstallProgress{Phase: "model", Message: "Loading " + chosen.Name + " into the engine…", PercentEstimate: 100})
-		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath); rerr != nil {
+		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime); rerr != nil {
 			a.bus.Warn("app", "SelectLocalModel sidecar restart failed", map[string]any{"err": rerr.Error()})
 			emit(types.InstallProgress{Phase: "error", Error: rerr.Error(), Done: true})
 			return
@@ -342,21 +507,300 @@ func (a *App) deleteManagedModel(p string) {
 // autoSave writes the generated image to disk and stamps result.SavedPath.
 // A save failure is logged but never propagated — the user still gets the
 // base64 in memory and can manually save from the renderer if needed.
-func (a *App) autoSave(result *types.GenerationResult) {
-	dir := a.settings.Get().OutputDir
-	if dir == "" {
-		dir = imagesink.DefaultDir()
-	}
-	path, err := imagesink.Save(result.ImageBase64, result.Source, result.Seed, dir)
+func (a *App) autoSave(result *types.GenerationResult, meta types.GenerationMeta) {
+	dir := a.outputDir()
+	meta.Source = result.Source
+	meta.Seed = result.Seed
+	meta.CreatedAt = time.Now().Format(time.RFC3339)
+	path, metaErr, err := imagesink.SaveWithMeta(result.ImageBase64, result.Source, result.Seed, dir, meta)
 	if err != nil {
-		a.bus.Warn("app", "auto-save failed", map[string]any{
-			"err": err.Error(),
-			"dir": dir,
-		})
+		a.bus.Warn("app", "auto-save failed", map[string]any{"err": err.Error(), "dir": dir})
 		return
 	}
+	if metaErr != nil {
+		a.bus.Warn("app", "metadata sidecar not written", map[string]any{"err": metaErr.Error()})
+	}
 	result.SavedPath = path
+	result.Meta = &meta
+	a.invalidateGalleryCache()
 	a.bus.Info("app", "image saved", map[string]any{"path": path})
+}
+
+// invalidateGalleryCache drops the derived meta cache so the next gallery scan
+// rebuilds it. Called after any save/delete.
+func (a *App) invalidateGalleryCache() {
+	a.galleryMu.Lock()
+	a.galleryValid = false
+	a.galleryCache = nil
+	a.galleryMu.Unlock()
+}
+
+// outputDir is where generated images are saved and where the gallery reads
+// from — the user's OutputDir setting, or the default Pictures/Imference.
+func (a *App) outputDir() string {
+	if d := a.settings.Get().OutputDir; d != "" {
+		return d
+	}
+	return imagesink.DefaultDir()
+}
+
+var galleryExts = map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".webp": true, ".gif": true}
+
+// ListSavedImages returns one page of previously-generated images from the
+// output folder, newest first (by file mtime), optionally narrowed by filter.
+// Paginated for infinite scroll: pass the running offset and a page size.
+func (a *App) ListSavedImages(offset, limit int, filter types.GalleryFilter) ([]types.SavedImage, error) {
+	dir := a.outputDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []types.SavedImage{}, nil // no folder yet → empty gallery
+		}
+		return nil, err
+	}
+	type fmeta struct {
+		name string
+		mod  time.Time
+	}
+	files := make([]fmeta, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() || !galleryExts[strings.ToLower(filepath.Ext(e.Name()))] {
+			continue
+		}
+		mt := time.Time{}
+		if info, ierr := e.Info(); ierr == nil {
+			mt = info.ModTime()
+		}
+		files = append(files, fmeta{e.Name(), mt})
+	}
+	// Newest first, by actual file date.
+	sort.Slice(files, func(i, j int) bool { return files[i].mod.After(files[j].mod) })
+
+	// Filtering needs metadata for the whole set → use the cache.
+	active := filter.Engine != "" || filter.ModelCode != "" || filter.Source != ""
+	var cache map[string]*types.GenerationMeta
+	if active {
+		cache = a.galleryMeta(dir)
+		kept := files[:0]
+		for _, f := range files {
+			if matchFilter(cache[f.name], filter) {
+				kept = append(kept, f)
+			}
+		}
+		files = kept
+	}
+
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(files) {
+		return []types.SavedImage{}, nil
+	}
+	end := offset + limit
+	if limit <= 0 || end > len(files) {
+		end = len(files)
+	}
+	out := make([]types.SavedImage, 0, end-offset)
+	for _, fm := range files[offset:end] {
+		p := filepath.Join(dir, fm.name)
+		source, seed := parseSavedName(fm.name)
+		w, h := imageDims(p)
+		var mptr *types.GenerationMeta
+		if cache != nil {
+			mptr = cache[fm.name]
+		} else {
+			mptr = readSidecar(p)
+		}
+		out = append(out, types.SavedImage{
+			Name: fm.name, Source: source, Seed: seed, SavedPath: p, Width: w, Height: h, Meta: mptr,
+		})
+	}
+	return out, nil
+}
+
+// readSidecar loads "<imgPath>.json" if present. nil when absent/unparseable.
+func readSidecar(imgPath string) *types.GenerationMeta {
+	raw, err := os.ReadFile(imgPath + ".json")
+	if err != nil {
+		return nil
+	}
+	var m types.GenerationMeta
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil
+	}
+	return &m
+}
+
+func matchFilter(m *types.GenerationMeta, f types.GalleryFilter) bool {
+	if f.Engine == "" && f.ModelCode == "" && f.Source == "" {
+		return true
+	}
+	if m == nil {
+		return false // an active filter excludes images without metadata
+	}
+	if f.Engine != "" && m.Engine != f.Engine {
+		return false
+	}
+	if f.ModelCode != "" && m.ModelCode != f.ModelCode {
+		return false
+	}
+	if f.Source != "" && m.Source != f.Source {
+		return false
+	}
+	return true
+}
+
+// galleryMeta returns the derived name→meta cache, (re)building it by reading
+// every sidecar when invalid. The sidecars stay the source of truth.
+func (a *App) galleryMeta(dir string) map[string]*types.GenerationMeta {
+	a.galleryMu.Lock()
+	if a.galleryValid && a.galleryCache != nil {
+		c := a.galleryCache
+		a.galleryMu.Unlock()
+		return c
+	}
+	a.galleryMu.Unlock()
+
+	cache := map[string]*types.GenerationMeta{}
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() || !galleryExts[strings.ToLower(filepath.Ext(e.Name()))] {
+				continue
+			}
+			if m := readSidecar(filepath.Join(dir, e.Name())); m != nil {
+				cache[e.Name()] = m
+			}
+		}
+	}
+	a.galleryMu.Lock()
+	a.galleryCache = cache
+	a.galleryValid = true
+	a.galleryMu.Unlock()
+	return cache
+}
+
+// GalleryFacets returns the distinct filterable values across the whole gallery
+// (with counts), for building the filter UI.
+func (a *App) GalleryFacets() (types.GalleryFacets, error) {
+	cache := a.galleryMeta(a.outputDir())
+	models := map[string]*types.Facet{}
+	engines := map[string]int{}
+	sources := map[string]int{}
+	for _, m := range cache {
+		if m == nil {
+			continue
+		}
+		if m.ModelCode != "" {
+			f := models[m.ModelCode]
+			if f == nil {
+				f = &types.Facet{Value: m.ModelCode, Label: m.ModelName}
+				models[m.ModelCode] = f
+			}
+			if f.Label == "" {
+				f.Label = m.ModelName
+			}
+			f.Count++
+		}
+		if m.Engine != "" {
+			engines[m.Engine]++
+		}
+		if m.Source != "" {
+			sources[m.Source]++
+		}
+	}
+	// Non-nil slices → JSON [] (not null), so the renderer can read .length safely.
+	out := types.GalleryFacets{
+		Models:  []types.Facet{},
+		Engines: []types.Facet{},
+		Sources: []types.Facet{},
+	}
+	for _, f := range models {
+		if f.Label == "" {
+			f.Label = f.Value
+		}
+		out.Models = append(out.Models, *f)
+	}
+	for k, c := range engines {
+		out.Engines = append(out.Engines, types.Facet{Value: k, Label: k, Count: c})
+	}
+	for k, c := range sources {
+		out.Sources = append(out.Sources, types.Facet{Value: k, Label: k, Count: c})
+	}
+	byCountDesc := func(s []types.Facet) {
+		sort.Slice(s, func(i, j int) bool {
+			if s[i].Count != s[j].Count {
+				return s[i].Count > s[j].Count
+			}
+			return s[i].Label < s[j].Label
+		})
+	}
+	byCountDesc(out.Models)
+	byCountDesc(out.Engines)
+	byCountDesc(out.Sources)
+	return out, nil
+}
+
+// imageDims reads only the image header to get pixel dimensions (cheap; no full
+// decode). Returns 0,0 for formats without a registered decoder (e.g. webp).
+func imageDims(path string) (int, int) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, 0
+	}
+	defer f.Close()
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return 0, 0
+	}
+	return cfg.Width, cfg.Height
+}
+
+// DeleteSavedImage removes one file from the output folder. Destructive — the
+// renderer confirms first.
+func (a *App) DeleteSavedImage(name string) error {
+	if name == "" || strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
+		return errors.New("invalid image name")
+	}
+	p := filepath.Join(a.outputDir(), name)
+	if err := os.Remove(p); err != nil {
+		return err
+	}
+	_ = os.Remove(p + ".json") // best-effort: drop the metadata sidecar too
+	a.invalidateGalleryCache()
+	a.bus.Info("app", "deleted saved image", map[string]any{"name": name})
+	return nil
+}
+
+// parseSavedName pulls source + seed out of "<ts>_<source>_<seed>.<ext>".
+// Best-effort: returns ("", 0) for names that don't match.
+func parseSavedName(name string) (source string, seed int) {
+	base := strings.TrimSuffix(name, filepath.Ext(name))
+	parts := strings.Split(base, "_")
+	if len(parts) < 3 {
+		return "", 0
+	}
+	seed, _ = strconv.Atoi(parts[len(parts)-1])
+	source = strings.Join(parts[1:len(parts)-1], "_")
+	return source, seed
+}
+
+// GetSavedImage reads one gallery file and returns it as a base64 data URL. Goes
+// through the Wails bridge (not an HTTP route) so it works identically in
+// `wails dev`, the packaged build, and on Windows. The renderer calls it lazily
+// per tile (only when scrolled into view), so a large history stays cheap.
+func (a *App) GetSavedImage(name string) (string, error) {
+	if name == "" || strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
+		return "", errors.New("invalid image name")
+	}
+	raw, err := os.ReadFile(filepath.Join(a.outputDir(), name))
+	if err != nil {
+		return "", err
+	}
+	mimeType := mime.TypeByExtension(filepath.Ext(name))
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(raw), nil
 }
 
 // ------------------------------------------------------------------------
@@ -424,10 +868,6 @@ func (a *App) InstallEngine() error {
 	if err != nil {
 		return err
 	}
-	modelPath, err := sdxlModelPath(installer.SDXLModelURL)
-	if err != nil {
-		return err
-	}
 
 	progress := make(chan types.InstallProgress, 16)
 
@@ -440,10 +880,12 @@ func (a *App) InstallEngine() error {
 		a.bus.Info("app", "stopping sidecar before install (to release venv file locks)", nil)
 		a.sidecar.Stop()
 
+		// No ModelPath: the engine install no longer bundles a default checkpoint.
+		// Model weights are downloaded on demand when the user picks one from the
+		// catalog (SelectLocalModel), keyed by its im_engine backend.
 		err := a.installer.Install(a.ctx, installer.Options{
 			VenvDir:                 venvDir,
 			SidecarRequirementsPath: reqs,
-			ModelPath:               modelPath, // triggers the SDXL download phase
 		}, progress)
 		if err != nil {
 			a.bus.Error("app", "InstallEngine failed", map[string]any{"err": err.Error()})
@@ -458,21 +900,31 @@ func (a *App) InstallEngine() error {
 		// which case path is unchanged but the sidecar is still stopped).
 		s := a.settings.Get()
 		s.PythonPath = installer.VenvPython(venvDir)
-			// The install flow downloaded (or reused) the SDXL weights at
-			// modelPath, so wire them in too — this is what lets the post-install
-			// sidecar restart succeed instead of failing "settings incomplete".
-			s.SDXLPath = modelPath
+		// A reinstall keeps a valid prior model, but a from-scratch install (cache
+		// dir wiped) can inherit a dangling SDXLPath from the surviving
+		// settings.json — drop it so we don't try to load missing weights.
+		if s.SDXLPath != "" {
+			if _, err := os.Stat(s.SDXLPath); err != nil {
+				a.bus.Warn("app", "post-install: selected model weights missing; clearing", map[string]any{"path": s.SDXLPath})
+				s.SDXLPath = ""
+				s.LocalModel = nil
+			}
+		}
 		if _, err := a.settings.Save(s); err != nil {
 			a.bus.Error("app", "post-install settings save failed", map[string]any{"err": err.Error()})
 		}
 
-		// Always restart the sidecar after a successful install — the
-		// pre-install Stop() left it in "stopped" state and nothing else
-		// will revive it. Avoids the "local: stopped" pill that lingered
-		// indefinitely on reinstall-with-same-pythonPath previously.
-		a.bus.Info("app", "restarting sidecar after install", nil)
-		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath); rerr != nil {
-			a.bus.Warn("app", "post-install sidecar restart failed", map[string]any{"err": rerr.Error()})
+		// Restart the sidecar after install only when a valid model is already
+		// configured — the pre-install Stop() left it "stopped". With no model
+		// yet, starting would just fail "settings incomplete"; the upcoming model
+		// selection (SelectLocalModel) restarts it once weights are on disk.
+		if s.SDXLPath == "" {
+			a.bus.Info("app", "install complete; awaiting model selection before sidecar start", nil)
+		} else {
+			a.bus.Info("app", "restarting sidecar after install", nil)
+			if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime); rerr != nil {
+				a.bus.Warn("app", "post-install sidecar restart failed", map[string]any{"err": rerr.Error()})
+			}
 		}
 	}()
 

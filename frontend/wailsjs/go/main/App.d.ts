@@ -5,9 +5,13 @@ import {logbus} from '../models';
 
 export function ClearLogs():Promise<void>;
 
+export function DeleteSavedImage(arg1:string):Promise<void>;
+
 export function DetectPython():Promise<types.PythonInfo>;
 
 export function ExportWalletPrivateKey():Promise<string>;
+
+export function GalleryFacets():Promise<types.GalleryFacets>;
 
 export function GenerateCloud(arg1:types.GenerationRequest):Promise<types.GenerationResult>;
 
@@ -15,9 +19,13 @@ export function GenerateLocal(arg1:types.GenerationRequest):Promise<types.Genera
 
 export function GenerateWallet():Promise<string>;
 
+export function GetCreditBalance(arg1:string):Promise<types.CreditInfo>;
+
 export function GetEngineInfo():Promise<types.EngineInfo>;
 
 export function GetLogs():Promise<Array<logbus.Entry>>;
+
+export function GetSavedImage(arg1:string):Promise<string>;
 
 export function GetSettings():Promise<types.Settings>;
 
@@ -29,7 +37,11 @@ export function ImportWallet(arg1:string):Promise<string>;
 
 export function InstallEngine():Promise<void>;
 
+export function ListCloudModels():Promise<Array<types.ModelInfo>>;
+
 export function ListLocalModels():Promise<Array<types.ModelInfo>>;
+
+export function ListSavedImages(arg1:number,arg2:number,arg3:types.GalleryFilter):Promise<Array<types.SavedImage>>;
 
 export function LogFromFrontend(arg1:string,arg2:string,arg3:string,arg4:any):Promise<void>;
 
@@ -39,4 +51,10 @@ export function RestartSidecar():Promise<void>;
 
 export function SaveSettings(arg1:types.Settings):Promise<types.Settings>;
 
+export function SelectCloudModel(arg1:string):Promise<void>;
+
 export function SelectLocalModel(arg1:string):Promise<void>;
+
+export function StartSidecar():Promise<void>;
+
+export function StopSidecar():Promise<void>;

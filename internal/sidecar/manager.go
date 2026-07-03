@@ -12,6 +12,7 @@ package sidecar
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -23,6 +24,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -33,15 +36,137 @@ import (
 )
 
 const (
-	readyTimeout     = 5 * time.Minute   // ~time to import torch + load engine
-	stopGraceTimeout = 3 * time.Second
+	readyTimeout = 5 * time.Minute // ~import torch + load engine (SDXL: ~365 MB base config/VAE from CDN)
+	// readyTimeoutColdBase covers a first-time Z-Image load: register_model pulls
+	// the shared base-components (~8–10 GB Qwen text-encoder + VAE) from the CDN
+	// at load time, before the sidecar reports ready. Cached afterwards, so later
+	// boots fall back to the short timeout. Download progress streams to the
+	// LogPanel via the engine's stderr in the meantime.
+	readyTimeoutColdBase = 30 * time.Minute
+	stopGraceTimeout     = 3 * time.Second
 )
+
+// imageModelCDN mirrors the engine's image base-components (SDXL config + VAE,
+// Z-Image tokenizer/text-encoder/VAE) so a cold load never touches
+// huggingface.co. Wired into the sidecar as IMAGE_MODEL_CDN
+// (RuntimeConfig.model_cdn): the engine reads <cdn>/<repo>/.manifest.json then
+// pulls each file over plain HTTP. A developer can export IMAGE_MODEL_CDN before
+// launch to point elsewhere — or set it empty to fall back to HuggingFace.
+const imageModelCDN = "https://gen-models.ml-cnd-gen.cc/image"
+
+// modelCacheDir is the persistent, symlink-free offline model tree the engine
+// fills from the CDN (IMAGE_MODEL_CACHE / RuntimeConfig.model_cache_dir). Under
+// UserCacheDir alongside the venv + downloaded weights — large, regenerable
+// assets, not roamable user config.
+func modelCacheDir() (string, error) {
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("locate UserCacheDir: %w", err)
+	}
+	return filepath.Join(cache, "imference-desktop-go", "model-cache"), nil
+}
+
+// runtimeEnv translates the user's host-tuning settings into the engine's
+// IMAGE_*/WAN_* env contract. It only emits a var when the user picked a
+// meaningful (non-default, non-"auto") value, so anything left alone falls
+// through to the engine's host-adaptive defaults — and there's no precedence
+// fight with a developer's pre-set shell env.
+func bool01(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
+}
+
+// runtimeEnv builds the engine's env from the user's settings for the ACTIVE
+// backend. SDXL and Z-Image both use the engine's IMAGE_* contract, but the
+// desktop keeps a separate settings block for each — only one image backend
+// loads per sidecar, so we emit IMAGE_* from the block matching `backend`.
+func runtimeEnv(rt types.EngineRuntimeSettings, backend string) []string {
+	var env []string
+	set := func(key, val string) {
+		if v := strings.TrimSpace(val); v != "" && v != "auto" {
+			env = append(env, key+"="+v)
+		}
+	}
+
+	// Pick the active image block. Tiny VAE is SDXL-only (ignored by Z-Image), so
+	// Z-Image forces it off.
+	var device, maxGPU, maxCPU string
+	var tinyVAE, cpuOffload bool
+	if backend == "zimage" {
+		z := rt.Zimage
+		device, maxGPU, maxCPU = z.Device, z.MaxGPUModels, z.MaxCPUModels
+		cpuOffload = z.EnableCPUOffload
+		tinyVAE = false
+	} else {
+		s := rt.Sdxl
+		device, maxGPU, maxCPU = s.Device, s.MaxGPUModels, s.MaxCPUModels
+		cpuOffload = s.EnableCPUOffload
+		tinyVAE = s.UseTinyVAE
+	}
+
+	// Device + the two boolean perf knobs are emitted UNCONDITIONALLY (device as
+	// auto|value, bools as explicit 0/1) so the UI is authoritative: a stray
+	// IMAGE_* left in the launching shell would otherwise silently override the
+	// toggles (e.g. IMAGE_ENABLE_CPU_OFFLOAD=1 forcing painfully slow gens).
+	// Duplicate env keys resolve to the last value and ours is appended last.
+	dev := strings.TrimSpace(device)
+	if dev == "" {
+		dev = "auto"
+	}
+	env = append(env,
+		"IMAGE_DEVICE="+dev,
+		"IMAGE_USE_TINY_VAE="+bool01(tinyVAE),
+		"IMAGE_ENABLE_CPU_OFFLOAD="+bool01(cpuOffload),
+	)
+	set("MAX_GPU_MODELS", maxGPU)
+	set("MAX_CPU_MODELS", maxCPU)
+
+	// WAN video backend (applies once video is enabled).
+	wan := rt.Wan
+	set("WAN_DEVICE", wan.Device)
+	set("WAN_PROFILE", wan.MemoryProfile)
+	set("WAN_TEXT_ENCODER_QUANT", wan.TextEncoderQuant)
+	set("WAN_MAX_RESIDENT", wan.MaxResident)
+	// These two default to true in the engine — only forward an explicit disable.
+	if wan.VAETiling != nil && !*wan.VAETiling {
+		env = append(env, "WAN_VAE_TILING=false")
+	}
+	if wan.EnableOffload != nil && !*wan.EnableOffload {
+		env = append(env, "WAN_ENABLE_OFFLOAD=false")
+	}
+	return env
+}
+
+// engineEnv wires the engine's CDN + offline-cache contract into the sidecar's
+// environment. Each var is defaulted only when the launching environment hasn't
+// already set it, so a developer can override (or disable, by exporting an empty
+// value) without touching code.
+func (m *Manager) engineEnv(env []string) []string {
+	if _, ok := os.LookupEnv("IMAGE_MODEL_CDN"); !ok {
+		env = append(env, "IMAGE_MODEL_CDN="+imageModelCDN)
+	}
+	if _, ok := os.LookupEnv("IMAGE_MODEL_CACHE"); !ok {
+		if dir, err := modelCacheDir(); err != nil {
+			m.bus.Warn("sidecar", "model cache dir unavailable; engine may re-fetch base-components each boot", map[string]any{"err": err.Error()})
+		} else {
+			env = append(env, "IMAGE_MODEL_CACHE="+dir)
+		}
+	}
+	return env
+}
 
 // StatusListener is invoked on every state transition. Manager keeps no
 // reference to the wails runtime — the caller (app.go) wires the listener
 // to runtime.EventsEmit so this package stays free of Wails deps and
 // remains unit-testable.
 type StatusListener func(types.SidecarStatus)
+
+// ProgressListener is invoked once per denoise step during a local generation
+// (parsed from the engine's stderr progress bar). Wired by the caller (app.go)
+// to a Wails event, same as StatusListener, so this package stays Wails-free.
+type ProgressListener func(types.GenerateProgress)
 
 // Manager is goroutine-safe. The hot path (Send) takes stdinMu while
 // writing a request line; readers fan out to per-task channels under
@@ -50,6 +175,9 @@ type Manager struct {
 	scriptPath string
 	logDir     string
 	listener   StatusListener
+	progress   ProgressListener
+	inferring  atomic.Bool // true between "Inference chunk" and the 100% step
+	stopping   atomic.Bool // true during an intentional Stop, so watchExit doesn't cry "error"
 	bus        *logbus.Bus
 
 	mu     sync.RWMutex
@@ -93,6 +221,10 @@ func New(scriptPath, logDir string, listener StatusListener, bus *logbus.Bus) *M
 	}
 }
 
+// SetProgressListener wires per-step generation progress to the caller. Set once
+// at startup, before any generation runs.
+func (m *Manager) SetProgressListener(fn ProgressListener) { m.progress = fn }
+
 // Status returns a snapshot of the current state.
 func (m *Manager) Status() types.SidecarStatus {
 	m.mu.RLock()
@@ -121,9 +253,15 @@ func (m *Manager) setStatus(next types.SidecarStatus) {
 	}
 }
 
-// Start spawns the sidecar using the given Python interpreter and SDXL
-// weights path. Idempotent: a no-op if already starting or ready.
-func (m *Manager) Start(parentCtx context.Context, pythonPath, sdxlPath string) error {
+// Start spawns the sidecar using the given Python interpreter and weights path.
+// model carries the selected catalog entry so the right engine backend (SDXL vs
+// Z-Image), its base-components repo, and the Z-Image shift are wired into the
+// sidecar's environment. nil model → defaults to the SDXL backend.
+// rt carries the host-machine tuning knobs (device, VAE mode, offload, residency
+// caps, WAN quantization) the user set in Settings, forwarded as IMAGE_*/WAN_*
+// env the engine reads via from_env. Zero value → engine defaults.
+// Idempotent: a no-op if already starting or ready.
+func (m *Manager) Start(parentCtx context.Context, pythonPath, sdxlPath string, model *types.ModelInfo, rt types.EngineRuntimeSettings) error {
 	if state := m.Status().State; state == "starting" || state == "ready" {
 		return nil
 	}
@@ -135,14 +273,42 @@ func (m *Manager) Start(parentCtx context.Context, pythonPath, sdxlPath string) 
 		return errors.New("sidecar: settings incomplete")
 	}
 
+	m.stopping.Store(false) // fresh launch — a later exit is unexpected again
 	m.setStatus(types.SidecarStatus{State: "starting"})
 
 	runCtx, cancel := context.WithCancel(parentCtx)
 	cmd := exec.CommandContext(runCtx, pythonPath, m.scriptPath)
-	cmd.Env = append(os.Environ(),
+	backend := "sdxl"
+	var baseModel string
+	var shift float64
+	if model != nil {
+		if model.BackendType != "" {
+			backend = model.BackendType
+		}
+		baseModel = model.BaseModel
+		shift = model.ShiftDefault
+	}
+	env := append(os.Environ(),
 		"IMFERENCE_LOCAL_SDXL_PATH="+sdxlPath,
+		"IMFERENCE_LOCAL_BACKEND="+backend,
 		"PYTHONUNBUFFERED=1", // critical so per-line writes flush immediately
 	)
+	if baseModel != "" {
+		env = append(env, "IMFERENCE_LOCAL_BASE_MODEL="+baseModel)
+	}
+	if shift > 0 {
+		env = append(env, fmt.Sprintf("IMFERENCE_BACKEND_SHIFT=%g", shift))
+	}
+	env = append(env, runtimeEnv(rt, backend)...)
+	cmd.Env = m.engineEnv(env)
+
+	// A configured base_model (Z-Image) pulls a large shared base at register
+	// time on the first load, so allow a much longer ready window. Cheap on warm
+	// boots — the engine returns from cache well before this fires.
+	readyWait := readyTimeout
+	if baseModel != "" {
+		readyWait = readyTimeoutColdBase
+	}
 	cmd.SysProcAttr = hideWindowAttr()
 
 	stdin, err := cmd.StdinPipe()
@@ -210,8 +376,8 @@ func (m *Manager) Start(parentCtx context.Context, pythonPath, sdxlPath string) 
 		_ = m.Stop()
 		m.setStatus(types.SidecarStatus{State: "error", Message: err.Error()})
 		return err
-	case <-time.After(readyTimeout):
-		err := fmt.Errorf("sidecar didn't become ready within %s", readyTimeout)
+	case <-time.After(readyWait):
+		err := fmt.Errorf("sidecar didn't become ready within %s", readyWait)
 		_ = m.Stop()
 		m.setStatus(types.SidecarStatus{State: "error", Message: err.Error()})
 		return err
@@ -238,6 +404,11 @@ func (m *Manager) currentDevice() string {
 // stdin → Python sees EOF and exits cleanly), falls back to the Job
 // Object + SIGKILL after grace period.
 func (m *Manager) Stop() error {
+	// Mark the stop intentional *before* the process can exit, so watchExit
+	// treats the imminent termination as expected (not a crash → "error").
+	// Reset by the next Start().
+	m.stopping.Store(true)
+
 	m.mu.Lock()
 	cmd := m.cmd
 	job := m.job
@@ -300,9 +471,9 @@ func (m *Manager) Stop() error {
 	return nil
 }
 
-func (m *Manager) Restart(ctx context.Context, pythonPath, sdxlPath string) error {
+func (m *Manager) Restart(ctx context.Context, pythonPath, sdxlPath string, model *types.ModelInfo, rt types.EngineRuntimeSettings) error {
 	_ = m.Stop()
-	return m.Start(ctx, pythonPath, sdxlPath)
+	return m.Start(ctx, pythonPath, sdxlPath, model, rt)
 }
 
 // ----------------------------------------------------------------------
@@ -314,17 +485,61 @@ func (m *Manager) Restart(ctx context.Context, pythonPath, sdxlPath string) erro
 // atomic.Value so Status() can read it without locks.
 var deviceLogRE = regexp.MustCompile(`Sidecar ready on (\S+) device`)
 
-// streamStderr reads child stderr line by line and republishes into the
-// logbus. Engine + Python logs ("Loading SDXL pipeline…", "BatchSizer:…",
-// tracebacks) flow here unmodified — that's the point of switching off
-// HTTP: the LogPanel sees engine internals for free.
+// tqdmRE parses a tqdm progress bar line, e.g. " 45%|████▌ | 9/20 [04:52<05:57,
+// 32.5s/it]" -> percent=45, step=9, total=20. The engine's denoise loop (and its
+// component loaders) render these to stderr with carriage returns.
+var tqdmRE = regexp.MustCompile(`(\d+)%\|[^|]*\|\s*(\d+)/(\d+)`)
+
+// scanLinesOrCR splits on either '\n' or '\r' so tqdm's in-place redraws (which
+// use '\r', not '\n') surface as individual tokens instead of one giant line
+// that only flushes at the end. Empty tokens (from "\r\n") are dropped by the
+// caller's blank-line check.
+func scanLinesOrCR(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
+		return i + 1, data[:i], nil
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil // need more data
+}
+
+// streamStderr reads child stderr and republishes into the logbus. Engine +
+// Python logs ("Loading SDXL pipeline…", "BatchSizer:…", tracebacks) flow here
+// unmodified — that's the point of switching off HTTP: the LogPanel sees engine
+// internals for free. Denoise progress-bar redraws are intercepted and turned
+// into "generate:progress" events instead of spamming the log.
 func (m *Manager) streamStderr(r io.Reader) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Split(scanLinesOrCR)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
 			continue
+		}
+		// The engine logs "Inference chunk 1-1/1 …" right before the denoise
+		// loop — gate progress parsing on it so the earlier component/fetch
+		// progress bars don't drive the UI's step counter.
+		if strings.Contains(line, "Inference chunk") {
+			m.inferring.Store(true)
+		}
+		if m.inferring.Load() {
+			if pm := tqdmRE.FindStringSubmatch(line); pm != nil {
+				pct, _ := strconv.Atoi(pm[1])
+				step, _ := strconv.Atoi(pm[2])
+				total, _ := strconv.Atoi(pm[3])
+				if m.progress != nil {
+					m.progress(types.GenerateProgress{Step: step, Total: total, Percent: pct})
+				}
+				if total > 0 && step >= total {
+					m.inferring.Store(false)
+				}
+				continue // don't log every redraw
+			}
 		}
 		// Side-effect: sniff the device line so Status() can report it.
 		if m.currentDevice() == "unknown" {
@@ -400,7 +615,9 @@ func (m *Manager) watchExit(cmd *exec.Cmd, exitDone chan<- struct{}) {
 	_, _ = cmd.Process.Wait()
 	close(exitDone)
 	state := m.Status().State
-	if state == "starting" || state == "ready" {
+	// An intentional Stop() closes stdin → the child exits cleanly; that's not a
+	// crash, so don't flip to "error" (Stop sets its own "stopped" status).
+	if !m.stopping.Load() && (state == "starting" || state == "ready") {
 		m.setStatus(types.SidecarStatus{
 			State:   "error",
 			Message: "sidecar exited unexpectedly — see logs in the LogPanel",

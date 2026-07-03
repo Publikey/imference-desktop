@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"imference-desktop-go/internal/types"
@@ -29,6 +30,18 @@ type generatePayload struct {
 	Seed           *int    `json:"seed,omitempty"`
 	Scheduler      string  `json:"scheduler,omitempty"`
 	ClipSkip       *int    `json:"clip_skip,omitempty"`
+	SourceImage    string  `json:"source_image,omitempty"`
+	Strength       float64 `json:"strength,omitempty"`
+}
+
+// stripDataURL returns the raw base64 the sidecar's base64.b64decode expects,
+// dropping a leading "data:<mime>;base64," prefix when the renderer sends a
+// FileReader data-URL. A plain base64 string passes through unchanged.
+func stripDataURL(s string) string {
+	if i := strings.Index(s, ";base64,"); i >= 0 {
+		return s[i+len(";base64,"):]
+	}
+	return s
 }
 
 // generateResult mirrors what sidecar/main.py:generate returns.
@@ -58,11 +71,14 @@ func (m *Manager) Generate(ctx context.Context, req types.GenerationRequest) (ty
 		Seed:           req.Seed,
 		Scheduler:      req.Scheduler,
 		ClipSkip:       req.ClipSkip,
+		SourceImage:    stripDataURL(req.SourceImage),
+		Strength:       req.Strength,
 	}
 
 	m.bus.Info("sidecar", "Generate start", map[string]any{
-		"prompt": truncate(req.Prompt, 80),
-		"steps":  req.NumSteps,
+		"prompt":  truncate(req.Prompt, 80),
+		"steps":   req.NumSteps,
+		"img2img": req.SourceImage != "",
 	})
 
 	callCtx, cancel := context.WithTimeout(ctx, generateTimeout)

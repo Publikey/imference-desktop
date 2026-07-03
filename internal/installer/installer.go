@@ -29,19 +29,48 @@ import (
 	"imference-desktop-go/internal/types"
 )
 
-// EngineTarball is the pip-installable source. Branch can be retargeted to a
-// tag (refs/tags/v0.0.1) when stable releases exist; for the POC, main is fine.
-const EngineTarball = "imference-engine[runtime] @ https://github.com/Publikey/imference-engine/archive/refs/heads/main.tar.gz"
-
-// TorchIndexURL is the CUDA 12.4 wheel index used on Windows/Linux. We use
-// cu124 (not cu121) because imference-engine's pyproject.toml pins torch>=2.6
-// in the [runtime] extra, and the cu121 index stops at torch 2.5.x. If we used
-// cu121, pip would later uninstall our CUDA torch and pull the CPU torch 2.6+
-// from PyPI to satisfy the engine's constraint. cu124 ships torch 2.6+ wheels
-// and is compatible with NVIDIA drivers shipped from late 2024 onwards.
+// EngineTarball is the default pip-installable source, pinned to a tagged
+// release for reproducible installs. Bump this when adopting a newer engine
+// release (and adapt the sidecar/Go to any API changes first). Using a fixed
+// tag — not refs/heads/main — so the desktop never silently picks up a drifting
+// main that could break the sidecar.
 //
-// NOT used on macOS — see torchInstallArgs(): the default PyPI wheels carry
-// Apple's MPS (Metal) backend, and the cu124 index has no darwin wheels at all.
+// For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
+// See resolveEngineSource() below.
+const EngineTarball = "imference-engine[sdxl,zimage] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.2.2.tar.gz"
+
+// EngineSourceEnvVar lets a developer point the installer at a local
+// imference-engine checkout instead of the GitHub tarball. Set to an absolute
+// path (e.g. "C:\git windows\imference-engine") and the engine phase will
+// pip-install it in editable mode — code edits become visible after a sidecar
+// restart, no Reinstall needed.
+const EngineSourceEnvVar = "IMFERENCE_ENGINE_SOURCE"
+
+// resolveEngineSource picks between the local override and the GitHub default.
+// Returns the spec to pass to pip and whether it should be installed editable
+// (-e). Local override → editable, URL → regular install.
+func resolveEngineSource() (spec string, editable bool) {
+	override := strings.TrimSpace(os.Getenv(EngineSourceEnvVar))
+	if override == "" {
+		return EngineTarball, false
+	}
+	// Looks like a URL? Treat as remote install, no -e.
+	if strings.HasPrefix(override, "http://") || strings.HasPrefix(override, "https://") {
+		return override, false
+	}
+	// Local path → editable install with the per-backend image extras. Pip
+	// accepts "path[extras]" syntax even on Windows paths with spaces. We install
+	// both SDXL and Z-Image (identical deps, resolved once) — matching the pinned
+	// GitHub tarball (EngineTarball), which uses [sdxl,zimage] since v0.2.2.
+	return override + "[sdxl,zimage]", true
+}
+
+// TorchIndexURL is the CUDA 12.4 wheel index. We use cu124 (not cu121) because
+// imference-engine's pyproject.toml pins torch>=2.6 in the image extras, and
+// the cu121 index stops at torch 2.5.x. If we used cu121, pip would later
+// uninstall our CUDA torch and pull the CPU torch 2.6+ from PyPI to satisfy
+// the engine's constraint. cu124 ships torch 2.6+ wheels and is compatible
+// with NVIDIA drivers shipped from late 2024 onwards.
 const TorchIndexURL = "https://download.pytorch.org/whl/cu124"
 
 // TorchSpec is the version constraint we install. Mirroring the engine's
@@ -58,7 +87,7 @@ const TorchSpec = "torch>=2.6"
 //     fallback would lose GPU acceleration on Apple Silicon.
 //   - Windows/Linux: install the CUDA 12.4 build from the pytorch.org index.
 //
-// torchvision is intentionally not installed here; imference-engine[runtime]
+// torchvision is intentionally not installed here; imference-engine[sdxl,zimage]
 // pulls whatever it needs, and on macOS the matching MPS torchvision resolves
 // from PyPI in the engine phase.
 func torchInstallArgs() (args []string, message string) {
@@ -75,7 +104,7 @@ func torchInstallArgs() (args []string, message string) {
 // sd_embed's setup.py declares unconstrained `torch` + `torchvision`
 // dependencies that would clobber our CUDA torch with the CPU wheel.
 // All transitive deps it actually uses (torch, transformers, ftfy) are
-// already in imference-engine[runtime].
+// already in imference-engine[sdxl,zimage].
 const SDEmbedTarball = "sd-embed @ https://github.com/xhinker/sd_embed/archive/refs/heads/main.tar.gz"
 
 // SDXLModelURL is the default single-file SDXL checkpoint the app downloads so
@@ -208,14 +237,22 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 	emit(types.InstallProgress{Phase: "sidecar-deps", Message: "Sidecar deps installed", PercentEstimate: 100})
 
 	// ----- Phase 5: pip install imference-engine -----
-	emit(types.InstallProgress{
-		Phase:   "engine",
-		Message: "Downloading imference-engine from GitHub",
+	engineSpec, editable := resolveEngineSource()
+	engineMsg := "Downloading imference-engine from GitHub"
+	if editable {
+		engineMsg = "Installing imference-engine from local source (editable)"
+	}
+	emit(types.InstallProgress{Phase: "engine", Message: engineMsg})
+	i.bus.Info("installer", "engine phase start", map[string]any{
+		"spec":     engineSpec,
+		"editable": editable,
 	})
-	i.bus.Info("installer", "engine phase start", map[string]any{"tarball": EngineTarball})
-	if err := i.runPip(ctx, venvPython, "engine", emit,
-		"install", EngineTarball,
-	); err != nil {
+	pipArgs := []string{"install"}
+	if editable {
+		pipArgs = append(pipArgs, "-e")
+	}
+	pipArgs = append(pipArgs, engineSpec)
+	if err := i.runPip(ctx, venvPython, "engine", emit, pipArgs...); err != nil {
 		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
 		return err
 	}
@@ -363,8 +400,8 @@ func (i *Installer) runPip(
 	cmd.SysProcAttr = hideWindowAttr()
 	// Disable pip's animations so we get parseable per-line output.
 	cmd.Env = append(os.Environ(),
-		"PIP_PROGRESS_BAR=on",     // keep progress, but on a new line each tick
-		"PYTHONUNBUFFERED=1",      // flush per line
+		"PIP_PROGRESS_BAR=on", // keep progress, but on a new line each tick
+		"PYTHONUNBUFFERED=1",  // flush per line
 		"PIP_DISABLE_PIP_VERSION_CHECK=1",
 	)
 

@@ -14,6 +14,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	"imference-desktop-go/internal/logbus"
@@ -28,12 +31,27 @@ const (
 	statusTimeout  = 10 * time.Second
 	pollInterval   = 1 * time.Second
 	overallTimeout = 120 * time.Second
+	catalogTTL     = 5 * time.Minute // the model catalog is effectively static per session
 )
 
 type Client struct {
 	base string
 	http *http.Client
 	bus  *logbus.Bus
+
+	// catalog caches the full (unfiltered) /api/models response. The catalog
+	// rarely changes during a session, yet it's hit on every list AND every
+	// model-select (which looks one entry up by code). One fetch serves them
+	// all until the TTL lapses. Guarded by catalogMu.
+	catalogMu      sync.Mutex
+	catalog        []apiModel
+	catalogFetched time.Time
+
+	// formats caches the /api/formats response (per-model resolutions/ratios),
+	// same TTL semantics as the catalog. Guarded by formatsMu.
+	formatsMu      sync.Mutex
+	formats        []apiFormat
+	formatsFetched time.Time
 }
 
 func New(bus *logbus.Bus) *Client {
@@ -52,7 +70,7 @@ type postBody struct {
 	NegativePrompt string  `json:"negative_prompt,omitempty"`
 	Width          int     `json:"width,omitempty"`
 	Height         int     `json:"height,omitempty"`
-	NumSteps       int     `json:"num_steps,omitempty"`
+	NumSteps       int     `json:"steps,omitempty"`
 	GuidanceScale  float64 `json:"guidance_scale,omitempty"`
 	Seed           *int    `json:"seed,omitempty"`
 	BatchNbr       int     `json:"batch_nbr,omitempty"`
@@ -99,12 +117,198 @@ type apiModel struct {
 	SkipDefault       int     `json:"skip_default"`
 	SchedulerDefault  string  `json:"scheduler_default"`
 	FormatCode        string  `json:"format_code"`
+	// ImEngine is the catalog's engine discriminator: "sdxl" | "zimage" |
+	// "wan22" | "external" | null. Mapped to the internal backend name; the
+	// local picker skips the ones that aren't locally runnable (external / null).
+	ImEngine     string  `json:"im_engine"`
+	BaseModel    string  `json:"base_model"`
+	ShiftDefault float64 `json:"shift_default"`
+	// ImCost is the cloud run cost in credits (1 credit = $0.001). ImLocal/ImCloud
+	// declare where the model may run (drives which catalog it appears in).
+	ImCost  int  `json:"im_cost"`
+	ImLocal bool `json:"im_local"`
+	ImCloud bool `json:"im_cloud"`
+	// Catalog organization — order + family/group for sorting/grouping the list.
+	ModelOrder      int    `json:"model_order"`
+	ModelFamilyCode string `json:"model_family_code"`
+	FamilyName      string `json:"family_name"`
+	ModelGroupCode  string `json:"model_group_code"`
 }
 
-// ListModels fetches the imference model catalog and returns only the
-// locally-runnable models — those with a downloadable model_url. The endpoint
-// is public (no auth), so this works before the user configures an API key.
-func (c *Client) ListModels(ctx context.Context) ([]types.ModelInfo, error) {
+// apiFormat mirrors one im_format row (GET /api/formats).
+type apiFormat struct {
+	ModelCode  string `json:"model_code"`
+	FormatCode string `json:"format_code"`
+	Name       string `json:"name"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	Ratio      string `json:"ratio"`
+	IsDefault  bool   `json:"is_default"`
+}
+
+// normalizeEngine maps the catalog's im_engine value to the internal backend
+// name the sidecar understands. Returns "" for values the desktop can't run
+// locally — null/empty, or "external" (a remote-API model handled elsewhere).
+func normalizeEngine(imEngine string) string {
+	switch strings.ToLower(strings.TrimSpace(imEngine)) {
+	case "sdxl":
+		return "sdxl"
+	case "zimage":
+		return "zimage"
+	case "wan22", "wan":
+		return "wan"
+	default:
+		return "" // "external" (later) and null/empty
+	}
+}
+
+// defaultZImageBase is the shared base-components repo (tokenizer + Qwen text
+// encoder + VAE) for Z-Image checkpoints that ship transformer-only (the common
+// case). Fallback only when the catalog carries no per-model base_model; a
+// non-empty catalog base_model always wins.
+const defaultZImageBase = "Tongyi-MAI/Z-Image-Turbo"
+
+// toModelInfo maps a wire entry to the app's camelCase ModelInfo, normalizing
+// im_engine to the internal backend name and defaulting the Z-Image base repo.
+func toModelInfo(m apiModel) types.ModelInfo {
+	backend := normalizeEngine(m.ImEngine)
+	baseModel := m.BaseModel
+	if backend == "zimage" && baseModel == "" {
+		baseModel = defaultZImageBase
+	}
+	return types.ModelInfo{
+		ModelCode:         m.ModelCode,
+		Name:              m.Name,
+		ShortDescription:  m.ShortDescription,
+		MediumDescription: m.MediumDescription,
+		Image:             m.Image,
+		ModelURL:          m.ModelURL,
+		PromptPre:         m.PromptPre,
+		PromptNegative:    m.PromptNegative,
+		StepsDefault:      m.StepsDefault,
+		StepsMin:          m.StepsMin,
+		StepsMax:          m.StepsMax,
+		CfgDefault:        m.CfgDefault,
+		CfgMin:            m.CfgMin,
+		CfgMax:            m.CfgMax,
+		SkipDefault:       m.SkipDefault,
+		SchedulerDefault:  m.SchedulerDefault,
+		FormatCode:        m.FormatCode,
+		BackendType:       backend,
+		BaseModel:         baseModel,
+		ShiftDefault:      m.ShiftDefault,
+		Cost:              m.ImCost,
+		CanLocal:          m.ImLocal,
+		CanCloud:          m.ImCloud,
+		Order:             m.ModelOrder,
+		FamilyCode:        m.ModelFamilyCode,
+		FamilyName:        m.FamilyName,
+		GroupCode:         m.ModelGroupCode,
+	}
+}
+
+// ListModels fetches the imference model catalog, filtered by the catalog's
+// im_local / im_cloud flags. When localOnly is true it returns models the local
+// engine can run (im_local, plus the technical prerequisites: a downloadable
+// model_url and a known engine); otherwise it returns the cloud-runnable models
+// (im_cloud). The endpoint is public (no auth), so this works before the user
+// configures an API key.
+func (c *Client) ListModels(ctx context.Context, localOnly bool) ([]types.ModelInfo, error) {
+	models, err := c.fetchCatalog(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Per-model formats (resolutions/ratios). Non-fatal if it fails — models
+	// still list, the UI falls back to generic square/portrait/landscape.
+	formatsByModel := map[string][]types.FormatOption{}
+	if fs, ferr := c.fetchFormats(ctx); ferr != nil {
+		c.bus.Warn("cloud", "fetchFormats failed", map[string]any{"err": ferr.Error()})
+	} else {
+		for _, f := range fs {
+			formatsByModel[f.ModelCode] = append(formatsByModel[f.ModelCode], types.FormatOption{
+				FormatCode: f.FormatCode, Name: f.Name, Width: f.Width, Height: f.Height,
+				Ratio: f.Ratio, IsDefault: f.IsDefault,
+			})
+		}
+	}
+
+	out := make([]types.ModelInfo, 0, len(models))
+	for _, m := range models {
+		if localOnly {
+			// im_local is authoritative, but the sidecar still needs weights to
+			// download and a backend to route to.
+			if !m.ImLocal || m.ModelURL == "" || normalizeEngine(m.ImEngine) == "" {
+				continue
+			}
+		} else if !m.ImCloud {
+			continue // not cloud-runnable
+		}
+		mi := toModelInfo(m)
+		mi.Formats = formatsByModel[m.ModelCode]
+		out = append(out, mi)
+	}
+	// Catalog display order (model_order), then name as a stable tiebreaker.
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Order != out[j].Order {
+			return out[i].Order < out[j].Order
+		}
+		return out[i].Name < out[j].Name
+	})
+	c.bus.Info("cloud", "ListModels ok", map[string]any{"total": len(models), "returned": len(out), "localOnly": localOnly})
+	return out, nil
+}
+
+// fetchFormats returns the full /api/formats response, cached per formatsTTL
+// (same as the catalog). Public endpoint — no auth needed.
+func (c *Client) fetchFormats(ctx context.Context) ([]apiFormat, error) {
+	c.formatsMu.Lock()
+	defer c.formatsMu.Unlock()
+
+	if c.formats != nil && time.Since(c.formatsFetched) < catalogTTL {
+		return c.formats, nil
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+
+	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+"/api/formats", nil)
+	r.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(r)
+	if err != nil {
+		return nil, fmt.Errorf("cloud: GET /api/formats: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("cloud: /api/formats HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var parsed struct {
+		Formats []apiFormat `json:"formats"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, fmt.Errorf("cloud: parse /api/formats: %w", err)
+	}
+
+	c.formats = parsed.Formats
+	c.formatsFetched = time.Now()
+	return parsed.Formats, nil
+}
+
+// fetchCatalog returns the full (unfiltered) /api/models response, served from
+// an in-memory cache when a prior fetch is still within catalogTTL. A single
+// fetch therefore backs every list and model-select within a session. The
+// catalog is public (no auth), so this works before the user configures a key.
+func (c *Client) fetchCatalog(ctx context.Context) ([]apiModel, error) {
+	c.catalogMu.Lock()
+	defer c.catalogMu.Unlock()
+
+	if c.catalog != nil && time.Since(c.catalogFetched) < catalogTTL {
+		return c.catalog, nil
+	}
+
 	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
 
@@ -128,33 +332,52 @@ func (c *Client) ListModels(ctx context.Context) ([]types.ModelInfo, error) {
 		return nil, fmt.Errorf("cloud: parse /api/models: %w", err)
 	}
 
-	out := make([]types.ModelInfo, 0, len(parsed.Models))
-	for _, m := range parsed.Models {
-		if m.ModelURL == "" {
-			continue // cloud-only model — can't run locally, skip from the picker
-		}
-		out = append(out, types.ModelInfo{
-			ModelCode:         m.ModelCode,
-			Name:              m.Name,
-			ShortDescription:  m.ShortDescription,
-			MediumDescription: m.MediumDescription,
-			Image:             m.Image,
-			ModelURL:          m.ModelURL,
-			PromptPre:         m.PromptPre,
-			PromptNegative:    m.PromptNegative,
-			StepsDefault:      m.StepsDefault,
-			StepsMin:          m.StepsMin,
-			StepsMax:          m.StepsMax,
-			CfgDefault:        m.CfgDefault,
-			CfgMin:            m.CfgMin,
-			CfgMax:            m.CfgMax,
-			SkipDefault:       m.SkipDefault,
-			SchedulerDefault:  m.SchedulerDefault,
-			FormatCode:        m.FormatCode,
-		})
+	c.catalog = parsed.Models
+	c.catalogFetched = time.Now()
+	return parsed.Models, nil
+}
+
+// creditsPath is the account credit-balance endpoint — the same one the
+// imference web app calls (GET /credits/balance, Bearer auth, → {"credits": N}).
+const creditsPath = "/credits/balance"
+
+// creditsResponse is the wire shape of creditsPath: a flat {"credits": 100}.
+type creditsResponse struct {
+	Credits float64 `json:"credits"`
+}
+
+// GetCredits fetches the remaining credit balance for a Bearer API key. The
+// caller passes the key explicitly (the Settings UI checks the key the user
+// just typed, before it's necessarily saved). A non-200 surfaces the server's
+// body so an invalid/expired key shows a useful message.
+func (c *Client) GetCredits(ctx context.Context, apiKey string) (float64, error) {
+	if apiKey == "" {
+		return 0, errors.New("cloud: API key not set")
 	}
-	c.bus.Info("cloud", "ListModels ok", map[string]any{"total": len(parsed.Models), "local": len(out)})
-	return out, nil
+
+	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+
+	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+creditsPath, nil)
+	r.Header.Set("Authorization", "Bearer "+apiKey)
+	r.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(r)
+	if err != nil {
+		return 0, fmt.Errorf("cloud: GET %s: %w", creditsPath, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return 0, fmt.Errorf("cloud: %s HTTP %d: %s", creditsPath, resp.StatusCode, string(body))
+	}
+
+	var parsed creditsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return 0, fmt.Errorf("cloud: parse %s: %w", creditsPath, err)
+	}
+	c.bus.Info("cloud", "GetCredits ok", map[string]any{"credits": parsed.Credits})
+	return parsed.Credits, nil
 }
 
 // Generate runs the full POST → poll → download → base64 dance and returns
@@ -518,10 +741,13 @@ func (c *Client) fetchStatus(ctx context.Context, statusURL, apiKey string) (str
 // between cloud and local modes.
 func (c *Client) downloadAsBase64(ctx context.Context, src string) (string, string, error) {
 	c.bus.Trace("cloud", "GET "+src, nil)
-	r, _ := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
+	// Bound the download to 30s via context, but reuse the shared client so we
+	// keep connection pooling / keep-alive instead of allocating a fresh one.
+	dlCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	r, _ := http.NewRequestWithContext(dlCtx, http.MethodGet, src, nil)
 	r.Header.Set("User-Agent", "imference-desktop-go/0.0.1")
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(r)
+	resp, err := c.http.Do(r)
 	if err != nil {
 		return "", "", err
 	}

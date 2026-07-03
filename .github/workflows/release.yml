@@ -1,0 +1,129 @@
+name: Release
+
+# Build the desktop app for Windows + macOS and publish a GitHub Release
+# whenever a version tag is pushed (e.g. `git tag v1.2.3 && git push origin v1.2.3`).
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # required to create the Release
+
+env:
+  GO_VERSION: "1.24"
+  NODE_VERSION: "20"
+  WAILS_VERSION: "v2.12.0"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Wails + NSIS
+        shell: bash
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+          echo "$(go env GOPATH)\bin" >> "$GITHUB_PATH"
+          choco install nsis -y --no-progress
+
+      - name: Set version from tag
+        run: node scripts/set-version.mjs "${{ github.ref_name }}"
+
+      - name: Build (portable .exe + NSIS installer)
+        run: wails build -platform windows/amd64 -ldflags "-X main.Version=${{ github.ref_name }}" -nsis
+
+      - name: Stage assets
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Move-Item build/bin/imference-desktop-go.exe dist/imference-desktop-go-windows-amd64.exe
+          Move-Item build/bin/imference-desktop-go-amd64-installer.exe dist/imference-desktop-go-windows-amd64-installer.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Wails
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Set version from tag
+        run: node scripts/set-version.mjs "${{ github.ref_name }}"
+
+      - name: Build (universal .app)
+        run: wails build -platform darwin/universal -ldflags "-X main.Version=${{ github.ref_name }}"
+
+      - name: Package .app.zip + .dmg
+        run: |
+          set -euo pipefail
+          APP="$(ls -d build/bin/*.app | head -1)"
+          echo "App bundle: $APP"
+          mkdir -p dist
+
+          # Zip preserving the bundle structure (symlinks/permissions).
+          ditto -c -k --keepParent "$APP" "dist/imference-desktop-go-macos-universal.app.zip"
+
+          # DMG with a drag-to-Applications shortcut (unsigned — built-in hdiutil).
+          STAGE="$(mktemp -d)"
+          cp -R "$APP" "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "Imference Desktop" -srcfolder "$STAGE" -ov -format UDZO \
+            "dist/imference-desktop-go-macos-universal.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  release:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > ../checksums.txt
+          mv ../checksums.txt .
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: dist/*

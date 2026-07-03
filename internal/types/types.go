@@ -27,6 +27,57 @@ type Settings struct {
 	// imference catalog and downloaded to SDXLPath). Nil until the user picks
 	// one. Its config drives local generation defaults — see App.GenerateLocal.
 	LocalModel *ModelInfo `json:"localModel,omitempty"`
+	// EngineRuntime holds host-machine tuning for the engine (device, VAE mode,
+	// offload, model-residency caps, WAN quantization). Applied as env vars when
+	// the sidecar starts. NOT generation params — those live in the generation UI.
+	EngineRuntime EngineRuntimeSettings `json:"engineRuntime"`
+	// CloudModelInfo is the full catalog entry for the selected cloud model
+	// (CloudModel holds just its code, the value actually sent to the server).
+	// Stored so the form selector can show the model's details and seed cloud
+	// generation params (steps/cfg/resolution) the same way LocalModel does.
+	// Nil until the user picks a cloud model from the form.
+	CloudModelInfo *ModelInfo `json:"cloudModelInfo,omitempty"`
+}
+
+// EngineRuntimeSettings holds per-backend host-tuning. SDXL and Z-Image each get
+// their own block even though they share the engine's IMAGE_* env contract: only
+// one image backend is loaded per sidecar (chosen by the model's im_engine), so
+// the manager emits IMAGE_* from the block matching the active backend.
+type EngineRuntimeSettings struct {
+	Sdxl   ImageRuntimeSettings  `json:"sdxl"`
+	Zimage ZImageRuntimeSettings `json:"zimage"`
+	Wan    WanRuntimeSettings    `json:"wan"`
+}
+
+// ImageRuntimeSettings tunes the SDXL backend (IMAGE_* env contract).
+type ImageRuntimeSettings struct {
+	Device           string `json:"device,omitempty"`           // "" / "auto" | cuda | cuda:N | mps | cpu
+	UseTinyVAE       bool   `json:"useTinyVae,omitempty"`       // SDXL TAESDxl — ~10× faster VAE decode
+	EnableCPUOffload bool   `json:"enableCpuOffload,omitempty"` // peak VRAM ↓ (≤8 GB), ~10–30% slower
+	MaxGPUModels     string `json:"maxGpuModels,omitempty"`     // "" / "auto" / int
+	MaxCPUModels     string `json:"maxCpuModels,omitempty"`     // "" / "auto" / int
+}
+
+// ZImageRuntimeSettings tunes the Z-Image backend (same IMAGE_* env contract).
+// No UseTinyVAE: Tiny VAE (TAESDxl) is SDXL-only and ignored by Z-Image.
+type ZImageRuntimeSettings struct {
+	Device           string `json:"device,omitempty"`
+	EnableCPUOffload bool   `json:"enableCpuOffload,omitempty"`
+	MaxGPUModels     string `json:"maxGpuModels,omitempty"`
+	MaxCPUModels     string `json:"maxCpuModels,omitempty"`
+}
+
+// WanRuntimeSettings tunes the WAN video backend (WAN_* env contract). Applies
+// once the video backend is enabled; ignored by the image backends. The two
+// bool knobs are pointers because the engine defaults them to true — nil means
+// "leave at engine default", *false means the user explicitly disabled it.
+type WanRuntimeSettings struct {
+	Device           string `json:"device,omitempty"`
+	MemoryProfile    string `json:"memoryProfile,omitempty"`    // "" / "auto" | gguf_q8 | gguf_q6 | gguf_q5 | gguf_q4
+	TextEncoderQuant string `json:"textEncoderQuant,omitempty"` // "" / int8 | none
+	VAETiling        *bool  `json:"vaeTiling,omitempty"`        // engine default true
+	EnableOffload    *bool  `json:"enableOffload,omitempty"`    // engine default true
+	MaxResident      string `json:"maxResident,omitempty"`      // "" / int
 }
 
 // ModelInfo is one entry from imference.com/api/models, trimmed to the fields
@@ -51,6 +102,40 @@ type ModelInfo struct {
 	SkipDefault       int     `json:"skipDefault"` // clip-skip
 	SchedulerDefault  string  `json:"schedulerDefault"`
 	FormatCode        string  `json:"formatCode"`
+	// BackendType is the internal engine backend, normalized from the catalog's
+	// im_engine field: "sdxl" | "zimage" | "wan". (im_engine "external" and null
+	// are filtered out upstream in cloud.ListModels — not locally runnable.)
+	BackendType string `json:"backendType,omitempty"`
+	// BaseModel is the HF repo id of the shared base-components a backend needs
+	// (Z-Image finetunes, e.g. "Tongyi-MAI/Z-Image-Turbo"). Empty for
+	// self-contained SDXL single-file checkpoints. Resolved offline via the CDN.
+	BaseModel string `json:"baseModel,omitempty"`
+	// ShiftDefault is the Z-Image flow-matching shift (3.0≈480p, 5.0≈720p),
+	// passed as backend_options={"shift": …}. Ignored by SDXL. 0 → engine default.
+	ShiftDefault float64 `json:"shiftDefault,omitempty"`
+	// Cost is the cloud run cost in credits (1 credit = $0.001). Local runs are
+	// free. CanLocal/CanCloud declare where the model may run.
+	Cost     int  `json:"cost"`
+	CanLocal bool `json:"canLocal"`
+	CanCloud bool `json:"canCloud"`
+	// Formats are the model's supported resolutions/ratios (im_format). Empty
+	// when the catalog has none — the UI then falls back to generic formats.
+	Formats []FormatOption `json:"formats,omitempty"`
+	// Catalog organization (im_model family/group) for sorting/grouping the list.
+	Order      int    `json:"order,omitempty"`
+	FamilyCode string `json:"familyCode,omitempty"`
+	FamilyName string `json:"familyName,omitempty"`
+	GroupCode  string `json:"groupCode,omitempty"`
+}
+
+// FormatOption is one supported resolution/ratio for a model (from im_format).
+type FormatOption struct {
+	FormatCode string `json:"formatCode"`
+	Name       string `json:"name,omitempty"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	Ratio      string `json:"ratio,omitempty"`
+	IsDefault  bool   `json:"isDefault"`
 }
 
 // WalletInfo is what the renderer sees when it asks about the wallet
@@ -61,6 +146,16 @@ type WalletInfo struct {
 	BalanceUSDC string `json:"balanceUSDC"` // human string ("1.234"), atomic / 10^6
 	Network     string `json:"network"`     // always "base-mainnet" in this POC
 	Error       string `json:"error,omitempty"`
+}
+
+// CreditInfo is the renderer's view of the cloud account's remaining credits,
+// fetched with the Bearer API key (the "API key (credit)" payment mode). Mirrors
+// the balance readout the imference web app shows. Configured is false when no
+// key is set, so the Settings UI can prompt for a key instead of showing an error.
+type CreditInfo struct {
+	Configured bool    `json:"configured"`      // true when an API key was available to query
+	Credits    float64 `json:"credits"`         // remaining credit balance
+	Error      string  `json:"error,omitempty"` // populated on a failed lookup (bad key, network)
 }
 
 // GenerationRequest is the unified frontend → Go payload for both modes.
@@ -79,6 +174,78 @@ type GenerationRequest struct {
 	// but the fields exist so a caller can override. Empty/nil → engine default.
 	Scheduler string `json:"scheduler,omitempty"`
 	ClipSkip  *int   `json:"clipSkip,omitempty"`
+	// SourceImage enables img2img: a base64 source the engine denoises from
+	// instead of pure noise. May be a data-URL ("data:image/png;base64,…") or
+	// raw base64 — the sidecar client strips any data-URL prefix. Empty = text2img.
+	SourceImage string `json:"sourceImage,omitempty"`
+	// Strength is the img2img denoising strength (0 = keep source, 1 = ignore it).
+	// Only meaningful with SourceImage set. 0/unset → engine default (0.75). In
+	// img2img the output size is derived from the source image (Width/Height ignored).
+	Strength float64 `json:"strength,omitempty"`
+}
+
+// SavedImage is one previously-generated image found on disk in the output
+// folder. The renderer fetches its bytes lazily via GetSavedImage(name) (base64
+// over the Wails bridge). Basic fields are parsed from the filename
+// "<YYYYMMDD-HHMMSS>_<source>_<seed>.<ext>"; Meta comes from the "<name>.json"
+// sidecar when present.
+type SavedImage struct {
+	Name      string `json:"name"`      // file name (key for GetSavedImage / DeleteSavedImage)
+	Source    string `json:"source"`    // "local" | "cloud" | …
+	Seed      int    `json:"seed"`      // 0 when unparseable
+	SavedPath string `json:"savedPath"` // absolute path on disk
+	// Width/Height let the renderer reserve the right aspect box before the bytes
+	// load (masonry with any format). 0 when the header couldn't be read.
+	Width  int `json:"width"`
+	Height int `json:"height"`
+	// Meta is the generation metadata from the sidecar JSON. Nil for images saved
+	// before this feature (or hand-added files).
+	Meta *GenerationMeta `json:"meta,omitempty"`
+}
+
+// GenerationMeta captures how an image was produced. Written verbatim to a
+// "<image>.json" sidecar at save time, and read back to drive the gallery's
+// detail view and filters. Format-agnostic — reused as-is for future video.
+type GenerationMeta struct {
+	Prompt         string  `json:"prompt"`
+	NegativePrompt string  `json:"negativePrompt,omitempty"`
+	Source         string  `json:"source"`              // "local" | "cloud"
+	ModelCode      string  `json:"modelCode,omitempty"` // catalog code
+	ModelName      string  `json:"modelName,omitempty"` // display name
+	Engine         string  `json:"engine,omitempty"`    // "sdxl" | "zimage" | "wan"
+	Width          int     `json:"width,omitempty"`
+	Height         int     `json:"height,omitempty"`
+	FormatCode     string  `json:"formatCode,omitempty"` // "square" | "portrait" | "landscape"
+	NumSteps       int     `json:"numSteps,omitempty"`
+	GuidanceScale  float64 `json:"guidanceScale,omitempty"`
+	Scheduler      string  `json:"scheduler,omitempty"`
+	ClipSkip       *int    `json:"clipSkip,omitempty"`
+	Seed           int     `json:"seed"`
+	Img2Img        bool    `json:"img2img,omitempty"`
+	Strength       float64 `json:"strength,omitempty"`
+	CreatedAt      string  `json:"createdAt"` // RFC3339
+}
+
+// GalleryFilter narrows ListSavedImages. Empty fields mean "no constraint".
+type GalleryFilter struct {
+	Engine    string `json:"engine"`    // "sdxl" | "zimage" | "wan"
+	ModelCode string `json:"modelCode"` // exact catalog code
+	Source    string `json:"source"`    // "local" | "cloud"
+}
+
+// Facet is one filterable value with how many saved images carry it.
+type Facet struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+	Count int    `json:"count"`
+}
+
+// GalleryFacets are the distinct filterable values across the whole gallery,
+// used to build the filter UI.
+type GalleryFacets struct {
+	Models  []Facet `json:"models"`
+	Engines []Facet `json:"engines"`
+	Sources []Facet `json:"sources"`
 }
 
 // GenerationResult is the unified Go → frontend response. Same shape for
@@ -92,6 +259,19 @@ type GenerationResult struct {
 	// string when save failed (the failure is logged but doesn't fail the
 	// generation — the in-memory base64 result is still usable).
 	SavedPath string `json:"savedPath"`
+	// Meta is the generation metadata (same as the sidecar), so the freshly
+	// generated image shows the same details in the UI as gallery images.
+	Meta *GenerationMeta `json:"meta,omitempty"`
+}
+
+// GenerateProgress is broadcast on the "generate:progress" event channel during
+// a local generation — one per denoise step, parsed from the engine's stderr
+// progress bar. Lets the UI show a real progress bar instead of an opaque
+// "Generating…". Cloud generation doesn't emit these (no per-step feedback).
+type GenerateProgress struct {
+	Step    int `json:"step"`
+	Total   int `json:"total"`
+	Percent int `json:"percent"`
 }
 
 // SidecarStatus is broadcast via Wails events on the "sidecar:status" channel

@@ -10,31 +10,45 @@ import {
   GenerateCloud,
   GenerateLocal,
   GenerateWallet,
+  GetCreditBalance,
   GetEngineInfo,
   GetLogs,
   GetSettings,
   GetSidecarStatus,
   GetWalletInfo,
   ImportWallet,
+  DeleteSavedImage,
+  GalleryFacets,
+  GetSavedImage,
   InstallEngine,
+  ListCloudModels,
   ListLocalModels,
+  ListSavedImages,
   LogFromFrontend,
   RefreshWalletBalance,
   RestartSidecar,
   SaveSettings,
+  SelectCloudModel,
   SelectLocalModel,
+  StartSidecar,
+  StopSidecar,
 } from "../../wailsjs/go/main/App";
 import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
 import type {
   AppSettings,
+  CreditInfo,
   EngineInfo,
+  GenerateProgress,
   GenerationRequest,
   GenerationResult,
   InstallProgress,
   LogEntry,
   LogLevel,
+  GalleryFacets as GalleryFacetsType,
+  GalleryFilter,
   ModelInfo,
   PythonInfo,
+  SavedImage,
   SidecarStatus,
   WalletInfo,
 } from "./types";
@@ -50,8 +64,15 @@ const raw = {
   saveSettings: SaveSettings as unknown as (next: AppSettings) => Promise<AppSettings>,
   getSidecarStatus: GetSidecarStatus as () => Promise<SidecarStatus>,
   restartSidecar: RestartSidecar as () => Promise<void>,
+  // Local engine lifecycle — the engine no longer auto-starts; the home-screen
+  // control drives it.
+  startSidecar: StartSidecar as () => Promise<void>,
+  stopSidecar: StopSidecar as () => Promise<void>,
   generateCloud: GenerateCloud as (req: GenerationRequest) => Promise<GenerationResult>,
   generateLocal: GenerateLocal as (req: GenerationRequest) => Promise<GenerationResult>,
+  // Pass the (possibly unsaved draft) API key; Go falls back to the saved one
+  // when "" is given. The key arg is redacted from logs in sanitize() below.
+  getCreditBalance: GetCreditBalance as (apiKey: string) => Promise<CreditInfo>,
 
   getLogs: GetLogs as () => Promise<LogEntry[]>,
   clearLogs: ClearLogs as () => Promise<void>,
@@ -69,9 +90,24 @@ const raw = {
   getEngineInfo: GetEngineInfo as () => Promise<EngineInfo>,
   installEngine: InstallEngine as () => Promise<void>,
 
-  // Model catalog + local model selection
+  // Model catalog + model selection (local downloads weights; cloud is instant)
   listLocalModels: ListLocalModels as () => Promise<ModelInfo[]>,
+  listCloudModels: ListCloudModels as () => Promise<ModelInfo[]>,
   selectLocalModel: SelectLocalModel as (modelCode: string) => Promise<void>,
+  // Cloud model: pick from the full catalog; persists code + full entry.
+  selectCloudModel: SelectCloudModel as (modelCode: string) => Promise<void>,
+  // Saved-image gallery (output folder history). listSavedImages returns one
+  // page of metadata (optionally filtered); getSavedImage fetches one file's
+  // bytes (base64) lazily; deleteSavedImage removes a file; galleryFacets lists
+  // the distinct filterable values.
+  listSavedImages: ListSavedImages as (
+    offset: number,
+    limit: number,
+    filter: GalleryFilter
+  ) => Promise<SavedImage[]>,
+  getSavedImage: GetSavedImage as (name: string) => Promise<string>,
+  deleteSavedImage: DeleteSavedImage as (name: string) => Promise<void>,
+  galleryFacets: GalleryFacets as () => Promise<GalleryFacetsType>,
 
   // Wallet (x402 mode)
   getWalletInfo: GetWalletInfo as () => Promise<WalletInfo>,
@@ -96,6 +132,10 @@ const raw = {
     EventsOn("model:progress", (p: InstallProgress) => cb(p));
     return () => EventsOff("model:progress");
   },
+  onGenerateProgress: (cb: (p: GenerateProgress) => void): (() => void) => {
+    EventsOn("generate:progress", (p: GenerateProgress) => cb(p));
+    return () => EventsOff("generate:progress");
+  },
 };
 
 const NO_WRAP = new Set([
@@ -104,6 +144,7 @@ const NO_WRAP = new Set([
   "onLogEntry",
   "onInstallProgress",
   "onModelProgress",
+  "onGenerateProgress",
 ]);
 
 function wrap<K extends keyof typeof raw>(key: K, fn: (typeof raw)[K]): (typeof raw)[K] {
@@ -132,6 +173,10 @@ function sanitize(method: string, args: unknown[]): unknown {
   if (method === "saveSettings" && args[0] && typeof args[0] === "object") {
     const s = args[0] as Record<string, unknown>;
     return { ...s, apiKey: s.apiKey ? "***" : "" };
+  }
+  // getCreditBalance(apiKey): never log the key itself.
+  if (method === "getCreditBalance") {
+    return [args[0] ? "***" : ""];
   }
   return args;
 }

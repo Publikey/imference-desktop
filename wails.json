@@ -9,5 +9,12 @@
   "author": {
     "name": "Joul",
     "email": "joul1285@gmail.com"
+  },
+  "info": {
+    "companyName": "Imference",
+    "productName": "Imference Desktop",
+    "productVersion": "0.0.0",
+    "copyright": "© 2026 Imference",
+    "comments": "AI image generation — cloud & local"
   }
 }

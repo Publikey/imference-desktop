@@ -37,7 +37,7 @@ import (
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[runtime] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.2.1.tar.gz"
+const EngineTarball = "imference-engine[sdxl,zimage] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.2.2.tar.gz"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute
@@ -60,14 +60,13 @@ func resolveEngineSource() (spec string, editable bool) {
 	}
 	// Local path → editable install with the per-backend image extras. Pip
 	// accepts "path[extras]" syntax even on Windows paths with spaces. We install
-	// both SDXL and Z-Image (identical deps, resolved once). The pinned GitHub
-	// tarball (EngineTarball) still uses [runtime] because tag v0.2.1 predates the
-	// [sdxl]/[zimage] split — flip EngineTarball to [sdxl,zimage] at the v0.2.2 bump.
+	// both SDXL and Z-Image (identical deps, resolved once) — matching the pinned
+	// GitHub tarball (EngineTarball), which uses [sdxl,zimage] since v0.2.2.
 	return override + "[sdxl,zimage]", true
 }
 
 // TorchIndexURL is the CUDA 12.4 wheel index. We use cu124 (not cu121) because
-// imference-engine's pyproject.toml pins torch>=2.6 in the [runtime] extra, and
+// imference-engine's pyproject.toml pins torch>=2.6 in the image extras, and
 // the cu121 index stops at torch 2.5.x. If we used cu121, pip would later
 // uninstall our CUDA torch and pull the CPU torch 2.6+ from PyPI to satisfy
 // the engine's constraint. cu124 ships torch 2.6+ wheels and is compatible
@@ -88,7 +87,7 @@ const TorchSpec = "torch>=2.6"
 //     fallback would lose GPU acceleration on Apple Silicon.
 //   - Windows/Linux: install the CUDA 12.4 build from the pytorch.org index.
 //
-// torchvision is intentionally not installed here; imference-engine[runtime]
+// torchvision is intentionally not installed here; imference-engine[sdxl,zimage]
 // pulls whatever it needs, and on macOS the matching MPS torchvision resolves
 // from PyPI in the engine phase.
 func torchInstallArgs() (args []string, message string) {
@@ -105,7 +104,7 @@ func torchInstallArgs() (args []string, message string) {
 // sd_embed's setup.py declares unconstrained `torch` + `torchvision`
 // dependencies that would clobber our CUDA torch with the CPU wheel.
 // All transitive deps it actually uses (torch, transformers, ftfy) are
-// already in imference-engine[runtime].
+// already in imference-engine[sdxl,zimage].
 const SDEmbedTarball = "sd-embed @ https://github.com/xhinker/sd_embed/archive/refs/heads/main.tar.gz"
 
 // SDXLModelURL is the default single-file SDXL checkpoint the app downloads so

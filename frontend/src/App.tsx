@@ -443,6 +443,7 @@ export default function App() {
         onInstallEngine={installEngine}
         onStartEngine={startEngine}
         onStopEngine={stopEngine}
+        onSelectModel={() => setMode("local")}
         errorLogCount={errorLogCount}
         onToggleLogs={() => setLogsOpen((o) => !o)}
         onOpenSettings={() => openSettings()}
@@ -539,6 +540,7 @@ function Header({
   onInstallEngine,
   onStartEngine,
   onStopEngine,
+  onSelectModel,
   errorLogCount,
   onToggleLogs,
   onOpenSettings,
@@ -550,6 +552,7 @@ function Header({
   onInstallEngine: () => void;
   onStartEngine: () => void;
   onStopEngine: () => void;
+  onSelectModel: () => void;
   errorLogCount: number;
   onToggleLogs: () => void;
   onOpenSettings: () => void;
@@ -570,6 +573,7 @@ function Header({
             onInstall={onInstallEngine}
             onStart={onStartEngine}
             onStop={onStopEngine}
+            onSelectModel={onSelectModel}
           />
         </div>
       </div>
@@ -598,9 +602,11 @@ function Header({
   );
 }
 
-// EngineControl — the local engine's status *and* its on/off switch. The engine
-// no longer auto-starts, so this button drives its whole lifecycle:
-//   not installed → Install · stopped → Start · running → Stop.
+// EngineControl — the local engine's status *and* its lifecycle switch. Because
+// the backend (sdxl/zimage/wan) and weights are chosen BY the model, "starting
+// the engine" means "load the selected model"; there is no model-agnostic start.
+// So: not installed → Install · no model → Select a model · model ready, stopped
+// → Start (loads it) · running → Stop (frees VRAM).
 function EngineControl({
   status,
   engineInstalled,
@@ -609,6 +615,7 @@ function EngineControl({
   onInstall,
   onStart,
   onStop,
+  onSelectModel,
 }: {
   status: SidecarStatus;
   engineInstalled: boolean;
@@ -617,6 +624,7 @@ function EngineControl({
   onInstall: () => void;
   onStart: () => void;
   onStop: () => void;
+  onSelectModel: () => void;
 }) {
   const pill =
     "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50";
@@ -665,19 +673,29 @@ function EngineControl({
       </button>
     );
   }
-  // idle / stopped / error → offer Start (needs a downloaded model).
+  // No downloaded model → "start" is meaningless (the model picks the backend +
+  // weights). Guide to model selection instead of a dead greyed button.
+  if (!hasLocalModel) {
+    return (
+      <button
+        type="button"
+        onClick={onSelectModel}
+        title="Pick a local model — that's what the engine loads and runs"
+        className={cn(pill, "border-border text-muted-foreground hover:text-foreground hover:border-primary/40")}
+      >
+        <Cpu className="size-3" /> Select a model
+      </button>
+    );
+  }
+
+  // Model ready but engine stopped / errored → Start (loads that model).
   const isError = status.state === "error";
   const errMsg = status.state === "error" ? status.message : undefined;
   return (
     <button
       type="button"
       onClick={onStart}
-      disabled={!hasLocalModel}
-      title={
-        !hasLocalModel
-          ? "Select & download a local model first"
-          : errMsg || "Start the local engine"
-      }
+      title={errMsg || "Start the local engine (loads the selected model)"}
       className={cn(
         pill,
         isError

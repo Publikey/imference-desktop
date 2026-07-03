@@ -12,6 +12,10 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// Version is the app version, injected at build time via
+// -ldflags "-X main.Version=<tag>". "dev" for local `wails dev`/`wails build`.
+var Version = "dev"
+
 func main() {
 	app := NewApp()
 

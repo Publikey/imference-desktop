@@ -161,6 +161,9 @@ export default function App() {
   const [pendingLocalModel, setPendingLocalModel] = useState<ModelInfo | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [dlProgress, setDlProgress] = useState<InstallProgress | null>(null);
+  // Whether a usable x402 wallet exists (keychain — the real source of truth,
+  // not settings.walletAddress). Drives cloud gating in x402 mode.
+  const [walletConfigured, setWalletConfigured] = useState(false);
 
   // Per-step progress is a single global stream (the sidecar runs local jobs
   // serially), so attribute each tick to the oldest still-running local job —
@@ -261,9 +264,19 @@ export default function App() {
   // Cloud is ready when a model is picked AND the active payment method is
   // configured (x402 → wallet present; bearer → API key present). Funding is
   // surfaced by the PaymentBar; the server rejects an under-funded request.
+  // x402 is gated on the ACTUAL wallet (keychain), not settings.walletAddress —
+  // that mirror is only written on generate/import, so a fresh settings.json with
+  // an existing keychain wallet would otherwise read as "not configured".
   const cloudConfigured =
-    settings?.paymentMode === "x402" ? !!settings?.walletAddress : !!settings?.apiKey;
+    settings?.paymentMode === "x402" ? walletConfigured : !!settings?.apiKey;
   const cloudReady = cloudConfigured && !!settings?.cloudModel;
+
+  // Refresh wallet-configured state whenever x402 is (or becomes) the mode, or a
+  // wallet is generated/imported (walletAddress changes). Reads the keychain.
+  useEffect(() => {
+    if (settings?.paymentMode !== "x402") return;
+    void api.getWalletInfo().then((w) => setWalletConfigured(w.configured)).catch(() => {});
+  }, [settings?.paymentMode, settings?.walletAddress]);
 
   // Seed the pending local selection from the persisted (downloaded) model, and
   // keep it in sync when a download completes (settings.localModel updates).

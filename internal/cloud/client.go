@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,12 @@ type Client struct {
 	catalogMu      sync.Mutex
 	catalog        []apiModel
 	catalogFetched time.Time
+
+	// formats caches the /api/formats response (per-model resolutions/ratios),
+	// same TTL semantics as the catalog. Guarded by formatsMu.
+	formatsMu      sync.Mutex
+	formats        []apiFormat
+	formatsFetched time.Time
 }
 
 func New(bus *logbus.Bus) *Client {
@@ -63,7 +70,7 @@ type postBody struct {
 	NegativePrompt string  `json:"negative_prompt,omitempty"`
 	Width          int     `json:"width,omitempty"`
 	Height         int     `json:"height,omitempty"`
-	NumSteps       int     `json:"num_steps,omitempty"`
+	NumSteps       int     `json:"steps,omitempty"`
 	GuidanceScale  float64 `json:"guidance_scale,omitempty"`
 	Seed           *int    `json:"seed,omitempty"`
 	BatchNbr       int     `json:"batch_nbr,omitempty"`
@@ -116,6 +123,27 @@ type apiModel struct {
 	ImEngine     string  `json:"im_engine"`
 	BaseModel    string  `json:"base_model"`
 	ShiftDefault float64 `json:"shift_default"`
+	// ImCost is the cloud run cost in credits (1 credit = $0.001). ImLocal/ImCloud
+	// declare where the model may run (drives which catalog it appears in).
+	ImCost  int  `json:"im_cost"`
+	ImLocal bool `json:"im_local"`
+	ImCloud bool `json:"im_cloud"`
+	// Catalog organization — order + family/group for sorting/grouping the list.
+	ModelOrder      int    `json:"model_order"`
+	ModelFamilyCode string `json:"model_family_code"`
+	FamilyName      string `json:"family_name"`
+	ModelGroupCode  string `json:"model_group_code"`
+}
+
+// apiFormat mirrors one im_format row (GET /api/formats).
+type apiFormat struct {
+	ModelCode  string `json:"model_code"`
+	FormatCode string `json:"format_code"`
+	Name       string `json:"name"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	Ratio      string `json:"ratio"`
+	IsDefault  bool   `json:"is_default"`
 }
 
 // normalizeEngine maps the catalog's im_engine value to the internal backend
@@ -169,34 +197,104 @@ func toModelInfo(m apiModel) types.ModelInfo {
 		BackendType:       backend,
 		BaseModel:         baseModel,
 		ShiftDefault:      m.ShiftDefault,
+		Cost:              m.ImCost,
+		CanLocal:          m.ImLocal,
+		CanCloud:          m.ImCloud,
+		Order:             m.ModelOrder,
+		FamilyCode:        m.ModelFamilyCode,
+		FamilyName:        m.FamilyName,
+		GroupCode:         m.ModelGroupCode,
 	}
 }
 
-// ListModels fetches the imference model catalog. When localOnly is true it
-// returns only the locally-runnable models — those with a downloadable
-// model_url; otherwise it returns the full catalog (cloud can run any model
-// code, including the proprietary cloud-only ones). The endpoint is public (no
-// auth), so this works before the user configures an API key.
+// ListModels fetches the imference model catalog, filtered by the catalog's
+// im_local / im_cloud flags. When localOnly is true it returns models the local
+// engine can run (im_local, plus the technical prerequisites: a downloadable
+// model_url and a known engine); otherwise it returns the cloud-runnable models
+// (im_cloud). The endpoint is public (no auth), so this works before the user
+// configures an API key.
 func (c *Client) ListModels(ctx context.Context, localOnly bool) ([]types.ModelInfo, error) {
 	models, err := c.fetchCatalog(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	// Per-model formats (resolutions/ratios). Non-fatal if it fails — models
+	// still list, the UI falls back to generic square/portrait/landscape.
+	formatsByModel := map[string][]types.FormatOption{}
+	if fs, ferr := c.fetchFormats(ctx); ferr != nil {
+		c.bus.Warn("cloud", "fetchFormats failed", map[string]any{"err": ferr.Error()})
+	} else {
+		for _, f := range fs {
+			formatsByModel[f.ModelCode] = append(formatsByModel[f.ModelCode], types.FormatOption{
+				FormatCode: f.FormatCode, Name: f.Name, Width: f.Width, Height: f.Height,
+				Ratio: f.Ratio, IsDefault: f.IsDefault,
+			})
+		}
+	}
+
 	out := make([]types.ModelInfo, 0, len(models))
 	for _, m := range models {
 		if localOnly {
-			if m.ModelURL == "" {
-				continue // cloud-only model — can't run locally
+			// im_local is authoritative, but the sidecar still needs weights to
+			// download and a backend to route to.
+			if !m.ImLocal || m.ModelURL == "" || normalizeEngine(m.ImEngine) == "" {
+				continue
 			}
-			if normalizeEngine(m.ImEngine) == "" {
-				continue // im_engine null (ignore) or "external" — not a local backend
-			}
+		} else if !m.ImCloud {
+			continue // not cloud-runnable
 		}
-		out = append(out, toModelInfo(m))
+		mi := toModelInfo(m)
+		mi.Formats = formatsByModel[m.ModelCode]
+		out = append(out, mi)
 	}
+	// Catalog display order (model_order), then name as a stable tiebreaker.
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Order != out[j].Order {
+			return out[i].Order < out[j].Order
+		}
+		return out[i].Name < out[j].Name
+	})
 	c.bus.Info("cloud", "ListModels ok", map[string]any{"total": len(models), "returned": len(out), "localOnly": localOnly})
 	return out, nil
+}
+
+// fetchFormats returns the full /api/formats response, cached per formatsTTL
+// (same as the catalog). Public endpoint — no auth needed.
+func (c *Client) fetchFormats(ctx context.Context) ([]apiFormat, error) {
+	c.formatsMu.Lock()
+	defer c.formatsMu.Unlock()
+
+	if c.formats != nil && time.Since(c.formatsFetched) < catalogTTL {
+		return c.formats, nil
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+
+	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+"/api/formats", nil)
+	r.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(r)
+	if err != nil {
+		return nil, fmt.Errorf("cloud: GET /api/formats: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("cloud: /api/formats HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var parsed struct {
+		Formats []apiFormat `json:"formats"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, fmt.Errorf("cloud: parse /api/formats: %w", err)
+	}
+
+	c.formats = parsed.Formats
+	c.formatsFetched = time.Now()
+	return parsed.Formats, nil
 }
 
 // fetchCatalog returns the full (unfiltered) /api/models response, served from

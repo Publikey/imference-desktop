@@ -17,15 +17,21 @@ import {
   GetSidecarStatus,
   GetWalletInfo,
   ImportWallet,
+  DeleteSavedImage,
+  GalleryFacets,
+  GetSavedImage,
   InstallEngine,
   ListCloudModels,
   ListLocalModels,
+  ListSavedImages,
   LogFromFrontend,
   RefreshWalletBalance,
   RestartSidecar,
   SaveSettings,
   SelectCloudModel,
   SelectLocalModel,
+  StartSidecar,
+  StopSidecar,
 } from "../../wailsjs/go/main/App";
 import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
 import type {
@@ -38,8 +44,11 @@ import type {
   InstallProgress,
   LogEntry,
   LogLevel,
+  GalleryFacets as GalleryFacetsType,
+  GalleryFilter,
   ModelInfo,
   PythonInfo,
+  SavedImage,
   SidecarStatus,
   WalletInfo,
 } from "./types";
@@ -55,6 +64,10 @@ const raw = {
   saveSettings: SaveSettings as unknown as (next: AppSettings) => Promise<AppSettings>,
   getSidecarStatus: GetSidecarStatus as () => Promise<SidecarStatus>,
   restartSidecar: RestartSidecar as () => Promise<void>,
+  // Local engine lifecycle — the engine no longer auto-starts; the home-screen
+  // control drives it.
+  startSidecar: StartSidecar as () => Promise<void>,
+  stopSidecar: StopSidecar as () => Promise<void>,
   generateCloud: GenerateCloud as (req: GenerationRequest) => Promise<GenerationResult>,
   generateLocal: GenerateLocal as (req: GenerationRequest) => Promise<GenerationResult>,
   // Pass the (possibly unsaved draft) API key; Go falls back to the saved one
@@ -83,6 +96,18 @@ const raw = {
   selectLocalModel: SelectLocalModel as (modelCode: string) => Promise<void>,
   // Cloud model: pick from the full catalog; persists code + full entry.
   selectCloudModel: SelectCloudModel as (modelCode: string) => Promise<void>,
+  // Saved-image gallery (output folder history). listSavedImages returns one
+  // page of metadata (optionally filtered); getSavedImage fetches one file's
+  // bytes (base64) lazily; deleteSavedImage removes a file; galleryFacets lists
+  // the distinct filterable values.
+  listSavedImages: ListSavedImages as (
+    offset: number,
+    limit: number,
+    filter: GalleryFilter
+  ) => Promise<SavedImage[]>,
+  getSavedImage: GetSavedImage as (name: string) => Promise<string>,
+  deleteSavedImage: DeleteSavedImage as (name: string) => Promise<void>,
+  galleryFacets: GalleryFacets as () => Promise<GalleryFacetsType>,
 
   // Wallet (x402 mode)
   getWalletInfo: GetWalletInfo as () => Promise<WalletInfo>,

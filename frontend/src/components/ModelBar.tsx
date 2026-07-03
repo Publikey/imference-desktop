@@ -16,31 +16,40 @@ type Mode = "local" | "cloud";
 
 type Props = {
   // The active generation mode. Drives which catalog the selector shows and how
-  // a pick is applied: local downloads weights; cloud just records the code.
+  // a pick is applied: local just records the selection (App's Download button
+  // fetches weights); cloud records the code instantly.
   mode: Mode;
-  // Whole settings object — the card reads localModel / cloudModel from it.
+  // Whole settings object — the card reads cloudModel from it.
   settings: AppSettings | null;
-  // Called with refetched settings after a switch, so App's generation params
-  // (steps/cfg/resolution from the chosen model) stay in sync for both modes.
+  // Called with refetched settings after a cloud switch.
   onModelSwitched: (next: AppSettings) => void;
+  // Local selection is App-owned (decoupled from the download): the pending pick
+  // and the download state/progress are passed in.
+  pendingLocalModel: ModelInfo | null;
+  onSelectLocal: (m: ModelInfo) => void;
+  downloading: boolean;
+  progress: InstallProgress | null;
 };
 
-// ModelBar — the single model selector for the whole app, lifted out of the
-// Settings dialog and into the form. It stays mounted for the app's lifetime,
-// so a local model download keeps streaming progress here in the background
-// even while the user switches to Cloud and generates (cloud uses a separate
-// HTTP client and is never blocked by it). The catalog is mode-aware:
-//   • local mode → only locally-runnable models; picking one downloads ~6–7 GB
-//     of weights and restarts the sidecar (so local is briefly unavailable).
-//   • cloud mode → the full catalog (incl. cloud-only Flux/Veo/…); picking one
-//     is instant — it just records the model code for the next request.
-export function ModelBar({ mode, settings, onModelSwitched }: Props) {
+// ModelBar — the single model selector for the whole app. Just the mode icon +
+// a thumbnail-rich dropdown (the Local/Cloud toggle sits right above, so a text
+// label is redundant). Catalog is mode-aware:
+//   • local mode → only locally-runnable models; picking one records the choice
+//     (App's primary button downloads ~6–7 GB of weights on demand).
+//   • cloud mode → the full catalog; picking one is instant.
+export function ModelBar({
+  mode,
+  settings,
+  onModelSwitched,
+  pendingLocalModel,
+  onSelectLocal,
+  downloading,
+  progress,
+}: Props) {
   const [localModels, setLocalModels] = useState<ModelInfo[]>([]);
   const [cloudModels, setCloudModels] = useState<ModelInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<InstallProgress | null>(null);
-  const [downloading, setDownloading] = useState(false); // local weights fetch
   const [switching, setSwitching] = useState(false); // cloud quick-switch
 
   // Load both catalogs once.
@@ -60,26 +69,11 @@ export function ModelBar({ mode, settings, onModelSwitched }: Props) {
     };
   }, []);
 
-  // Background progress subscription for local downloads — persists for the
-  // card's lifetime, so progress survives a mode switch to Cloud.
-  useEffect(() => {
-    return api.onModelProgress((p) => {
-      setProgress(p);
-      if (p.done || p.phase === "done" || p.phase === "error") {
-        setDownloading(false);
-        if (p.phase === "done") void api.getSettings().then(onModelSwitched);
-      } else {
-        setDownloading(true);
-      }
-    });
-  }, [onModelSwitched]);
-
   const isCloud = mode === "cloud";
   const models = isCloud ? cloudModels : localModels;
   const activeCode = isCloud
     ? settings?.cloudModel || null
-    : settings?.localModel?.modelCode ?? null;
-  const active = models.find((m) => m.modelCode === activeCode) ?? null;
+    : pendingLocalModel?.modelCode ?? null;
   const busy = downloading || switching;
 
   const pick = useCallback(
@@ -101,59 +95,29 @@ export function ModelBar({ mode, settings, onModelSwitched }: Props) {
         return;
       }
 
-      // Local: kick off the background weights download.
-      setDownloading(true);
-      setProgress({ phase: "model", message: `Preparing ${target.name}`, percentEstimate: 0, done: false });
-      try {
-        await api.selectLocalModel(code);
-      } catch (e) {
-        setDownloading(false);
-        setProgress({
-          phase: "error",
-          message: "",
-          percentEstimate: 0,
-          done: true,
-          error: e instanceof Error ? e.message : String(e),
-        });
-      }
+      // Local: just record the selection — the Download button fetches weights.
+      onSelectLocal(target);
     },
-    [activeCode, busy, isCloud, models, onModelSwitched]
+    [activeCode, busy, isCloud, models, onModelSwitched, onSelectLocal]
   );
 
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className={cn(
-              "flex size-7 items-center justify-center rounded-[9px] text-white shadow-sm",
-              isCloud
-                ? "bg-gradient-to-br from-sky-400 to-blue-600"
-                : "brand-surface"
-            )}
-          >
-            {isCloud ? <Cloud className="size-4" /> : <Cpu className="size-4" />}
-          </span>
-          <div className="flex min-w-0 flex-col">
-            <span className="text-sm font-semibold leading-tight">
-              {isCloud ? "Cloud model" : "Local model"}
-            </span>
-            <span className="text-muted-foreground/80 text-[11px] leading-tight">
-              {active
-                ? `${active.stepsDefault} steps · cfg ${active.cfgDefault}${
-                    active.schedulerDefault ? ` · ${active.schedulerDefault}` : ""
-                  }`
-                : isCloud
-                  ? "Runs on imference.com"
-                  : "Runs on your GPU"}
-            </span>
-          </div>
-        </div>
+      <div className="flex items-center gap-2.5">
+        <span
+          className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-[10px] text-white shadow-sm",
+            isCloud ? "bg-gradient-to-br from-sky-400 to-blue-600" : "brand-surface"
+          )}
+          title={isCloud ? "Cloud model" : "Local model"}
+        >
+          {isCloud ? <Cloud className="size-[18px]" /> : <Cpu className="size-[18px]" />}
+        </span>
 
         {listError ? (
-          <span className="text-destructive text-xs">Catalog unavailable</span>
+          <span className="text-destructive flex-1 text-xs">Catalog unavailable</span>
         ) : loading ? (
-          <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+          <span className="text-muted-foreground inline-flex flex-1 items-center gap-1.5 text-xs">
             <Loader2 className="size-3.5 animate-spin" />
             Loading…
           </span>
@@ -171,7 +135,7 @@ export function ModelBar({ mode, settings, onModelSwitched }: Props) {
       {downloading && progress ? (
         <DownloadProgress p={progress} />
       ) : progress?.error && mode === "local" ? (
-        <p className="text-destructive mt-2 pl-9 text-xs">{progress.error}</p>
+        <p className="text-destructive mt-2 text-xs">{progress.error}</p>
       ) : null}
     </section>
   );
@@ -215,13 +179,13 @@ function ModelSelect({
   const selected = models.find((m) => m.modelCode === value) ?? null;
 
   return (
-    <div ref={ref} className="relative shrink-0">
+    <div ref={ref} className="relative min-w-0 flex-1">
       <button
         type="button"
         disabled={disabled || models.length === 0}
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "group flex h-10 w-[15rem] items-center gap-2.5 rounded-xl border px-2.5 text-left text-sm shadow-sm transition",
+          "group flex h-10 w-full items-center gap-2.5 rounded-xl border px-2.5 text-left text-sm shadow-sm transition",
           "bg-background/70 hover:border-primary/40 hover:bg-background",
           "disabled:cursor-not-allowed disabled:opacity-60",
           open && "border-primary/50 ring-primary/15 ring-2"
@@ -271,6 +235,11 @@ function ModelSelect({
                     </div>
                   )}
                 </div>
+                {isCloud && m.cost > 0 && (
+                  <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums" title="credits per run">
+                    {m.cost} cr
+                  </span>
+                )}
                 {isActive && <Check className="text-primary size-4 shrink-0" />}
               </button>
             );

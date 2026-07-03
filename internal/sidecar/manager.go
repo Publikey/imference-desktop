@@ -177,6 +177,7 @@ type Manager struct {
 	listener   StatusListener
 	progress   ProgressListener
 	inferring  atomic.Bool // true between "Inference chunk" and the 100% step
+	stopping   atomic.Bool // true during an intentional Stop, so watchExit doesn't cry "error"
 	bus        *logbus.Bus
 
 	mu     sync.RWMutex
@@ -272,6 +273,7 @@ func (m *Manager) Start(parentCtx context.Context, pythonPath, sdxlPath string, 
 		return errors.New("sidecar: settings incomplete")
 	}
 
+	m.stopping.Store(false) // fresh launch — a later exit is unexpected again
 	m.setStatus(types.SidecarStatus{State: "starting"})
 
 	runCtx, cancel := context.WithCancel(parentCtx)
@@ -402,6 +404,11 @@ func (m *Manager) currentDevice() string {
 // stdin → Python sees EOF and exits cleanly), falls back to the Job
 // Object + SIGKILL after grace period.
 func (m *Manager) Stop() error {
+	// Mark the stop intentional *before* the process can exit, so watchExit
+	// treats the imminent termination as expected (not a crash → "error").
+	// Reset by the next Start().
+	m.stopping.Store(true)
+
 	m.mu.Lock()
 	cmd := m.cmd
 	job := m.job
@@ -608,7 +615,9 @@ func (m *Manager) watchExit(cmd *exec.Cmd, exitDone chan<- struct{}) {
 	_, _ = cmd.Process.Wait()
 	close(exitDone)
 	state := m.Status().State
-	if state == "starting" || state == "ready" {
+	// An intentional Stop() closes stdin → the child exits cleanly; that's not a
+	// crash, so don't flip to "error" (Stop sets its own "stopped" status).
+	if !m.stopping.Load() && (state == "starting" || state == "ready") {
 		m.setStatus(types.SidecarStatus{
 			State:   "error",
 			Message: "sidecar exited unexpectedly — see logs in the LogPanel",

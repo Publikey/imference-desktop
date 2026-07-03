@@ -113,6 +113,29 @@ type ModelInfo struct {
 	// ShiftDefault is the Z-Image flow-matching shift (3.0≈480p, 5.0≈720p),
 	// passed as backend_options={"shift": …}. Ignored by SDXL. 0 → engine default.
 	ShiftDefault float64 `json:"shiftDefault,omitempty"`
+	// Cost is the cloud run cost in credits (1 credit = $0.001). Local runs are
+	// free. CanLocal/CanCloud declare where the model may run.
+	Cost     int  `json:"cost"`
+	CanLocal bool `json:"canLocal"`
+	CanCloud bool `json:"canCloud"`
+	// Formats are the model's supported resolutions/ratios (im_format). Empty
+	// when the catalog has none — the UI then falls back to generic formats.
+	Formats []FormatOption `json:"formats,omitempty"`
+	// Catalog organization (im_model family/group) for sorting/grouping the list.
+	Order      int    `json:"order,omitempty"`
+	FamilyCode string `json:"familyCode,omitempty"`
+	FamilyName string `json:"familyName,omitempty"`
+	GroupCode  string `json:"groupCode,omitempty"`
+}
+
+// FormatOption is one supported resolution/ratio for a model (from im_format).
+type FormatOption struct {
+	FormatCode string `json:"formatCode"`
+	Name       string `json:"name,omitempty"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	Ratio      string `json:"ratio,omitempty"`
+	IsDefault  bool   `json:"isDefault"`
 }
 
 // WalletInfo is what the renderer sees when it asks about the wallet
@@ -161,6 +184,70 @@ type GenerationRequest struct {
 	Strength float64 `json:"strength,omitempty"`
 }
 
+// SavedImage is one previously-generated image found on disk in the output
+// folder. The renderer fetches its bytes lazily via GetSavedImage(name) (base64
+// over the Wails bridge). Basic fields are parsed from the filename
+// "<YYYYMMDD-HHMMSS>_<source>_<seed>.<ext>"; Meta comes from the "<name>.json"
+// sidecar when present.
+type SavedImage struct {
+	Name      string `json:"name"`      // file name (key for GetSavedImage / DeleteSavedImage)
+	Source    string `json:"source"`    // "local" | "cloud" | …
+	Seed      int    `json:"seed"`      // 0 when unparseable
+	SavedPath string `json:"savedPath"` // absolute path on disk
+	// Width/Height let the renderer reserve the right aspect box before the bytes
+	// load (masonry with any format). 0 when the header couldn't be read.
+	Width  int `json:"width"`
+	Height int `json:"height"`
+	// Meta is the generation metadata from the sidecar JSON. Nil for images saved
+	// before this feature (or hand-added files).
+	Meta *GenerationMeta `json:"meta,omitempty"`
+}
+
+// GenerationMeta captures how an image was produced. Written verbatim to a
+// "<image>.json" sidecar at save time, and read back to drive the gallery's
+// detail view and filters. Format-agnostic — reused as-is for future video.
+type GenerationMeta struct {
+	Prompt         string  `json:"prompt"`
+	NegativePrompt string  `json:"negativePrompt,omitempty"`
+	Source         string  `json:"source"`              // "local" | "cloud"
+	ModelCode      string  `json:"modelCode,omitempty"` // catalog code
+	ModelName      string  `json:"modelName,omitempty"` // display name
+	Engine         string  `json:"engine,omitempty"`    // "sdxl" | "zimage" | "wan"
+	Width          int     `json:"width,omitempty"`
+	Height         int     `json:"height,omitempty"`
+	FormatCode     string  `json:"formatCode,omitempty"` // "square" | "portrait" | "landscape"
+	NumSteps       int     `json:"numSteps,omitempty"`
+	GuidanceScale  float64 `json:"guidanceScale,omitempty"`
+	Scheduler      string  `json:"scheduler,omitempty"`
+	ClipSkip       *int    `json:"clipSkip,omitempty"`
+	Seed           int     `json:"seed"`
+	Img2Img        bool    `json:"img2img,omitempty"`
+	Strength       float64 `json:"strength,omitempty"`
+	CreatedAt      string  `json:"createdAt"` // RFC3339
+}
+
+// GalleryFilter narrows ListSavedImages. Empty fields mean "no constraint".
+type GalleryFilter struct {
+	Engine    string `json:"engine"`    // "sdxl" | "zimage" | "wan"
+	ModelCode string `json:"modelCode"` // exact catalog code
+	Source    string `json:"source"`    // "local" | "cloud"
+}
+
+// Facet is one filterable value with how many saved images carry it.
+type Facet struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+	Count int    `json:"count"`
+}
+
+// GalleryFacets are the distinct filterable values across the whole gallery,
+// used to build the filter UI.
+type GalleryFacets struct {
+	Models  []Facet `json:"models"`
+	Engines []Facet `json:"engines"`
+	Sources []Facet `json:"sources"`
+}
+
 // GenerationResult is the unified Go → frontend response. Same shape for
 // cloud and local: image always arrives as base64 PNG/WebP so the React
 // side just sets `<img src="data:image/png;base64,..."/>` regardless of source.
@@ -172,6 +259,9 @@ type GenerationResult struct {
 	// string when save failed (the failure is logged but doesn't fail the
 	// generation — the in-memory base64 result is still usable).
 	SavedPath string `json:"savedPath"`
+	// Meta is the generation metadata (same as the sidecar), so the freshly
+	// generated image shows the same details in the UI as gallery images.
+	Meta *GenerationMeta `json:"meta,omitempty"`
 }
 
 // GenerateProgress is broadcast on the "generate:progress" event channel during

@@ -89,6 +89,28 @@ export type ModelInfo = {
   baseModel?: string;
   /** Z-Image flow-matching shift (3.0≈480p, 5.0≈720p). Ignored by SDXL. */
   shiftDefault?: number;
+  /** Cloud run cost in credits (1 credit = $0.001). Local runs are free. */
+  cost: number;
+  /** Where the model may run — drives which catalog (local/cloud) lists it. */
+  canLocal: boolean;
+  canCloud: boolean;
+  /** Supported resolutions/ratios (im_format). Empty → generic fallback. */
+  formats?: FormatOption[];
+  /** Catalog organization (im_model family/group) for sorting/grouping. */
+  order?: number;
+  familyCode?: string;
+  familyName?: string;
+  groupCode?: string;
+};
+
+/** One supported resolution/ratio for a model (from im_format). */
+export type FormatOption = {
+  formatCode: string;
+  name?: string;
+  width: number;
+  height: number;
+  ratio?: string;
+  isDefault: boolean;
 };
 
 export type PaymentMode = "bearer" | "x402";
@@ -131,12 +153,53 @@ export type GenerateProgress = {
   percent: number;
 };
 
+/** A previously-generated image found on disk (the output folder gallery). */
+export type SavedImage = {
+  /** File name — key for api.getSavedImage(name) / api.deleteSavedImage(name). */
+  name: string;
+  source: string;
+  seed: number;
+  savedPath: string;
+  /** Pixel dimensions (0 when unknown) — used to reserve the masonry tile's box. */
+  width: number;
+  height: number;
+  /** Generation metadata from the sidecar JSON. Absent for pre-feature images. */
+  meta?: GenerationMeta | null;
+};
+
+/** How an image was generated — from the "<image>.json" sidecar. */
+export type GenerationMeta = {
+  prompt: string;
+  negativePrompt?: string;
+  source: string;
+  modelCode?: string;
+  modelName?: string;
+  engine?: string;
+  width?: number;
+  height?: number;
+  formatCode?: string;
+  numSteps?: number;
+  guidanceScale?: number;
+  scheduler?: string;
+  clipSkip?: number;
+  seed: number;
+  img2img?: boolean;
+  strength?: number;
+  createdAt: string;
+};
+
+export type GalleryFilter = { engine: string; modelCode: string; source: string };
+export type Facet = { value: string; label: string; count: number };
+export type GalleryFacets = { models: Facet[]; engines: Facet[]; sources: Facet[] };
+
 export type GenerationResult = {
   imageBase64: string; // already a `data:...;base64,...` URL — drop straight into <img src>
   seed: number;
   source: "local" | "cloud";
   /** Absolute path to the auto-saved file on disk. Empty if save failed. */
   savedPath: string;
+  /** Generation metadata (same as the sidecar) so the fresh image shows full details. */
+  meta?: GenerationMeta | null;
 };
 
 export type SidecarStatus =

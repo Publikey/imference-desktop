@@ -6,12 +6,20 @@ export function ClearLogs() {
   return window['go']['main']['App']['ClearLogs']();
 }
 
+export function DeleteSavedImage(arg1) {
+  return window['go']['main']['App']['DeleteSavedImage'](arg1);
+}
+
 export function DetectPython() {
   return window['go']['main']['App']['DetectPython']();
 }
 
 export function ExportWalletPrivateKey() {
   return window['go']['main']['App']['ExportWalletPrivateKey']();
+}
+
+export function GalleryFacets() {
+  return window['go']['main']['App']['GalleryFacets']();
 }
 
 export function GenerateCloud(arg1) {
@@ -36,6 +44,10 @@ export function GetEngineInfo() {
 
 export function GetLogs() {
   return window['go']['main']['App']['GetLogs']();
+}
+
+export function GetSavedImage(arg1) {
+  return window['go']['main']['App']['GetSavedImage'](arg1);
 }
 
 export function GetSettings() {
@@ -66,6 +78,10 @@ export function ListLocalModels() {
   return window['go']['main']['App']['ListLocalModels']();
 }
 
+export function ListSavedImages(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ListSavedImages'](arg1, arg2, arg3);
+}
+
 export function LogFromFrontend(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['LogFromFrontend'](arg1, arg2, arg3, arg4);
 }
@@ -88,4 +104,12 @@ export function SelectCloudModel(arg1) {
 
 export function SelectLocalModel(arg1) {
   return window['go']['main']['App']['SelectLocalModel'](arg1);
+}
+
+export function StartSidecar() {
+  return window['go']['main']['App']['StartSidecar']();
+}
+
+export function StopSidecar() {
+  return window['go']['main']['App']['StopSidecar']();
 }

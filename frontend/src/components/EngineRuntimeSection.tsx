@@ -46,7 +46,7 @@ export function EngineRuntimeSection({
       </div>
 
       {/* SDXL */}
-      <div className="grid gap-3">
+      <div id="settings-runtime-sdxl" className="grid gap-3 scroll-mt-4">
         <span className="text-xs font-medium">SDXL</span>
         <DeviceMaxGrid
           device={sdxl.device}
@@ -70,7 +70,7 @@ export function EngineRuntimeSection({
       </div>
 
       {/* Z-Image — no Tiny VAE (SDXL-only, ignored by Z-Image) */}
-      <div className="grid gap-3 border-t pt-3">
+      <div id="settings-runtime-zimage" className="grid gap-3 border-t pt-3 scroll-mt-4">
         <span className="text-xs font-medium">Z-Image</span>
         <DeviceMaxGrid
           device={zimage.device}
@@ -89,7 +89,7 @@ export function EngineRuntimeSection({
       </div>
 
       {/* WAN video — applies once the video backend is enabled */}
-      <div className="grid gap-3 border-t pt-3">
+      <div id="settings-runtime-wan" className="grid gap-3 border-t pt-3 scroll-mt-4">
         <span className="text-xs font-medium">
           Video · WAN{" "}
           <span className="text-muted-foreground font-normal">— applies once video is enabled</span>

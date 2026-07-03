@@ -5,12 +5,15 @@ package imagesink
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"imference-desktop-go/internal/types"
 )
 
 // Save persists a base64 data URL ("data:image/...;base64,...") to baseDir.
@@ -41,6 +44,25 @@ func Save(dataURL, source string, seed int, baseDir string) (string, error) {
 		return "", fmt.Errorf("imagesink: write %s: %w", path, err)
 	}
 	return path, nil
+}
+
+// SaveWithMeta writes the image (like Save) and a "<path>.json" sidecar holding
+// the generation metadata. The image write is fatal on error; the sidecar write
+// is best-effort — its error is returned as metaErr but the image path is still
+// valid, so callers can log-and-continue.
+func SaveWithMeta(dataURL, source string, seed int, baseDir string, meta types.GenerationMeta) (path string, metaErr error, err error) {
+	path, err = Save(dataURL, source, seed, baseDir)
+	if err != nil {
+		return "", nil, err
+	}
+	data, mErr := json.MarshalIndent(meta, "", "  ")
+	if mErr != nil {
+		return path, fmt.Errorf("imagesink: marshal meta: %w", mErr), nil
+	}
+	if mErr := os.WriteFile(path+".json", data, 0o644); mErr != nil {
+		return path, fmt.Errorf("imagesink: write meta %s.json: %w", path, mErr), nil
+	}
+	return path, nil, nil
 }
 
 // DefaultDir returns "<home>/Pictures/Imference". Falls back to "./imference-out"

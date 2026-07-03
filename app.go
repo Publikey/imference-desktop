@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -1051,25 +1052,50 @@ func (a *App) ExportWalletPrivateKey() (string, error) {
 	return w.PrivateKeyHex(), nil
 }
 
-// resolveSidecarDir finds the sidecar/ folder relative to the running binary.
-// `wails dev` runs from the project root so "sidecar/" is right there;
-// `wails build` packs the binary into build/bin/ so we walk up. POC ships
-// dev-mode only — the prod branch is here for completeness, not tested.
+// resolveSidecarDir returns the directory holding the sidecar Python wrapper.
+// In a dev checkout the on-disk "sidecar/" is preferred so edits are live under
+// `wails dev`; a packaged binary has no such folder, so we extract the embedded
+// copy (bundled via //go:embed in main.go) to a stable, writable location.
 func resolveSidecarDir() (string, error) {
-	candidates := []string{
-		"sidecar",                            // wails dev
-		filepath.Join("..", "..", "sidecar"), // wails build → build/bin/<exe>
+	// Dev: an on-disk sidecar/ next to the working dir (or up from build/bin).
+	for _, c := range []string{"sidecar", filepath.Join("..", "..", "sidecar")} {
+		if abs, err := filepath.Abs(c); err == nil {
+			if _, err := os.Stat(filepath.Join(abs, "main.py")); err == nil {
+				return abs, nil
+			}
+		}
 	}
-	for _, c := range candidates {
-		abs, err := filepath.Abs(c)
+	// Packaged: materialize the embedded wrapper.
+	return extractEmbeddedSidecar()
+}
+
+// extractEmbeddedSidecar writes the embedded sidecar files to
+// "<UserCacheDir>/imference-desktop-go/sidecar" (i.e. %LOCALAPPDATA%\… on
+// Windows), rewriting only when missing or changed so the extracted copy tracks
+// the running app version. Returns the directory.
+func extractEmbeddedSidecar() (string, error) {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(base, "imference-desktop-go", "sidecar")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	for _, name := range []string{"main.py", "requirements.txt"} {
+		data, err := sidecarFiles.ReadFile("sidecar/" + name)
 		if err != nil {
-			continue
+			return "", fmt.Errorf("read embedded sidecar/%s: %w", name, err)
 		}
-		if _, err := os.Stat(filepath.Join(abs, "main.py")); err == nil {
-			return abs, nil
+		dst := filepath.Join(dir, name)
+		if cur, err := os.ReadFile(dst); err == nil && bytes.Equal(cur, data) {
+			continue // up to date
+		}
+		if err := os.WriteFile(dst, data, 0o644); err != nil {
+			return "", fmt.Errorf("write %s: %w", dst, err)
 		}
 	}
-	return "", fmt.Errorf("sidecar/ dir not found (tried %v)", candidates)
+	return dir, nil
 }
 
 func resolveSidecarScript() (string, error) {

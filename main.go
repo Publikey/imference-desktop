@@ -14,6 +14,16 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// sidecarFiles bundles the app's own Python glue (the thin wrapper that runs
+// imference-engine and speaks the stdio protocol) into the binary, so a
+// packaged/portable .exe is self-contained: it downloads the *engine* at install
+// and carries its own *wrapper*. These are ~10 KB of app code, version-locked to
+// the Go stdio contract — not the heavy engine (that stays a download).
+// Extracted to %LOCALAPPDATA% at startup; see extractEmbeddedSidecar in app.go.
+//
+//go:embed sidecar/main.py sidecar/requirements.txt
+var sidecarFiles embed.FS
+
 // Version is the app version, injected at build time via
 // -ldflags "-X main.Version=<tag>". "dev" for local `wails dev`/`wails build`.
 var Version = "dev"

@@ -19,6 +19,11 @@ jobs:
   # ---------------------------------------------------------------------------
   windows:
     runs-on: windows-latest
+    # The runner ships mingw, so Go would default to CGO_ENABLED=1 and produce a
+    # cgo binary that crashes at startup (exit 2). Wails' new Go WebView2Loader
+    # needs no cgo on Windows — build pure-Go, matching a gcc-less dev machine.
+    env:
+      CGO_ENABLED: "0"
     steps:
       - uses: actions/checkout@v4
 

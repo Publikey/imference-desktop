@@ -35,6 +35,9 @@ jobs:
           go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
           echo "$(go env GOPATH)\bin" >> "$GITHUB_PATH"
           choco install nsis -y --no-progress
+          # choco updates the machine PATH, not this job's — add NSIS explicitly
+          # so `wails build -nsis` (later step) finds makensis.exe.
+          echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
 
       - name: Set version from tag
         run: node scripts/set-version.mjs "${{ github.ref_name }}"

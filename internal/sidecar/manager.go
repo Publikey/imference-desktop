@@ -265,6 +265,13 @@ func (m *Manager) Start(parentCtx context.Context, pythonPath, sdxlPath string, 
 	if state := m.Status().State; state == "starting" || state == "ready" {
 		return nil
 	}
+	if m.scriptPath == "" {
+		m.setStatus(types.SidecarStatus{
+			State:   "error",
+			Message: "Local engine not available in this build (sidecar script missing).",
+		})
+		return errors.New("sidecar: script path not set")
+	}
 	if pythonPath == "" || sdxlPath == "" {
 		m.setStatus(types.SidecarStatus{
 			State:   "error",

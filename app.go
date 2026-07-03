@@ -73,9 +73,15 @@ func NewApp() *App {
 	logDir, _ := os.UserConfigDir()
 	logDir = filepath.Join(logDir, "imference-desktop-go")
 
+	// The sidecar Python script is optional and NOT embedded: a packaged/portable
+	// build has no sidecar/ folder beside it, so this resolves only in a dev
+	// checkout. Missing → the local engine is unavailable (cloud still works);
+	// don't crash the whole app. The empty path makes sidecar.Start() no-op/fail
+	// gracefully instead of paniquing at construction.
 	scriptPath, err := resolveSidecarScript()
 	if err != nil {
-		panic(fmt.Errorf("locate sidecar script: %w", err))
+		bus.Warn("app", "sidecar script not found — local engine unavailable (cloud only)", map[string]any{"err": err.Error()})
+		scriptPath = ""
 	}
 
 	a := &App{

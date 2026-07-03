@@ -59,7 +59,9 @@ func probe(ctx context.Context, cmd string, args []string) (path, version string
 		"-c",
 		"import sys; print(sys.executable); print('%d.%d.%d' % sys.version_info[:3])",
 	)
-	out, err := exec.CommandContext(probeCtx, cmd, args...).Output()
+	probe := exec.CommandContext(probeCtx, cmd, args...)
+	probe.SysProcAttr = hideWindowAttr() // no console flash under the GUI build
+	out, err := probe.Output()
 	if err != nil {
 		return "", "", false
 	}

@@ -343,7 +343,9 @@ func (i *Installer) ensureVenv(ctx context.Context, pythonPath, dir string) (boo
 	if _, err := os.Stat(venvPython); err == nil {
 		checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
-		if probeErr := exec.CommandContext(checkCtx, venvPython, "--version").Run(); probeErr == nil {
+		probe := exec.CommandContext(checkCtx, venvPython, "--version")
+		probe.SysProcAttr = hideWindowAttr() // no console flash under the GUI build
+		if probeErr := probe.Run(); probeErr == nil {
 			i.bus.Info("installer", "reusing existing venv", map[string]any{"dir": dir})
 			return true, nil
 		}
@@ -530,7 +532,9 @@ func EngineInfoFor(ctx context.Context, venvDir string) types.EngineInfo {
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	if err := exec.CommandContext(probeCtx, py, "--version").Run(); err != nil {
+	probe := exec.CommandContext(probeCtx, py, "--version")
+	probe.SysProcAttr = hideWindowAttr() // no console flash under the GUI build
+	if err := probe.Run(); err != nil {
 		return info
 	}
 	info.Installed = true

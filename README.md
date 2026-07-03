@@ -1,110 +1,57 @@
-# imference-desktop-go (POC)
+# Imference Desktop
 
-Wails v2 + Go + React variant of the [imference-desktop](../imference-desktop)
-Electron POC. **Same feature set, different shell:** Go owns sidecar lifecycle
-and all HTTP (both cloud and local), the React frontend only knows about
-typed bindings to Go.
+A desktop app for AI image generation — run models **in the cloud** or
+**locally on your own GPU**, from one clean interface. Windows & macOS.
 
-- **Run Cloud** — `internal/cloud/client.go` calls `https://imference.com/image/generate`, polls `/image/status`, downloads the Azure Blob URL and returns it base64-encoded.
-- **Run Local** — `internal/sidecar/manager.go` spawns `sidecar/main.py` (FastAPI wrapping `imference_engine.Engine`), `internal/sidecar/client.go` POSTs to it on localhost.
+Built with [Wails](https://wails.io) (Go + React).
 
-POC scope: SDXL only, no Python bundling, no installer, Windows-first, dev mode only.
+## Download
 
-## One-time setup
+Grab the latest build from the [**Releases**](https://github.com/Publikey/imference-desktop/releases) page.
 
-1. **Wails CLI v2**: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-   (then make sure `$(go env GOPATH)/bin` is on your PATH).
-2. **Python venv** for the local sidecar — see [`sidecar/README.md`](sidecar/README.md). The venv from the Electron POC is reusable as-is.
-3. **Imference API key** with a few credits.
+**Windows** — the installer (`…-windows-amd64-installer.exe`) or the portable
+`.exe`.
+**macOS** — the `.dmg` (universal: Intel & Apple Silicon).
 
-## Run
+> The app isn't code-signed yet, so the OS will warn on first launch:
+> - **Windows**: SmartScreen → *More info* → *Run anyway*.
+> - **macOS**: right-click the app → *Open* (or `xattr -cr "/Applications/Imference Desktop.app"`).
 
-```powershell
-cd "C:\git windows\imference-desktop-go"
-wails dev
+## Features
+
+- **Cloud** — generate on [imference.com](https://imference.com). Pay with an
+  **API key (credits)** or **x402 (USDC on Base)**.
+- **Local** — one-click engine install, then run **SDXL** / **Z-Image** models
+  on your GPU. The engine starts/stops on demand.
+- **Per-model parameters** from the catalog (format, steps, CFG, seed, quality
+  tags, negative prompt), image-to-image, and a metadata-rich **gallery** with
+  filters and a fullscreen viewer.
+
+### Requirements
+
+- Windows 10/11 (x64) or macOS 12+.
+- **Local generation**: an NVIDIA GPU (CUDA) on Windows, or Apple Silicon on
+  macOS. The installer sets up an isolated Python environment; models are
+  downloaded on demand (~6–7 GB each).
+- **Cloud generation**: an imference.com API key, or a funded x402 wallet.
+
+## Build from source
+
+Requires [Go](https://go.dev) 1.24+, [Node](https://nodejs.org) 20+, and the
+Wails CLI:
+
+```bash
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+wails dev     # run in dev mode (hot reload)
+wails build   # produce a binary in build/bin/
 ```
 
-`wails dev` boots Vite + the Go side, opens the window, and tries to spawn the
-sidecar. First launch fails on empty settings → click the ⚙ in the header, fill in:
-- Imference API key
-- Cloud model_code (`curl https://imference.com/api/models -H "Authorization: Bearer <key>"` to discover one)
-- Python path — `C:\envs\imference\Scripts\python.exe`
-- Local SDXL path — absolute path to a `.safetensors`
+Releases are built automatically by GitHub Actions on a pushed `v*` tag
+(see [`.github/workflows/release.yml`](.github/workflows/release.yml)).
 
-Save → sidecar restarts → pill flips green → Run Local enables.
+## Status
 
-## What runs where
-
-```
-React (webview)
-  └─ window.go.main.App.GenerateCloud / GenerateLocal  (typed Wails bindings)
-       │
-       ▼
-  ┌─────────────────────────────┐
-  │ App (Go, app.go)            │
-  ├─────────────────────────────┤
-  │ • settings.Store            │ → %APPDATA%\imference-desktop-go\settings.json
-  │ • sidecar.Manager           │ → spawn python.exe, healthz poller
-  │ • cloud.Client              │ → POST /image/generate, poll /image/status, base64
-  └─────────────────────────────┘
-       │                                              │
-       │ POST /generate                               │ https
-       ▼                                              ▼
-  sidecar/main.py (FastAPI)                  imference.com
-       │
-       ▼
-  imference_engine.Engine
-       │
-       ▼
-  PyTorch + Diffusers + SDXL on CUDA
-```
-
-## Project layout
-
-```
-app.go                          # Wails-bound facade (one struct, ~6 methods)
-main.go                         # wails.Run() — wires App + window options
-go.mod / go.sum
-internal/
-  types/types.go                # Settings, GenerationRequest, GenerationResult, SidecarStatus
-  settings/store.go             # JSON file in os.UserConfigDir, mutex-protected
-  sidecar/manager.go            # spawn/kill, port finder, healthz polling, status events
-  sidecar/client.go             # POST to running sidecar's /generate
-  sidecar/hide_*.go             # build-tagged HideWindow for cmd.SysProcAttr
-  cloud/client.go               # POST /image/generate + poll /image/status + download as base64
-frontend/                       # Vite + React + TS + Tailwind v4 + shadcn (mostly copy-pasted from imference-desktop)
-  src/
-    App.tsx
-    components/
-      SettingsDialog.tsx
-      ui/                       # shadcn — button, card, dialog, input, label, textarea
-    lib/
-      types.ts                  # mirror of internal/types/types.go (camelCase)
-      wails-bridge.ts           # typed facade around wailsjs/go/main/App
-      utils.ts                  # shadcn cn()
-    index.css                   # Tailwind v4 theme (neutral, with dark vars)
-    main.tsx
-  wailsjs/                      # auto-generated by wails dev/build — checked in
-sidecar/                        # verbatim copy of imference-desktop/sidecar/
-  main.py                       # FastAPI mono-fichier wrapping imference_engine.Engine
-  requirements.txt
-  README.md
-```
-
-## Out-of-scope for POC
-
-LoRA, img2img, Z-Image, batching > 1, model catalog / picker, x402 cloud mode,
-code signing, installer, macOS / Linux, automated tests.
-
-## Why this exists (vs the Electron sibling)
-
-Three hypotheses to validate side-by-side with `imference-desktop` (Electron):
-1. **Stack coherence** — Go is already the language of the `imference.com` API
-   server and the Runqy workers. Desktop in Go avoids a third glue language.
-2. **Sidecar DX** — `os/exec.CommandContext` + goroutines + `context.Context`
-   is cleaner than `child_process.spawn` + `AbortController` for lifecycle and
-   concurrent in-flight requests.
-3. **Binary size** — `wails build` emits ~15-20 MB vs Electron's ~250 MB.
-
-When both POCs work end-to-end, decision time on which one becomes the
-production Imference Desktop.
+Early public release — expect rough edges, and please
+[open issues](https://github.com/Publikey/imference-desktop/issues). In-app
+auto-update and code signing are on the way.

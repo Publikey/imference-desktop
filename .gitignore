@@ -1,6 +1,15 @@
-build/bin
+# Wails v3 build output
+bin
+.task
 node_modules
 frontend/dist
+build/linux/appimage/build
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+# Mobile generated (per-machine; overlays hold absolute paths)
+build/ios/xcode/overlay.json
+build/ios/xcode/gen/
+build/android/overlay.json
+build/android/gen/
 
 # Editor / OS
 .DS_Store

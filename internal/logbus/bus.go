@@ -4,7 +4,7 @@
 // each entry to stderr (so `wails dev` still shows it in the terminal), and
 // emits a Wails event so the renderer's <LogPanel/> can stream them live.
 //
-// The bus is intentionally NOT tied to wails/v2 at the package level — the
+// The bus is intentionally NOT tied to Wails at the package level — the
 // emit hook is injected via SetEmitter() from app.go. Keeps this package
 // unit-testable and the cloud/sidecar packages free of Wails imports.
 package logbus
@@ -42,8 +42,8 @@ type Entry struct {
 	Data      any    `json:"data,omitempty"`
 }
 
-// Emitter is the wails runtime.EventsEmit shape, injected from app.go. We
-// don't import wails/v2 here on purpose.
+// Emitter is the Wails Event.Emit shape (name, ...data), injected from app.go.
+// We don't import Wails here on purpose.
 type Emitter func(eventName string, data ...any)
 
 const defaultBufferSize = 2000

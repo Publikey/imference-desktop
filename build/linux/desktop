@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=Imference Desktop
+Comment=AI image generation — cloud and local
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/imference-desktop-go %u
+Terminal=false
+Type=Application
+Icon=imference-desktop-go
+Categories=Utility;
+StartupWMClass=imference-desktop-go
+
+ 

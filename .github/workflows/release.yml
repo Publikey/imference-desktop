@@ -2,26 +2,28 @@ name: Release
 
 # Build the desktop app for Windows + macOS and publish a GitHub Release
 # whenever a version tag is pushed (e.g. `git tag v1.2.3 && git push origin v1.2.3`).
+# `workflow_dispatch` lets you exercise the build (no Release published) without a tag.
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write # required to create the Release
 
 env:
-  GO_VERSION: "1.24"
+  GO_VERSION: "1.25" # Wails v3 requires Go >= 1.25
   NODE_VERSION: "20"
-  WAILS_VERSION: "v2.12.0"
+  WAILS3_VERSION: "v3.0.0-alpha2.116"
 
 jobs:
   # ---------------------------------------------------------------------------
   windows:
     runs-on: windows-latest
     # The runner ships mingw, so Go would default to CGO_ENABLED=1 and produce a
-    # cgo binary that crashes at startup (exit 2). Wails' new Go WebView2Loader
-    # needs no cgo on Windows — build pure-Go, matching a gcc-less dev machine.
+    # cgo binary that crashes at startup. Wails' Go WebView2Loader needs no cgo on
+    # Windows — build pure-Go, matching a gcc-less dev machine.
     env:
       CGO_ENABLED: "0"
     steps:
@@ -34,27 +36,38 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install Wails + NSIS
+      - name: Install wails3 + NSIS
         shell: bash
         run: |
-          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+          go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS3_VERSION }}
           echo "$(go env GOPATH)\bin" >> "$GITHUB_PATH"
           choco install nsis -y --no-progress
           # choco updates the machine PATH, not this job's — add NSIS explicitly
-          # so `wails build -nsis` (later step) finds makensis.exe.
+          # so `wails3 package` (NSIS step) finds makensis.exe.
           echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
 
-      - name: Set version from tag
-        run: node scripts/set-version.mjs "${{ github.ref_name }}"
+      - name: Set version + refresh build assets
+        shell: bash
+        run: |
+          # set-version.mjs patches build/config.yml (info.version); update
+          # build-assets propagates it into windows/info.json + wails_tools.nsh
+          # (the exe/installer version metadata). On workflow_dispatch the ref is
+          # a branch, not a version tag — fall back to 0.0.0.
+          VERSION="0.0.0"
+          [ "${{ github.ref_type }}" = "tag" ] && VERSION="${{ github.ref_name }}"
+          node scripts/set-version.mjs "$VERSION"
+          wails3 task common:update:build-assets
 
       - name: Build (portable .exe + NSIS installer)
-        run: wails build -platform windows/amd64 -ldflags "-X main.Version=${{ github.ref_name }}" -nsis
+        # `wails3 package` builds the frontend + Go binary AND the NSIS installer.
+        run: wails3 package
 
       - name: Stage assets
+        shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Move-Item build/bin/imference-desktop-go.exe dist/imference-desktop-go-windows-amd64.exe
-          Move-Item build/bin/imference-desktop-go-amd64-installer.exe dist/imference-desktop-go-windows-amd64-installer.exe
+          Move-Item bin/imference-desktop-go.exe dist/imference-desktop-go-windows-amd64.exe
+          Move-Item bin/imference-desktop-go-amd64-installer.exe dist/imference-desktop-go-windows-amd64-installer.exe
 
       - uses: actions/upload-artifact@v4
         with:
@@ -75,21 +88,29 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install Wails
+      - name: Install wails3
         run: |
-          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+          go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS3_VERSION }}
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      - name: Set version from tag
-        run: node scripts/set-version.mjs "${{ github.ref_name }}"
+      - name: Set version + refresh build assets
+        run: |
+          # set-version.mjs patches build/config.yml (info.version); update
+          # build-assets propagates it into darwin/Info.plist (CFBundleVersion).
+          # On workflow_dispatch the ref is a branch, not a version tag → 0.0.0.
+          VERSION="0.0.0"
+          [ "${{ github.ref_type }}" = "tag" ] && VERSION="${{ github.ref_name }}"
+          node scripts/set-version.mjs "$VERSION"
+          wails3 task common:update:build-assets
 
       - name: Build (universal .app)
-        run: wails build -platform darwin/universal -ldflags "-X main.Version=${{ github.ref_name }}"
+        # Universal (amd64 + arm64 via lipo) + ad-hoc-signed .app bundle → bin/.
+        run: wails3 task darwin:package:universal
 
       - name: Package .app.zip + .dmg
         run: |
           set -euo pipefail
-          APP="$(ls -d build/bin/*.app | head -1)"
+          APP="$(ls -d bin/*.app | head -1)"
           echo "App bundle: $APP"
           mkdir -p dist
 
@@ -111,6 +132,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   release:
+    # Only publish a Release for tag pushes, not manual workflow_dispatch runs.
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [windows, macos]
     runs-on: ubuntu-latest
     steps:

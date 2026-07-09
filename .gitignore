@@ -1,6 +1,11 @@
-build/bin
+# Wails v3 build output
+bin
+.task
 node_modules
 frontend/dist
+*.tsbuildinfo
+build/linux/appimage/build
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 
 # Editor / OS
 .DS_Store

@@ -1,14 +1,38 @@
-// Patches wails.json's info.productVersion from a tag passed as arg 1.
+// Patches build/config.yml's info.version from a tag passed as arg 1.
 // Cross-platform (runs on the Windows / macOS / Ubuntu CI runners via Node).
-// Usage: node scripts/set-version.mjs v1.2.3   ->   productVersion "1.2.3"
+// Usage: node scripts/set-version.mjs v1.2.3   ->   info.version "1.2.3"
+//
+// Wails v3 keeps the packaged-app version in build/config.yml (info.version);
+// the in-app main.Version string is injected separately at build time via
+// `wails3 build -ldflags "-X main.Version=<tag>"`.
 import { readFileSync, writeFileSync } from "node:fs";
 
 const raw = process.argv[2] || "0.0.0";
-const version = raw.replace(/^v/, ""); // strip a leading "v" from the git tag
-const path = "wails.json";
+// Sanitise to a numeric MAJOR.MINOR.PATCH: the NSIS installer template does
+// `VIFileVersion "${INFO_PRODUCTVERSION}.0"` (build/windows/nsis/project.nsi),
+// which requires a strict X.X.X.X — a raw tag like "0.2.0-rc1" (pre-release
+// suffix) or "1.2" (too few parts) makes makensis abort. Drop the leading "v",
+// drop any pre-release/build metadata after the first "-"/"+", and normalise to
+// exactly three numeric components. The GitHub Release keeps the full tag name
+// (the release job uses github.ref_name, not this value).
+const version = raw
+  .replace(/^v/, "")
+  .split(/[-+]/)[0]
+  .split(".")
+  .map((n) => parseInt(n, 10) || 0)
+  .concat(0, 0)
+  .slice(0, 3)
+  .join(".");
+const path = "build/config.yml";
 
-const cfg = JSON.parse(readFileSync(path, "utf8"));
-cfg.info = { ...(cfg.info || {}), productVersion: version };
-writeFileSync(path, JSON.stringify(cfg, null, 2) + "\n");
+const src = readFileSync(path, "utf8");
+// Replace the `version: "..."` line inside the top-level `info:` block. The
+// trailing comment after the value is preserved.
+const next = src.replace(/^(\s*version:\s*)"[^"]*"/m, `$1"${version}"`);
+if (next === src) {
+  console.error(`set-version: could not find an info.version line in ${path}`);
+  process.exit(1);
+}
+writeFileSync(path, next);
 
-console.log(`wails.json info.productVersion -> ${version}`);
+console.log(`build/config.yml info.version -> ${version}`);

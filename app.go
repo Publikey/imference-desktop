@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"imference-desktop-go/internal/cloud"
 	"imference-desktop-go/internal/imagesink"
@@ -44,6 +44,9 @@ import (
 // it owns no business logic.
 type App struct {
 	ctx context.Context
+	// app is the running Wails v3 application handle, captured in ServiceStartup.
+	// Used to emit events to the renderer (a.app.Event.Emit). nil until startup.
+	app *application.App
 
 	bus       *logbus.Bus
 	settings  *settings.Store
@@ -96,16 +99,22 @@ func NewApp() *App {
 	return a
 }
 
-// startup is called by Wails once the BrowserWindow is alive. We capture
-// the context so we can EventsEmit later, then attempt a first sidecar
-// spawn. If settings are empty the spawn fails fast and the UI shows
-// "local: error" on first paint, prompting the user toward ⚙.
-func (a *App) startup(ctx context.Context) {
+// ServiceStartup is the Wails v3 service lifecycle hook, called during app
+// startup. We capture the app context (reused by downstream network/RPC calls)
+// and the application handle (for emitting events), wire the log-bus emitter,
+// then kick off cleanup. If settings are empty the local engine stays stopped
+// and the UI shows "local: error" on first paint, prompting the user toward ⚙.
+func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	a.ctx = ctx
-	// Wire the bus emitter now that we have a wails context — every
-	// Publish() from this point streams to the renderer's <LogPanel/>.
+	a.app = application.Get()
+	// Wire the bus emitter now that we have the app handle — every Publish()
+	// from this point streams to the renderer's <LogPanel/>. The emitter shape
+	// (name, ...data) maps directly onto v3's variadic Event.Emit.
 	a.bus.SetEmitter(func(eventName string, data ...any) {
-		runtime.EventsEmit(a.ctx, eventName, data...)
+		if a.app == nil {
+			return
+		}
+		a.app.Event.Emit(eventName, data...)
 	})
 	a.bus.Info("app", "startup", nil)
 	go func() {
@@ -115,6 +124,7 @@ func (a *App) startup(ctx context.Context) {
 		_ = a.clearStaleLocalModel()
 		a.bus.Info("app", "sidecar left stopped at startup — start it from the engine control", nil)
 	}()
+	return nil
 }
 
 // clearStaleLocalModel drops a persisted model selection whose weights file no
@@ -140,27 +150,29 @@ func (a *App) clearStaleLocalModel() types.Settings {
 	return s
 }
 
-// onBeforeClose runs when the user clicks the X. Returning false lets the
-// window close. We block long enough to SIGTERM the sidecar gracefully —
-// the manager's Stop() has its own 3 s SIGKILL deadline so this is bounded.
-func (a *App) onBeforeClose(_ context.Context) bool {
-	a.bus.Info("app", "onBeforeClose — stopping sidecar", nil)
+// ServiceShutdown is the Wails v3 service lifecycle hook, called when the app
+// is terminating (default v3 behaviour quits the app once the last window is
+// closed). We SIGTERM the sidecar gracefully — the manager's Stop() has its own
+// 3 s SIGKILL deadline so this is bounded — and the shutdown blocks until we
+// return.
+func (a *App) ServiceShutdown() error {
+	a.bus.Info("app", "ServiceShutdown — stopping sidecar", nil)
 	a.sidecar.Stop()
-	return false
+	return nil
 }
 
 func (a *App) broadcastSidecarStatus(s types.SidecarStatus) {
-	if a.ctx == nil {
-		return // Wails hasn't called startup yet — nothing to emit to.
+	if a.app == nil {
+		return // Wails hasn't called ServiceStartup yet — nothing to emit to.
 	}
-	runtime.EventsEmit(a.ctx, "sidecar:status", s)
+	a.app.Event.Emit("sidecar:status", s)
 }
 
 func (a *App) broadcastGenerateProgress(p types.GenerateProgress) {
-	if a.ctx == nil {
+	if a.app == nil {
 		return
 	}
-	runtime.EventsEmit(a.ctx, "generate:progress", p)
+	a.app.Event.Emit("generate:progress", p)
 }
 
 // ------------------------------------------------------------------------
@@ -435,8 +447,8 @@ func (a *App) SelectLocalModel(modelCode string) error {
 	oldPath := a.settings.Get().SDXLPath
 
 	emit := func(p types.InstallProgress) {
-		if a.ctx != nil {
-			runtime.EventsEmit(a.ctx, "model:progress", p)
+		if a.app != nil {
+			a.app.Event.Emit("model:progress", p)
 		}
 	}
 
@@ -938,7 +950,9 @@ func (a *App) InstallEngine() error {
 	// Goroutine #2: forward progress events to the renderer.
 	go func() {
 		for p := range progress {
-			runtime.EventsEmit(a.ctx, "install:progress", p)
+			if a.app != nil {
+				a.app.Event.Emit("install:progress", p)
+			}
 		}
 	}()
 

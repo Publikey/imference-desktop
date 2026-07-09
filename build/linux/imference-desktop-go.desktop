@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=imference-desktop-go
+Exec=imference-desktop-go
+Icon=imference-desktop-go
+Categories=Development;
+Terminal=false
+Keywords=wails
+Version=1.0
+StartupNotify=false

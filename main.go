@@ -5,10 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 //go:embed all:frontend/dist
@@ -25,7 +22,7 @@ var assets embed.FS
 var sidecarFiles embed.FS
 
 // Version is the app version, injected at build time via
-// -ldflags "-X main.Version=<tag>". "dev" for local `wails dev`/`wails build`.
+// -ldflags "-X main.Version=<tag>". "dev" for local `wails3 dev`/`wails3 build`.
 var Version = "dev"
 
 // webviewDataPath returns a fixed, always-writable directory for the WebView2
@@ -49,33 +46,40 @@ func webviewDataPath() string {
 }
 
 func main() {
-	app := NewApp()
+	appModel := NewApp()
 
-	err := wails.Run(&options.App{
-		Title:     "Imference Desktop",
-		Width:     1100,
-		Height:    780,
-		MinWidth:  900,
-		MinHeight: 600,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
+	// v3 separates the three phases: create the application (registers the App
+	// as a service so its exported methods become frontend bindings), create the
+	// single window, then run. The App's ServiceStartup/ServiceShutdown hooks
+	// (app.go) wire the event bus and stop the Python sidecar on quit.
+	app := application.New(application.Options{
+		Name:        "Imference Desktop",
+		Description: "AI image generation — cloud & local",
+		Services: []application.Service{
+			application.NewService(appModel),
 		},
-		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
-		OnStartup:        app.startup,
-		OnBeforeClose:    app.onBeforeClose,
-		Bind: []interface{}{
-			app,
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(assets),
 		},
-		Windows: &windows.Options{
-			WebviewIsTransparent:              false,
-			WindowIsTranslucent:               false,
-			DisableFramelessWindowDecorations: false,
+		Windows: application.WindowsOptions{
 			// Pin the WebView2 profile to a known-writable dir so the app launches
-			// from any folder (double-click in Downloads/Desktop, etc.).
+			// from any folder (double-click in Downloads/Desktop, etc.). Without
+			// this the window silently never appears from OneDrive/read-only dirs.
 			WebviewUserDataPath: webviewDataPath(),
 		},
 	})
-	if err != nil {
+
+	app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:            "Imference Desktop",
+		Width:            1100,
+		Height:           780,
+		MinWidth:         900,
+		MinHeight:        600,
+		BackgroundColour: application.RGBA{Red: 255, Green: 255, Blue: 255, Alpha: 255},
+		URL:              "/",
+	})
+
+	if err := app.Run(); err != nil {
 		println("Error:", err.Error())
 	}
 }

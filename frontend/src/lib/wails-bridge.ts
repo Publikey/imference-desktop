@@ -32,8 +32,8 @@ import {
   SelectLocalModel,
   StartSidecar,
   StopSidecar,
-} from "../../wailsjs/go/main/App";
-import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
+} from "../../bindings/imference-desktop-go/app";
+import { Events } from "@wailsio/runtime";
 import type {
   AppSettings,
   CreditInfo,
@@ -116,26 +116,19 @@ const raw = {
   importWallet: ImportWallet as (privateKeyHex: string) => Promise<string>,
   exportWalletPrivateKey: ExportWalletPrivateKey as () => Promise<string>,
 
-  onSidecarStatus: (cb: (s: SidecarStatus) => void): (() => void) => {
-    EventsOn("sidecar:status", (s: SidecarStatus) => cb(s));
-    return () => EventsOff("sidecar:status");
-  },
-  onLogEntry: (cb: (e: LogEntry) => void): (() => void) => {
-    EventsOn("log:entry", (e: LogEntry) => cb(e));
-    return () => EventsOff("log:entry");
-  },
-  onInstallProgress: (cb: (p: InstallProgress) => void): (() => void) => {
-    EventsOn("install:progress", (p: InstallProgress) => cb(p));
-    return () => EventsOff("install:progress");
-  },
-  onModelProgress: (cb: (p: InstallProgress) => void): (() => void) => {
-    EventsOn("model:progress", (p: InstallProgress) => cb(p));
-    return () => EventsOff("model:progress");
-  },
-  onGenerateProgress: (cb: (p: GenerateProgress) => void): (() => void) => {
-    EventsOn("generate:progress", (p: GenerateProgress) => cb(p));
-    return () => EventsOff("generate:progress");
-  },
+  // Wails v3: Events.On(name, cb) returns the unsubscribe fn directly, and the
+  // callback receives a WailsEvent whose `.data` is the Go-emitted payload
+  // (Go's Event.Emit(name, x) → e.data === x).
+  onSidecarStatus: (cb: (s: SidecarStatus) => void): (() => void) =>
+    Events.On("sidecar:status", (e) => cb(e.data as SidecarStatus)),
+  onLogEntry: (cb: (e: LogEntry) => void): (() => void) =>
+    Events.On("log:entry", (e) => cb(e.data as LogEntry)),
+  onInstallProgress: (cb: (p: InstallProgress) => void): (() => void) =>
+    Events.On("install:progress", (e) => cb(e.data as InstallProgress)),
+  onModelProgress: (cb: (p: InstallProgress) => void): (() => void) =>
+    Events.On("model:progress", (e) => cb(e.data as InstallProgress)),
+  onGenerateProgress: (cb: (p: GenerateProgress) => void): (() => void) =>
+    Events.On("generate:progress", (e) => cb(e.data as GenerateProgress)),
 };
 
 const NO_WRAP = new Set([

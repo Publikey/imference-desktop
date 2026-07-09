@@ -1,15 +1,15 @@
 {
 	"fixed": {
-		"file_version": "{{.Info.ProductVersion}}"
+		"file_version": "0.0.0"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "{{.Info.ProductVersion}}",
-			"CompanyName": "{{.Info.CompanyName}}",
-			"FileDescription": "{{.Info.ProductName}}",
-			"LegalCopyright": "{{.Info.Copyright}}",
-			"ProductName": "{{.Info.ProductName}}",
-			"Comments": "{{.Info.Comments}}"
+			"ProductVersion": "0.0.0",
+			"CompanyName": "Imference",
+			"FileDescription": "AI image generation — cloud and local",
+			"LegalCopyright": "© 2026 Imference",
+			"ProductName": "Imference Desktop",
+			"Comments": "AI image generation — cloud and local"
 		}
 	}
 }

@@ -8,7 +8,21 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 const raw = process.argv[2] || "0.0.0";
-const version = raw.replace(/^v/, ""); // strip a leading "v" from the git tag
+// Sanitise to a numeric MAJOR.MINOR.PATCH: the NSIS installer template does
+// `VIFileVersion "${INFO_PRODUCTVERSION}.0"` (build/windows/nsis/project.nsi),
+// which requires a strict X.X.X.X — a raw tag like "0.2.0-rc1" (pre-release
+// suffix) or "1.2" (too few parts) makes makensis abort. Drop the leading "v",
+// drop any pre-release/build metadata after the first "-"/"+", and normalise to
+// exactly three numeric components. The GitHub Release keeps the full tag name
+// (the release job uses github.ref_name, not this value).
+const version = raw
+  .replace(/^v/, "")
+  .split(/[-+]/)[0]
+  .split(".")
+  .map((n) => parseInt(n, 10) || 0)
+  .concat(0, 0)
+  .slice(0, 3)
+  .join(".");
 const path = "build/config.yml";
 
 const src = readFileSync(path, "utf8");

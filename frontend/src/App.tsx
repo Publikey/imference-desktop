@@ -24,6 +24,7 @@ import { ModelBar } from "@/components/ModelBar";
 import { PaymentBar } from "@/components/PaymentBar";
 import { LogPanel } from "@/components/LogPanel";
 import { api } from "@/lib/wails-bridge";
+import logoUrl from "./assets/logo.svg";
 import { installLogCapture } from "@/lib/log-capture";
 import { cn } from "@/lib/utils";
 import type {
@@ -573,11 +574,8 @@ function Header({
   return (
     <header className="bg-background/70 supports-[backdrop-filter]:bg-background/55 sticky top-0 z-10 flex items-center justify-between border-b px-5 py-3 backdrop-blur-xl">
       <div className="flex items-center gap-2.5">
-        <div className="brand-surface flex size-7 items-center justify-center rounded-[9px] text-white shadow-[0_3px_10px_-2px_color-mix(in_oklch,var(--brand-to)_55%,transparent)]">
-          <Sparkles className="size-4" />
-        </div>
+        <img src={logoUrl} alt="Imference" className="size-8" />
         <div className="flex items-center gap-2.5">
-          <span className="text-[15px] font-semibold tracking-tight">Imference</span>
           <EngineControl
             status={sidecar}
             engineInstalled={engineInstalled}

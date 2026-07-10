@@ -4,6 +4,7 @@
 // 2. transparently wrap every method so entry/exit/errors land in the
 //    in-app LogPanel (via api.logFromFrontend → Go logbus).
 import {
+  CheckForUpdate,
   ClearLogs,
   DetectPython,
   ExportWalletPrivateKey,
@@ -15,6 +16,7 @@ import {
   GetLogs,
   GetSettings,
   GetSidecarStatus,
+  GetVersion,
   GetWalletInfo,
   ImportWallet,
   DeleteSavedImage,
@@ -50,6 +52,7 @@ import type {
   PythonInfo,
   SavedImage,
   SidecarStatus,
+  UpdateInfo,
   WalletInfo,
 } from "./types";
 
@@ -58,6 +61,9 @@ import type {
 // without polluting every callsite.
 const raw = {
   getSettings: GetSettings as () => Promise<AppSettings>,
+  // App version + update check ("dev" builds always report no update).
+  getVersion: GetVersion as () => Promise<string>,
+  checkForUpdate: CheckForUpdate as () => Promise<UpdateInfo>,
   // Cast through `unknown`: the generated arg type (the `Settings` class, which
   // carries a `convertValues` method) doesn't structurally overlap with the
   // plain `AppSettings` type on the contravariant parameter position.

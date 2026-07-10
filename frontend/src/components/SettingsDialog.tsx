@@ -53,6 +53,12 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
   const [activeNav, setActiveNav] = useState<string>("engine");
   // Timestamp of the last successful auto-save — drives the transient "Saved" toast.
   const [savedAt, setSavedAt] = useState(0);
+
+  // App version shown in the footer ("dev" for local builds).
+  const [appVersion, setAppVersion] = useState("");
+  useEffect(() => {
+    void api.getVersion().then(setAppVersion).catch(() => {});
+  }, []);
   // Serialized last-persisted settings — auto-save skips no-op writes and avoids
   // re-firing on its own result.
   const savedRef = useRef<string>("");
@@ -254,7 +260,10 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
               </div>
             </section>
 
-            <div className="bg-background/80 sticky bottom-0 flex items-center justify-end gap-2 border-t py-3 backdrop-blur">
+            <div className="bg-background/80 sticky bottom-0 flex items-center justify-between gap-2 border-t py-3 backdrop-blur">
+              <span className="text-muted-foreground text-xs">
+                Imference Desktop {appVersion === "dev" ? "(dev build)" : appVersion ? `v${appVersion}` : ""}
+              </span>
               <Button onClick={() => onOpenChange(false)}>Done</Button>
             </div>
           </div>

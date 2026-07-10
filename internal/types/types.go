@@ -39,6 +39,16 @@ type Settings struct {
 	CloudModelInfo *ModelInfo `json:"cloudModelInfo,omitempty"`
 }
 
+// UpdateInfo is the result of App.CheckForUpdate: the app's own version vs the
+// latest GitHub release. URL is the release page to open in the browser —
+// there is no in-app download (the app isn't code-signed yet).
+type UpdateInfo struct {
+	CurrentVersion  string `json:"currentVersion"`            // "dev" or "X.X.X"
+	LatestVersion   string `json:"latestVersion,omitempty"`   // "X.X.X" (tag without v)
+	URL             string `json:"url,omitempty"`             // release page html_url
+	UpdateAvailable bool   `json:"updateAvailable"`
+}
+
 // EngineRuntimeSettings holds per-backend host-tuning. SDXL and Z-Image each get
 // their own block even though they share the engine's IMAGE_* env contract: only
 // one image backend is loaded per sidecar (chosen by the model's im_engine), so

@@ -35,7 +35,8 @@ expected — here's how to get past it:
   If macOS still refuses: `xattr -cr "/Applications/Imference Desktop.app"`
 
 You can verify your download against `checksums.txt` from the release.
-Code signing and in-app auto-update are on the roadmap.
+The app checks for new versions at startup and shows a banner when one is
+available; code signing and silent in-app auto-update are on the roadmap.
 
 ## Why Imference Desktop
 

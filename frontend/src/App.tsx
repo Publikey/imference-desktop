@@ -42,7 +42,9 @@ import type {
   PaymentMode,
   SavedImage,
   SidecarStatus,
+  UpdateInfo,
 } from "@/lib/types";
+import { Browser } from "@wailsio/runtime";
 
 // Module-load side effect: install console + window error hooks before any
 // component renders. The api wrapping itself happens inside wails-bridge.ts
@@ -216,6 +218,17 @@ export default function App() {
     void api.getEngineInfo().then((i) => setEngineInstalled(i.installed)).catch(() => {});
     return api.onSidecarStatus(setSidecar);
   }, []);
+
+  // One-shot update check at startup. "dev" builds report no update without a
+  // network call; any failure is silent (no banner) — never blocks the app.
+  // Dismiss only hides the banner for this session: it returns on every launch
+  // on purpose, to keep nudging until the user updates (frequent breaking
+  // changes are expected in the coming releases).
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  useEffect(() => {
+    void api.checkForUpdate().then(setUpdateInfo).catch(() => {});
+  }, []);
+  const dismissUpdate = useCallback(() => setUpdateInfo(null), []);
 
   // Re-check install state on every sidecar transition (e.g. after install).
   useEffect(() => {
@@ -462,6 +475,12 @@ export default function App() {
         onToggleLogs={() => setLogsOpen((o) => !o)}
         onOpenSettings={() => openSettings()}
       />
+
+      {updateInfo?.updateAvailable && updateInfo.latestVersion && (
+        <div className="relative z-10 mx-auto w-full max-w-[100rem] px-6 pt-4">
+          <UpdateBanner info={updateInfo} onDismiss={dismissUpdate} />
+        </div>
+      )}
 
       <main className="relative z-10 flex-1 overflow-y-auto">
         {/* Desktop two-zone layout: controls on the left (fixed, sticky), the
@@ -1635,6 +1654,39 @@ function MetaPanel({ meta }: { meta: GenerationMeta }) {
           ))}
         </dl>
       )}
+    </div>
+  );
+}
+
+// UpdateBanner announces a newer release. Download opens the GitHub release
+// page in the system browser — no in-app download while the app is unsigned.
+function UpdateBanner({ info, onDismiss }: { info: UpdateInfo; onDismiss: () => void }) {
+  const url = info.url ?? "https://github.com/Publikey/imference-desktop/releases/latest";
+  return (
+    <div className="animate-in fade-in slide-in-from-top-1 flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-300">
+      <Download className="size-4 shrink-0" />
+      <p className="flex-1 leading-relaxed">
+        Imference Desktop <span className="font-semibold">v{info.latestVersion}</span> is available
+        {info.currentVersion !== "dev" && (
+          <span className="opacity-70"> (you have v{info.currentVersion})</span>
+        )}
+        .
+      </p>
+      <Button
+        size="sm"
+        className="h-7 shrink-0 rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white hover:bg-amber-400"
+        onClick={() => void Browser.OpenURL(url)}
+      >
+        Download
+      </Button>
+      <button
+        onClick={onDismiss}
+        className="shrink-0 opacity-60 transition-opacity hover:opacity-100"
+        aria-label="Dismiss"
+        title="Dismiss (shown again at next launch)"
+      >
+        <X className="size-4" />
+      </button>
     </div>
   );
 }

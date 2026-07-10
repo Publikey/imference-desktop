@@ -448,6 +448,29 @@ export interface SidecarStatus {
 }
 
 /**
+ * UpdateInfo is the result of App.CheckForUpdate: the app's own version vs the
+ * latest GitHub release. URL is the release page to open in the browser —
+ * there is no in-app download (the app isn't code-signed yet).
+ */
+export interface UpdateInfo {
+    /**
+     * "dev" or "X.X.X"
+     */
+    "currentVersion": string;
+
+    /**
+     * "X.X.X" (tag without v)
+     */
+    "latestVersion"?: string;
+
+    /**
+     * release page html_url
+     */
+    "url"?: string;
+    "updateAvailable": boolean;
+}
+
+/**
  * WalletInfo is what the renderer sees when it asks about the wallet
  * status. The private key is never exposed through this struct.
  */

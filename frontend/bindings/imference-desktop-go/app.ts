@@ -23,6 +23,15 @@ import * as logbus$0 from "./internal/logbus/models.js";
 // @ts-ignore: Unused imports
 import * as types$0 from "./internal/types/models.js";
 
+/**
+ * CheckForUpdate asks GitHub for the latest release and compares it to this
+ * build. Local "dev" builds return UpdateAvailable=false without any network
+ * call. The frontend treats an error as "no banner" — never blocking startup.
+ */
+export function CheckForUpdate(): $CancellablePromise<types$0.UpdateInfo> {
+    return $Call.ByID(2347956003);
+}
+
 export function ClearLogs(): $CancellablePromise<void> {
     return $Call.ByID(1566804265);
 }
@@ -142,6 +151,14 @@ export function GetSettings(): $CancellablePromise<types$0.Settings> {
 
 export function GetSidecarStatus(): $CancellablePromise<types$0.SidecarStatus> {
     return $Call.ByID(314904788);
+}
+
+/**
+ * GetVersion returns the app's own version: "dev" for local builds, "X.X.X"
+ * for release binaries (embedded by CI, see internal/version).
+ */
+export function GetVersion(): $CancellablePromise<string> {
+    return $Call.ByID(1049863377);
 }
 
 /**

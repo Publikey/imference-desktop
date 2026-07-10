@@ -3,8 +3,8 @@
 // Usage: node scripts/set-version.mjs v1.2.3   ->   info.version "1.2.3"
 //
 // Wails v3 keeps the packaged-app version in build/config.yml (info.version);
-// the in-app main.Version string is injected separately at build time via
-// `wails3 build -ldflags "-X main.Version=<tag>"`.
+// the in-app version string is embedded from internal/version/version.txt,
+// which this script also rewrites (see below).
 import { readFileSync, writeFileSync } from "node:fs";
 
 const raw = process.argv[2] || "0.0.0";
@@ -35,4 +35,11 @@ if (next === src) {
 }
 writeFileSync(path, next);
 
+// Also stamp the version embedded in the Go binary (internal/version reads
+// this via go:embed). Committed as "dev"; only CI rewrites it before building,
+// so local builds keep reporting "dev" and skip the update check.
+const embedPath = "internal/version/version.txt";
+writeFileSync(embedPath, `${version}\n`);
+
 console.log(`build/config.yml info.version -> ${version}`);
+console.log(`${embedPath} -> ${version}`);

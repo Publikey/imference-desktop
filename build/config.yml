@@ -11,7 +11,7 @@ info:
   description: "AI image generation — cloud and local" # The application description
   copyright: "© 2026 Imference" # Copyright text
   comments: "AI image generation — cloud and local" # Comments
-  version: "0.0.0" # The application version (injected at release time from the git tag)
+  version: "9.9.9" # The application version (injected at release time from the git tag)
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension
   #                               # If not set and Assets.car exists, defaults to "appicon"

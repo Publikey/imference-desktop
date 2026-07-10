@@ -18,6 +18,7 @@ export type {
     SavedImage,
     Settings,
     SidecarStatus,
+    UpdateInfo,
     WalletInfo,
     WanRuntimeSettings,
     ZImageRuntimeSettings

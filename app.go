@@ -32,6 +32,8 @@ import (
 	"imference-desktop-go/internal/settings"
 	"imference-desktop-go/internal/sidecar"
 	"imference-desktop-go/internal/types"
+	"imference-desktop-go/internal/update"
+	"imference-desktop-go/internal/version"
 	"imference-desktop-go/internal/wallet"
 )
 
@@ -181,6 +183,29 @@ func (a *App) broadcastGenerateProgress(p types.GenerateProgress) {
 
 func (a *App) GetSettings() types.Settings {
 	return a.settings.Get()
+}
+
+// GetVersion returns the app's own version: "dev" for local builds, "X.X.X"
+// for release binaries (embedded by CI, see internal/version).
+func (a *App) GetVersion() string {
+	return version.Version
+}
+
+// CheckForUpdate asks GitHub for the latest release and compares it to this
+// build. Local "dev" builds return UpdateAvailable=false without any network
+// call. The frontend treats an error as "no banner" — never blocking startup.
+func (a *App) CheckForUpdate() (types.UpdateInfo, error) {
+	info, err := update.Check(a.ctx, version.Version)
+	if err != nil {
+		a.bus.Warn("app", "CheckForUpdate failed", map[string]any{"err": err.Error()})
+		return info, err
+	}
+	if info.UpdateAvailable {
+		a.bus.Info("app", "update available", map[string]any{
+			"current": info.CurrentVersion, "latest": info.LatestVersion,
+		})
+	}
+	return info, nil
 }
 
 // SaveSettings overwrites settings on disk and restarts the sidecar in the

@@ -21,10 +21,6 @@ var assets embed.FS
 //go:embed sidecar/main.py sidecar/requirements.txt
 var sidecarFiles embed.FS
 
-// Version is the app version, injected at build time via
-// -ldflags "-X main.Version=<tag>". "dev" for local `wails3 dev`/`wails3 build`.
-var Version = "dev"
-
 // webviewDataPath returns a fixed, always-writable directory for the WebView2
 // browser profile: "<UserCacheDir>/imference-desktop-go/webview2" (i.e.
 // %LOCALAPPDATA%\... on Windows). Without this, Wails/WebView2 defaults the

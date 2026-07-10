@@ -23,6 +23,17 @@ export type AppSettings = {
   cloudModelInfo?: ModelInfo | null;
 };
 
+/** Result of api.checkForUpdate(): this build vs the latest GitHub release. */
+export type UpdateInfo = {
+  /** "dev" (local build) or "X.X.X". */
+  currentVersion: string;
+  /** Latest release tag without the leading v. */
+  latestVersion?: string;
+  /** Release page URL to open in the system browser. */
+  url?: string;
+  updateAvailable: boolean;
+};
+
 /** Host-tuning knobs for the SDXL backend (IMAGE_* env contract). */
 export type ImageRuntimeSettings = {
   /** "" / "auto" | cuda | cuda:N | mps | cpu */

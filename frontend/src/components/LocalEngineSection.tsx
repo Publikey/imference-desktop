@@ -118,9 +118,23 @@ export function LocalEngineSection({ onInstallDone }: Props) {
       <PythonLine probe={pythonProbe} err={pythonError} />
 
       {engineInfo?.installed && !installing && (
-        <p className="text-muted-foreground mt-2 truncate font-mono text-xs" title={engineInfo.pythonPath}>
-          venv: {engineInfo.pythonPath}
-        </p>
+        <>
+          <p className="text-muted-foreground mt-2 text-xs">
+            imference-engine{" "}
+            <span className="font-mono">
+              {engineInfo.engineVersion ? `v${engineInfo.engineVersion}` : "version unknown"}
+            </span>
+            {engineInfo.outdated && engineInfo.pinnedVersion && (
+              <span className="text-yellow-700">
+                {" "}
+                — updating to v{engineInfo.pinnedVersion}…
+              </span>
+            )}
+          </p>
+          <p className="text-muted-foreground mt-1 truncate font-mono text-xs" title={engineInfo.pythonPath}>
+            venv: {engineInfo.pythonPath}
+          </p>
+        </>
       )}
 
       {installing && progress && <ProgressView p={progress} />}

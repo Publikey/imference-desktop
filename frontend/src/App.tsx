@@ -272,6 +272,12 @@ export default function App() {
   }, []);
   const dismissUpdate = useCallback(() => setUpdateInfo(null), []);
 
+  // App's own version — shown under the logo in the header.
+  const [appVersion, setAppVersion] = useState("");
+  useEffect(() => {
+    void api.getVersion().then(setAppVersion).catch(() => {});
+  }, []);
+
   // Re-check install state on every sidecar transition (e.g. after install).
   useEffect(() => {
     void api.getEngineInfo().then((i) => setEngineInstalled(i.installed)).catch(() => {});
@@ -510,6 +516,7 @@ export default function App() {
         <span className="aurora-blob aurora-blob-3" />
       </div>
       <Header
+        appVersion={appVersion}
         sidecar={sidecar}
         engineInstalled={engineInstalled}
         installing={installing}
@@ -621,6 +628,7 @@ export default function App() {
 // ---------------------------------------------------------------------------
 
 function Header({
+  appVersion,
   sidecar,
   engineInstalled,
   installing,
@@ -633,6 +641,7 @@ function Header({
   onToggleLogs,
   onOpenSettings,
 }: {
+  appVersion: string;
   sidecar: SidecarStatus;
   engineInstalled: boolean;
   installing: boolean;
@@ -648,7 +657,13 @@ function Header({
   return (
     <header className="bg-background/70 supports-[backdrop-filter]:bg-background/55 sticky top-0 z-10 flex items-center justify-between border-b px-5 py-3 backdrop-blur-xl">
       <div className="flex items-center gap-2.5">
-        <img src={logoUrl} alt="Imference" className="size-8" />
+        {/* Logo + app version stacked — the version is important operational info. */}
+        <div className="flex flex-col items-center leading-none">
+          <img src={logoUrl} alt="Imference" className="size-8" />
+          <span className="text-muted-foreground mt-0.5 text-[9px] tabular-nums" title="Imference Desktop version">
+            {appVersion === "dev" ? "dev" : appVersion ? `v${appVersion}` : ""}
+          </span>
+        </div>
         <div className="flex items-center gap-2.5">
           <EngineControl
             status={sidecar}

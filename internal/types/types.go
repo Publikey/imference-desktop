@@ -324,6 +324,15 @@ type EngineInfo struct {
 	Installed  bool   `json:"installed"`
 	VenvDir    string `json:"venvDir"`
 	PythonPath string `json:"pythonPath"`
+	// EngineVersion is the imference-engine version currently installed in the
+	// venv (via importlib.metadata), "" when unknown / not installed.
+	EngineVersion string `json:"engineVersion"`
+	// PinnedVersion is the version the desktop ships with (parsed from
+	// EngineTarball), "" under a dev source override where no version is enforced.
+	PinnedVersion string `json:"pinnedVersion"`
+	// Outdated is true when both versions are known and differ — the startup
+	// check force-reinstalls the pinned engine in that case.
+	Outdated bool `json:"outdated"`
 }
 
 // InstallProgress is emitted on the "install:progress" event channel during

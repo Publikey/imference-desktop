@@ -65,6 +65,28 @@ func resolveEngineSource() (spec string, editable bool) {
 	return override + "[sdxl,zimage]", true
 }
 
+// pinnedEngineVersionRe pulls the X.Y.Z out of the EngineTarball tag URL
+// (".../tags/v0.3.0.tar.gz" -> "0.3.0").
+var pinnedEngineVersionRe = regexp.MustCompile(`/tags/v?([0-9]+\.[0-9]+\.[0-9]+)\.tar\.gz`)
+
+// PinnedEngineVersion is the imference-engine version the desktop ships with,
+// parsed from EngineTarball. It returns "" when a dev source override
+// (IMFERENCE_ENGINE_SOURCE) is active — a local/editable checkout has no pinned
+// version to enforce — or when the URL can't be parsed. The startup version
+// check compares this against the installed version and force-reinstalls on a
+// mismatch, so a stale venv can't silently run an old engine (e.g. diffusers
+// 0.38 whose CPU offload doesn't actually cut VRAM).
+func PinnedEngineVersion() string {
+	if strings.TrimSpace(os.Getenv(EngineSourceEnvVar)) != "" {
+		return ""
+	}
+	m := pinnedEngineVersionRe.FindStringSubmatch(EngineTarball)
+	if len(m) != 2 {
+		return ""
+	}
+	return m[1]
+}
+
 // TorchIndexURL is the CUDA 12.4 wheel index. We use cu124 (not cu121) because
 // imference-engine's pyproject.toml pins torch>=2.6 in the image extras, and
 // the cu121 index stops at torch 2.5.x. If we used cu121, pip would later
@@ -136,6 +158,11 @@ type Options struct {
 	// SDXLModelURL when empty but ModelPath is set.
 	ModelURL  string
 	ModelPath string
+	// EngineOnly skips the detect / venv / torch / sidecar-deps phases and just
+	// force-replaces the imference-engine package (uninstall + install the pinned
+	// tarball) plus sd-embed. Used by the startup version check to upgrade a
+	// stale engine without a 3 GB torch re-pull. Requires an existing venv.
+	EngineOnly bool
 }
 
 // Installer runs the 5-phase setup. Safe to instantiate but only one Install()
@@ -181,6 +208,10 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 			default:
 			}
 		}
+	}
+
+	if opts.EngineOnly {
+		return i.reinstallEngineOnly(ctx, opts.VenvDir, emit)
 	}
 
 	// ----- Phase 1: detect Python -----
@@ -323,6 +354,56 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 		PercentEstimate: 100,
 		Done:            true,
 	})
+	return nil
+}
+
+// reinstallEngineOnly force-replaces just the imference-engine package (+ the
+// best-effort sd-embed extra) in an existing venv, skipping the expensive
+// torch / venv phases. The uninstall makes the pinned tarball authoritative (a
+// direct-URL pip install can otherwise treat a same-named install as already
+// satisfied), and the tarball's own pins pull any upgraded transitive deps
+// (e.g. diffusers 0.38 -> 0.39). Shares the "engine"/"extras" phase labels with
+// Install so the frontend's progress UI renders identically.
+func (i *Installer) reinstallEngineOnly(
+	ctx context.Context, venvDir string, emit func(types.InstallProgress),
+) error {
+	venvPython := venvPythonPath(venvDir)
+	if _, err := os.Stat(venvPython); err != nil {
+		e := fmt.Errorf("engine-only reinstall: venv python missing at %s", venvPython)
+		emit(types.InstallProgress{Phase: "error", Error: e.Error(), Done: true})
+		return e
+	}
+
+	// Force-uninstall first (best-effort: a missing package is not an error).
+	emit(types.InstallProgress{Phase: "engine", Message: "Removing outdated imference-engine"})
+	i.bus.Info("installer", "engine-only: uninstall", nil)
+	_ = i.runPip(ctx, venvPython, "engine", emit, "uninstall", "-y", "imference-engine")
+
+	engineSpec, editable := resolveEngineSource()
+	emit(types.InstallProgress{Phase: "engine", Message: "Installing pinned imference-engine"})
+	i.bus.Info("installer", "engine-only: install", map[string]any{"spec": engineSpec, "editable": editable})
+	pipArgs := []string{"install"}
+	if editable {
+		pipArgs = append(pipArgs, "-e")
+	}
+	pipArgs = append(pipArgs, engineSpec)
+	if err := i.runPip(ctx, venvPython, "engine", emit, pipArgs...); err != nil {
+		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
+		return err
+	}
+	emit(types.InstallProgress{Phase: "engine", Message: "imference-engine installed", PercentEstimate: 100})
+
+	// sd-embed (weighted prompts) — same best-effort --no-deps as the full install.
+	emit(types.InstallProgress{Phase: "extras", Message: "Installing sd-embed (weighted prompts) with --no-deps"})
+	if err := i.runPip(ctx, venvPython, "extras", emit, "install", "--no-deps", SDEmbedTarball); err != nil {
+		i.bus.Warn("installer", "sd-embed install failed; engine will use raw prompts", map[string]any{"err": err.Error()})
+		emit(types.InstallProgress{Phase: "extras", Message: "sd-embed install failed (non-fatal)"})
+	} else {
+		emit(types.InstallProgress{Phase: "extras", Message: "sd-embed installed", PercentEstimate: 100})
+	}
+
+	i.bus.Info("installer", "engine-only reinstall complete", map[string]any{"python": venvPython})
+	emit(types.InstallProgress{Phase: "done", Message: "Engine updated at " + venvPython, PercentEstimate: 100, Done: true})
 	return nil
 }
 
@@ -526,7 +607,7 @@ func VenvPython(venvDir string) string {
 // and reports a version. The sidecar's healthz handles the deeper validation.
 func EngineInfoFor(ctx context.Context, venvDir string) types.EngineInfo {
 	py := venvPythonPath(venvDir)
-	info := types.EngineInfo{VenvDir: venvDir, PythonPath: py}
+	info := types.EngineInfo{VenvDir: venvDir, PythonPath: py, PinnedVersion: PinnedEngineVersion()}
 	if _, err := os.Stat(py); err != nil {
 		return info
 	}
@@ -538,7 +619,28 @@ func EngineInfoFor(ctx context.Context, venvDir string) types.EngineInfo {
 		return info
 	}
 	info.Installed = true
+	info.EngineVersion = probeEngineVersion(ctx, py)
+	if info.PinnedVersion != "" && info.EngineVersion != "" &&
+		info.EngineVersion != info.PinnedVersion {
+		info.Outdated = true
+	}
 	return info
+}
+
+// probeEngineVersion reads the installed imference-engine version from the venv
+// via importlib.metadata. Returns "" when the package isn't installed or the
+// probe fails/times out — callers treat "" as "unknown, don't enforce".
+func probeEngineVersion(ctx context.Context, py string) string {
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(probeCtx, py, "-c",
+		"import importlib.metadata as m; print(m.version('imference-engine'))")
+	cmd.SysProcAttr = hideWindowAttr()
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func truncate(s string, n int) string {

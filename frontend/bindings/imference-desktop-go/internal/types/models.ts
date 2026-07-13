@@ -33,6 +33,21 @@ export interface EngineInfo {
     "installed": boolean;
     "venvDir": string;
     "pythonPath": string;
+
+    /**
+     * Installed imference-engine version ("" if unknown / not installed).
+     */
+    "engineVersion": string;
+
+    /**
+     * Version the desktop ships/pins ("" under a dev source override).
+     */
+    "pinnedVersion": string;
+
+    /**
+     * installed != pinned (both known) — startup force-reinstalls in that case.
+     */
+    "outdated": boolean;
 }
 
 /**

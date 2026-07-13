@@ -251,6 +251,12 @@ export type EngineInfo = {
   installed: boolean;
   venvDir: string;
   pythonPath: string;
+  /** Installed imference-engine version ("" if unknown / not installed). */
+  engineVersion: string;
+  /** Version the desktop pins ("" under a dev source override). */
+  pinnedVersion: string;
+  /** installed != pinned (both known) — startup force-reinstalls in that case. */
+  outdated: boolean;
 };
 
 export type InstallPhase =

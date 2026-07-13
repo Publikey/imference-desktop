@@ -125,6 +125,10 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 		// users no longer pay for a local engine (GPU/RAM) they won't use.
 		_ = a.clearStaleLocalModel()
 		a.bus.Info("app", "sidecar left stopped at startup — start it from the engine control", nil)
+		// Force the venv engine to the pinned version if it drifted (e.g. an
+		// older install whose diffusers doesn't actually offload). No-op when
+		// the versions match, the venv is absent, or a dev source override is set.
+		a.ensureEngineUpToDate()
 	}()
 	return nil
 }
@@ -1112,6 +1116,65 @@ func (a *App) InstallEngine() error {
 	}()
 
 	return nil
+}
+
+// ensureEngineUpToDate compares the engine version installed in the venv against
+// the version the desktop pins (EngineTarball) and, on a mismatch, force-
+// reinstalls the pinned engine (uninstall + install, skipping the torch phase).
+// This keeps the venv in lockstep with the desktop build — e.g. upgrading a
+// stale engine whose diffusers can't actually cut VRAM via CPU offload. Runs in
+// the background and streams the same "install:progress" events as InstallEngine
+// so the UI shows the update; a no-op when versions match, the venv is missing,
+// or a dev source override is active (PinnedEngineVersion == "").
+func (a *App) ensureEngineUpToDate() {
+	venvDir, err := engineVenvDir()
+	if err != nil {
+		return
+	}
+	info := installer.EngineInfoFor(a.ctx, venvDir)
+	if !info.Installed || !info.Outdated {
+		return
+	}
+	reqs, err := resolveSidecarRequirements()
+	if err != nil {
+		return
+	}
+	a.bus.Warn("app", "engine version mismatch — force-reinstalling pinned engine", map[string]any{
+		"installed": info.EngineVersion, "pinned": info.PinnedVersion,
+	})
+
+	progress := make(chan types.InstallProgress, 16)
+	go func() {
+		// Release venv file locks (Windows keeps torch .pyd/.dll mmap'd).
+		a.sidecar.Stop()
+		if err := a.installer.Install(a.ctx, installer.Options{
+			VenvDir:                 venvDir,
+			SidecarRequirementsPath: reqs,
+			EngineOnly:              true,
+		}, progress); err != nil {
+			a.bus.Error("app", "engine auto-reinstall failed", map[string]any{"err": err.Error()})
+			return
+		}
+		// pythonPath is unchanged (same venv) — just restart the sidecar with the
+		// current model so the freshly upgraded engine is live. No model yet →
+		// leave stopped; selection restarts it later.
+		s := a.settings.Get()
+		if s.SDXLPath == "" {
+			a.bus.Info("app", "engine updated; awaiting model selection before sidecar start", nil)
+			return
+		}
+		a.bus.Info("app", "restarting sidecar after engine update", nil)
+		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime); rerr != nil {
+			a.bus.Warn("app", "post-update sidecar restart failed", map[string]any{"err": rerr.Error()})
+		}
+	}()
+	go func() {
+		for p := range progress {
+			if a.app != nil {
+				a.app.Event.Emit("install:progress", p)
+			}
+		}
+	}()
 }
 
 // ------------------------------------------------------------------------

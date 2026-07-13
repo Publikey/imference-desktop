@@ -137,17 +137,35 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 // never tries to load a missing checkpoint (which surfaced as "Local error").
 func (a *App) clearStaleLocalModel() types.Settings {
 	s := a.settings.Get()
-	if s.SDXLPath == "" {
-		return s
+	dirty := false
+
+	// Purge custom-registry entries whose file has moved/been deleted.
+	if len(s.CustomModels) > 0 {
+		kept := s.CustomModels[:0]
+		for _, m := range s.CustomModels {
+			if _, err := os.Stat(m.LocalPath); err == nil {
+				kept = append(kept, m)
+			} else {
+				a.bus.Warn("app", "custom model file missing; dropping from registry", map[string]any{"path": m.LocalPath})
+				dirty = true
+			}
+		}
+		s.CustomModels = kept
 	}
-	if _, err := os.Stat(s.SDXLPath); err == nil {
-		return s // weights present — selection is valid
+
+	if s.SDXLPath != "" {
+		if _, err := os.Stat(s.SDXLPath); err != nil {
+			a.bus.Warn("app", "selected model weights missing; clearing stale selection", map[string]any{"path": s.SDXLPath})
+			s.SDXLPath = ""
+			s.LocalModel = nil
+			dirty = true
+		}
 	}
-	a.bus.Warn("app", "selected model weights missing; clearing stale selection", map[string]any{"path": s.SDXLPath})
-	s.SDXLPath = ""
-	s.LocalModel = nil
-	if _, err := a.settings.Save(s); err != nil {
-		a.bus.Error("app", "clear stale model save failed", map[string]any{"err": err.Error()})
+
+	if dirty {
+		if _, err := a.settings.Save(s); err != nil {
+			a.bus.Error("app", "clear stale model save failed", map[string]any{"err": err.Error()})
+		}
 	}
 	return s
 }
@@ -546,6 +564,118 @@ func (a *App) deleteManagedModel(p string) {
 		return
 	}
 	a.bus.Info("app", "deleted old local model", map[string]any{"path": p})
+}
+
+// PickModelFile opens the native file picker filtered to .safetensors and
+// returns the chosen absolute path, or "" when the user cancels.
+func (a *App) PickModelFile() (string, error) {
+	if a.app == nil {
+		return "", errors.New("app not ready")
+	}
+	path, err := a.app.Dialog.OpenFile().
+		SetTitle("Choose a .safetensors checkpoint").
+		AddFilter("Safetensors checkpoint", "*.safetensors").
+		PromptForSingleSelection()
+	if err != nil {
+		// Treat a dialog cancel surfaced as an error like a plain cancel.
+		a.bus.Info("app", "PickModelFile cancelled/failed", map[string]any{"err": err.Error()})
+		return "", nil
+	}
+	return path, nil
+}
+
+// customModelMinBytes is the floor below which a .safetensors file cannot be a
+// full checkpoint — LoRA/embedding files are typically 10–500 MB and the
+// engine only loads full checkpoints, so failing early beats a cryptic
+// engine-load error later.
+const customModelMinBytes = 1 << 30 // 1 GB
+
+// UseCustomModel registers a user-supplied checkpoint (referenced in place —
+// never copied, never deleted) and makes it the active local model. The
+// previously downloaded catalog file, if any, is kept on disk so switching
+// back is instant (modelfetch's size-based reuse skips the re-download).
+func (a *App) UseCustomModel(path, backendType, baseModel string) (types.Settings, error) {
+	if backendType != "sdxl" && backendType != "zimage" {
+		return types.Settings{}, fmt.Errorf("unsupported backend %q (want sdxl or zimage)", backendType)
+	}
+	if backendType == "zimage" && strings.TrimSpace(baseModel) == "" {
+		return types.Settings{}, errors.New("Z-Image models need a base model (Hugging Face repo id)")
+	}
+	if !strings.EqualFold(filepath.Ext(path), ".safetensors") {
+		return types.Settings{}, errors.New("not a .safetensors file")
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return types.Settings{}, fmt.Errorf("file not found: %s", path)
+	}
+	if fi.Size() < customModelMinBytes {
+		return types.Settings{}, errors.New("this file is too small to be a full checkpoint — LoRA/embedding files are not supported, only complete model checkpoints")
+	}
+
+	base := filepath.Base(path)
+	info := types.ModelInfo{
+		ModelCode:   "custom:" + base,
+		Name:        strings.TrimSuffix(base, filepath.Ext(base)),
+		BackendType: backendType,
+		BaseModel:   strings.TrimSpace(baseModel),
+		LocalPath:   path,
+		CanLocal:    true,
+	}
+
+	s := a.settings.Get()
+	s.SDXLPath = path
+	s.LocalModel = &info
+	// Upsert into the custom registry (dedup by path, newest first).
+	kept := []types.ModelInfo{info}
+	for _, m := range s.CustomModels {
+		if m.LocalPath != path {
+			kept = append(kept, m)
+		}
+	}
+	s.CustomModels = kept
+	saved, err := a.settings.Save(s)
+	if err != nil {
+		a.bus.Error("app", "UseCustomModel settings save failed", map[string]any{"err": err.Error()})
+		return types.Settings{}, err
+	}
+	a.bus.Info("app", "custom model registered", map[string]any{"path": path, "backend": backendType})
+
+	// Reload the engine only if it's currently running; otherwise the model
+	// loads at the next on-demand start (same policy as SaveSettings).
+	if a.sidecar.Status().State == "ready" {
+		go func() {
+			_ = a.sidecar.Restart(a.ctx, saved.PythonPath, saved.SDXLPath, saved.LocalModel, saved.EngineRuntime)
+		}()
+	}
+	return saved, nil
+}
+
+// RemoveCustomModel drops a custom checkpoint from the registry (the file on
+// disk is never touched). If it was the active model, the selection is cleared
+// and the engine stopped.
+func (a *App) RemoveCustomModel(path string) (types.Settings, error) {
+	s := a.settings.Get()
+	kept := s.CustomModels[:0]
+	for _, m := range s.CustomModels {
+		if m.LocalPath != path {
+			kept = append(kept, m)
+		}
+	}
+	s.CustomModels = kept
+	wasActive := s.SDXLPath == path
+	if wasActive {
+		s.SDXLPath = ""
+		s.LocalModel = nil
+	}
+	saved, err := a.settings.Save(s)
+	if err != nil {
+		return types.Settings{}, err
+	}
+	if wasActive {
+		a.sidecar.Stop()
+	}
+	a.bus.Info("app", "custom model removed", map[string]any{"path": path, "wasActive": wasActive})
+	return saved, nil
 }
 
 // autoSave writes the generated image to disk and stamps result.SavedPath.

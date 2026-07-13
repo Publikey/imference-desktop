@@ -266,6 +266,13 @@ export interface ModelInfo {
      * downloadable .safetensors ("" = cloud-only)
      */
     "modelUrl": string;
+
+    /**
+     * LocalPath is the absolute path of a user-supplied checkpoint (custom
+     * model added via UseCustomModel). Non-empty = custom: no catalog entry,
+     * no download — the sidecar loads this file directly.
+     */
+    "localPath"?: string;
     "promptPre": string;
     "promptNegative": string;
     "stepsDefault": number;
@@ -429,6 +436,14 @@ export interface Settings {
      * Nil until the user picks a cloud model from the form.
      */
     "cloudModelInfo"?: ModelInfo | null;
+
+    /**
+     * CustomModels are user-supplied checkpoints (LocalPath set) registered via
+     * UseCustomModel, kept so they stay selectable in the model dropdown. The
+     * files themselves are referenced in place — never copied, never deleted.
+     * UI-only: not a sidecar-affecting field (the active model is LocalModel).
+     */
+    "customModels"?: ModelInfo[] | null;
 }
 
 /**

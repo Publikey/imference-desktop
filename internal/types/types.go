@@ -37,6 +37,11 @@ type Settings struct {
 	// generation params (steps/cfg/resolution) the same way LocalModel does.
 	// Nil until the user picks a cloud model from the form.
 	CloudModelInfo *ModelInfo `json:"cloudModelInfo,omitempty"`
+	// CustomModels are user-supplied checkpoints (LocalPath set) registered via
+	// UseCustomModel, kept so they stay selectable in the model dropdown. The
+	// files themselves are referenced in place — never copied, never deleted.
+	// UI-only: not a sidecar-affecting field (the active model is LocalModel).
+	CustomModels []ModelInfo `json:"customModels,omitempty"`
 }
 
 // UpdateInfo is the result of App.CheckForUpdate: the app's own version vs the
@@ -101,6 +106,10 @@ type ModelInfo struct {
 	MediumDescription string  `json:"mediumDescription"`
 	Image             string  `json:"image"`    // thumbnail URL
 	ModelURL          string  `json:"modelUrl"` // downloadable .safetensors ("" = cloud-only)
+	// LocalPath is the absolute path of a user-supplied checkpoint (custom
+	// model added via UseCustomModel). Non-empty = custom: no catalog entry,
+	// no download — the sidecar loads this file directly.
+	LocalPath string `json:"localPath,omitempty"`
 	PromptPre         string  `json:"promptPre"`
 	PromptNegative    string  `json:"promptNegative"`
 	StepsDefault      int     `json:"stepsDefault"`

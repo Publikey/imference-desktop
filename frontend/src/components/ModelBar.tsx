@@ -5,8 +5,11 @@ import {
   Cloud,
   Cpu,
   Download,
+  FileBox,
   Loader2,
+  Plus,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
@@ -29,6 +32,11 @@ type Props = {
   onSelectLocal: (m: ModelInfo) => void;
   downloading: boolean;
   progress: InstallProgress | null;
+  // Custom user checkpoints: open the add flow (native picker + backend
+  // dialog), activate a registered one, or drop one from the registry.
+  onAddCustom: () => void;
+  onSelectCustom: (m: ModelInfo) => Promise<void>;
+  onRemoveCustom: (m: ModelInfo) => void;
 };
 
 // ModelBar — the single model selector for the whole app. Just the mode icon +
@@ -45,12 +53,16 @@ export function ModelBar({
   onSelectLocal,
   downloading,
   progress,
+  onAddCustom,
+  onSelectCustom,
+  onRemoveCustom,
 }: Props) {
   const [localModels, setLocalModels] = useState<ModelInfo[]>([]);
   const [cloudModels, setCloudModels] = useState<ModelInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false); // cloud quick-switch
+  const [customError, setCustomError] = useState<string | null>(null); // custom activation
 
   // Load both catalogs once.
   useEffect(() => {
@@ -70,7 +82,9 @@ export function ModelBar({
   }, []);
 
   const isCloud = mode === "cloud";
-  const models = isCloud ? cloudModels : localModels;
+  // Local mode: the user's own checkpoints (settings registry) come first,
+  // then the catalog. Cloud mode is catalog-only.
+  const models = isCloud ? cloudModels : [...(settings?.customModels ?? []), ...localModels];
   const activeCode = isCloud
     ? settings?.cloudModel || null
     : pendingLocalModel?.modelCode ?? null;
@@ -95,10 +109,24 @@ export function ModelBar({
         return;
       }
 
+      // Custom checkpoint: activate immediately (no download — file is local).
+      if (target.localPath) {
+        setSwitching(true);
+        setCustomError(null);
+        try {
+          await onSelectCustom(target);
+        } catch (e) {
+          setCustomError(e instanceof Error ? e.message : String(e));
+        } finally {
+          setSwitching(false);
+        }
+        return;
+      }
+
       // Local: just record the selection — the Download button fetches weights.
       onSelectLocal(target);
     },
-    [activeCode, busy, isCloud, models, onModelSwitched, onSelectLocal]
+    [activeCode, busy, isCloud, models, onModelSwitched, onSelectLocal, onSelectCustom]
   );
 
   return (
@@ -128,12 +156,16 @@ export function ModelBar({
             disabled={busy}
             isCloud={isCloud}
             onChange={pick}
+            onAddCustom={isCloud ? undefined : onAddCustom}
+            onRemoveCustom={isCloud ? undefined : onRemoveCustom}
           />
         )}
       </div>
 
       {downloading && progress ? (
         <DownloadProgress p={progress} />
+      ) : customError && mode === "local" ? (
+        <p className="text-destructive mt-2 text-xs">{customError}</p>
       ) : progress?.error && mode === "local" ? (
         <p className="text-destructive mt-2 text-xs">{progress.error}</p>
       ) : null}
@@ -152,12 +184,16 @@ function ModelSelect({
   disabled,
   isCloud,
   onChange,
+  onAddCustom,
+  onRemoveCustom,
 }: {
   models: ModelInfo[];
   value: string | null;
   disabled: boolean;
   isCloud: boolean;
   onChange: (code: string) => void;
+  onAddCustom?: () => void;
+  onRemoveCustom?: (m: ModelInfo) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -223,15 +259,19 @@ function ModelSelect({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="truncate text-sm font-medium">{m.name}</span>
-                    {!m.modelUrl && (
+                    {m.localPath ? (
+                      <span className="rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">
+                        custom
+                      </span>
+                    ) : !m.modelUrl ? (
                       <span className="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide">
                         cloud
                       </span>
-                    )}
+                    ) : null}
                   </div>
-                  {m.shortDescription && (
-                    <div className="text-muted-foreground truncate text-[11px]">
-                      {m.shortDescription}
+                  {(m.shortDescription || m.localPath) && (
+                    <div className="text-muted-foreground truncate text-[11px]" title={m.localPath || undefined}>
+                      {m.shortDescription || m.localPath}
                     </div>
                   )}
                 </div>
@@ -240,10 +280,45 @@ function ModelSelect({
                     {m.cost} cr
                   </span>
                 )}
+                {m.localPath && onRemoveCustom && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveCustom(m);
+                    }}
+                    className="text-muted-foreground hover:text-destructive shrink-0 p-1 transition-colors"
+                    title="Remove from list (the file is not deleted)"
+                    aria-label="Remove custom model"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </span>
+                )}
                 {isActive && <Check className="text-primary size-4 shrink-0" />}
               </button>
             );
           })}
+          {onAddCustom && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onAddCustom();
+              }}
+              className="border-border/60 hover:bg-accent/60 mt-1 flex w-full items-center gap-3 rounded-lg border border-dashed px-2 py-2 text-left transition"
+            >
+              <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+                <Plus className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">Add custom model…</div>
+                <div className="text-muted-foreground text-[11px]">
+                  Use your own .safetensors (e.g. from Civitai)
+                </div>
+              </div>
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -268,6 +343,18 @@ function Thumb({
         className={cn(size, "shrink-0 rounded-lg object-cover")}
         onError={(e) => (e.currentTarget.style.display = "none")}
       />
+    );
+  }
+  if (m?.localPath) {
+    return (
+      <span
+        className={cn(
+          size,
+          "flex shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-300"
+        )}
+      >
+        <FileBox className={large ? "size-5" : "size-3.5"} />
+      </span>
     );
   }
   return (

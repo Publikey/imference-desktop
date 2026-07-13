@@ -46,6 +46,9 @@ available; code signing and silent in-app auto-update are on the roadmap.
   [imference.com](https://imference.com) from the same interface. Pay with an
   **API key (credits)** or **x402 (USDC on Base)** — the x402 route needs no
   account at all.
+- 📦 **Bring your own model** — load any local `.safetensors` checkpoint
+  (e.g. downloaded from Civitai), no catalog required. The file is used in
+  place — nothing is copied or uploaded.
 - ⚡ **One-click local engine** — the app installs an isolated inference engine
   for you (nothing touches your system Python) and starts/stops it on demand.
   Models download automatically when first used (~6–7 GB each).

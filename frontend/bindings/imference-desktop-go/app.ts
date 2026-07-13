@@ -228,12 +228,29 @@ export function LogFromFrontend(level: string, source: string, message: string, 
 }
 
 /**
+ * PickModelFile opens the native file picker filtered to .safetensors and
+ * returns the chosen absolute path, or "" when the user cancels.
+ */
+export function PickModelFile(): $CancellablePromise<string> {
+    return $Call.ByID(3611692075);
+}
+
+/**
  * RefreshWalletBalance bypasses the in-memory balance cache and re-queries
  * the RPC. Bound separately because the renderer's refresh button must
  * always read fresh state, not the 10s-cached one.
  */
 export function RefreshWalletBalance(): $CancellablePromise<string> {
     return $Call.ByID(548670143);
+}
+
+/**
+ * RemoveCustomModel drops a custom checkpoint from the registry (the file on
+ * disk is never touched). If it was the active model, the selection is cleared
+ * and the engine stopped.
+ */
+export function RemoveCustomModel(path: string): $CancellablePromise<types$0.Settings> {
+    return $Call.ByID(1818023451, path);
 }
 
 export function RestartSidecar(): $CancellablePromise<void> {
@@ -285,4 +302,14 @@ export function StartSidecar(): $CancellablePromise<void> {
  */
 export function StopSidecar(): $CancellablePromise<void> {
     return $Call.ByID(2431020056);
+}
+
+/**
+ * UseCustomModel registers a user-supplied checkpoint (referenced in place —
+ * never copied, never deleted) and makes it the active local model. The
+ * previously downloaded catalog file, if any, is kept on disk so switching
+ * back is instant (modelfetch's size-based reuse skips the re-download).
+ */
+export function UseCustomModel(path: string, backendType: string, baseModel: string): $CancellablePromise<types$0.Settings> {
+    return $Call.ByID(2742322084, path, backendType, baseModel);
 }

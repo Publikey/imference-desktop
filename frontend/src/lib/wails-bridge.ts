@@ -27,13 +27,16 @@ import {
   ListLocalModels,
   ListSavedImages,
   LogFromFrontend,
+  PickModelFile,
   RefreshWalletBalance,
+  RemoveCustomModel,
   RestartSidecar,
   SaveSettings,
   SelectCloudModel,
   SelectLocalModel,
   StartSidecar,
   StopSidecar,
+  UseCustomModel,
 } from "../../bindings/imference-desktop-go/app";
 import { Events } from "@wailsio/runtime";
 import type {
@@ -102,6 +105,15 @@ const raw = {
   selectLocalModel: SelectLocalModel as (modelCode: string) => Promise<void>,
   // Cloud model: pick from the full catalog; persists code + full entry.
   selectCloudModel: SelectCloudModel as (modelCode: string) => Promise<void>,
+  // Custom user-supplied checkpoints (referenced in place, no download).
+  // pickModelFile returns "" when the user cancels the native dialog.
+  pickModelFile: PickModelFile as () => Promise<string>,
+  useCustomModel: UseCustomModel as unknown as (
+    path: string,
+    backendType: string,
+    baseModel: string
+  ) => Promise<AppSettings>,
+  removeCustomModel: RemoveCustomModel as unknown as (path: string) => Promise<AppSettings>,
   // Saved-image gallery (output folder history). listSavedImages returns one
   // page of metadata (optionally filtered); getSavedImage fetches one file's
   // bytes (base64) lazily; deleteSavedImage removes a file; galleryFacets lists

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
 import { PaymentBar } from "@/components/PaymentBar";
 import { LogPanel } from "@/components/LogPanel";
@@ -201,6 +202,47 @@ export default function App() {
     setSettingsOpen(true);
   }, []);
 
+  // --- Custom user checkpoints (.safetensors referenced in place) ---------
+  // Two-step add flow: native picker first, then a small dialog to pick the
+  // engine backend. customModelPath non-null = dialog open.
+  const [customModelPath, setCustomModelPath] = useState<string | null>(null);
+
+  const addCustomModel = useCallback(async () => {
+    try {
+      const path = await api.pickModelFile();
+      if (path) setCustomModelPath(path);
+    } catch {
+      // picker failure = treat as cancel
+    }
+  }, []);
+
+  const confirmCustomModel = useCallback(
+    async (path: string, backend: string, baseModel: string) => {
+      const next = await api.useCustomModel(path, backend, baseModel);
+      setSettings(next);
+      setPendingLocalModel(next.localModel ?? null);
+    },
+    []
+  );
+
+  const selectCustomModel = useCallback(async (m: ModelInfo) => {
+    if (!m.localPath) return;
+    const next = await api.useCustomModel(m.localPath, m.backendType ?? "sdxl", m.baseModel ?? "");
+    setSettings(next);
+    setPendingLocalModel(next.localModel ?? null);
+  }, []);
+
+  const removeCustomModel = useCallback(async (m: ModelInfo) => {
+    if (!m.localPath) return;
+    try {
+      const next = await api.removeCustomModel(m.localPath);
+      setSettings(next);
+      setPendingLocalModel((p) => (p?.modelCode === m.modelCode ? (next.localModel ?? null) : p));
+    } catch {
+      // removal failure is non-fatal; the row stays
+    }
+  }, []);
+
   // Switch the cloud payment method (persisted; cloud generation reads it).
   const setPaymentMode = useCallback(
     (m: PaymentMode) => {
@@ -357,12 +399,17 @@ export default function App() {
   }, [mode, activeModel?.modelCode]);
 
   // Nudge the default mode toward whatever is usable on first load — if local
-  // isn't ready but cloud is, start there. Only before the first generation, so
-  // it never fights the user's explicit pick mid-session.
+  // isn't ready but cloud is, start there. Strictly ONE-SHOT, decided when the
+  // persisted settings first arrive: re-running on every localReady change made
+  // any local-model selection (pending pick / sidecar restart drops localReady)
+  // yank the user back to cloud mid-session.
+  const modeNudged = useRef(false);
   useEffect(() => {
-    if (jobs.length) return;
+    if (modeNudged.current || !settings) return;
+    modeNudged.current = true;
     if (!localReady && cloudReady) setMode("cloud");
-  }, [localReady, cloudReady, jobs.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
 
   // Multiple generations may run at once — the button isn't gated on a running job.
   const canGenerate = (mode === "cloud" ? cloudReady : localReady) && !!prompt.trim();
@@ -514,6 +561,9 @@ export default function App() {
               onSelectLocal={setPendingLocalModel}
               downloading={downloading}
               progress={dlProgress}
+              onAddCustom={addCustomModel}
+              onSelectCustom={selectCustomModel}
+              onRemoveCustom={removeCustomModel}
             />
 
             {/* 2b. Parameters — seeded from the model, tweakable per generation. */}
@@ -555,6 +605,11 @@ export default function App() {
         }}
         initialSection={settingsSection}
         onSaved={handleSettingsSaved}
+      />
+      <CustomModelDialog
+        path={customModelPath}
+        onClose={() => setCustomModelPath(null)}
+        onConfirm={confirmCustomModel}
       />
       <LogPanel open={logsOpen} onOpenChange={setLogsOpen} />
     </div>

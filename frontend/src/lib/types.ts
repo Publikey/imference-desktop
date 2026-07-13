@@ -21,6 +21,8 @@ export type AppSettings = {
   /** Full catalog entry for the selected cloud model (cloudModel holds its code).
    *  Drives the form selector's details + cloud generation params. Null until chosen. */
   cloudModelInfo?: ModelInfo | null;
+  /** User-supplied checkpoints (localPath set), referenced in place. */
+  customModels?: ModelInfo[];
 };
 
 /** Result of api.checkForUpdate(): this build vs the latest GitHub release. */
@@ -83,6 +85,8 @@ export type ModelInfo = {
   mediumDescription: string;
   image: string;
   modelUrl: string;
+  /** Absolute path of a user-supplied checkpoint. Non-empty = custom model. */
+  localPath?: string;
   promptPre: string;
   promptNegative: string;
   stepsDefault: number;

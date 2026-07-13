@@ -37,7 +37,7 @@ import (
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[sdxl,zimage] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.3.0.tar.gz"
+const EngineTarball = "imference-engine[sdxl,zimage] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.3.1.tar.gz"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute
@@ -127,7 +127,11 @@ func torchInstallArgs() (args []string, message string) {
 // dependencies that would clobber our CUDA torch with the CPU wheel.
 // All transitive deps it actually uses (torch, transformers, ftfy) are
 // already in imference-engine[sdxl,zimage].
-const SDEmbedTarball = "sd-embed @ https://github.com/xhinker/sd_embed/archive/refs/heads/main.tar.gz"
+//
+// Pinned to a COMMIT, not refs/heads/main: sd_embed has no PyPI release, so a
+// moving `main` would silently change prompt-encoding behaviour between installs
+// (and can't be rolled back). This SHA is the current head of main (2025-04-24).
+const SDEmbedTarball = "sd-embed @ https://github.com/xhinker/sd_embed/archive/4a47f71150a22942fa606fb741a1c971d95ba56f.tar.gz"
 
 // SDXLModelURL is the default single-file SDXL checkpoint the app downloads so
 // the user never has to hand-pick a .safetensors. Must point directly at a

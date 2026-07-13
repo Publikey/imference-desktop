@@ -66,18 +66,24 @@ type EngineRuntimeSettings struct {
 
 // ImageRuntimeSettings tunes the SDXL backend (IMAGE_* env contract).
 type ImageRuntimeSettings struct {
-	Device           string `json:"device,omitempty"`           // "" / "auto" | cuda | cuda:N | mps | cpu
-	UseTinyVAE       bool   `json:"useTinyVae,omitempty"`       // SDXL TAESDxl — ~10× faster VAE decode
-	EnableCPUOffload bool   `json:"enableCpuOffload,omitempty"` // peak VRAM ↓ (≤8 GB), ~10–30% slower
-	MaxGPUModels     string `json:"maxGpuModels,omitempty"`     // "" / "auto" / int
-	MaxCPUModels     string `json:"maxCpuModels,omitempty"`     // "" / "auto" / int
+	Device     string `json:"device,omitempty"`     // "" / "auto" | cuda | cuda:N | mps | cpu
+	UseTinyVAE bool   `json:"useTinyVae,omitempty"` // SDXL TAESDxl — ~10× faster VAE decode
+	// EnableCPUOffload is tri-state: nil = Auto (the desktop enables offload on
+	// CUDA cards below autoOffloadVRAMThresholdGiB — see resolveCPUOffload — so a
+	// small-VRAM GPU doesn't oversubscribe VRAM and crawl via WDDM shared-memory
+	// spill), *true = force on, *false = force off. On a card the full pipe fits
+	// on, Auto leaves it off (full residency is fastest).
+	EnableCPUOffload *bool  `json:"enableCpuOffload,omitempty"`
+	MaxGPUModels     string `json:"maxGpuModels,omitempty"` // "" / "auto" / int
+	MaxCPUModels     string `json:"maxCpuModels,omitempty"` // "" / "auto" / int
 }
 
 // ZImageRuntimeSettings tunes the Z-Image backend (same IMAGE_* env contract).
 // No UseTinyVAE: Tiny VAE (TAESDxl) is SDXL-only and ignored by Z-Image.
 type ZImageRuntimeSettings struct {
-	Device           string `json:"device,omitempty"`
-	EnableCPUOffload bool   `json:"enableCpuOffload,omitempty"`
+	Device string `json:"device,omitempty"`
+	// Tri-state, same semantics as ImageRuntimeSettings.EnableCPUOffload.
+	EnableCPUOffload *bool  `json:"enableCpuOffload,omitempty"`
 	MaxGPUModels     string `json:"maxGpuModels,omitempty"`
 	MaxCPUModels     string `json:"maxCpuModels,omitempty"`
 }

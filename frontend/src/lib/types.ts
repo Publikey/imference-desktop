@@ -42,7 +42,11 @@ export type ImageRuntimeSettings = {
   device?: string;
   /** SDXL TAESDxl — faster VAE decode, slight quality loss. */
   useTinyVae?: boolean;
-  /** Lower peak VRAM (recommended ≤8 GB), a bit slower. */
+  /**
+   * Tri-state CPU offload. undefined = Auto (the desktop enables it on
+   * low-VRAM GPUs to avoid VRAM oversubscription); true = force on;
+   * false = force off. Maps to the Go *bool.
+   */
   enableCpuOffload?: boolean;
   /** "" / "auto" / integer */
   maxGpuModels?: string;
@@ -52,6 +56,7 @@ export type ImageRuntimeSettings = {
 /** Host-tuning knobs for the Z-Image backend. No Tiny VAE (SDXL-only, ignored). */
 export type ZImageRuntimeSettings = {
   device?: string;
+  /** Tri-state CPU offload, same semantics as ImageRuntimeSettings. */
   enableCpuOffload?: boolean;
   maxGpuModels?: string;
   maxCpuModels?: string;

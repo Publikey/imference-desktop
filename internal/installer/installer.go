@@ -37,7 +37,7 @@ import (
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[sdxl,zimage] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.2.2.tar.gz"
+const EngineTarball = "imference-engine[sdxl,zimage] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.3.0.tar.gz"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute

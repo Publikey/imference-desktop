@@ -230,9 +230,13 @@ export interface ImageRuntimeSettings {
     "useTinyVae"?: boolean;
 
     /**
-     * peak VRAM ↓ (≤8 GB), ~10–30% slower
+     * EnableCPUOffload is tri-state: nil = Auto (the desktop enables offload on
+     * CUDA cards below autoOffloadVRAMThresholdGiB — see resolveCPUOffload — so a
+     * small-VRAM GPU doesn't oversubscribe VRAM and crawl via WDDM shared-memory
+     * spill), *true = force on, *false = force off. On a card the full pipe fits
+     * on, Auto leaves it off (full residency is fastest).
      */
-    "enableCpuOffload"?: boolean;
+    "enableCpuOffload"?: boolean | null;
 
     /**
      * "" / "auto" / int
@@ -553,7 +557,11 @@ export interface WanRuntimeSettings {
  */
 export interface ZImageRuntimeSettings {
     "device"?: string;
-    "enableCpuOffload"?: boolean;
+
+    /**
+     * Tri-state, same semantics as ImageRuntimeSettings.EnableCPUOffload.
+     */
+    "enableCpuOffload"?: boolean | null;
     "maxGpuModels"?: string;
     "maxCpuModels"?: string;
 }

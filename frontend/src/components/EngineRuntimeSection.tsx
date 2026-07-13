@@ -62,10 +62,9 @@ export function EngineRuntimeSection({
           onChange={(useTinyVae) => setSdxl({ useTinyVae })}
           label="Tiny VAE — much faster decode, slight quality loss"
         />
-        <Toggle
-          checked={!!sdxl.enableCpuOffload}
+        <OffloadSelect
+          value={sdxl.enableCpuOffload}
           onChange={(enableCpuOffload) => setSdxl({ enableCpuOffload })}
-          label="CPU offload — lower VRAM (≤ 8 GB), a bit slower"
         />
       </div>
 
@@ -81,10 +80,9 @@ export function EngineRuntimeSection({
           onMaxCpu={(maxCpuModels) => setZimage({ maxCpuModels })}
           mps
         />
-        <Toggle
-          checked={!!zimage.enableCpuOffload}
+        <OffloadSelect
+          value={zimage.enableCpuOffload}
           onChange={(enableCpuOffload) => setZimage({ enableCpuOffload })}
-          label="CPU offload — lower VRAM (≤ 8 GB), a bit slower"
         />
       </div>
 
@@ -194,6 +192,37 @@ function DeviceMaxGrid({
         <Input value={maxCpuModels ?? ""} onChange={(e) => onMaxCpu(e.target.value)} placeholder="auto" />
       </label>
     </div>
+  );
+}
+
+// CPU offload is tri-state. Auto (undefined) lets the desktop enable offload on
+// small-VRAM GPUs, where keeping the whole pipe resident oversubscribes VRAM and
+// spills to shared system memory (~50× slower); On/Off force it. Maps to the Go
+// *bool ImageRuntimeSettings.EnableCPUOffload (nil = Auto).
+function OffloadSelect({
+  value,
+  onChange,
+}: {
+  value?: boolean;
+  onChange: (v: boolean | undefined) => void;
+}) {
+  const current = value === undefined ? "auto" : value ? "on" : "off";
+  return (
+    <label className="grid gap-1 text-xs">
+      CPU offload
+      <select
+        className={selectCls}
+        value={current}
+        onChange={(e) => {
+          const v = e.target.value;
+          onChange(v === "auto" ? undefined : v === "on");
+        }}
+      >
+        <option value="auto">Auto — enabled on low-VRAM GPUs (recommended)</option>
+        <option value="on">On — always (lowest peak VRAM)</option>
+        <option value="off">Off — full residency (needs ≳ 12 GB VRAM)</option>
+      </select>
+    </label>
   );
 }
 

@@ -75,9 +75,9 @@ def setup() -> dict:
     # falls back to the engine's host-adaptive defaults (device=auto, etc.).
     runtime = RuntimeConfig.from_env()
     logger.info(
-        "Engine runtime: device=%s use_tiny_vae=%s enable_cpu_offload=%s "
+        "Engine runtime: device=%s use_tiny_vae=%s enable_offload=%s "
         "model_cdn=%s model_cache_dir=%s",
-        runtime.device, runtime.use_tiny_vae, runtime.enable_cpu_offload,
+        runtime.device, runtime.use_tiny_vae, runtime.enable_offload,
         runtime.model_cdn, runtime.model_cache_dir,
     )
 

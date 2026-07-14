@@ -78,11 +78,51 @@ func bool01(b bool) string {
 	return "0"
 }
 
+// autoOffloadVRAMThresholdGiB: SDXL / Z-Image at full residency peak ~8.8 GiB at
+// 1024². GPUs below this threshold oversubscribe VRAM and spill to WDDM shared
+// system memory (measured ~50× slowdown on an 8 GiB card — 12 min vs 12 s for a
+// 20-step run), so Auto mode enables enable_model_cpu_offload for them. Cards
+// at/above it hold the whole pipe and are fastest at full residency, so Auto
+// leaves offload off. 12 GiB keeps the common 6/8/10/11 GiB consumer cards safe
+// while letting 12 GiB+ run full residency.
+const autoOffloadVRAMThresholdGiB = 12.0
+
+// resolveCPUOffload maps the tri-state offload setting to the sidecar's
+// IMAGE_ENABLE_CPU_OFFLOAD value ("0"/"1") plus a human-readable reason for the
+// log. An explicit *bool (user picked On/Off in Settings) always wins. nil =
+// Auto: enable offload only on an NVIDIA card whose total VRAM is below the
+// threshold — the case where full residency would spill and crawl. cpu/mps, or a
+// GPU we can't measure, leaves it off (model_cpu_offload is a CUDA-only win, and
+// we never silently slow a machine we couldn't probe).
+func resolveCPUOffload(setting *bool, device string) (value string, reason string) {
+	if setting != nil {
+		if *setting {
+			return "1", "explicit On (Settings)"
+		}
+		return "0", "explicit Off (Settings)"
+	}
+	dev := strings.ToLower(strings.TrimSpace(device))
+	if dev != "" && dev != "auto" && !strings.HasPrefix(dev, "cuda") {
+		return "0", "Auto: device=" + dev + " (offload is NVIDIA-only)"
+	}
+	gib, ok := probeNvidiaVRAMGiB()
+	if !ok {
+		return "0", "Auto: VRAM undetectable (nvidia-smi absent?) — leaving offload off"
+	}
+	g := strconv.FormatFloat(gib, 'f', 1, 64)
+	thr := strconv.FormatFloat(autoOffloadVRAMThresholdGiB, 'f', 0, 64)
+	if gib < autoOffloadVRAMThresholdGiB {
+		return "1", "Auto: " + g + " GiB VRAM < " + thr +
+			" GiB threshold — enabling offload to avoid VRAM spill"
+	}
+	return "0", "Auto: " + g + " GiB VRAM ≥ " + thr + " GiB — full residency (offload off)"
+}
+
 // runtimeEnv builds the engine's env from the user's settings for the ACTIVE
 // backend. SDXL and Z-Image both use the engine's IMAGE_* contract, but the
 // desktop keeps a separate settings block for each — only one image backend
 // loads per sidecar, so we emit IMAGE_* from the block matching `backend`.
-func runtimeEnv(rt types.EngineRuntimeSettings, backend string) []string {
+func (m *Manager) runtimeEnv(rt types.EngineRuntimeSettings, backend string) []string {
 	var env []string
 	set := func(key, val string) {
 		if v := strings.TrimSpace(val); v != "" && v != "auto" {
@@ -90,21 +130,14 @@ func runtimeEnv(rt types.EngineRuntimeSettings, backend string) []string {
 		}
 	}
 
-	// Pick the active image block. Tiny VAE is SDXL-only (ignored by Z-Image), so
-	// Z-Image forces it off.
-	var device, maxGPU, maxCPU string
-	var tinyVAE, cpuOffload bool
-	if backend == "zimage" {
-		z := rt.Zimage
-		device, maxGPU, maxCPU = z.Device, z.MaxGPUModels, z.MaxCPUModels
-		cpuOffload = z.EnableCPUOffload
-		tinyVAE = false
-	} else {
-		s := rt.Sdxl
-		device, maxGPU, maxCPU = s.Device, s.MaxGPUModels, s.MaxCPUModels
-		cpuOffload = s.EnableCPUOffload
-		tinyVAE = s.UseTinyVAE
-	}
+	// One unified Image block drives every image backend (they share the engine's
+	// IMAGE_* contract; only one loads per sidecar). UseTinyVAE only affects
+	// SDXL/SD1.5 — the engine ignores it for the others, so emitting it is a no-op
+	// there. cpuOffload is tri-state (*bool): nil = Auto.
+	img := rt.Image
+	device, maxGPU, maxCPU := img.Device, img.MaxGPUModels, img.MaxCPUModels
+	cpuOffload := img.EnableCPUOffload
+	tinyVAE := img.UseTinyVAE
 
 	// Device + the two boolean perf knobs are emitted UNCONDITIONALLY (device as
 	// auto|value, bools as explicit 0/1) so the UI is authoritative: a stray
@@ -115,10 +148,18 @@ func runtimeEnv(rt types.EngineRuntimeSettings, backend string) []string {
 	if dev == "" {
 		dev = "auto"
 	}
+	// Auto mode probes VRAM and may flip offload on for small cards — log the
+	// decision so a surprised user can see WHY offload engaged (or didn't) in the
+	// LogPanel. An explicit Settings toggle short-circuits the probe.
+	offloadVal, offloadReason := resolveCPUOffload(cpuOffload, dev)
+	if m.bus != nil {
+		m.bus.Info("sidecar", "CPU offload — "+offloadReason,
+			map[string]any{"backend": backend, "IMAGE_ENABLE_CPU_OFFLOAD": offloadVal})
+	}
 	env = append(env,
 		"IMAGE_DEVICE="+dev,
 		"IMAGE_USE_TINY_VAE="+bool01(tinyVAE),
-		"IMAGE_ENABLE_CPU_OFFLOAD="+bool01(cpuOffload),
+		"IMAGE_ENABLE_CPU_OFFLOAD="+offloadVal,
 	)
 	set("MAX_GPU_MODELS", maxGPU)
 	set("MAX_CPU_MODELS", maxCPU)
@@ -306,7 +347,7 @@ func (m *Manager) Start(parentCtx context.Context, pythonPath, sdxlPath string, 
 	if shift > 0 {
 		env = append(env, fmt.Sprintf("IMFERENCE_BACKEND_SHIFT=%g", shift))
 	}
-	env = append(env, runtimeEnv(rt, backend)...)
+	env = append(env, m.runtimeEnv(rt, backend)...)
 	cmd.Env = m.engineEnv(env)
 
 	// A configured base_model (Z-Image) pulls a large shared base at register

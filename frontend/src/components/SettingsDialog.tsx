@@ -30,8 +30,7 @@ type Props = {
 const NAV: { id: string; label: string; sub?: boolean }[] = [
   { id: "engine", label: "Local engine" },
   { id: "runtime", label: "Advanced runtime" },
-  { id: "runtime-sdxl", label: "SDXL", sub: true },
-  { id: "runtime-zimage", label: "Z-Image", sub: true },
+  { id: "runtime-image", label: "Image", sub: true },
   { id: "runtime-wan", label: "WAN video", sub: true },
   { id: "payment", label: "Cloud payment" },
   { id: "apikey", label: "API key", sub: true },
@@ -48,7 +47,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
     outputDir: "",
     paymentMode: "bearer",
     walletAddress: "",
-    engineRuntime: { sdxl: {}, zimage: {}, wan: {} },
+    engineRuntime: { image: {}, wan: {} },
   });
   const [activeNav, setActiveNav] = useState<string>("engine");
   // Timestamp of the last successful auto-save — drives the transient "Saved" toast.

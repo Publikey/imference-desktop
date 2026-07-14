@@ -11,7 +11,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Backend = "sdxl" | "zimage";
+type Backend = "sdxl" | "sd15" | "zimage" | "flux" | "chroma" | "qwenimage" | "anima";
+
+// One row per image backend that can load a SINGLE .safetensors checkpoint.
+// `base` (when set) is the shared base-components repo a transformer-only
+// checkpoint needs — shown as the default placeholder and applied server-side
+// when the user leaves the field blank (see cloud.DefaultBaseModel). Mirrors the
+// Go IsSingleFileBackend / DefaultBaseModel set.
+const BACKENDS: { id: Backend; label: string; hint: string; base?: string }[] = [
+  { id: "sdxl", label: "SDXL", hint: "Most Civitai models (SDXL, Pony, Illustrious…) — a single self-contained file." },
+  { id: "sd15", label: "SD 1.5", hint: "Classic Stable Diffusion 1.5 checkpoints — a single self-contained file." },
+  { id: "zimage", label: "Z-Image", hint: "Transformer-only weights; needs a base repo.", base: "Tongyi-MAI/Z-Image-Turbo" },
+  { id: "flux", label: "FLUX", hint: "FLUX.1 transformer-only checkpoint; needs a base repo.", base: "black-forest-labs/FLUX.1-dev" },
+  { id: "chroma", label: "Chroma", hint: "FLUX-derived (single T5 encoder); needs a base repo.", base: "lodestones/Chroma1-HD" },
+  { id: "qwenimage", label: "Qwen-Image", hint: "20B MMDiT, strong text rendering; needs a base repo.", base: "Qwen/Qwen-Image" },
+  { id: "anima", label: "Anima", hint: "Single-file DiT (Cosmos); needs the Anima base repo (Qwen3 encoder + VAE).", base: "circlestone-labs/Anima-Base-v1.0-Diffusers" },
+];
 
 type Props = {
   // Absolute path returned by the native picker; null closes the dialog.
@@ -22,8 +37,8 @@ type Props = {
 };
 
 // CustomModelDialog — second step of the "add custom model" flow: the file is
-// already chosen, the user only picks which engine backend should load it
-// (Z-Image finetunes additionally need their Hugging Face base repo).
+// already chosen, the user picks which engine backend should load it (and, for
+// transformer-only backends, optionally overrides the base repo).
 export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
   const [backend, setBackend] = useState<Backend>("sdxl");
   const [baseModel, setBaseModel] = useState("");
@@ -31,13 +46,15 @@ export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const fileName = path?.split(/[\\/]/).pop() ?? "";
+  const selected = BACKENDS.find((b) => b.id === backend)!;
 
   const confirm = async () => {
     if (!path || busy) return;
     setBusy(true);
     setError(null);
     try {
-      await onConfirm(path, backend, backend === "zimage" ? baseModel : "");
+      // Empty base → server applies DefaultBaseModel for the backend.
+      await onConfirm(path, backend, selected.base ? baseModel.trim() : "");
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -67,52 +84,38 @@ export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
         </div>
 
         <div className="grid gap-2">
-          <Label className="text-xs">Model type</Label>
-          <div className="flex flex-col gap-2 text-sm">
-            <label className="flex cursor-pointer items-start gap-2">
-              <input
-                type="radio"
-                name="custom-backend"
-                checked={backend === "sdxl"}
-                onChange={() => setBackend("sdxl")}
-                className="mt-1"
-              />
-              <span>
-                <span className="font-medium">SDXL checkpoint</span>
-                <span className="text-muted-foreground block text-xs">
-                  Most Civitai models (SDXL, Pony, Illustrious…) — a single self-contained file.
-                </span>
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-start gap-2">
-              <input
-                type="radio"
-                name="custom-backend"
-                checked={backend === "zimage"}
-                onChange={() => setBackend("zimage")}
-                className="mt-1"
-              />
-              <span>
-                <span className="font-medium">Z-Image finetune</span>
-                <span className="text-muted-foreground block text-xs">
-                  Transformer-only weights that need their base model downloaded alongside.
-                </span>
-              </span>
-            </label>
-          </div>
+          <Label htmlFor="custom-backend" className="text-xs">
+            Model type
+          </Label>
+          <select
+            id="custom-backend"
+            value={backend}
+            onChange={(e) => setBackend(e.target.value as Backend)}
+            className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+          >
+            {BACKENDS.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-muted-foreground text-xs">{selected.hint}</p>
         </div>
 
-        {backend === "zimage" && (
+        {selected.base && (
           <div className="grid gap-2">
             <Label htmlFor="custom-base-model" className="text-xs">
-              Base model (Hugging Face repo id)
+              Base model (Hugging Face repo id) — optional
             </Label>
             <Input
               id="custom-base-model"
               value={baseModel}
               onChange={(e) => setBaseModel(e.target.value)}
-              placeholder="Tongyi-MAI/Z-Image-Turbo"
+              placeholder={selected.base}
             />
+            <p className="text-muted-foreground text-[11px]">
+              Leave blank to use the default ({selected.base}).
+            </p>
           </div>
         )}
 
@@ -122,7 +125,7 @@ export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
           <Button variant="outline" disabled={busy} onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={busy || (backend === "zimage" && !baseModel.trim())} onClick={confirm}>
+          <Button disabled={busy} onClick={confirm}>
             {busy && <Loader2 className="size-4 animate-spin" />}
             Use this model
           </Button>

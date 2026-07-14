@@ -117,8 +117,8 @@ type apiModel struct {
 	SkipDefault       int     `json:"skip_default"`
 	SchedulerDefault  string  `json:"scheduler_default"`
 	FormatCode        string  `json:"format_code"`
-	// ImEngine is the catalog's engine discriminator: "sdxl" | "zimage" |
-	// "wan22" | "external" | null. Mapped to the internal backend name; the
+	// ImEngine is the catalog's engine discriminator: an image backend (sdxl,
+	// sd15, zimage, flux, chroma, qwenimage, anima), "wan22", "external", or null. Mapped to the internal backend name; the
 	// local picker skips the ones that aren't locally runnable (external / null).
 	ImEngine     string  `json:"im_engine"`
 	BaseModel    string  `json:"base_model"`
@@ -149,12 +149,25 @@ type apiFormat struct {
 // normalizeEngine maps the catalog's im_engine value to the internal backend
 // name the sidecar understands. Returns "" for values the desktop can't run
 // locally — null/empty, or "external" (a remote-API model handled elsewhere).
+// All seven image backends the engine exposes (imference-engine 0.3.x) plus WAN
+// video are recognized; only one image backend loads per sidecar, chosen from
+// the selected model's backend.
 func normalizeEngine(imEngine string) string {
 	switch strings.ToLower(strings.TrimSpace(imEngine)) {
 	case "sdxl":
 		return "sdxl"
-	case "zimage":
+	case "sd15", "sd1.5", "sd-1.5":
+		return "sd15"
+	case "zimage", "z-image":
 		return "zimage"
+	case "flux":
+		return "flux"
+	case "chroma":
+		return "chroma"
+	case "qwenimage", "qwen-image", "qwen_image":
+		return "qwenimage"
+	case "anima":
+		return "anima"
 	case "wan22", "wan":
 		return "wan"
 	default:
@@ -162,19 +175,70 @@ func normalizeEngine(imEngine string) string {
 	}
 }
 
-// defaultZImageBase is the shared base-components repo (tokenizer + Qwen text
-// encoder + VAE) for Z-Image checkpoints that ship transformer-only (the common
-// case). Fallback only when the catalog carries no per-model base_model; a
-// non-empty catalog base_model always wins.
-const defaultZImageBase = "Tongyi-MAI/Z-Image-Turbo"
+// imageBackends is the set of normalized image-backend names the sidecar can
+// load (one per sidecar). Kept in sync with the engine's registered backends
+// (imference-engine 0.3.x) and normalizeEngine above.
+var imageBackends = map[string]bool{
+	"sdxl": true, "sd15": true, "zimage": true, "flux": true,
+	"chroma": true, "qwenimage": true, "anima": true,
+}
+
+// IsImageBackend reports whether name is a normalized image backend the desktop
+// can run locally (excludes "wan" video and "" / external).
+func IsImageBackend(name string) bool {
+	return imageBackends[name]
+}
+
+// singleFileBackends is the subset of image backends that load from a single
+// .safetensors checkpoint (with a base repo for the transformer-only ones). This
+// is what the "add custom model" flow supports. Anima is excluded: it's a
+// Modular Diffusers pipeline that needs a full diffusers-format directory, not a
+// single file (its load_pipeline treats the path as a repo id -> HF error).
+var singleFileBackends = map[string]bool{
+	"sdxl": true, "sd15": true, "zimage": true,
+	"flux": true, "chroma": true, "qwenimage": true,
+	// Anima: a single-file DiT (.safetensors) + a base modular repo (encoder /
+	// VAE / config) — the engine's Anima backend injects the DiT into the base.
+	"anima": true,
+}
+
+// IsSingleFileBackend reports whether a user-supplied single .safetensors can be
+// loaded as this backend. Used to validate a custom checkpoint's backend.
+func IsSingleFileBackend(name string) bool {
+	return singleFileBackends[name]
+}
+
+// DefaultBaseModel returns the shared base-components repo a transformer-only
+// checkpoint of the given backend needs (text encoder(s) + VAE + scheduler +,
+// for Anima, the modular config), used only when the catalog carries no per-model
+// base_model — a non-empty catalog base_model always wins. Self-contained
+// backends (SDXL / SD 1.5 single-file) return "". Repos per the engine backend
+// READMEs. NOTE: FLUX.1-dev is a GATED HF repo and the Anima base is large — rely
+// on IMAGE_MODEL_CDN or a catalog base_model in practice.
+func DefaultBaseModel(backend string) string {
+	switch backend {
+	case "zimage":
+		return "Tongyi-MAI/Z-Image-Turbo"
+	case "flux":
+		return "black-forest-labs/FLUX.1-dev"
+	case "chroma":
+		return "lodestones/Chroma1-HD"
+	case "qwenimage":
+		return "Qwen/Qwen-Image"
+	case "anima":
+		return "circlestone-labs/Anima-Base-v1.0-Diffusers"
+	default:
+		return ""
+	}
+}
 
 // toModelInfo maps a wire entry to the app's camelCase ModelInfo, normalizing
 // im_engine to the internal backend name and defaulting the Z-Image base repo.
 func toModelInfo(m apiModel) types.ModelInfo {
 	backend := normalizeEngine(m.ImEngine)
 	baseModel := m.BaseModel
-	if backend == "zimage" && baseModel == "" {
-		baseModel = defaultZImageBase
+	if baseModel == "" {
+		baseModel = DefaultBaseModel(backend)
 	}
 	return types.ModelInfo{
 		ModelCode:         m.ModelCode,

@@ -125,6 +125,10 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 		// users no longer pay for a local engine (GPU/RAM) they won't use.
 		_ = a.clearStaleLocalModel()
 		a.bus.Info("app", "sidecar left stopped at startup — start it from the engine control", nil)
+		// Force the venv engine to the pinned version if it drifted (e.g. an
+		// older install whose diffusers doesn't actually offload). No-op when
+		// the versions match, the venv is absent, or a dev source override is set.
+		a.ensureEngineUpToDate()
 	}()
 	return nil
 }
@@ -395,10 +399,12 @@ func (a *App) applyLocalModelConfig(req *types.GenerationRequest) {
 	if req.NegativePrompt == "" {
 		req.NegativePrompt = m.PromptNegative
 	}
-	// Z-Image has no CLIP tokenizer and a fixed flow-matching scheduler, so the
-	// engine ignores scheduler/clip-skip for it — don't inject them. SDXL keeps
-	// the model's catalog defaults when the caller left them unset.
-	if m.BackendType != "zimage" {
+	// Scheduler + clip-skip are CLIP/sampler-scheduler concepts — only SDXL and
+	// SD 1.5 use them. The flow-matching backends (Z-Image, FLUX, Chroma,
+	// Qwen-Image, Anima) fix their scheduler at load and have no CLIP-skip, so the
+	// engine ignores both; don't inject them. SDXL/SD1.5 keep the model's catalog
+	// defaults when the caller left them unset.
+	if m.BackendType == "sdxl" || m.BackendType == "sd15" {
 		if req.Scheduler == "" {
 			req.Scheduler = m.SchedulerDefault
 		}
@@ -595,11 +601,17 @@ const customModelMinBytes = 1 << 30 // 1 GB
 // previously downloaded catalog file, if any, is kept on disk so switching
 // back is instant (modelfetch's size-based reuse skips the re-download).
 func (a *App) UseCustomModel(path, backendType, baseModel string) (types.Settings, error) {
-	if backendType != "sdxl" && backendType != "zimage" {
-		return types.Settings{}, fmt.Errorf("unsupported backend %q (want sdxl or zimage)", backendType)
+	if !cloud.IsSingleFileBackend(backendType) {
+		// Anima (Modular Diffusers) needs a diffusers-format directory, not a
+		// single .safetensors, so it can't come through the custom-file flow.
+		return types.Settings{}, fmt.Errorf("backend %q can't be loaded from a single .safetensors file", backendType)
 	}
-	if backendType == "zimage" && strings.TrimSpace(baseModel) == "" {
-		return types.Settings{}, errors.New("Z-Image models need a base model (Hugging Face repo id)")
+	// Transformer-only backends (Z-Image, FLUX, Chroma, Qwen-Image) need shared
+	// base-components; default the repo when the user didn't supply one, matching
+	// the catalog path. Self-contained backends (SDXL, SD 1.5, Anima) get "".
+	baseModel = strings.TrimSpace(baseModel)
+	if baseModel == "" {
+		baseModel = cloud.DefaultBaseModel(backendType)
 	}
 	if !strings.EqualFold(filepath.Ext(path), ".safetensors") {
 		return types.Settings{}, errors.New("not a .safetensors file")
@@ -1112,6 +1124,65 @@ func (a *App) InstallEngine() error {
 	}()
 
 	return nil
+}
+
+// ensureEngineUpToDate compares the engine version installed in the venv against
+// the version the desktop pins (EngineTarball) and, on a mismatch, force-
+// reinstalls the pinned engine (uninstall + install, skipping the torch phase).
+// This keeps the venv in lockstep with the desktop build — e.g. upgrading a
+// stale engine whose diffusers can't actually cut VRAM via CPU offload. Runs in
+// the background and streams the same "install:progress" events as InstallEngine
+// so the UI shows the update; a no-op when versions match, the venv is missing,
+// or a dev source override is active (PinnedEngineVersion == "").
+func (a *App) ensureEngineUpToDate() {
+	venvDir, err := engineVenvDir()
+	if err != nil {
+		return
+	}
+	info := installer.EngineInfoFor(a.ctx, venvDir)
+	if !info.Installed || !info.Outdated {
+		return
+	}
+	reqs, err := resolveSidecarRequirements()
+	if err != nil {
+		return
+	}
+	a.bus.Warn("app", "engine version mismatch — force-reinstalling pinned engine", map[string]any{
+		"installed": info.EngineVersion, "pinned": info.PinnedVersion,
+	})
+
+	progress := make(chan types.InstallProgress, 16)
+	go func() {
+		// Release venv file locks (Windows keeps torch .pyd/.dll mmap'd).
+		a.sidecar.Stop()
+		if err := a.installer.Install(a.ctx, installer.Options{
+			VenvDir:                 venvDir,
+			SidecarRequirementsPath: reqs,
+			EngineOnly:              true,
+		}, progress); err != nil {
+			a.bus.Error("app", "engine auto-reinstall failed", map[string]any{"err": err.Error()})
+			return
+		}
+		// pythonPath is unchanged (same venv) — just restart the sidecar with the
+		// current model so the freshly upgraded engine is live. No model yet →
+		// leave stopped; selection restarts it later.
+		s := a.settings.Get()
+		if s.SDXLPath == "" {
+			a.bus.Info("app", "engine updated; awaiting model selection before sidecar start", nil)
+			return
+		}
+		a.bus.Info("app", "restarting sidecar after engine update", nil)
+		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime); rerr != nil {
+			a.bus.Warn("app", "post-update sidecar restart failed", map[string]any{"err": rerr.Error()})
+		}
+	}()
+	go func() {
+		for p := range progress {
+			if a.app != nil {
+				a.app.Event.Emit("install:progress", p)
+			}
+		}
+	}()
 }
 
 // ------------------------------------------------------------------------

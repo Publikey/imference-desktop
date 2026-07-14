@@ -54,32 +54,31 @@ type UpdateInfo struct {
 	UpdateAvailable bool   `json:"updateAvailable"`
 }
 
-// EngineRuntimeSettings holds per-backend host-tuning. SDXL and Z-Image each get
-// their own block even though they share the engine's IMAGE_* env contract: only
-// one image backend is loaded per sidecar (chosen by the model's im_engine), so
-// the manager emits IMAGE_* from the block matching the active backend.
+// EngineRuntimeSettings holds host-tuning for the engine. All seven image
+// backends (SDXL, SD 1.5, Z-Image, FLUX, Chroma, Qwen-Image, Anima) share the
+// engine's single IMAGE_* env contract and only one loads per sidecar, so they
+// share ONE Image block rather than a block each. WAN video has its own WAN_*
+// contract. (Pre-unification builds stored separate `sdxl`/`zimage` blocks;
+// settings.reload() migrates the old `sdxl` block into `image`.)
 type EngineRuntimeSettings struct {
-	Sdxl   ImageRuntimeSettings  `json:"sdxl"`
-	Zimage ZImageRuntimeSettings `json:"zimage"`
-	Wan    WanRuntimeSettings    `json:"wan"`
+	Image ImageRuntimeSettings `json:"image"`
+	Wan   WanRuntimeSettings   `json:"wan"`
 }
 
-// ImageRuntimeSettings tunes the SDXL backend (IMAGE_* env contract).
+// ImageRuntimeSettings tunes the active image backend (shared IMAGE_* env
+// contract). UseTinyVAE only affects SDXL / SD 1.5; the engine ignores it for
+// Z-Image / FLUX / Chroma / Qwen-Image / Anima.
 type ImageRuntimeSettings struct {
-	Device           string `json:"device,omitempty"`           // "" / "auto" | cuda | cuda:N | mps | cpu
-	UseTinyVAE       bool   `json:"useTinyVae,omitempty"`       // SDXL TAESDxl — ~10× faster VAE decode
-	EnableCPUOffload bool   `json:"enableCpuOffload,omitempty"` // peak VRAM ↓ (≤8 GB), ~10–30% slower
-	MaxGPUModels     string `json:"maxGpuModels,omitempty"`     // "" / "auto" / int
-	MaxCPUModels     string `json:"maxCpuModels,omitempty"`     // "" / "auto" / int
-}
-
-// ZImageRuntimeSettings tunes the Z-Image backend (same IMAGE_* env contract).
-// No UseTinyVAE: Tiny VAE (TAESDxl) is SDXL-only and ignored by Z-Image.
-type ZImageRuntimeSettings struct {
-	Device           string `json:"device,omitempty"`
-	EnableCPUOffload bool   `json:"enableCpuOffload,omitempty"`
-	MaxGPUModels     string `json:"maxGpuModels,omitempty"`
-	MaxCPUModels     string `json:"maxCpuModels,omitempty"`
+	Device     string `json:"device,omitempty"`     // "" / "auto" | cuda | cuda:N | mps | cpu
+	UseTinyVAE bool   `json:"useTinyVae,omitempty"` // SDXL/SD1.5 TAESD — ~10× faster VAE decode
+	// EnableCPUOffload is tri-state: nil = Auto (the desktop enables offload on
+	// CUDA cards below autoOffloadVRAMThresholdGiB — see resolveCPUOffload — so a
+	// small-VRAM GPU doesn't oversubscribe VRAM and crawl via WDDM shared-memory
+	// spill), *true = force on, *false = force off. On a card the full pipe fits
+	// on, Auto leaves it off (full residency is fastest).
+	EnableCPUOffload *bool  `json:"enableCpuOffload,omitempty"`
+	MaxGPUModels     string `json:"maxGpuModels,omitempty"` // "" / "auto" / int
+	MaxCPUModels     string `json:"maxCpuModels,omitempty"` // "" / "auto" / int
 }
 
 // WanRuntimeSettings tunes the WAN video backend (WAN_* env contract). Applies
@@ -122,7 +121,8 @@ type ModelInfo struct {
 	SchedulerDefault  string  `json:"schedulerDefault"`
 	FormatCode        string  `json:"formatCode"`
 	// BackendType is the internal engine backend, normalized from the catalog's
-	// im_engine field: "sdxl" | "zimage" | "wan". (im_engine "external" and null
+	// im_engine field, one of the image backends (sdxl, sd15, zimage, flux,
+	// chroma, qwenimage, anima) or "wan". (im_engine "external" and null
 	// are filtered out upstream in cloud.ListModels — not locally runnable.)
 	BackendType string `json:"backendType,omitempty"`
 	// BaseModel is the HF repo id of the shared base-components a backend needs
@@ -231,7 +231,7 @@ type GenerationMeta struct {
 	Source         string  `json:"source"`              // "local" | "cloud"
 	ModelCode      string  `json:"modelCode,omitempty"` // catalog code
 	ModelName      string  `json:"modelName,omitempty"` // display name
-	Engine         string  `json:"engine,omitempty"`    // "sdxl" | "zimage" | "wan"
+	Engine         string  `json:"engine,omitempty"`    // e.g. "sdxl" | "flux" | "zimage" | "wan"
 	Width          int     `json:"width,omitempty"`
 	Height         int     `json:"height,omitempty"`
 	FormatCode     string  `json:"formatCode,omitempty"` // "square" | "portrait" | "landscape"
@@ -247,7 +247,7 @@ type GenerationMeta struct {
 
 // GalleryFilter narrows ListSavedImages. Empty fields mean "no constraint".
 type GalleryFilter struct {
-	Engine    string `json:"engine"`    // "sdxl" | "zimage" | "wan"
+	Engine    string `json:"engine"`    // e.g. "sdxl" | "flux" | "zimage" | "wan"
 	ModelCode string `json:"modelCode"` // exact catalog code
 	Source    string `json:"source"`    // "local" | "cloud"
 }
@@ -318,6 +318,15 @@ type EngineInfo struct {
 	Installed  bool   `json:"installed"`
 	VenvDir    string `json:"venvDir"`
 	PythonPath string `json:"pythonPath"`
+	// EngineVersion is the imference-engine version currently installed in the
+	// venv (via importlib.metadata), "" when unknown / not installed.
+	EngineVersion string `json:"engineVersion"`
+	// PinnedVersion is the version the desktop ships with (parsed from
+	// EngineTarball), "" under a dev source override where no version is enforced.
+	PinnedVersion string `json:"pinnedVersion"`
+	// Outdated is true when both versions are known and differ — the startup
+	// check force-reinstalls the pinned engine in that case.
+	Outdated bool `json:"outdated"`
 }
 
 // InstallProgress is emitted on the "install:progress" event channel during

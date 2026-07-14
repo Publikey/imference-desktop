@@ -197,6 +197,9 @@ func IsImageBackend(name string) bool {
 var singleFileBackends = map[string]bool{
 	"sdxl": true, "sd15": true, "zimage": true,
 	"flux": true, "chroma": true, "qwenimage": true,
+	// Anima: a single-file DiT (.safetensors) + a base modular repo (encoder /
+	// VAE / config) — the engine's Anima backend injects the DiT into the base.
+	"anima": true,
 }
 
 // IsSingleFileBackend reports whether a user-supplied single .safetensors can be
@@ -206,13 +209,12 @@ func IsSingleFileBackend(name string) bool {
 }
 
 // DefaultBaseModel returns the shared base-components repo a transformer-only
-// checkpoint of the given backend needs (text encoder(s) + VAE + scheduler),
-// used only when the catalog carries no per-model base_model — a non-empty
-// catalog base_model always wins. Backends whose checkpoints are self-contained
-// (SDXL / SD 1.5 single-file; Anima has no transformer/base split) return "".
-// Repos per the engine backend READMEs. NOTE: FLUX.1-dev is a GATED HF repo and
-// its base components are large — rely on IMAGE_MODEL_CDN or a catalog base_model
-// in practice.
+// checkpoint of the given backend needs (text encoder(s) + VAE + scheduler +,
+// for Anima, the modular config), used only when the catalog carries no per-model
+// base_model — a non-empty catalog base_model always wins. Self-contained
+// backends (SDXL / SD 1.5 single-file) return "". Repos per the engine backend
+// READMEs. NOTE: FLUX.1-dev is a GATED HF repo and the Anima base is large — rely
+// on IMAGE_MODEL_CDN or a catalog base_model in practice.
 func DefaultBaseModel(backend string) string {
 	switch backend {
 	case "zimage":
@@ -223,6 +225,8 @@ func DefaultBaseModel(backend string) string {
 		return "lodestones/Chroma1-HD"
 	case "qwenimage":
 		return "Qwen/Qwen-Image"
+	case "anima":
+		return "circlestone-labs/Anima-Base-v1.0-Diffusers"
 	default:
 		return ""
 	}

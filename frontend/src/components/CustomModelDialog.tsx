@@ -11,15 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Backend = "sdxl" | "sd15" | "zimage" | "flux" | "chroma" | "qwenimage";
+type Backend = "sdxl" | "sd15" | "zimage" | "flux" | "chroma" | "qwenimage" | "anima";
 
 // One row per image backend that can load a SINGLE .safetensors checkpoint.
 // `base` (when set) is the shared base-components repo a transformer-only
 // checkpoint needs — shown as the default placeholder and applied server-side
 // when the user leaves the field blank (see cloud.DefaultBaseModel). Mirrors the
-// Go IsSingleFileBackend / DefaultBaseModel set. Anima is intentionally absent:
-// it's a Modular Diffusers pipeline that needs a full diffusers-format
-// directory, not a single file.
+// Go IsSingleFileBackend / DefaultBaseModel set.
 const BACKENDS: { id: Backend; label: string; hint: string; base?: string }[] = [
   { id: "sdxl", label: "SDXL", hint: "Most Civitai models (SDXL, Pony, Illustrious…) — a single self-contained file." },
   { id: "sd15", label: "SD 1.5", hint: "Classic Stable Diffusion 1.5 checkpoints — a single self-contained file." },
@@ -27,6 +25,7 @@ const BACKENDS: { id: Backend; label: string; hint: string; base?: string }[] = 
   { id: "flux", label: "FLUX", hint: "FLUX.1 transformer-only checkpoint; needs a base repo.", base: "black-forest-labs/FLUX.1-dev" },
   { id: "chroma", label: "Chroma", hint: "FLUX-derived (single T5 encoder); needs a base repo.", base: "lodestones/Chroma1-HD" },
   { id: "qwenimage", label: "Qwen-Image", hint: "20B MMDiT, strong text rendering; needs a base repo.", base: "Qwen/Qwen-Image" },
+  { id: "anima", label: "Anima", hint: "Single-file DiT (Cosmos); needs the Anima base repo (Qwen3 encoder + VAE).", base: "circlestone-labs/Anima-Base-v1.0-Diffusers" },
 ];
 
 type Props = {

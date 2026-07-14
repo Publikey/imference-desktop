@@ -1,28 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Check,
-  ChevronsUpDown,
-  Cloud,
-  Cpu,
-  Download,
-  FileBox,
-  Loader2,
-  Plus,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ChevronsUpDown, Cloud, Cpu, Download, Loader2 } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
+import { ModelPickerDialog, ModelThumb } from "@/components/ModelPickerDialog";
 import type { AppSettings, InstallProgress, ModelInfo } from "@/lib/types";
 
 type Mode = "local" | "cloud";
 
 type Props = {
-  // The active generation mode. Drives which catalog the selector shows and how
+  // The active generation mode. Drives which catalog the picker shows and how
   // a pick is applied: local just records the selection (App's Download button
   // fetches weights); cloud records the code instantly.
   mode: Mode;
-  // Whole settings object — the card reads cloudModel from it.
+  // Whole settings object — the card reads cloudModel + customModels from it.
   settings: AppSettings | null;
   // Called with refetched settings after a cloud switch.
   onModelSwitched: (next: AppSettings) => void;
@@ -39,11 +29,12 @@ type Props = {
   onRemoveCustom: (m: ModelInfo) => void;
 };
 
-// ModelBar — the single model selector for the whole app. Just the mode icon +
-// a thumbnail-rich dropdown (the Local/Cloud toggle sits right above, so a text
-// label is redundant). Catalog is mode-aware:
-//   • local mode → only locally-runnable models; picking one records the choice
-//     (App's primary button downloads ~6–7 GB of weights on demand).
+// ModelBar — the single model selector for the whole app. Shows the active
+// model as a compact trigger; clicking opens the ModelPickerDialog (cards
+// grouped by type, searchable/filterable). Catalog is mode-aware:
+//   • local mode → locally-runnable catalog + a "My models" tab for the user's
+//     own checkpoints; picking a catalog model records the choice (App's primary
+//     button downloads weights on demand).
 //   • cloud mode → the full catalog; picking one is instant.
 export function ModelBar({
   mode,
@@ -63,6 +54,7 @@ export function ModelBar({
   const [listError, setListError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false); // cloud quick-switch
   const [customError, setCustomError] = useState<string | null>(null); // custom activation
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Load both catalogs once.
   useEffect(() => {
@@ -82,18 +74,20 @@ export function ModelBar({
   }, []);
 
   const isCloud = mode === "cloud";
-  // Local mode: the user's own checkpoints (settings registry) come first,
-  // then the catalog. Cloud mode is catalog-only.
-  const models = isCloud ? cloudModels : [...(settings?.customModels ?? []), ...localModels];
+  const customModels = settings?.customModels ?? [];
+  // For lookups on pick: local mode resolves both the user's checkpoints and the
+  // catalog; cloud mode is catalog-only.
+  const allModels = isCloud ? cloudModels : [...customModels, ...localModels];
   const activeCode = isCloud
     ? settings?.cloudModel || null
     : pendingLocalModel?.modelCode ?? null;
+  const selected = allModels.find((m) => m.modelCode === activeCode) ?? null;
   const busy = downloading || switching;
 
   const pick = useCallback(
     async (code: string) => {
       if (code === activeCode || busy) return;
-      const target = models.find((m) => m.modelCode === code);
+      const target = allModels.find((m) => m.modelCode === code);
       if (!target) return;
 
       if (isCloud) {
@@ -126,7 +120,7 @@ export function ModelBar({
       // Local: just record the selection — the Download button fetches weights.
       onSelectLocal(target);
     },
-    [activeCode, busy, isCloud, models, onModelSwitched, onSelectLocal, onSelectCustom]
+    [activeCode, busy, isCloud, allModels, onModelSwitched, onSelectLocal, onSelectCustom]
   );
 
   return (
@@ -150,15 +144,26 @@ export function ModelBar({
             Loading…
           </span>
         ) : (
-          <ModelSelect
-            models={models}
-            value={activeCode}
+          <button
+            type="button"
             disabled={busy}
-            isCloud={isCloud}
-            onChange={pick}
-            onAddCustom={isCloud ? undefined : onAddCustom}
-            onRemoveCustom={isCloud ? undefined : onRemoveCustom}
-          />
+            onClick={() => setPickerOpen(true)}
+            className={cn(
+              "group flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-xl border px-2.5 text-left text-sm shadow-sm transition",
+              "bg-background/70 hover:border-primary/40 hover:bg-background",
+              "disabled:cursor-not-allowed disabled:opacity-60"
+            )}
+          >
+            <ModelThumb m={selected} isCloud={isCloud} className="size-7 rounded-lg" iconClassName="size-3.5" />
+            <span className="min-w-0 flex-1 truncate font-medium">
+              {selected?.name ?? (allModels.length ? "Select a model" : "No models")}
+            </span>
+            {busy ? (
+              <Loader2 className="size-4 shrink-0 animate-spin opacity-60" />
+            ) : (
+              <ChevronsUpDown className="size-4 shrink-0 opacity-40 transition group-hover:opacity-70" />
+            )}
+          </button>
         )}
       </div>
 
@@ -169,204 +174,26 @@ export function ModelBar({
       ) : progress?.error && mode === "local" ? (
         <p className="text-destructive mt-2 text-xs">{progress.error}</p>
       ) : null}
-    </section>
-  );
-}
 
-// ---------------------------------------------------------------------------
-// ModelSelect — a custom, thumbnail-rich dropdown (the catalog gives every
-// model a preview image). Replaces the native <select> for a far nicer look.
-// ---------------------------------------------------------------------------
-
-function ModelSelect({
-  models,
-  value,
-  disabled,
-  isCloud,
-  onChange,
-  onAddCustom,
-  onRemoveCustom,
-}: {
-  models: ModelInfo[];
-  value: string | null;
-  disabled: boolean;
-  isCloud: boolean;
-  onChange: (code: string) => void;
-  onAddCustom?: () => void;
-  onRemoveCustom?: (m: ModelInfo) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [open]);
-
-  const selected = models.find((m) => m.modelCode === value) ?? null;
-
-  return (
-    <div ref={ref} className="relative min-w-0 flex-1">
-      <button
-        type="button"
-        disabled={disabled || models.length === 0}
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          "group flex h-10 w-full items-center gap-2.5 rounded-xl border px-2.5 text-left text-sm shadow-sm transition",
-          "bg-background/70 hover:border-primary/40 hover:bg-background",
-          "disabled:cursor-not-allowed disabled:opacity-60",
-          open && "border-primary/50 ring-primary/15 ring-2"
-        )}
-      >
-        <Thumb m={selected} isCloud={isCloud} />
-        <span className="min-w-0 flex-1 truncate font-medium">
-          {selected?.name ?? (models.length ? "Select a model" : "No models")}
-        </span>
-        {disabled ? (
-          <Loader2 className="size-4 shrink-0 animate-spin opacity-60" />
-        ) : (
-          <ChevronsUpDown className="size-4 shrink-0 opacity-40 transition group-hover:opacity-70" />
-        )}
-      </button>
-
-      {open && (
-        <div className="bg-popover text-popover-foreground animate-in fade-in zoom-in-95 absolute right-0 z-50 mt-2 max-h-[22rem] w-[21rem] origin-top-right overflow-y-auto rounded-xl border p-1.5 shadow-xl">
-          {models.map((m) => {
-            const isActive = m.modelCode === value;
-            return (
-              <button
-                key={m.modelCode}
-                type="button"
-                onClick={() => {
-                  onChange(m.modelCode);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition",
-                  isActive ? "bg-accent" : "hover:bg-accent/60"
-                )}
-              >
-                <Thumb m={m} isCloud={isCloud} large />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate text-sm font-medium">{m.name}</span>
-                    {m.localPath ? (
-                      <span className="rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">
-                        custom
-                      </span>
-                    ) : !m.modelUrl ? (
-                      <span className="bg-muted text-muted-foreground rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide">
-                        cloud
-                      </span>
-                    ) : null}
-                  </div>
-                  {(m.shortDescription || m.localPath) && (
-                    <div className="text-muted-foreground truncate text-[11px]" title={m.localPath || undefined}>
-                      {m.shortDescription || m.localPath}
-                    </div>
-                  )}
-                </div>
-                {isCloud && m.cost > 0 && (
-                  <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums" title="credits per run">
-                    {m.cost} cr
-                  </span>
-                )}
-                {m.localPath && onRemoveCustom && (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveCustom(m);
-                    }}
-                    className="text-muted-foreground hover:text-destructive shrink-0 p-1 transition-colors"
-                    title="Remove from list (the file is not deleted)"
-                    aria-label="Remove custom model"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </span>
-                )}
-                {isActive && <Check className="text-primary size-4 shrink-0" />}
-              </button>
-            );
-          })}
-          {onAddCustom && (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onAddCustom();
-              }}
-              className="border-border/60 hover:bg-accent/60 mt-1 flex w-full items-center gap-3 rounded-lg border border-dashed px-2 py-2 text-left transition"
-            >
-              <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
-                <Plus className="size-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium">Add custom model…</div>
-                <div className="text-muted-foreground text-[11px]">
-                  Use your own .safetensors (e.g. from Civitai)
-                </div>
-              </div>
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Thumb({
-  m,
-  isCloud,
-  large,
-}: {
-  m: ModelInfo | null;
-  isCloud: boolean;
-  large?: boolean;
-}) {
-  const size = large ? "size-10" : "size-7";
-  if (m?.image) {
-    return (
-      <img
-        src={m.image}
-        alt=""
-        className={cn(size, "shrink-0 rounded-lg object-cover")}
-        onError={(e) => (e.currentTarget.style.display = "none")}
+      <ModelPickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        mode={mode}
+        catalog={isCloud ? cloudModels : localModels}
+        customModels={customModels}
+        activeCode={activeCode}
+        busy={busy}
+        onPick={(m) => {
+          setPickerOpen(false);
+          void pick(m.modelCode);
+        }}
+        onAddCustom={() => {
+          setPickerOpen(false); // hand off to the native picker + CustomModelDialog
+          onAddCustom();
+        }}
+        onRemoveCustom={onRemoveCustom}
       />
-    );
-  }
-  if (m?.localPath) {
-    return (
-      <span
-        className={cn(
-          size,
-          "flex shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-300"
-        )}
-      >
-        <FileBox className={large ? "size-5" : "size-3.5"} />
-      </span>
-    );
-  }
-  return (
-    <span
-      className={cn(
-        size,
-        "flex shrink-0 items-center justify-center rounded-lg text-white",
-        isCloud ? "bg-gradient-to-br from-sky-400 to-blue-600" : "brand-surface"
-      )}
-    >
-      <Sparkles className={large ? "size-5" : "size-3.5"} />
-    </span>
+    </section>
   );
 }
 

@@ -51,14 +51,14 @@ export interface EngineInfo {
 }
 
 /**
- * EngineRuntimeSettings holds per-backend host-tuning. SDXL and Z-Image each get
- * their own block even though they share the engine's IMAGE_* env contract: only
- * one image backend is loaded per sidecar (chosen by the model's im_engine), so
- * the manager emits IMAGE_* from the block matching the active backend.
+ * EngineRuntimeSettings holds host-tuning for the engine. All seven image
+ * backends (SDXL, SD 1.5, Z-Image, FLUX, Chroma, Qwen-Image, Anima) share the
+ * engine's single IMAGE_* env contract and only one loads per sidecar, so they
+ * share ONE Image block rather than a block each. WAN video has its own WAN_*
+ * contract.
  */
 export interface EngineRuntimeSettings {
-    "sdxl": ImageRuntimeSettings;
-    "zimage": ZImageRuntimeSettings;
+    "image": ImageRuntimeSettings;
     "wan": WanRuntimeSettings;
 }
 
@@ -564,19 +564,4 @@ export interface WanRuntimeSettings {
      * "" / int
      */
     "maxResident"?: string;
-}
-
-/**
- * ZImageRuntimeSettings tunes the Z-Image backend (same IMAGE_* env contract).
- * No UseTinyVAE: Tiny VAE (TAESDxl) is SDXL-only and ignored by Z-Image.
- */
-export interface ZImageRuntimeSettings {
-    "device"?: string;
-
-    /**
-     * Tri-state, same semantics as ImageRuntimeSettings.EnableCPUOffload.
-     */
-    "enableCpuOffload"?: boolean | null;
-    "maxGpuModels"?: string;
-    "maxCpuModels"?: string;
 }

@@ -36,11 +36,16 @@ export type UpdateInfo = {
   updateAvailable: boolean;
 };
 
-/** Host-tuning knobs for the SDXL backend (IMAGE_* env contract). */
+/**
+ * Host-tuning knobs for the active image backend (shared IMAGE_* env contract).
+ * All image backends (SDXL, SD 1.5, Z-Image, FLUX, Chroma, Qwen-Image, Anima)
+ * share this one block — only one loads per sidecar. useTinyVae only affects
+ * SDXL / SD 1.5; the engine ignores it for the others.
+ */
 export type ImageRuntimeSettings = {
   /** "" / "auto" | cuda | cuda:N | mps | cpu */
   device?: string;
-  /** SDXL TAESDxl — faster VAE decode, slight quality loss. */
+  /** SDXL / SD 1.5 TAESD — faster VAE decode, slight quality loss. */
   useTinyVae?: boolean;
   /**
    * Tri-state CPU offload. undefined = Auto (the desktop enables it on
@@ -49,15 +54,6 @@ export type ImageRuntimeSettings = {
    */
   enableCpuOffload?: boolean;
   /** "" / "auto" / integer */
-  maxGpuModels?: string;
-  maxCpuModels?: string;
-};
-
-/** Host-tuning knobs for the Z-Image backend. No Tiny VAE (SDXL-only, ignored). */
-export type ZImageRuntimeSettings = {
-  device?: string;
-  /** Tri-state CPU offload, same semantics as ImageRuntimeSettings. */
-  enableCpuOffload?: boolean;
   maxGpuModels?: string;
   maxCpuModels?: string;
 };
@@ -77,8 +73,7 @@ export type WanRuntimeSettings = {
 };
 
 export type EngineRuntimeSettings = {
-  sdxl: ImageRuntimeSettings;
-  zimage: ZImageRuntimeSettings;
+  image: ImageRuntimeSettings;
   wan: WanRuntimeSettings;
 };
 

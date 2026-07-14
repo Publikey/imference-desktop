@@ -130,22 +130,14 @@ func (m *Manager) runtimeEnv(rt types.EngineRuntimeSettings, backend string) []s
 		}
 	}
 
-	// Pick the active image block. Tiny VAE is SDXL-only (ignored by Z-Image), so
-	// Z-Image forces it off. cpuOffload is tri-state (*bool): nil = Auto.
-	var device, maxGPU, maxCPU string
-	var tinyVAE bool
-	var cpuOffload *bool
-	if backend == "zimage" {
-		z := rt.Zimage
-		device, maxGPU, maxCPU = z.Device, z.MaxGPUModels, z.MaxCPUModels
-		cpuOffload = z.EnableCPUOffload
-		tinyVAE = false
-	} else {
-		s := rt.Sdxl
-		device, maxGPU, maxCPU = s.Device, s.MaxGPUModels, s.MaxCPUModels
-		cpuOffload = s.EnableCPUOffload
-		tinyVAE = s.UseTinyVAE
-	}
+	// One unified Image block drives every image backend (they share the engine's
+	// IMAGE_* contract; only one loads per sidecar). UseTinyVAE only affects
+	// SDXL/SD1.5 — the engine ignores it for the others, so emitting it is a no-op
+	// there. cpuOffload is tri-state (*bool): nil = Auto.
+	img := rt.Image
+	device, maxGPU, maxCPU := img.Device, img.MaxGPUModels, img.MaxCPUModels
+	cpuOffload := img.EnableCPUOffload
+	tinyVAE := img.UseTinyVAE
 
 	// Device + the two boolean perf knobs are emitted UNCONDITIONALLY (device as
 	// auto|value, bools as explicit 0/1) so the UI is authoritative: a stray

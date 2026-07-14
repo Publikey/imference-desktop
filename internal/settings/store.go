@@ -58,8 +58,30 @@ func (s *Store) reload() error {
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return fmt.Errorf("settings: parse %s: %w", s.path, err)
 	}
+	migrateEngineRuntime(data, &parsed)
 	s.cache = parsed
 	return nil
+}
+
+// migrateEngineRuntime one-time-migrates pre-unification settings: builds before
+// the runtime blocks were merged stored engineRuntime.sdxl / engineRuntime.zimage
+// instead of a single engineRuntime.image. When the new image block is empty, we
+// adopt the legacy sdxl block (the desktop's primary image backend) so a user's
+// device / offload / residency choices survive the upgrade. Read straight from
+// the raw JSON so the public types stay clean (image + wan only). No-op once the
+// file has been re-saved in the new shape.
+func migrateEngineRuntime(raw []byte, parsed *types.Settings) {
+	if parsed.EngineRuntime.Image != (types.ImageRuntimeSettings{}) {
+		return
+	}
+	var legacy struct {
+		EngineRuntime struct {
+			Sdxl types.ImageRuntimeSettings `json:"sdxl"`
+		} `json:"engineRuntime"`
+	}
+	if json.Unmarshal(raw, &legacy) == nil {
+		parsed.EngineRuntime.Image = legacy.EngineRuntime.Sdxl
+	}
 }
 
 // Get returns a copy of the current settings.

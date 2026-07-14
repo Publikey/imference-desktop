@@ -3,17 +3,16 @@ import type {
   EngineRuntimeSettings,
   ImageRuntimeSettings,
   WanRuntimeSettings,
-  ZImageRuntimeSettings,
 } from "@/lib/types";
 
 // Host-machine tuning for the engine — NOT generation params (those live in the
 // generation UI). Maps to the engine's RuntimeConfig / WanRuntimeConfig env
-// contract (IMAGE_* / WAN_*). SDXL and Z-Image each get their own block: only
-// one image backend loads per sidecar, so the desktop applies the block matching
-// the selected model's engine. Empty / "auto" = "let the engine adapt". Saving
-// restarts the local engine (load-time knobs).
+// contract (IMAGE_* / WAN_*). All image backends (SDXL, SD 1.5, Z-Image, FLUX,
+// Chroma, Qwen-Image, Anima) share ONE Image block — they share the engine's
+// IMAGE_* contract and only one loads per sidecar. Empty / "auto" = "let the
+// engine adapt". Saving restarts the local engine (load-time knobs).
 
-const EMPTY: EngineRuntimeSettings = { sdxl: {}, zimage: {}, wan: {} };
+const EMPTY: EngineRuntimeSettings = { image: {}, wan: {} };
 
 const selectCls = "border-input bg-background h-9 rounded-md border px-2 text-sm";
 
@@ -25,15 +24,12 @@ export function EngineRuntimeSection({
   onChange: (next: EngineRuntimeSettings) => void;
 }) {
   const v = value ?? EMPTY;
-  const sdxl = v.sdxl ?? {};
-  const zimage = v.zimage ?? {};
+  const image = v.image ?? {};
   const wan = v.wan ?? {};
-  const setSdxl = (patch: Partial<ImageRuntimeSettings>) =>
-    onChange({ sdxl: { ...sdxl, ...patch }, zimage, wan });
-  const setZimage = (patch: Partial<ZImageRuntimeSettings>) =>
-    onChange({ sdxl, zimage: { ...zimage, ...patch }, wan });
+  const setImage = (patch: Partial<ImageRuntimeSettings>) =>
+    onChange({ image: { ...image, ...patch }, wan });
   const setWan = (patch: Partial<WanRuntimeSettings>) =>
-    onChange({ sdxl, zimage, wan: { ...wan, ...patch } });
+    onChange({ image, wan: { ...wan, ...patch } });
 
   return (
     <section className="bg-card grid gap-4 rounded-2xl border p-4 shadow-sm">
@@ -45,44 +41,32 @@ export function EngineRuntimeSection({
         </p>
       </div>
 
-      {/* SDXL */}
-      <div id="settings-runtime-sdxl" className="grid gap-3 scroll-mt-4">
-        <span className="text-xs font-medium">SDXL</span>
+      {/* Image — one block for every image backend (SDXL, SD 1.5, Z-Image,
+          FLUX, Chroma, Qwen-Image, Anima); they share the IMAGE_* contract. */}
+      <div id="settings-runtime-image" className="grid gap-3 scroll-mt-4">
+        <span className="text-xs font-medium">
+          Image{" "}
+          <span className="text-muted-foreground font-normal">
+            — SDXL · SD 1.5 · Z-Image · FLUX · Chroma · Qwen-Image · Anima
+          </span>
+        </span>
         <DeviceMaxGrid
-          device={sdxl.device}
-          maxGpuModels={sdxl.maxGpuModels}
-          maxCpuModels={sdxl.maxCpuModels}
-          onDevice={(device) => setSdxl({ device })}
-          onMaxGpu={(maxGpuModels) => setSdxl({ maxGpuModels })}
-          onMaxCpu={(maxCpuModels) => setSdxl({ maxCpuModels })}
+          device={image.device}
+          maxGpuModels={image.maxGpuModels}
+          maxCpuModels={image.maxCpuModels}
+          onDevice={(device) => setImage({ device })}
+          onMaxGpu={(maxGpuModels) => setImage({ maxGpuModels })}
+          onMaxCpu={(maxCpuModels) => setImage({ maxCpuModels })}
           mps
         />
         <Toggle
-          checked={!!sdxl.useTinyVae}
-          onChange={(useTinyVae) => setSdxl({ useTinyVae })}
-          label="Tiny VAE — much faster decode, slight quality loss"
+          checked={!!image.useTinyVae}
+          onChange={(useTinyVae) => setImage({ useTinyVae })}
+          label="Tiny VAE — much faster decode, slight quality loss (SDXL / SD 1.5 only)"
         />
         <OffloadSelect
-          value={sdxl.enableCpuOffload}
-          onChange={(enableCpuOffload) => setSdxl({ enableCpuOffload })}
-        />
-      </div>
-
-      {/* Z-Image — no Tiny VAE (SDXL-only, ignored by Z-Image) */}
-      <div id="settings-runtime-zimage" className="grid gap-3 border-t pt-3 scroll-mt-4">
-        <span className="text-xs font-medium">Z-Image</span>
-        <DeviceMaxGrid
-          device={zimage.device}
-          maxGpuModels={zimage.maxGpuModels}
-          maxCpuModels={zimage.maxCpuModels}
-          onDevice={(device) => setZimage({ device })}
-          onMaxGpu={(maxGpuModels) => setZimage({ maxGpuModels })}
-          onMaxCpu={(maxCpuModels) => setZimage({ maxCpuModels })}
-          mps
-        />
-        <OffloadSelect
-          value={zimage.enableCpuOffload}
-          onChange={(enableCpuOffload) => setZimage({ enableCpuOffload })}
+          value={image.enableCpuOffload}
+          onChange={(enableCpuOffload) => setImage({ enableCpuOffload })}
         />
       </div>
 

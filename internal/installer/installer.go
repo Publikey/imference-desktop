@@ -37,7 +37,7 @@ import (
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[sdxl,zimage] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.3.1.tar.gz"
+const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.3.1.tar.gz"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute
@@ -58,11 +58,11 @@ func resolveEngineSource() (spec string, editable bool) {
 	if strings.HasPrefix(override, "http://") || strings.HasPrefix(override, "https://") {
 		return override, false
 	}
-	// Local path → editable install with the per-backend image extras. Pip
-	// accepts "path[extras]" syntax even on Windows paths with spaces. We install
-	// both SDXL and Z-Image (identical deps, resolved once) — matching the pinned
-	// GitHub tarball (EngineTarball), which uses [sdxl,zimage] since v0.2.2.
-	return override + "[sdxl,zimage]", true
+	// Local path → editable install with all image-backend extras. Pip accepts
+	// "path[extras]" syntax even on Windows paths with spaces. The seven image
+	// backends share byte-identical deps (torch + diffusers 0.39 + transformers +
+	// sentencepiece), so this resolves once — matching the pinned GitHub tarball.
+	return override + "[sdxl,sd15,zimage,flux,chroma,qwenimage,anima]", true
 }
 
 // pinnedEngineVersionRe pulls the X.Y.Z out of the EngineTarball tag URL
@@ -109,7 +109,7 @@ const TorchSpec = "torch>=2.6"
 //     fallback would lose GPU acceleration on Apple Silicon.
 //   - Windows/Linux: install the CUDA 12.4 build from the pytorch.org index.
 //
-// torchvision is intentionally not installed here; imference-engine[sdxl,zimage]
+// torchvision is intentionally not installed here; imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima]
 // pulls whatever it needs, and on macOS the matching MPS torchvision resolves
 // from PyPI in the engine phase.
 func torchInstallArgs() (args []string, message string) {
@@ -126,7 +126,7 @@ func torchInstallArgs() (args []string, message string) {
 // sd_embed's setup.py declares unconstrained `torch` + `torchvision`
 // dependencies that would clobber our CUDA torch with the CPU wheel.
 // All transitive deps it actually uses (torch, transformers, ftfy) are
-// already in imference-engine[sdxl,zimage].
+// already in imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima].
 //
 // Pinned to a COMMIT, not refs/heads/main: sd_embed has no PyPI release, so a
 // moving `main` would silently change prompt-encoding behaviour between installs

@@ -399,10 +399,12 @@ func (a *App) applyLocalModelConfig(req *types.GenerationRequest) {
 	if req.NegativePrompt == "" {
 		req.NegativePrompt = m.PromptNegative
 	}
-	// Z-Image has no CLIP tokenizer and a fixed flow-matching scheduler, so the
-	// engine ignores scheduler/clip-skip for it — don't inject them. SDXL keeps
-	// the model's catalog defaults when the caller left them unset.
-	if m.BackendType != "zimage" {
+	// Scheduler + clip-skip are CLIP/sampler-scheduler concepts — only SDXL and
+	// SD 1.5 use them. The flow-matching backends (Z-Image, FLUX, Chroma,
+	// Qwen-Image, Anima) fix their scheduler at load and have no CLIP-skip, so the
+	// engine ignores both; don't inject them. SDXL/SD1.5 keep the model's catalog
+	// defaults when the caller left them unset.
+	if m.BackendType == "sdxl" || m.BackendType == "sd15" {
 		if req.Scheduler == "" {
 			req.Scheduler = m.SchedulerDefault
 		}
@@ -599,11 +601,15 @@ const customModelMinBytes = 1 << 30 // 1 GB
 // previously downloaded catalog file, if any, is kept on disk so switching
 // back is instant (modelfetch's size-based reuse skips the re-download).
 func (a *App) UseCustomModel(path, backendType, baseModel string) (types.Settings, error) {
-	if backendType != "sdxl" && backendType != "zimage" {
-		return types.Settings{}, fmt.Errorf("unsupported backend %q (want sdxl or zimage)", backendType)
+	if !cloud.IsImageBackend(backendType) {
+		return types.Settings{}, fmt.Errorf("unsupported backend %q", backendType)
 	}
-	if backendType == "zimage" && strings.TrimSpace(baseModel) == "" {
-		return types.Settings{}, errors.New("Z-Image models need a base model (Hugging Face repo id)")
+	// Transformer-only backends (Z-Image, FLUX, Chroma, Qwen-Image) need shared
+	// base-components; default the repo when the user didn't supply one, matching
+	// the catalog path. Self-contained backends (SDXL, SD 1.5, Anima) get "".
+	baseModel = strings.TrimSpace(baseModel)
+	if baseModel == "" {
+		baseModel = cloud.DefaultBaseModel(backendType)
 	}
 	if !strings.EqualFold(filepath.Ext(path), ".safetensors") {
 		return types.Settings{}, errors.New("not a .safetensors file")

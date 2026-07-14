@@ -601,8 +601,10 @@ const customModelMinBytes = 1 << 30 // 1 GB
 // previously downloaded catalog file, if any, is kept on disk so switching
 // back is instant (modelfetch's size-based reuse skips the re-download).
 func (a *App) UseCustomModel(path, backendType, baseModel string) (types.Settings, error) {
-	if !cloud.IsImageBackend(backendType) {
-		return types.Settings{}, fmt.Errorf("unsupported backend %q", backendType)
+	if !cloud.IsSingleFileBackend(backendType) {
+		// Anima (Modular Diffusers) needs a diffusers-format directory, not a
+		// single .safetensors, so it can't come through the custom-file flow.
+		return types.Settings{}, fmt.Errorf("backend %q can't be loaded from a single .safetensors file", backendType)
 	}
 	// Transformer-only backends (Z-Image, FLUX, Chroma, Qwen-Image) need shared
 	// base-components; default the repo when the user didn't supply one, matching

@@ -184,10 +184,25 @@ var imageBackends = map[string]bool{
 }
 
 // IsImageBackend reports whether name is a normalized image backend the desktop
-// can run locally (excludes "wan" video and "" / external). Used to validate a
-// user-supplied custom checkpoint's backend.
+// can run locally (excludes "wan" video and "" / external).
 func IsImageBackend(name string) bool {
 	return imageBackends[name]
+}
+
+// singleFileBackends is the subset of image backends that load from a single
+// .safetensors checkpoint (with a base repo for the transformer-only ones). This
+// is what the "add custom model" flow supports. Anima is excluded: it's a
+// Modular Diffusers pipeline that needs a full diffusers-format directory, not a
+// single file (its load_pipeline treats the path as a repo id -> HF error).
+var singleFileBackends = map[string]bool{
+	"sdxl": true, "sd15": true, "zimage": true,
+	"flux": true, "chroma": true, "qwenimage": true,
+}
+
+// IsSingleFileBackend reports whether a user-supplied single .safetensors can be
+// loaded as this backend. Used to validate a custom checkpoint's backend.
+func IsSingleFileBackend(name string) bool {
+	return singleFileBackends[name]
 }
 
 // DefaultBaseModel returns the shared base-components repo a transformer-only

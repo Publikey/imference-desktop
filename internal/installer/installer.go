@@ -109,16 +109,19 @@ const TorchSpec = "torch>=2.6"
 //     fallback would lose GPU acceleration on Apple Silicon.
 //   - Windows/Linux: install the CUDA 12.4 build from the pytorch.org index.
 //
-// torchvision is intentionally not installed here; imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima]
-// pulls whatever it needs, and on macOS the matching MPS torchvision resolves
-// from PyPI in the engine phase.
+// torchvision IS installed here (from the same index as torch, so the CUDA build
+// matches): the Anima / Cosmos transformer forward calls
+// torchvision.transforms.functional.resize on its padding mask, and diffusers
+// only imports it under is_torchvision_available() — without torchvision the
+// forward raises "name 'transforms' is not defined". Pinning it to the same
+// index as torch avoids pip pulling a mismatched CPU wheel from PyPI.
 func torchInstallArgs() (args []string, message string) {
 	if runtime.GOOS == "darwin" {
-		return []string{"install", "--upgrade", TorchSpec},
-			"Downloading torch (Apple Silicon / MPS) from PyPI"
+		return []string{"install", "--upgrade", TorchSpec, "torchvision"},
+			"Downloading torch + torchvision (Apple Silicon / MPS) from PyPI"
 	}
-	return []string{"install", "--upgrade", TorchSpec, "--index-url", TorchIndexURL},
-		"Downloading torch (CUDA 12.4, ~3 GB) — this is the long one"
+	return []string{"install", "--upgrade", TorchSpec, "torchvision", "--index-url", TorchIndexURL},
+		"Downloading torch + torchvision (CUDA 12.4, ~3 GB) — this is the long one"
 }
 
 // SDEmbedTarball is the GitHub archive URL for sd_embed (weighted prompt

@@ -578,6 +578,34 @@ export default function App() {
     };
   }, [mode, downloading, localNeedsDownload, pendingLocalModel, downloadLocalModel, canGenerate, run, t]);
 
+  // Global ⌘/Ctrl+Enter → run the primary action from anywhere in the app, not
+  // only when the prompt field has focus. Suppressed while a modal that captures
+  // typing is open (palette, settings, model picker, custom-model, lightbox), and
+  // preventDefault still swallows the newline when focus IS in the prompt. A ref
+  // holds the latest action/guards so the listener subscribes just once.
+  const primaryHotkeyRef = useRef<{ disabled: boolean; onClick: () => void; blocked: boolean }>({
+    disabled: true,
+    onClick: () => {},
+    blocked: false,
+  });
+  primaryHotkeyRef.current = {
+    disabled: primary.disabled,
+    onClick: primary.onClick,
+    blocked: paletteOpen || settingsOpen || modelPickerOpen || !!customModelPath || !!lightbox,
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        const s = primaryHotkeyRef.current;
+        if (s.blocked || s.disabled) return;
+        e.preventDefault();
+        s.onClick();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Hint shown under the composer: what this generation will use (params live in
   // the Parameters panel now, so no steps/cfg duplication here).
   const contextHint = useMemo(() => {
@@ -1153,12 +1181,8 @@ function Composer({
   onNegativePromptChange: (v: string) => void;
 }) {
   const { t } = useTranslation();
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      if (!action.disabled) action.onClick();
-    }
-  };
+  // ⌘/Ctrl+Enter is handled globally in App (works from anywhere, not just this
+  // field), so the textarea needs no key handler of its own.
 
   return (
     <div className="composer bg-card rounded-[26px] border">
@@ -1182,7 +1206,6 @@ function Composer({
       <textarea
         value={prompt}
         onChange={(e) => onPromptChange(e.target.value)}
-        onKeyDown={onKeyDown}
         placeholder={t("composer.promptPlaceholder")}
         rows={3}
         className={cn(

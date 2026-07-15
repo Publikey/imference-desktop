@@ -92,6 +92,25 @@
     "add": "Add source image (img2img)",
     "sourceAlt": "img2img source"
   },
+  "panels": {
+    "create": "Create",
+    "queue": "Activity",
+    "gallery": "Gallery",
+    "dragToReorder": "Drag to rearrange panels",
+    "collapse": "Collapse panel",
+    "expand": "Expand panel"
+  },
+  "queue": {
+    "empty": "Nothing running",
+    "emptyHint": "Generations you launch appear here, live.",
+    "clearFinished": "Clear",
+    "dismiss": "Dismiss",
+    "step": "step {{step}}/{{total}}",
+    "cloudRunning": "Running in the cloud…",
+    "generating": "Generating…",
+    "done": "Done in {{time}}",
+    "failed": "Failed"
+  },
   "gallery": {
     "deleteConfirm": "Delete this image?\n{{name}}",
     "emptyFiltered": "No images match this filter",
@@ -103,9 +122,6 @@
     "columns": "Columns",
     "columns_one": "{{count}} column",
     "columns_other": "{{count}} columns",
-    "step": "step {{step}}/{{total}}",
-    "cloudRunning": "Cloud…",
-    "generating": "Generating…",
     "seed": "seed {{seed}}",
     "deleteImage": "Delete image"
   },

@@ -1,53 +1,60 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@fontsource-variable/inter/index.css";
 
 @custom-variant dark (&:is(.dark *));
 
+/* Neutrals carry a whisper of the brand hue (violet, h≈286) so surfaces feel
+   intentional rather than gray-out-of-the-box — the chroma is far below the
+   threshold where anyone would call them "purple". */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --background: oklch(0.985 0.003 286);
+  --foreground: oklch(0.155 0.008 285);
+  --card: oklch(0.999 0.001 286);
+  --card-foreground: oklch(0.155 0.008 285);
+  --popover: oklch(0.999 0.001 286);
+  --popover-foreground: oklch(0.155 0.008 285);
+  --primary: oklch(0.21 0.015 285);
+  --primary-foreground: oklch(0.985 0.002 286);
+  --secondary: oklch(0.965 0.004 286);
+  --secondary-foreground: oklch(0.21 0.015 285);
+  --muted: oklch(0.962 0.004 286);
+  --muted-foreground: oklch(0.545 0.014 285);
+  --accent: oklch(0.965 0.004 286);
+  --accent-foreground: oklch(0.21 0.015 285);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.915 0.006 286);
+  --input: oklch(0.915 0.006 286);
+  --ring: oklch(0.62 0.11 288);
   --radius: 0.625rem;
   /* Signature brand gradient — the one spot of color in an otherwise neutral
      app. Indigo → violet, tuned for a creative/imaginative feel. */
   --brand-from: oklch(0.58 0.2 280);
   --brand-to: oklch(0.62 0.23 330);
+  /* Motion vocabulary — one easing family for the whole app. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.152 0.01 285);
+  --foreground: oklch(0.975 0.003 286);
+  --card: oklch(0.205 0.012 285);
+  --card-foreground: oklch(0.975 0.003 286);
+  --popover: oklch(0.205 0.012 285);
+  --popover-foreground: oklch(0.975 0.003 286);
+  --primary: oklch(0.925 0.006 286);
+  --primary-foreground: oklch(0.21 0.012 285);
+  --secondary: oklch(0.268 0.01 285);
+  --secondary-foreground: oklch(0.975 0.003 286);
+  --muted: oklch(0.268 0.01 285);
+  --muted-foreground: oklch(0.715 0.012 286);
+  --accent: oklch(0.268 0.01 285);
+  --accent-foreground: oklch(0.975 0.003 286);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(1 0 0 / 11%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.62 0.11 288);
   /* Slightly brighter brand on dark so it still reads as vivid, not muddy. */
   --brand-from: oklch(0.66 0.19 280);
   --brand-to: oklch(0.69 0.22 330);
@@ -90,7 +97,8 @@
   body {
     @apply bg-background text-foreground;
     font-family:
-      ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+      "Inter Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+      system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -178,6 +186,75 @@
       transparent 70%
     );
   }
+
+  /* ---- Panel system ------------------------------------------------------
+     The main window is three drag-reorderable panels (Create / Activity /
+     Gallery). Panels are light columns — a slim header over the content — so
+     the cards inside keep the visual weight. */
+  .panel-grip {
+    cursor: grab;
+    touch-action: none;
+  }
+  .panel-grip:active {
+    cursor: grabbing;
+  }
+  /* The panel currently being dragged: lifted + translucent. */
+  .panel-dragging {
+    opacity: 0.45;
+  }
+  /* Valid drop zones while a drag is in flight: a quiet dashed outline. */
+  .panel-drop-hint {
+    outline: 2px dashed color-mix(in oklch, var(--brand-from) 35%, transparent);
+    outline-offset: 6px;
+    border-radius: 1.25rem;
+  }
+
+  /* Entrance for list rows / tiles: a short rise + fade. */
+  .rise-in {
+    animation: rise-in 0.35s var(--ease-out-expo) both;
+  }
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Indeterminate progress (cloud jobs): a soft brand pulse sweeping the bar. */
+  .bar-indeterminate {
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklch, var(--brand-from) 75%, transparent),
+      color-mix(in oklch, var(--brand-to) 75%, transparent),
+      transparent
+    );
+    background-size: 40% 100%;
+    background-repeat: no-repeat;
+    animation: bar-sweep 1.4s var(--ease-out-expo) infinite;
+  }
+  @keyframes bar-sweep {
+    from {
+      background-position: -60% 0;
+    }
+    to {
+      background-position: 160% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rise-in {
+      animation: none;
+    }
+    .bar-indeterminate {
+      animation: none;
+      background-position: 30% 0;
+    }
+  }
 }
 
 /* ---- Animated brand aurora ------------------------------------------------
@@ -236,7 +313,8 @@
     color-mix(in oklch, var(--brand-from) 38%, var(--brand-to)),
     transparent 70%
   );
-  opacity: 0.28;
+  /* Quieter than the corner blobs — it sits behind the gallery's content. */
+  opacity: 0.16;
   animation: aurora-3 38s ease-in-out infinite alternate;
 }
 @keyframes aurora-1 {

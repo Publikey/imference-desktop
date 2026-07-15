@@ -20,6 +20,9 @@ import {
   Play,
   Square,
   Languages,
+  Wand2,
+  Activity,
+  Images,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/SettingsDialog";
@@ -27,6 +30,8 @@ import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
 import { PaymentBar } from "@/components/PaymentBar";
 import { LogPanel } from "@/components/LogPanel";
+import { PanelBoard, usePanelLayout } from "@/components/PanelBoard";
+import { QueuePanel } from "@/components/QueuePanel";
 import { api } from "@/lib/wails-bridge";
 import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import logoUrl from "./assets/logo.svg";
@@ -40,8 +45,8 @@ import type {
   GenerationMeta,
   FormatOption,
   GenerationRequest,
-  GenerationResult,
   InstallProgress,
+  Job,
   LogEntry,
   ModelInfo,
   PaymentMode,
@@ -66,18 +71,6 @@ type ComposerAction = {
   disabled: boolean;
   busy: boolean;
   kind: "generate" | "download";
-};
-
-// A single generation, tracked independently so several can run at once and
-// completed ones stay visible in the grid (newest first).
-type Job = {
-  id: string;
-  mode: Mode;
-  prompt: string;
-  status: "running" | "done" | "error";
-  image?: GenerationResult;
-  error?: string;
-  progress?: GenerateProgress | null; // per-step (local only)
 };
 
 let jobSeq = 0;
@@ -180,6 +173,10 @@ export default function App() {
   // Whether a usable x402 wallet exists (keychain — the real source of truth,
   // not settings.walletAddress). Drives cloud gating in x402 mode.
   const [walletConfigured, setWalletConfigured] = useState(false);
+  // Panel arrangement (Create / Activity / Gallery) — drag-reorderable, persisted.
+  const { order: panelOrder, collapsed: panelCollapsed, setOrder: setPanelOrder, toggleCollapsed: togglePanelCollapsed } = usePanelLayout();
+  // Fullscreen viewer — shared by the gallery and the Activity panel.
+  const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
 
   // Per-step progress is a single global stream (the sidecar runs local jobs
   // serially), so attribute each tick to the oldest still-running local job —
@@ -443,7 +440,10 @@ export default function App() {
       // already ends with a separator.
       const full = (pr?.prePrompt ?? "") + p;
       const id = nextJobId();
-      setJobs((js) => [{ id, mode: which, prompt: full, status: "running", progress: null }, ...js]);
+      setJobs((js) => [
+        { id, mode: which, prompt: full, status: "running", progress: null, startedAt: Date.now() },
+        ...js,
+      ]);
 
       const req: GenerationRequest = {
         prompt: full,
@@ -467,14 +467,34 @@ export default function App() {
       const call = which === "cloud" ? api.generateCloud(req) : api.generateLocal(req);
       call
         .then((result) =>
-          setJobs((js) => js.map((j) => (j.id === id ? { ...j, status: "done", image: result } : j)))
+          setJobs((js) =>
+            js.map((j) =>
+              j.id === id ? { ...j, status: "done", image: result, endedAt: Date.now() } : j
+            )
+          )
         )
         .catch((e) => {
           const msg = e instanceof Error ? e.message : String(e);
-          setJobs((js) => js.map((j) => (j.id === id ? { ...j, status: "error", error: msg } : j)));
+          setJobs((js) =>
+            js.map((j) =>
+              j.id === id ? { ...j, status: "error", error: msg, endedAt: Date.now() } : j
+            )
+          );
         });
     },
     [prompt, settings?.localModel, settings?.cloudModelInfo, params, sourceImage, strength]
+  );
+
+  // --- Activity panel bookkeeping ------------------------------------------
+  // Dismissing hides a finished row from the Activity panel only — the image
+  // stays in the gallery (jobs are the source of this session's fresh tiles).
+  const dismissJob = useCallback(
+    (id: string) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, hidden: true } : j))),
+    []
+  );
+  const clearFinished = useCallback(
+    () => setJobs((js) => js.map((j) => (j.status === "running" ? j : { ...j, hidden: true }))),
+    []
   );
 
   // Primary button: in local mode, download the pending model first (dedicated
@@ -520,6 +540,15 @@ export default function App() {
     return settings?.localModel?.name ?? t("hint.pickModel");
   }, [mode, cloudConfigured, downloading, localNeedsDownload, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, engineInstalled, t]);
 
+  // Activity-panel derivations: live count for the badge, finished rows for the
+  // Clear action, and the done subset the gallery shows as fresh tiles.
+  const runningCount = useMemo(() => jobs.filter((j) => j.status === "running").length, [jobs]);
+  const hasFinished = useMemo(
+    () => jobs.some((j) => !j.hidden && j.status !== "running"),
+    [jobs]
+  );
+  const doneJobs = useMemo(() => jobs.filter((j) => j.status === "done"), [jobs]);
+
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
       <div className="aurora" aria-hidden="true">
@@ -543,78 +572,119 @@ export default function App() {
       />
 
       {updateInfo?.updateAvailable && updateInfo.latestVersion && (
-        <div className="relative z-10 mx-auto w-full max-w-[100rem] px-6 pt-4">
+        <div className="relative z-10 mx-auto w-full max-w-[110rem] px-6 pt-4">
           <UpdateBanner info={updateInfo} onDismiss={dismissUpdate} />
         </div>
       )}
 
       <main className="relative z-10 flex-1 overflow-y-auto">
-        {/* Desktop two-zone layout: controls on the left (fixed, sticky), the
-            results grid fills the rest. Stacks vertically on narrow windows. */}
-        <div className="mx-auto flex w-full max-w-[100rem] flex-col gap-6 px-6 pt-6 pb-16 lg:flex-row lg:items-start">
-          {/* Controls — capped/centered when stacked; a fixed left rail on desktop. */}
-          <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 lg:sticky lg:top-4 lg:mx-0 lg:w-[26rem] lg:max-w-none lg:shrink-0">
-            {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
-            <ModeToggle
-              mode={mode}
-              onModeChange={setMode}
-              localReady={localReady}
-              cloudReady={cloudReady}
-            />
+        {/* Three drag-reorderable panels — Create / Activity / Gallery — side by
+            side on desktop, stacked (in the same order) on narrow windows. */}
+        <div className="mx-auto w-full max-w-[110rem] px-6 pt-5 pb-16">
+          <PanelBoard
+            order={panelOrder}
+            onOrderChange={setPanelOrder}
+            collapsed={panelCollapsed}
+            onToggleCollapsed={togglePanelCollapsed}
+            panels={{
+              create: {
+                title: t("panels.create"),
+                icon: <Wand2 />,
+                className:
+                  "mx-auto w-full max-w-2xl xl:sticky xl:top-4 xl:mx-0 xl:w-[25rem] xl:max-w-none xl:shrink-0",
+                content: (
+                  <div className="flex flex-col gap-4">
+                    {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
+                    <ModeToggle
+                      mode={mode}
+                      onModeChange={setMode}
+                      localReady={localReady}
+                      cloudReady={cloudReady}
+                    />
 
-            {/* 1b. Payment — cloud only: pick x402 or API key, deep-link to config. */}
-            {mode === "cloud" && (
-              <PaymentBar
-                settings={settings}
-                onModeChange={setPaymentMode}
-                onConfigure={openSettings}
-              />
-            )}
+                    {/* 1b. Payment — cloud only: pick x402 or API key, deep-link to config. */}
+                    {mode === "cloud" && (
+                      <PaymentBar
+                        settings={settings}
+                        onModeChange={setPaymentMode}
+                        onConfigure={openSettings}
+                      />
+                    )}
 
-            {/* 2. Model */}
-            <ModelBar
-              mode={mode}
-              settings={settings}
-              onModelSwitched={handleSettingsSaved}
-              pendingLocalModel={pendingLocalModel}
-              onSelectLocal={setPendingLocalModel}
-              downloading={downloading}
-              progress={dlProgress}
-              onAddCustom={addCustomModel}
-              onSelectCustom={selectCustomModel}
-              onRemoveCustom={removeCustomModel}
-            />
+                    {/* 2. Model */}
+                    <ModelBar
+                      mode={mode}
+                      settings={settings}
+                      onModelSwitched={handleSettingsSaved}
+                      pendingLocalModel={pendingLocalModel}
+                      onSelectLocal={setPendingLocalModel}
+                      downloading={downloading}
+                      progress={dlProgress}
+                      onAddCustom={addCustomModel}
+                      onSelectCustom={selectCustomModel}
+                      onRemoveCustom={removeCustomModel}
+                    />
 
-            {/* 2b. Parameters — seeded from the model, tweakable per generation. */}
-            {activeModel && params && (
-              <ParamsPanel model={activeModel} mode={mode} params={params} onChange={setParams} />
-            )}
+                    {/* 2b. Parameters — seeded from the model, tweakable per generation. */}
+                    {activeModel && params && (
+                      <ParamsPanel model={activeModel} mode={mode} params={params} onChange={setParams} />
+                    )}
 
-            {/* 3. Prompt (with pre-prompt above + negative below) */}
-            <Composer
-              prompt={prompt}
-              onPromptChange={setPrompt}
-              mode={mode}
-              action={primary}
-              contextHint={contextHint}
-              sourceImage={sourceImage}
-              onSourceImageChange={setSourceImage}
-              strength={strength}
-              onStrengthChange={setStrength}
-              showModelFields={!!params}
-              prePrompt={params?.prePrompt ?? ""}
-              onPrePromptChange={(v) => setParams((pp) => (pp ? { ...pp, prePrompt: v } : pp))}
-              negativePrompt={params?.negativePrompt ?? ""}
-              onNegativePromptChange={(v) => setParams((pp) => (pp ? { ...pp, negativePrompt: v } : pp))}
-            />
-          </div>
-
-          {/* 4. Generations — this session's jobs + the saved-image gallery. */}
-          <div className="min-w-0 flex-1">
-            <Gallery jobs={jobs} />
-          </div>
+                    {/* 3. Prompt (with pre-prompt above + negative below) */}
+                    <Composer
+                      prompt={prompt}
+                      onPromptChange={setPrompt}
+                      mode={mode}
+                      action={primary}
+                      contextHint={contextHint}
+                      sourceImage={sourceImage}
+                      onSourceImageChange={setSourceImage}
+                      strength={strength}
+                      onStrengthChange={setStrength}
+                      showModelFields={!!params}
+                      prePrompt={params?.prePrompt ?? ""}
+                      onPrePromptChange={(v) => setParams((pp) => (pp ? { ...pp, prePrompt: v } : pp))}
+                      negativePrompt={params?.negativePrompt ?? ""}
+                      onNegativePromptChange={(v) => setParams((pp) => (pp ? { ...pp, negativePrompt: v } : pp))}
+                    />
+                  </div>
+                ),
+              },
+              queue: {
+                title: t("panels.queue"),
+                icon: <Activity />,
+                badge:
+                  runningCount > 0 ? (
+                    <span className="brand-surface flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums text-white">
+                      {runningCount}
+                    </span>
+                  ) : undefined,
+                actions: hasFinished ? (
+                  <button
+                    type="button"
+                    onClick={clearFinished}
+                    className="text-muted-foreground/60 hover:text-foreground text-[11px] font-medium transition-colors"
+                  >
+                    {t("queue.clearFinished")}
+                  </button>
+                ) : undefined,
+                collapsible: true,
+                className:
+                  "mx-auto w-full max-w-2xl xl:sticky xl:top-4 xl:mx-0 xl:w-[18rem] xl:max-w-none xl:shrink-0",
+                content: <QueuePanel jobs={jobs} onDismiss={dismissJob} onOpenImage={setLightbox} />,
+              },
+              gallery: {
+                title: t("panels.gallery"),
+                icon: <Images />,
+                className: "w-full min-w-0 xl:flex-1",
+                content: <Gallery jobs={doneJobs} onOpen={setLightbox} />,
+              },
+            }}
+          />
         </div>
       </main>
+
+      {lightbox && <Lightbox item={lightbox} onClose={() => setLightbox(null)} />}
 
       <SettingsDialog
         open={settingsOpen}
@@ -1296,9 +1366,10 @@ function SegBtn({
 }
 
 // ---------------------------------------------------------------------------
-// Gallery — this session's jobs + the saved-image history, in an aspect-aware
-// masonry (any format). Adjustable columns, infinite scroll over the saved
-// history, click-to-fullscreen, and delete.
+// Gallery — this session's finished generations + the saved-image history, in
+// an aspect-aware masonry (any format). Adjustable columns, infinite scroll
+// over the saved history, click-to-fullscreen, and delete. In-flight jobs live
+// in the Activity panel, not here.
 // ---------------------------------------------------------------------------
 
 const GALLERY_PAGE = 24;
@@ -1307,7 +1378,7 @@ const EMPTY_FILTER: GalleryFilter = { engine: "", modelCode: "", source: "" };
 
 type LightboxItem = { src: string; meta?: GenerationMeta | null };
 
-function Gallery({ jobs }: { jobs: Job[] }) {
+function Gallery({ jobs, onOpen }: { jobs: Job[]; onOpen: (item: LightboxItem) => void }) {
   const { t } = useTranslation();
   const [saved, setSaved] = useState<SavedImage[]>([]);
   const [done, setDone] = useState(false);
@@ -1315,7 +1386,6 @@ function Gallery({ jobs }: { jobs: Job[] }) {
   const [cols, setCols] = useState(3);
   const [filter, setFilter] = useState<GalleryFilter>(EMPTY_FILTER);
   const [facets, setFacets] = useState<GalleryFacets | null>(null);
-  const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false); // guards against overlapping page loads
   const savedRef = useRef<SavedImage[]>([]);
@@ -1392,10 +1462,10 @@ function Gallery({ jobs }: { jobs: Job[] }) {
   // Each column stacks its tiles at natural height → true masonry.
   const tiles: { key: string; el: React.ReactElement }[] = [];
   if (!filtered) {
-    for (const j of jobs) tiles.push({ key: j.id, el: <JobTile job={j} onOpen={setLightbox} /> });
+    for (const j of jobs) tiles.push({ key: j.id, el: <JobTile job={j} onOpen={onOpen} /> });
   }
   for (const g of saved) {
-    tiles.push({ key: g.name, el: <SavedTile image={g} onOpen={setLightbox} onDelete={onDelete} /> });
+    tiles.push({ key: g.name, el: <SavedTile image={g} onOpen={onOpen} onDelete={onDelete} /> });
   }
   const columns: { key: string; el: React.ReactElement }[][] = Array.from({ length: cols }, () => []);
   tiles.forEach((t, i) => columns[i % cols].push(t));
@@ -1437,8 +1507,6 @@ function Gallery({ jobs }: { jobs: Job[] }) {
         </div>
       )}
 
-      {lightbox && <Lightbox item={lightbox} onClose={() => setLightbox(null)} />}
-      <style>{`@keyframes shimmer{100%{transform:translateX(100%)}}`}</style>
     </div>
   );
 }
@@ -1551,47 +1619,10 @@ function ColumnPicker({ cols, onChange }: { cols: number; onChange: (n: number) 
   );
 }
 
+// A finished generation from this session (in-flight ones render in the
+// Activity panel; only `status === "done"` jobs reach the gallery).
 function JobTile({ job, onOpen }: { job: Job; onOpen: (item: LightboxItem) => void }) {
   const { t } = useTranslation();
-  if (job.status === "running") {
-    const pct = job.progress && job.progress.total > 0 ? job.progress.percent : null;
-    const sub =
-      pct !== null
-        ? t("gallery.step", { step: job.progress!.step, total: job.progress!.total })
-        : job.mode === "cloud"
-          ? t("gallery.cloudRunning")
-          : t("gallery.generating");
-    return (
-      <div className="bg-muted/40 relative aspect-square w-full overflow-hidden rounded-2xl border" title={job.prompt}>
-        <div className="via-foreground/[0.04] absolute inset-0 -translate-x-full animate-[shimmer_1.6s_infinite] bg-gradient-to-r from-transparent to-transparent" />
-        <div className="text-muted-foreground absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-4 text-center">
-          <Loader2 className="size-5 animate-spin" />
-          <span className="text-[11px]">{sub}</span>
-          {pct !== null && (
-            <div className="bg-muted mt-0.5 h-1 w-24 max-w-full overflow-hidden rounded-full">
-              <div
-                className="bg-primary h-full transition-[width] duration-300"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (job.status === "error") {
-    return (
-      <div
-        className="border-destructive/30 bg-destructive/5 text-destructive flex aspect-square w-full flex-col items-center justify-center gap-1.5 rounded-2xl border p-4 text-center"
-        title={job.error}
-      >
-        <AlertCircle className="size-5" />
-        <span className="line-clamp-4 text-[11px] leading-snug">{job.error}</span>
-      </div>
-    );
-  }
-
   const img = job.image!;
   return (
     <figure
@@ -1668,7 +1699,7 @@ function SavedTile({
       onClick={open}
     >
       {src ? (
-        <img src={src} alt={image.name} className="h-full w-full object-cover" />
+        <img src={src} alt={image.name} className="animate-in fade-in h-full w-full object-cover duration-300" />
       ) : (
         <div className="text-muted-foreground/30 flex h-full w-full items-center justify-center">
           <ImageIcon className="size-5" />

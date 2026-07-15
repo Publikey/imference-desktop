@@ -220,6 +220,29 @@ export type GenerationResult = {
   meta?: GenerationMeta | null;
 };
 
+/** Where a generation runs. */
+export type GenerationMode = "local" | "cloud";
+
+/**
+ * A single generation tracked by the UI, from launch to completion. Running and
+ * failed jobs live in the Activity panel; finished images join the gallery.
+ */
+export type Job = {
+  id: string;
+  mode: GenerationMode;
+  prompt: string;
+  status: "running" | "done" | "error";
+  image?: GenerationResult;
+  error?: string;
+  /** Per-step progress (local only — the cloud API reports nothing mid-run). */
+  progress?: GenerateProgress | null;
+  /** Epoch ms — drives the live elapsed timer in the Activity panel. */
+  startedAt: number;
+  endedAt?: number;
+  /** Dismissed from the Activity panel (finished images stay in the gallery). */
+  hidden?: boolean;
+};
+
 export type SidecarStatus =
   | { state: "idle" }
   | { state: "starting"; port: number }

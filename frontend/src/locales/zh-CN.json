@@ -91,6 +91,25 @@
     "add": "添加参考图（图生图）",
     "sourceAlt": "图生图参考图"
   },
+  "panels": {
+    "create": "创作",
+    "queue": "任务",
+    "gallery": "画廊",
+    "dragToReorder": "拖动以重新排列面板",
+    "collapse": "折叠面板",
+    "expand": "展开面板"
+  },
+  "queue": {
+    "empty": "暂无任务",
+    "emptyHint": "启动的生成任务会实时显示在这里。",
+    "clearFinished": "清除",
+    "dismiss": "关闭",
+    "step": "第 {{step}}/{{total}} 步",
+    "cloudRunning": "云端生成中…",
+    "generating": "生成中…",
+    "done": "用时 {{time}}",
+    "failed": "失败"
+  },
   "gallery": {
     "deleteConfirm": "删除这张图片？\n{{name}}",
     "emptyFiltered": "没有符合筛选条件的图片",
@@ -101,9 +120,6 @@
     "filterAll": "{{label}}：全部",
     "columns": "列数",
     "columns_other": "{{count}} 列",
-    "step": "第 {{step}}/{{total}} 步",
-    "cloudRunning": "云端生成中…",
-    "generating": "生成中…",
     "seed": "种子 {{seed}}",
     "deleteImage": "删除图片"
   },

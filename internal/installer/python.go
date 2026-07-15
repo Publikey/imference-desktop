@@ -14,14 +14,16 @@ import (
 
 const minPyMajor, minPyMinor = 3, 10
 
+type pyCandidate struct {
+	cmd  string
+	args []string
+}
+
 // pythonCandidates is tried in order; first match >= 3.10 wins. On Windows the
 // `py` launcher (PEP 397) is the preferred entry point because it knows about
 // every installed interpreter; we still fall back to bare `python3` / `python`
 // for users who have a single install on PATH.
-var pythonCandidates = []struct {
-	cmd  string
-	args []string
-}{
+var pythonCandidates = []pyCandidate{
 	{"py", []string{"-3.11"}},
 	{"py", []string{"-3.10"}},
 	{"py", []string{"-3"}},
@@ -44,6 +46,38 @@ func DetectPython(ctx context.Context) (types.PythonInfo, error) {
 	return types.PythonInfo{}, fmt.Errorf(
 		"installer: no Python %d.%d+ found on PATH (tried: %s). Install from https://www.python.org/downloads/",
 		minPyMajor, minPyMinor, strings.Join(tried, ", "),
+	)
+}
+
+// detectPythonSeries finds an interpreter of the exact "major.minor" series
+// (e.g. "3.12") when series is non-empty, or delegates to DetectPython (any
+// >= 3.10) when it's "". The exact-series path exists for AMD's
+// ROCm-for-Windows torch wheels, which are built for a single Python ABI
+// (cp312) — a 3.11 interpreter would pass the generic check and then fail the
+// torch phase with pip's opaque "not a supported wheel on this platform".
+func detectPythonSeries(ctx context.Context, series string) (types.PythonInfo, error) {
+	if series == "" {
+		return DetectPython(ctx)
+	}
+	candidates := []pyCandidate{
+		{"py", []string{"-" + series}}, // Windows launcher, pinned
+		{"python" + series, nil},
+		{"python3", nil},
+		{"python", nil},
+	}
+	var tried []string
+	for _, c := range candidates {
+		path, version, ok := probe(ctx, c.cmd, c.args)
+		if ok && strings.HasPrefix(version, series+".") {
+			return types.PythonInfo{Path: path, Version: version}, nil
+		}
+		tried = append(tried, strings.TrimSpace(c.cmd+" "+strings.Join(c.args, " ")))
+	}
+	return types.PythonInfo{}, fmt.Errorf(
+		"installer: Python %s is required for AMD's ROCm-for-Windows torch wheels "+
+			"(they are cp%s-only), but none was found on PATH (tried: %s). "+
+			"Install Python %s from https://www.python.org/downloads/ then click Install again",
+		series, strings.ReplaceAll(series, ".", ""), strings.Join(tried, ", "), series,
 	)
 }
 

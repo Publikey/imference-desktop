@@ -49,6 +49,24 @@ logger = logging.getLogger("imference.sidecar")
 MODEL_NAME = "local"
 
 
+def _device_label(dev) -> str:
+    """Render the engine's Device for the ready line / result payloads.
+
+    On AMD, ROCm torch masquerades as CUDA (device string stays "cuda:0"), so
+    the raw torch_str can't tell the vendors apart — append a "(rocm)" marker
+    using the engine's Device.backend when available. getattr fallback keeps
+    this working on engine versions predating the backend property. Must stay
+    a single whitespace-free token: the Go parent scrapes it from the ready
+    line with `Sidecar ready on (\\S+) device`.
+    """
+    if dev is None:
+        return "unknown"
+    label = dev.torch_str
+    if getattr(dev, "backend", dev.kind) == "rocm":
+        label += "(rocm)"
+    return label
+
+
 @load
 def setup() -> dict:
     """Loaded once before the first task. Initializes the engine and
@@ -96,14 +114,12 @@ def setup() -> dict:
     )
     eng = Engine(runtime=runtime).load()
     eng.register_model(MODEL_NAME, backend=backend, weights_path=weights, base_model=base_model)
-    logger.info(
-        f"Sidecar ready on {eng._device.torch_str if eng._device else 'unknown'} device"
-    )
+    logger.info(f"Sidecar ready on {_device_label(eng._device)} device")
     # Stash resolved device + backend config so generate() can dispatch per
     # backend and echo the device without reaching into Engine private state.
     return {
         "engine": eng,
-        "device": eng._device.torch_str if eng._device else "unknown",
+        "device": _device_label(eng._device),
         "backend": backend,
         "shift": shift,
     }

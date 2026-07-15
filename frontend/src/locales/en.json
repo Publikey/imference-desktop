@@ -45,6 +45,13 @@
     "local": "Local",
     "cloud": "Cloud"
   },
+  "theme": {
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark",
+    "switchTo": "Switch to {{mode}} theme",
+    "current": "Theme: {{mode}}"
+  },
   "composer": {
     "qualityTags": "Quality tags",
     "qualityTagsPlaceholder": "masterpiece, best quality, …",

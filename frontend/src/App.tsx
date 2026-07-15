@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
@@ -23,6 +23,9 @@ import {
   Wand2,
   Activity,
   Images,
+  Sun,
+  Moon,
+  Monitor,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/SettingsDialog";
@@ -34,6 +37,7 @@ import { PanelBoard, usePanelLayout } from "@/components/PanelBoard";
 import { QueuePanel } from "@/components/QueuePanel";
 import { api } from "@/lib/wails-bridge";
 import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
+import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/theme";
 import logoUrl from "./assets/logo.svg";
 import { installLogCapture } from "@/lib/log-capture";
 import { cn } from "@/lib/utils";
@@ -761,6 +765,8 @@ function Header({
         </div>
       </div>
       <div className="flex items-center gap-1.5">
+        {/* Theme — cycles System → Light → Dark, persisted; System follows the OS. */}
+        <ThemeToggle />
         {/* Language — quick toggle; the Settings section offers "System" too. */}
         <LanguageToggle />
         {/* Settings — prominent, labelled entry point. */}
@@ -808,6 +814,31 @@ function LanguageToggle() {
     >
       <Languages className="size-4" />
       <span className="text-xs font-medium">{current.short}</span>
+    </Button>
+  );
+}
+
+// ThemeToggle — cycles the appearance System → Light → Dark from the header.
+// The choice is persisted (localStorage); "System" follows the OS live. The
+// icon shows the ACTIVE preference and the tooltip names what a click switches
+// TO, so the control reads correctly before and after pressing it.
+const THEME_CYCLE: ThemePref[] = ["system", "light", "dark"];
+function ThemeToggle() {
+  const { t } = useTranslation();
+  const pref = useSyncExternalStore(subscribeTheme, themePref, () => "system" as ThemePref);
+  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(pref) + 1) % THEME_CYCLE.length];
+  const Icon = pref === "system" ? Monitor : pref === "light" ? Sun : Moon;
+  const nextLabel = t(`theme.${next}`);
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setThemePref(next)}
+      title={t("theme.switchTo", { mode: nextLabel })}
+      aria-label={t("theme.current", { mode: t(`theme.${pref}`) })}
+      className="text-muted-foreground hover:text-foreground size-9"
+    >
+      <Icon className="size-4" />
     </Button>
   );
 }

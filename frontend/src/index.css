@@ -257,6 +257,26 @@
   }
 }
 
+/* ---- Manual theme cross-fade ---------------------------------------------
+   Armed by setThemePref() for ~300ms around a MANUAL light/dark switch, so the
+   palette eases across instead of hard-cutting. Scoped to color properties and
+   time-boxed (the class is removed after) so it never taxes scroll/hover. */
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition:
+    background-color 0.28s var(--ease-out-expo),
+    border-color 0.28s var(--ease-out-expo),
+    color 0.28s var(--ease-out-expo),
+    fill 0.28s var(--ease-out-expo),
+    stroke 0.28s var(--ease-out-expo) !important;
+}
+/* The aurora keeps its own long drift; don't let the cross-fade retime it. */
+.theme-transition .aurora-blob {
+  transition: none !important;
+}
+
 /* ---- Animated brand aurora ------------------------------------------------
    A few large, heavily-blurred gradient blobs that drift + breathe behind the
    content. transform/opacity only → GPU-composited, no layout/paint churn.

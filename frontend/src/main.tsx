@@ -4,15 +4,12 @@ import App from "./App";
 import "./index.css";
 // Side effect: initializes i18next (language detection + bundles) before render.
 import "./i18n";
+import { initTheme } from "./lib/theme";
 
-// System-following dark mode. Toggling `.dark` on <html> remaps the CSS color
-// tokens defined in index.css, so the whole app follows the OS appearance and
-// stays in sync if the user flips it. (Class toggle rather than a CSS media
-// query so it can be forced programmatically, e.g. in screenshots/tests.)
-const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
-const applyTheme = (dark: boolean) => document.documentElement.classList.toggle("dark", dark);
-applyTheme(prefersDark.matches);
-prefersDark.addEventListener("change", (e) => applyTheme(e.matches));
+// Apply the stored theme preference ("system" follows the OS live) before the
+// first paint. Toggling `.dark` on <html> remaps the CSS color tokens in
+// index.css, so the whole app restyles. The header's theme toggle drives it.
+initTheme();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

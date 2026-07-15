@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronsLeftRight, ChevronsRightLeft, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -79,6 +79,65 @@ export type PanelSpec = {
   content: ReactNode;
 };
 
+const FLIP_MS = 420;
+
+/**
+ * FLIP transitions for the panel columns: when `order` (or a collapse) changes
+ * their layout box, each panel slides from its old position to the new one
+ * instead of teleporting. Measure-invert-play against the previous frame's
+ * rects; the panel under the cursor is skipped (it tracks the drag ghost).
+ */
+function usePanelFlip(order: PanelId[], collapsedKey: string, dragId: PanelId | null) {
+  const nodes = useRef(new Map<PanelId, HTMLElement>());
+  const prev = useRef(new Map<PanelId, DOMRect>());
+
+  const register = useCallback((id: PanelId, el: HTMLElement | null) => {
+    if (el) nodes.current.set(id, el);
+    else nodes.current.delete(id);
+  }, []);
+
+  useLayoutEffect(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    for (const [id, el] of nodes.current) {
+      // Settle any in-flight transform so the box we read is the pure layout
+      // position, not a mid-animation one (matters for rapid reorders).
+      el.style.transition = "none";
+      el.style.transform = "none";
+      const next = el.getBoundingClientRect();
+      const before = prev.current.get(id);
+      prev.current.set(id, next);
+
+      const dx = before ? before.left - next.left : 0;
+      const dy = before ? before.top - next.top : 0;
+      // Nothing to animate (first sight, reduced motion, the dragged panel, or
+      // no movement) → drop the inline overrides so class transitions resume.
+      if (!before || reduce || id === dragId || (Math.abs(dx) < 1 && Math.abs(dy) < 1)) {
+        el.style.transition = "";
+        el.style.transform = "";
+        continue;
+      }
+
+      // Invert: jump the element back to where it was, then release on the next
+      // frame so the browser animates the transform back to identity.
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      requestAnimationFrame(() => {
+        el.style.transition = `transform ${FLIP_MS}ms var(--ease-out-expo)`;
+        el.style.transform = "";
+      });
+      const clear = () => {
+        el.style.transition = "";
+        el.style.transform = "";
+        el.removeEventListener("transitionend", clear);
+      };
+      el.addEventListener("transitionend", clear);
+    }
+    // Re-measure whenever the arrangement changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order.join(), collapsedKey]);
+
+  return register;
+}
+
 export function PanelBoard({
   order,
   onOrderChange,
@@ -93,6 +152,7 @@ export function PanelBoard({
   panels: Record<PanelId, PanelSpec>;
 }) {
   const [dragId, setDragId] = useState<PanelId | null>(null);
+  const registerNode = usePanelFlip(order, JSON.stringify(collapsed), dragId);
 
   // Live reorder while dragging: the dragged panel is inserted before/after the
   // hovered one depending on which half of it the pointer is in. The midpoint
@@ -119,6 +179,7 @@ export function PanelBoard({
           dragId={dragId}
           setDragId={setDragId}
           placeAround={placeAround}
+          registerNode={registerNode}
         />
       ))}
     </div>
@@ -133,6 +194,7 @@ function PanelColumn({
   dragId,
   setDragId,
   placeAround,
+  registerNode,
 }: {
   id: PanelId;
   spec: PanelSpec;
@@ -141,6 +203,7 @@ function PanelColumn({
   dragId: PanelId | null;
   setDragId: (id: PanelId | null) => void;
   placeAround: (from: PanelId, to: PanelId, before: boolean) => void;
+  registerNode: (id: PanelId, el: HTMLElement | null) => void;
 }) {
   const { t } = useTranslation();
   const dragging = dragId === id;
@@ -165,6 +228,7 @@ function PanelColumn({
   if (collapsed && spec.collapsible) {
     return (
       <section
+        ref={(el) => registerNode(id, el)}
         className={cn(
           "shrink-0 transition-opacity",
           dragging && "panel-dragging",
@@ -196,6 +260,7 @@ function PanelColumn({
 
   return (
     <section
+      ref={(el) => registerNode(id, el)}
       className={cn(
         "flex min-w-0 flex-col gap-3 transition-opacity",
         spec.className,

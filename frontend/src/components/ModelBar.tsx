@@ -28,6 +28,10 @@ type Props = {
   onAddCustom: () => void;
   onSelectCustom: (m: ModelInfo) => Promise<void>;
   onRemoveCustom: (m: ModelInfo) => void;
+  // Picker open state is controlled by App so the command palette (and later
+  // keyboard shortcuts) can open it too, not just the trigger button.
+  pickerOpen: boolean;
+  onPickerOpenChange: (open: boolean) => void;
 };
 
 // ModelBar — the single model selector for the whole app. Shows the active
@@ -48,6 +52,8 @@ export function ModelBar({
   onAddCustom,
   onSelectCustom,
   onRemoveCustom,
+  pickerOpen,
+  onPickerOpenChange,
 }: Props) {
   const { t } = useTranslation();
   const [localModels, setLocalModels] = useState<ModelInfo[]>([]);
@@ -56,7 +62,6 @@ export function ModelBar({
   const [listError, setListError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false); // cloud quick-switch
   const [customError, setCustomError] = useState<string | null>(null); // custom activation
-  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Load both catalogs once.
   useEffect(() => {
@@ -149,7 +154,7 @@ export function ModelBar({
           <button
             type="button"
             disabled={busy}
-            onClick={() => setPickerOpen(true)}
+            onClick={() => onPickerOpenChange(true)}
             className={cn(
               "group flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-xl border px-2.5 text-left text-sm shadow-sm transition",
               "bg-background/70 hover:border-primary/40 hover:bg-background",
@@ -179,18 +184,18 @@ export function ModelBar({
 
       <ModelPickerDialog
         open={pickerOpen}
-        onOpenChange={setPickerOpen}
+        onOpenChange={onPickerOpenChange}
         mode={mode}
         catalog={isCloud ? cloudModels : localModels}
         customModels={customModels}
         activeCode={activeCode}
         busy={busy}
         onPick={(m) => {
-          setPickerOpen(false);
+          onPickerOpenChange(false);
           void pick(m.modelCode);
         }}
         onAddCustom={() => {
-          setPickerOpen(false); // hand off to the native picker + CustomModelDialog
+          onPickerOpenChange(false); // hand off to the native picker + CustomModelDialog
           onAddCustom();
         }}
         onRemoveCustom={onRemoveCustom}

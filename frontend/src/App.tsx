@@ -26,6 +26,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/SettingsDialog";
@@ -35,6 +36,7 @@ import { PaymentBar } from "@/components/PaymentBar";
 import { LogPanel } from "@/components/LogPanel";
 import { PanelBoard, usePanelLayout } from "@/components/PanelBoard";
 import { QueuePanel } from "@/components/QueuePanel";
+import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
 import { api } from "@/lib/wails-bridge";
 import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/theme";
@@ -182,6 +184,10 @@ export default function App() {
   const { order: panelOrder, collapsed: panelCollapsed, setOrder: setPanelOrder, toggleCollapsed: togglePanelCollapsed } = usePanelLayout();
   // Fullscreen viewer — shared by the gallery and the Activity panel.
   const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
+  // Command palette (⌘K) + the model-picker open state it drives (lifted here so
+  // the palette can open the picker, not just ModelBar's own trigger).
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
 
   // Per-step progress is a single global stream (the sidecar runs local jobs
   // serially), so attribute each tick to the oldest still-running local job —
@@ -603,6 +609,95 @@ export default function App() {
   );
   const doneJobs = useMemo(() => jobs.filter((j) => j.status === "done"), [jobs]);
 
+  // --- Command palette registry --------------------------------------------
+  // The single source of truth for app actions. The ⌘K palette renders it now;
+  // direct keyboard shortcuts can bind to the same list later.
+  const commands: Command[] = useMemo(() => {
+    const cmds: Command[] = [];
+    const gGenerate = t("palette.groupGenerate");
+    const gMode = t("palette.groupMode");
+    const gModel = t("palette.groupModel");
+    const gEngine = t("palette.groupEngine");
+    const gPanels = t("palette.groupPanels");
+    const gAppearance = t("palette.groupAppearance");
+    const gApp = t("palette.groupApp");
+
+    if (canGenerate)
+      cmds.push({
+        id: "generate",
+        group: gGenerate,
+        label: t("palette.generate"),
+        icon: <Sparkles />,
+        shortcut: [modLabel, "↵"],
+        run: () => run(mode),
+      });
+
+    cmds.push(
+      mode === "local"
+        ? { id: "mode-cloud", group: gMode, label: t("palette.switchCloud"), icon: <Cloud />, keywords: "cloud", run: () => setMode("cloud") }
+        : { id: "mode-local", group: gMode, label: t("palette.switchLocal"), icon: <Cpu />, keywords: "local", run: () => setMode("local") }
+    );
+
+    cmds.push({
+      id: "model",
+      group: gModel,
+      label: t("palette.chooseModel"),
+      icon: <Wand2 />,
+      keywords: "model checkpoint",
+      run: () => setModelPickerOpen(true),
+    });
+
+    // Engine (local-only, contextual — mirrors the header EngineControl states).
+    if (mode === "local") {
+      if (!engineInstalled)
+        cmds.push({ id: "engine-install", group: gEngine, label: t("engineControl.install"), icon: <Download />, run: installEngine });
+      else if (sidecar.state === "ready")
+        cmds.push({ id: "engine-stop", group: gEngine, label: t("engineControl.stop"), icon: <Square />, run: stopEngine });
+      else if (settings?.localModel)
+        cmds.push({ id: "engine-start", group: gEngine, label: t("engineControl.start"), icon: <Play />, run: startEngine });
+    }
+
+    cmds.push({
+      id: "toggle-activity",
+      group: gPanels,
+      label: panelCollapsed.queue ? t("palette.expandActivity") : t("palette.collapseActivity"),
+      icon: <Activity />,
+      run: () => togglePanelCollapsed("queue"),
+    });
+    if (hasFinished)
+      cmds.push({ id: "clear-activity", group: gPanels, label: t("palette.clearActivity"), icon: <Trash2 />, run: clearFinished });
+
+    (["system", "light", "dark"] as const).forEach((p) =>
+      cmds.push({
+        id: `theme-${p}`,
+        group: gAppearance,
+        label: t("palette.theme", { mode: t(`theme.${p}`) }),
+        icon: p === "system" ? <Monitor /> : p === "light" ? <Sun /> : <Moon />,
+        keywords: "theme appearance dark light",
+        run: () => setThemePref(p),
+      })
+    );
+    SUPPORTED_LANGUAGES.forEach((l) =>
+      cmds.push({
+        id: `lang-${l.code}`,
+        group: gAppearance,
+        label: t("palette.language", { lang: l.label }),
+        icon: <Languages />,
+        keywords: "language locale",
+        run: () => setLanguage(l.code),
+      })
+    );
+
+    cmds.push({ id: "settings", group: gApp, label: t("palette.settings"), icon: <Settings />, keywords: "preferences", run: () => openSettings() });
+    cmds.push({ id: "logs", group: gApp, label: t("palette.logs"), icon: <ScrollText />, keywords: "console debug", run: () => setLogsOpen((o) => !o) });
+
+    return cmds;
+  }, [
+    t, canGenerate, run, mode, engineInstalled, sidecar.state, settings?.localModel,
+    installEngine, stopEngine, startEngine, panelCollapsed.queue, togglePanelCollapsed,
+    hasFinished, clearFinished, openSettings,
+  ]);
+
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
       <div className="aurora" aria-hidden="true">
@@ -623,6 +718,7 @@ export default function App() {
         errorLogCount={errorLogCount}
         onToggleLogs={() => setLogsOpen((o) => !o)}
         onOpenSettings={() => openSettings()}
+        onOpenPalette={() => setPaletteOpen(true)}
       />
 
       {updateInfo?.updateAvailable && updateInfo.latestVersion && (
@@ -677,6 +773,8 @@ export default function App() {
                       onAddCustom={addCustomModel}
                       onSelectCustom={selectCustomModel}
                       onRemoveCustom={removeCustomModel}
+                      pickerOpen={modelPickerOpen}
+                      onPickerOpenChange={setModelPickerOpen}
                     />
 
                     {/* 2b. Parameters — seeded from the model, tweakable per generation. */}
@@ -755,6 +853,7 @@ export default function App() {
         onConfirm={confirmCustomModel}
       />
       <LogPanel open={logsOpen} onOpenChange={setLogsOpen} />
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} commands={commands} />
     </div>
   );
 }
@@ -776,6 +875,7 @@ function Header({
   errorLogCount,
   onToggleLogs,
   onOpenSettings,
+  onOpenPalette,
 }: {
   appVersion: string;
   sidecar: SidecarStatus;
@@ -789,6 +889,7 @@ function Header({
   errorLogCount: number;
   onToggleLogs: () => void;
   onOpenSettings: () => void;
+  onOpenPalette: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -815,6 +916,20 @@ function Header({
         </div>
       </div>
       <div className="flex items-center gap-1.5">
+        {/* Command palette launcher — discoverable entry point for ⌘K. */}
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          title={t("palette.title")}
+          aria-label={t("palette.title")}
+          className="text-muted-foreground hover:text-foreground hover:border-primary/40 hidden h-9 items-center gap-2 rounded-lg border pl-2.5 pr-2 text-xs transition-colors sm:inline-flex"
+        >
+          <Search className="size-3.5" />
+          <span className="flex items-center gap-0.5">
+            <kbd className="bg-muted rounded px-1 py-0.5 text-[10px] font-medium leading-none">{modLabel}</kbd>
+            <kbd className="bg-muted rounded px-1 py-0.5 text-[10px] font-medium leading-none">K</kbd>
+          </span>
+        </button>
         {/* Theme — cycles System → Light → Dark, persisted; System follows the OS. */}
         <ThemeToggle />
         {/* Language — quick toggle; the Settings section offers "System" too. */}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, Check, Cloud, Cpu, Loader2, Wind, X } from "lucide-react";
+import { AlertCircle, Check, Clock, Cloud, Cpu, Loader2, Wind, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GenerationMeta, Job } from "@/lib/types";
 
@@ -45,6 +45,14 @@ export function QueuePanel({
   const anyRunning = visible.some((j) => j.status === "running");
   const now = useNow(anyRunning);
 
+  // 1-based position in the local queue (oldest waits at #1). `visible` is
+  // newest-first, so the oldest queued job gets the lowest number.
+  const queuePos = new Map<string, number>();
+  let pos = 0;
+  for (let i = visible.length - 1; i >= 0; i--) {
+    if (visible[i].status === "queued") queuePos.set(visible[i].id, ++pos);
+  }
+
   if (visible.length === 0) {
     return (
       <div className="bg-card/60 text-muted-foreground/70 flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-10 text-center backdrop-blur-sm">
@@ -58,7 +66,14 @@ export function QueuePanel({
   return (
     <ul className="flex flex-col gap-2">
       {visible.map((job) => (
-        <QueueRow key={job.id} job={job} now={now} onDismiss={onDismiss} onOpenImage={onOpenImage} />
+        <QueueRow
+          key={job.id}
+          job={job}
+          now={now}
+          position={queuePos.get(job.id)}
+          onDismiss={onDismiss}
+          onOpenImage={onOpenImage}
+        />
       ))}
     </ul>
   );
@@ -67,40 +82,50 @@ export function QueuePanel({
 function QueueRow({
   job,
   now,
+  position,
   onDismiss,
   onOpenImage,
 }: {
   job: Job;
   now: number;
+  position?: number;
   onDismiss: (id: string) => void;
   onOpenImage: (item: LightboxItem) => void;
 }) {
   const { t } = useTranslation();
   const running = job.status === "running";
+  const queued = job.status === "queued";
   const pct = job.progress && job.progress.total > 0 ? job.progress.percent : null;
-  const elapsed = fmtElapsed((job.endedAt ?? now) - job.startedAt);
+  // Elapsed only makes sense once a job has actually started (startedAt set).
+  const elapsed = job.startedAt ? fmtElapsed((job.endedAt ?? now) - job.startedAt) : "";
   const ModeIcon = job.mode === "cloud" ? Cloud : Cpu;
 
-  const statusLine = running
-    ? pct !== null
-      ? t("queue.step", { step: job.progress!.step, total: job.progress!.total })
-      : job.mode === "cloud"
-        ? t("queue.cloudRunning")
-        : t("queue.generating")
-    : job.status === "done"
-      ? t("queue.done", { time: elapsed })
-      : t("queue.failed");
+  const statusLine = queued
+    ? position && position > 1
+      ? t("queue.queuedPosition", { position })
+      : t("queue.queuedNext")
+    : running
+      ? pct !== null
+        ? t("queue.step", { step: job.progress!.step, total: job.progress!.total })
+        : job.mode === "cloud"
+          ? t("queue.cloudRunning")
+          : t("queue.generating")
+      : job.status === "done"
+        ? t("queue.done", { time: elapsed })
+        : t("queue.failed");
 
   return (
     <li
       className={cn(
         "rise-in bg-card group relative rounded-2xl border p-2.5 shadow-sm transition-colors",
-        job.status === "error" && "border-destructive/30 bg-destructive/5"
+        job.status === "error" && "border-destructive/30 bg-destructive/5",
+        queued && "border-dashed"
       )}
       title={job.prompt}
     >
       <div className="flex items-start gap-2.5">
-        {/* Leading visual: live spinner/ring while running, the image once done. */}
+        {/* Leading visual: image once done, else a state glyph (ring while
+            denoising, spinner while cloud-running, clock while queued). */}
         {job.status === "done" && job.image ? (
           <button
             type="button"
@@ -118,7 +143,9 @@ function QueueRow({
                 : "border-border/60 bg-muted/50 text-muted-foreground"
             )}
           >
-            {running ? (
+            {queued ? (
+              <Clock className="size-4" />
+            ) : running ? (
               pct !== null ? (
                 <ProgressRing percent={pct} />
               ) : (
@@ -133,7 +160,9 @@ function QueueRow({
         )}
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium leading-5">{job.prompt}</p>
+          <p className={cn("truncate text-xs font-medium leading-5", queued && "text-muted-foreground")}>
+            {job.prompt}
+          </p>
           <p
             className={cn(
               "mt-0.5 flex items-center gap-1.5 text-[11px] tabular-nums",
@@ -142,17 +171,20 @@ function QueueRow({
           >
             <ModeIcon className="size-3 shrink-0" />
             <span className="truncate">{job.status === "error" ? job.error : statusLine}</span>
-            {running && <span className="text-muted-foreground/60 ml-auto shrink-0">{elapsed}</span>}
+            {running && elapsed && (
+              <span className="text-muted-foreground/60 ml-auto shrink-0">{elapsed}</span>
+            )}
           </p>
         </div>
 
-        {/* Dismiss — finished rows only; a running job can't be cancelled (yet). */}
+        {/* Dismiss — cancels a queued job or clears a finished one. A running job
+            can't be cancelled yet (no sidecar cancel API). */}
         {!running && (
           <button
             type="button"
             onClick={() => onDismiss(job.id)}
-            aria-label={t("queue.dismiss")}
-            title={t("queue.dismiss")}
+            aria-label={queued ? t("queue.cancel") : t("queue.dismiss")}
+            title={queued ? t("queue.cancel") : t("queue.dismiss")}
             className="text-muted-foreground/40 hover:text-foreground -mr-0.5 -mt-0.5 rounded p-1 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
           >
             <X className="size-3.5" />

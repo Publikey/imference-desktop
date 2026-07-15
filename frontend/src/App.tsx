@@ -49,6 +49,7 @@ import type {
   GenerationMeta,
   FormatOption,
   GenerationRequest,
+  GenerationResult,
   InstallProgress,
   Job,
   LogEntry,
@@ -430,8 +431,26 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
-  // Multiple generations may run at once — the button isn't gated on a running job.
+  // The composer never gates on in-flight work: cloud runs fire concurrently and
+  // local runs are enqueued, so the user can keep launching either way.
   const canGenerate = (mode === "cloud" ? cloudReady : localReady) && !!prompt.trim();
+
+  // Settle a job from its generate() promise — shared by the immediate cloud path
+  // and the local queue dispatcher.
+  const settleJob = useCallback((id: string, call: Promise<GenerationResult>) => {
+    call
+      .then((result) =>
+        setJobs((js) =>
+          js.map((j) => (j.id === id ? { ...j, status: "done", image: result, endedAt: Date.now() } : j))
+        )
+      )
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        setJobs((js) =>
+          js.map((j) => (j.id === id ? { ...j, status: "error", error: msg, endedAt: Date.now() } : j))
+        );
+      });
+  }, []);
 
   const run = useCallback(
     (which: Mode) => {
@@ -443,11 +462,6 @@ export default function App() {
       // nothing, and it matters a lot for SDXL quality. The catalog's prompt_pre
       // already ends with a separator.
       const full = (pr?.prePrompt ?? "") + p;
-      const id = nextJobId();
-      setJobs((js) => [
-        { id, mode: which, prompt: full, status: "running", progress: null, startedAt: Date.now() },
-        ...js,
-      ]);
 
       const req: GenerationRequest = {
         prompt: full,
@@ -468,36 +482,68 @@ export default function App() {
         }
       }
 
-      const call = which === "cloud" ? api.generateCloud(req) : api.generateLocal(req);
-      call
-        .then((result) =>
-          setJobs((js) =>
-            js.map((j) =>
-              j.id === id ? { ...j, status: "done", image: result, endedAt: Date.now() } : j
-            )
-          )
-        )
-        .catch((e) => {
-          const msg = e instanceof Error ? e.message : String(e);
-          setJobs((js) =>
-            js.map((j) =>
-              j.id === id ? { ...j, status: "error", error: msg, endedAt: Date.now() } : j
-            )
-          );
-        });
+      const id = nextJobId();
+      const now = Date.now();
+      if (which === "cloud") {
+        // Cloud fires immediately — the API handles concurrency server-side.
+        setJobs((js) => [
+          { id, mode: "cloud", prompt: full, status: "running", progress: null, queuedAt: now, startedAt: now },
+          ...js,
+        ]);
+        settleJob(id, api.generateCloud(req));
+      } else {
+        // Local is enqueued: the sidecar denoises one image at a time, so the
+        // dispatcher starts it (and each queued job after it) one by one. The
+        // request is frozen now so later param tweaks never leak into a job
+        // already waiting in line.
+        setJobs((js) => [
+          { id, mode: "local", prompt: full, status: "queued", progress: null, queuedAt: now, request: req },
+          ...js,
+        ]);
+      }
     },
-    [prompt, settings?.localModel, settings?.cloudModelInfo, params, sourceImage, strength]
+    [prompt, settings?.localModel, settings?.cloudModelInfo, params, sourceImage, strength, settleJob]
   );
 
+  // Local FIFO dispatcher — the sidecar runs one local job at a time. Whenever
+  // no local job is running, start the oldest still-queued (non-cancelled) one.
+  // dispatchedRef makes each job fire its generateLocal exactly once, even though
+  // this effect re-runs on every jobs change (and under StrictMode double-invoke).
+  const dispatchedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (jobs.some((j) => j.mode === "local" && j.status === "running")) return;
+    let next: Job | undefined;
+    for (let i = jobs.length - 1; i >= 0; i--) {
+      const j = jobs[i];
+      if (j.mode === "local" && j.status === "queued" && !j.hidden) {
+        next = j;
+        break;
+      }
+    }
+    if (!next || !next.request || dispatchedRef.current.has(next.id)) return;
+    const job = next;
+    const request = next.request;
+    dispatchedRef.current.add(job.id);
+    setJobs((js) =>
+      js.map((j) => (j.id === job.id ? { ...j, status: "running", startedAt: Date.now(), progress: null } : j))
+    );
+    settleJob(job.id, api.generateLocal(request));
+  }, [jobs, settleJob]);
+
   // --- Activity panel bookkeeping ------------------------------------------
-  // Dismissing hides a finished row from the Activity panel only — the image
-  // stays in the gallery (jobs are the source of this session's fresh tiles).
+  // Dismissing hides a finished OR queued row: for a queued local job this also
+  // cancels it (the dispatcher skips hidden jobs, so it never runs). A running
+  // job can't be dismissed (no cancel API yet). Finished images stay in the
+  // gallery regardless — jobs are only the source of this session's fresh tiles.
   const dismissJob = useCallback(
     (id: string) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, hidden: true } : j))),
     []
   );
   const clearFinished = useCallback(
-    () => setJobs((js) => js.map((j) => (j.status === "running" ? j : { ...j, hidden: true }))),
+    () =>
+      setJobs((js) =>
+        js.map((j) => (j.status === "running" || j.status === "queued" ? j : { ...j, hidden: true }))
+      ),
     []
   );
 
@@ -544,11 +590,15 @@ export default function App() {
     return settings?.localModel?.name ?? t("hint.pickModel");
   }, [mode, cloudConfigured, downloading, localNeedsDownload, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, engineInstalled, t]);
 
-  // Activity-panel derivations: live count for the badge, finished rows for the
-  // Clear action, and the done subset the gallery shows as fresh tiles.
-  const runningCount = useMemo(() => jobs.filter((j) => j.status === "running").length, [jobs]);
+  // Activity-panel derivations: in-flight count (running + queued) for the badge,
+  // finished rows for the Clear action, and the done subset the gallery shows as
+  // fresh tiles.
+  const activeCount = useMemo(
+    () => jobs.filter((j) => !j.hidden && (j.status === "running" || j.status === "queued")).length,
+    [jobs]
+  );
   const hasFinished = useMemo(
-    () => jobs.some((j) => !j.hidden && j.status !== "running"),
+    () => jobs.some((j) => !j.hidden && (j.status === "done" || j.status === "error")),
     [jobs]
   );
   const doneJobs = useMemo(() => jobs.filter((j) => j.status === "done"), [jobs]);
@@ -658,9 +708,9 @@ export default function App() {
                 title: t("panels.queue"),
                 icon: <Activity />,
                 badge:
-                  runningCount > 0 ? (
+                  activeCount > 0 ? (
                     <span className="brand-surface flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums text-white">
-                      {runningCount}
+                      {activeCount}
                     </span>
                   ) : undefined,
                 actions: hasFinished ? (

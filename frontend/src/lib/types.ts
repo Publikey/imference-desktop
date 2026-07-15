@@ -224,20 +224,33 @@ export type GenerationResult = {
 export type GenerationMode = "local" | "cloud";
 
 /**
- * A single generation tracked by the UI, from launch to completion. Running and
- * failed jobs live in the Activity panel; finished images join the gallery.
+ * A single generation tracked by the UI, from enqueue to completion.
+ *
+ * Local runs are serialized through a FIFO queue (the sidecar loads one model
+ * and denoises one image at a time): a fresh local job starts as "queued" and
+ * only becomes "running" when it reaches the head of the queue. Cloud runs skip
+ * the queue and start "running" immediately (the cloud API handles concurrency
+ * server-side). Queued/running/failed jobs live in the Activity panel; finished
+ * images join the gallery.
  */
 export type Job = {
   id: string;
   mode: GenerationMode;
   prompt: string;
-  status: "running" | "done" | "error";
+  status: "queued" | "running" | "done" | "error";
   image?: GenerationResult;
   error?: string;
   /** Per-step progress (local only — the cloud API reports nothing mid-run). */
   progress?: GenerateProgress | null;
-  /** Epoch ms — drives the live elapsed timer in the Activity panel. */
-  startedAt: number;
+  /**
+   * The request to dispatch, captured at enqueue time so later param tweaks
+   * don't retro-change a job already waiting in the queue. Local jobs only.
+   */
+  request?: GenerationRequest;
+  /** Epoch ms the job was enqueued — orders the queue and drives "queued" UI. */
+  queuedAt: number;
+  /** Epoch ms the job began running — set when it leaves the queue. */
+  startedAt?: number;
   endedAt?: number;
   /** Dismissed from the Activity panel (finished images stay in the gallery). */
   hidden?: boolean;

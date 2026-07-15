@@ -111,9 +111,12 @@
     "emptyHint": "启动的生成任务会实时显示在这里。",
     "clearFinished": "清除",
     "dismiss": "关闭",
+    "cancel": "取消",
     "step": "第 {{step}}/{{total}} 步",
     "cloudRunning": "云端生成中…",
     "generating": "生成中…",
+    "queuedNext": "排队中 · 即将开始",
+    "queuedPosition": "排队中 · 第 {{position}} 位",
     "done": "用时 {{time}}",
     "failed": "失败"
   },

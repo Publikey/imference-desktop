@@ -112,9 +112,12 @@
     "emptyHint": "Generations you launch appear here, live.",
     "clearFinished": "Clear",
     "dismiss": "Dismiss",
+    "cancel": "Cancel",
     "step": "step {{step}}/{{total}}",
     "cloudRunning": "Running in the cloud…",
     "generating": "Generating…",
+    "queuedNext": "Queued · next up",
+    "queuedPosition": "Queued · #{{position}} in line",
     "done": "Done in {{time}}",
     "failed": "Failed"
   },

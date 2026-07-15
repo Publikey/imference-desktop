@@ -31,6 +31,8 @@ import {
   Copy,
   FolderOpen,
   Maximize2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/SettingsDialog";
@@ -1032,7 +1034,6 @@ export default function App() {
                 content: (
                   <Gallery
                     jobs={doneJobs}
-                    onOpen={setLightbox}
                     onUseAsSource={useAsImg2img}
                     onReuseSettings={reuseSettings}
                     onHideJob={dismissJob}
@@ -1044,7 +1045,19 @@ export default function App() {
         </div>
       </main>
 
-      {lightbox && <Lightbox item={lightbox} onClose={() => setLightbox(null)} />}
+      {/* Activity-panel viewer: a single image (no prev/next, no delete) but the
+          same action bar — reuses the gallery Lightbox with a one-item sequence. */}
+      {lightbox && (
+        <Lightbox
+          items={[{ name: null, meta: lightbox.meta, getSrc: async () => lightbox.src }]}
+          index={0}
+          onIndex={() => {}}
+          onClose={() => setLightbox(null)}
+          onUseAsSource={useAsImg2img}
+          onReuseSettings={reuseSettings}
+          onDelete={() => {}}
+        />
+      )}
 
       <SettingsDialog
         open={settingsOpen}
@@ -1876,26 +1889,32 @@ function SegBtn({
 
 const GALLERY_PAGE = 24;
 
-const EMPTY_FILTER: GalleryFilter = { engine: "", modelCode: "", source: "" };
+const EMPTY_FILTER: GalleryFilter = { engine: "", modelCode: "", source: "", text: "" };
 
 type LightboxItem = { src: string; meta?: GenerationMeta | null };
 
-// What a tile hands to the context menu / drag layer. `name` (a filename) keys
-// delete/reveal; it's null for a session job that hasn't been saved yet.
-type TileTarget = {
+// One image in the gallery's viewable sequence — the unit the lightbox steps
+// through and every action targets. `name` (a filename) keys delete/reveal; it's
+// null for a session job not yet written to disk.
+type ViewerItem = {
   name: string | null;
   savedPath?: string;
   meta?: GenerationMeta | null;
   getSrc: () => Promise<string>;
 };
 
-// Shared gallery behaviors handed to every tile (context menu, selection, drag).
+// What a tile hands to the context menu. Adds the tile's position in the viewer
+// sequence so "Open" can jump straight there.
+type TileTarget = ViewerItem & { index: number };
+
+// Shared gallery behaviors handed to every tile (open, context menu, selection,
+// drag). `index` is the tile's position in the viewer sequence.
 type GalleryShared = {
-  onOpen: (item: LightboxItem) => void;
+  openAt: (index: number) => void;
   openMenu: (e: React.MouseEvent, target: TileTarget) => void;
   selectionActive: boolean;
   isSelected: (name: string) => boolean;
-  tileClick: (e: React.MouseEvent, name: string | null, index: number, open: () => void) => void;
+  tileClick: (e: React.MouseEvent, name: string | null, index: number) => void;
   toggle: (name: string | null, index: number) => void;
   startDrag: (e: React.DragEvent, name: string | null, src: string | null) => void;
 };
@@ -1905,13 +1924,11 @@ const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
 
 function Gallery({
   jobs,
-  onOpen,
   onUseAsSource,
   onReuseSettings,
   onHideJob,
 }: {
   jobs: Job[];
-  onOpen: (item: LightboxItem) => void;
   onUseAsSource: (getSrc: () => Promise<string>) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
   onHideJob: (id: string) => void;
@@ -1923,11 +1940,13 @@ function Gallery({
   const [cols, setCols] = useState(3);
   const [filter, setFilter] = useState<GalleryFilter>(EMPTY_FILTER);
   const [facets, setFacets] = useState<GalleryFacets | null>(null);
-  // Multi-selection (keyed by filename) + the context menu.
+  // Multi-selection (keyed by filename), the context menu, and the fullscreen
+  // viewer (an index into the viewable sequence, or null when closed).
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<{ x: number; y: number; target: TileTarget } | null>(null);
+  const [viewIndex, setViewIndex] = useState<number | null>(null);
   const anchorRef = useRef<number | null>(null); // last-toggled index, for Shift-range
-  const selectableRef = useRef<string[]>([]); // names in display order
+  const viewItemsRef = useRef<ViewerItem[]>([]); // the viewable sequence, in display order
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false); // guards against overlapping page loads
   const savedRef = useRef<SavedImage[]>([]);
@@ -2031,6 +2050,10 @@ function Gallery({
 
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
+  const openAt = useCallback((index: number) => {
+    if (index >= 0) setViewIndex(index);
+  }, []);
+
   // Toggle one tile's selection; remember it as the Shift-range anchor.
   const toggle = useCallback((name: string | null, index: number) => {
     if (!name) return;
@@ -2044,28 +2067,35 @@ function Gallery({
   }, []);
 
   // Click on a tile: modifier-click selects (⌘/Ctrl toggles, Shift extends the
-  // range from the anchor); a plain click opens the lightbox.
+  // range from the anchor); a plain click opens the fullscreen viewer.
   const tileClick = useCallback(
-    (e: React.MouseEvent, name: string | null, index: number, open: () => void) => {
+    (e: React.MouseEvent, name: string | null, index: number) => {
       if ((e.metaKey || e.ctrlKey) && name) {
         toggle(name, index);
         return;
       }
       if (e.shiftKey && name && anchorRef.current != null) {
         const [lo, hi] = [Math.min(anchorRef.current, index), Math.max(anchorRef.current, index)];
-        const range = selectableRef.current.slice(lo, hi + 1);
+        const range = viewItemsRef.current
+          .slice(lo, hi + 1)
+          .map((v) => v.name)
+          .filter((n): n is string => !!n);
         setSelected((cur) => new Set([...cur, ...range]));
         return;
       }
-      open();
+      openAt(index);
     },
-    [toggle]
+    [toggle, openAt]
   );
 
   const startDrag = useCallback((e: React.DragEvent, name: string | null, src: string | null) => {
-    if (src) e.dataTransfer.setData(DRAG_SRC, src);
+    if (src) {
+      e.dataTransfer.setData(DRAG_SRC, src);
+      // Let the OS/other apps accept a drop as a real file (Chromium/Edge webviews).
+      e.dataTransfer.setData("DownloadURL", `image/png:${name || "image.png"}:${src}`);
+    }
     if (name) e.dataTransfer.setData(DRAG_NAME, name);
-    e.dataTransfer.effectAllowed = "copy";
+    e.dataTransfer.effectAllowed = "copyMove";
   }, []);
 
   const openMenu = useCallback((e: React.MouseEvent, target: TileTarget) => {
@@ -2073,10 +2103,54 @@ function Gallery({
     setMenu({ x: e.clientX, y: e.clientY, target });
   }, []);
 
-  const filtered = filter.engine !== "" || filter.modelCode !== "" || filter.source !== "";
+  // Latest values for the once-subscribed keyboard listener.
+  const deleteSelectedRef = useRef(deleteSelected);
+  deleteSelectedRef.current = deleteSelected;
+  const viewIndexRef = useRef(viewIndex);
+  viewIndexRef.current = viewIndex;
+  const menuRef = useRef(menu);
+  menuRef.current = menu;
+
+  // Keyboard: ⌘/Ctrl+A selects all, Delete removes the selection, Escape clears
+  // it. Ignored while typing in a field, or when a modal (viewer/menu) is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+      if ((e.metaKey || e.ctrlKey) && (e.key === "a" || e.key === "A")) {
+        const names = viewItemsRef.current.map((v) => v.name).filter((n): n is string => !!n);
+        if (names.length) {
+          e.preventDefault();
+          setSelected(new Set(names));
+        }
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        setSelected((cur) => {
+          if (cur.size > 0) {
+            e.preventDefault();
+            deleteSelectedRef.current();
+          }
+          return cur;
+        });
+      } else if (e.key === "Escape" && viewIndexRef.current == null && !menuRef.current) {
+        setSelected((cur) => (cur.size > 0 ? new Set() : cur));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Keep the open viewer valid when the sequence shrinks (e.g. after a delete):
+  // clamp to the last item, or close if nothing is left.
+  useEffect(() => {
+    const n = viewItemsRef.current.length;
+    setViewIndex((vi) => (vi != null && vi >= n ? (n > 0 ? n - 1 : null) : vi));
+  }, [saved.length, jobs.length]);
+
+  const filtered =
+    filter.engine !== "" || filter.modelCode !== "" || filter.source !== "" || filter.text !== "";
 
   const shared: GalleryShared = {
-    onOpen,
+    openAt,
     openMenu,
     selectionActive: selected.size > 0,
     isSelected: (name) => selected.has(name),
@@ -2085,28 +2159,35 @@ function Gallery({
     startDrag,
   };
 
-  // Build the tile list (session jobs first, then saved), then spread it across
-  // `cols` columns round-robin so the reading order is LEFT-TO-RIGHT (item 0 →
-  // col 0, item 1 → col 1, …). CSS `columns` would fill top-to-bottom instead.
-  // Each column stacks its tiles at natural height → true masonry. `selectable`
-  // records each tile's filename in display order so Shift-range works.
+  // Build the tile list (session jobs first, then saved) + the parallel viewer
+  // sequence (same order) whose index every tile, the menu, and the lightbox
+  // share. Tiles are then spread across `cols` columns round-robin so the reading
+  // order is LEFT-TO-RIGHT; each column stacks at natural height → true masonry.
   const tiles: { key: string; el: React.ReactElement }[] = [];
-  const selectable: string[] = [];
-  const nextIndex = (name: string | null) => {
-    if (!name) return -1;
-    selectable.push(name);
-    return selectable.length - 1;
+  const viewItems: ViewerItem[] = [];
+  const pushView = (v: ViewerItem) => {
+    viewItems.push(v);
+    return viewItems.length - 1;
   };
   if (!filtered) {
     for (const j of jobs) {
-      const name = j.image?.savedPath ? baseName(j.image.savedPath) : null;
-      tiles.push({ key: j.id, el: <JobTile job={j} index={nextIndex(name)} name={name} shared={shared} /> });
+      const img = j.image!;
+      const name = img.savedPath ? baseName(img.savedPath) : null;
+      const meta = img.meta ?? { prompt: j.prompt, source: img.source, seed: img.seed, createdAt: "" };
+      const index = pushView({ name, savedPath: img.savedPath || undefined, meta, getSrc: async () => img.imageBase64 });
+      tiles.push({ key: j.id, el: <JobTile job={j} index={index} name={name} shared={shared} /> });
     }
   }
   for (const g of saved) {
-    tiles.push({ key: g.name, el: <SavedTile image={g} index={nextIndex(g.name)} shared={shared} onDelete={deleteOne} /> });
+    const index = pushView({
+      name: g.name,
+      savedPath: g.savedPath || undefined,
+      meta: g.meta,
+      getSrc: () => api.getSavedImage(g.name),
+    });
+    tiles.push({ key: g.name, el: <SavedTile image={g} index={index} shared={shared} onDelete={deleteOne} /> });
   }
-  selectableRef.current = selectable;
+  viewItemsRef.current = viewItems;
   const columns: { key: string; el: React.ReactElement }[][] = Array.from({ length: cols }, () => []);
   tiles.forEach((t, i) => columns[i % cols].push(t));
   const empty = tiles.length === 0;
@@ -2176,7 +2257,19 @@ function Gallery({
           y={menu.y}
           target={menu.target}
           onClose={() => setMenu(null)}
-          onOpen={onOpen}
+          onOpenAt={openAt}
+          onUseAsSource={onUseAsSource}
+          onReuseSettings={onReuseSettings}
+          onDelete={deleteOne}
+        />
+      )}
+
+      {viewIndex != null && viewItems[viewIndex] && (
+        <Lightbox
+          items={viewItems}
+          index={viewIndex}
+          onIndex={setViewIndex}
+          onClose={() => setViewIndex(null)}
           onUseAsSource={onUseAsSource}
           onReuseSettings={onReuseSettings}
           onDelete={deleteOne}
@@ -2196,14 +2289,36 @@ function FilterBar({
   onChange: (f: GalleryFilter) => void;
 }) {
   const { t } = useTranslation();
-  const active = filter.engine !== "" || filter.modelCode !== "" || filter.source !== "";
+  const active =
+    filter.engine !== "" || filter.modelCode !== "" || filter.source !== "" || filter.text !== "";
   // Guard against nil slices (Go marshals empty slices as null).
   const models = facets?.models ?? [];
   const engines = facets?.engines ?? [];
   const sources = facets?.sources ?? [];
-  if (models.length === 0 && engines.length === 0 && sources.length === 0) return <div />;
+
+  // Debounce the search box so typing doesn't reload the gallery per keystroke.
+  const [q, setQ] = useState(filter.text);
+  useEffect(() => setQ(filter.text), [filter.text]); // stay in sync on external Clear
+  const commitRef = useRef<(text: string) => void>(() => {});
+  commitRef.current = (text: string) => onChange({ ...filter, text });
+  useEffect(() => {
+    if (q === filter.text) return;
+    const id = setTimeout(() => commitRef.current(q), 250);
+    return () => clearTimeout(id);
+  }, [q, filter.text]);
+
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <div className="relative">
+        <Search className="text-muted-foreground/60 pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={t("gallery.search")}
+          aria-label={t("gallery.search")}
+          className="border-input bg-background h-8 w-44 rounded-md border pl-8 pr-2 text-xs outline-none"
+        />
+      </div>
       {models.length > 0 && (
         <FacetSelect
           label={t("gallery.filterModel")}
@@ -2344,7 +2459,6 @@ function JobTile({
   const { t } = useTranslation();
   const img = job.image!;
   const meta = img.meta ?? { prompt: job.prompt, source: img.source, seed: img.seed, createdAt: "" };
-  const open = () => shared.onOpen({ src: img.imageBase64, meta });
   const selected = !!name && shared.isSelected(name);
   return (
     <figure
@@ -2354,9 +2468,10 @@ function JobTile({
         "group animate-in fade-in zoom-in-95 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1 duration-500",
         selected ? "ring-2 ring-[var(--brand-to)]" : "ring-border/60"
       )}
-      onClick={(e) => shared.tileClick(e, name, index, open)}
+      onClick={(e) => shared.tileClick(e, name, index)}
       onContextMenu={(e) =>
         shared.openMenu(e, {
+          index,
           name,
           savedPath: img.savedPath || undefined,
           meta,
@@ -2421,9 +2536,8 @@ function SavedTile({
   const aspect = image.width > 0 && image.height > 0 ? image.width / image.height : 1;
   const selected = shared.isSelected(image.name);
 
-  // Ensure the bytes are available (open / img2img / drag from an un-scrolled tile).
+  // Ensure the bytes are available (img2img / drag from an un-scrolled tile).
   const ensureSrc = () => (srcRef.current ? Promise.resolve(srcRef.current) : api.getSavedImage(image.name).then((d) => { setSrc(d); return d; }));
-  const open = () => void ensureSrc().then((d) => shared.onOpen({ src: d, meta: image.meta })).catch(() => {});
 
   return (
     <figure
@@ -2436,9 +2550,10 @@ function SavedTile({
       )}
       title={image.name}
       style={{ aspectRatio: aspect }}
-      onClick={(e) => shared.tileClick(e, image.name, index, open)}
+      onClick={(e) => shared.tileClick(e, image.name, index)}
       onContextMenu={(e) =>
         shared.openMenu(e, {
+          index,
           name: image.name,
           savedPath: image.savedPath || undefined,
           meta: image.meta,
@@ -2488,7 +2603,7 @@ function TileContextMenu({
   y,
   target,
   onClose,
-  onOpen,
+  onOpenAt,
   onUseAsSource,
   onReuseSettings,
   onDelete,
@@ -2497,7 +2612,7 @@ function TileContextMenu({
   y: number;
   target: TileTarget;
   onClose: () => void;
-  onOpen: (item: LightboxItem) => void;
+  onOpenAt: (index: number) => void;
   onUseAsSource: (getSrc: () => Promise<string>) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
   onDelete: (name: string) => void;
@@ -2540,7 +2655,7 @@ function TileContextMenu({
         <MenuItem
           icon={<Maximize2 />}
           label={t("gallery.ctxOpen")}
-          onClick={run(() => void target.getSrc().then((src) => onOpen({ src, meta })).catch(() => {}))}
+          onClick={run(() => onOpenAt(target.index))}
         />
         <MenuItem
           icon={<ImageIcon />}
@@ -2613,43 +2728,140 @@ function MenuItem({
   );
 }
 
-// Fullscreen viewer with a generation-details panel. Backdrop click or Esc closes.
-function Lightbox({ item, onClose }: { item: LightboxItem; onClose: () => void }) {
+// Fullscreen viewer over the gallery's viewable sequence: ←/→ (and edge arrows)
+// navigate, and the same actions as the right-click menu act on the current
+// image. Backdrop click or Esc closes.
+function Lightbox({
+  items,
+  index,
+  onIndex,
+  onClose,
+  onUseAsSource,
+  onReuseSettings,
+  onDelete,
+}: {
+  items: ViewerItem[];
+  index: number;
+  onIndex: (i: number) => void;
+  onClose: () => void;
+  onUseAsSource: (getSrc: () => Promise<string>) => void;
+  onReuseSettings: (meta: GenerationMeta) => void;
+  onDelete: (name: string) => void;
+}) {
   const { t } = useTranslation();
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const total = items.length;
+  const current = items[index];
+  const hasPrev = index > 0;
+  const hasNext = index < total - 1;
+  const prev = useCallback(() => onIndex(Math.max(0, index - 1)), [index, onIndex]);
+  const next = useCallback(() => onIndex(Math.min(total - 1, index + 1)), [index, total, onIndex]);
+
+  // Fetch the current image's bytes on navigation (and after a delete shifts the
+  // sequence, keyed by length).
+  useEffect(() => {
+    const cur = itemsRef.current[index];
+    if (!cur) return;
+    let alive = true;
+    setLoading(true);
+    setSrc(null);
+    void cur
+      .getSrc()
+      .then((d) => alive && (setSrc(d), setLoading(false)))
+      .catch(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [index, total]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowLeft") prev();
+      else if (e.key === "ArrowRight") next();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, prev, next]);
 
-  const meta = item.meta;
+  if (!current) return null;
+  const meta = current.meta;
+
+  const iconBtn =
+    "rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10";
 
   return (
     <div
       className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-sm"
       onClick={onClose}
     >
+      {/* Top bar: counter + actions + close. */}
+      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 py-3" onClick={(e) => e.stopPropagation()}>
+        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium tabular-nums text-white">
+          {t("gallery.counter", { i: index + 1, n: total })}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button type="button" className={iconBtn} title={t("gallery.ctxUseAsSource")} aria-label={t("gallery.ctxUseAsSource")} onClick={() => onUseAsSource(current.getSrc)}>
+            <ImageIcon className="size-5" />
+          </button>
+          {meta?.prompt && (
+            <button type="button" className={iconBtn} title={t("gallery.ctxReuse")} aria-label={t("gallery.ctxReuse")} onClick={() => onReuseSettings(meta)}>
+              <RotateCcw className="size-5" />
+            </button>
+          )}
+          {meta?.prompt && (
+            <button type="button" className={iconBtn} title={t("gallery.ctxCopyPrompt")} aria-label={t("gallery.ctxCopyPrompt")} onClick={() => void navigator.clipboard?.writeText(meta.prompt).catch(() => {})}>
+              <Copy className="size-5" />
+            </button>
+          )}
+          {current.savedPath && (
+            <button type="button" className={iconBtn} title={t("gallery.ctxReveal")} aria-label={t("gallery.ctxReveal")} onClick={() => void api.revealInFolder(current.savedPath!).catch(() => {})}>
+              <FolderOpen className="size-5" />
+            </button>
+          )}
+          {current.name && (
+            <button type="button" className={cn(iconBtn, "hover:bg-red-600/70")} title={t("gallery.ctxDelete")} aria-label={t("gallery.ctxDelete")} onClick={() => onDelete(current.name!)}>
+              <Trash2 className="size-5" />
+            </button>
+          )}
+          <button type="button" className={iconBtn} title={t("common.close")} aria-label={t("common.close")} onClick={onClose}>
+            <X className="size-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Prev / next edge arrows. */}
+      {hasPrev && (
+        <button type="button" className={cn(iconBtn, "absolute left-4 top-1/2 z-10 -translate-y-1/2")} aria-label={t("gallery.prev")} onClick={(e) => { e.stopPropagation(); prev(); }}>
+          <ChevronLeft className="size-6" />
+        </button>
+      )}
+      {hasNext && (
+        <button type="button" className={cn(iconBtn, "absolute right-4 top-1/2 z-10 -translate-y-1/2")} aria-label={t("gallery.next")} onClick={(e) => { e.stopPropagation(); next(); }}>
+          <ChevronRight className="size-6" />
+        </button>
+      )}
+
       <div
         className="flex max-h-full w-full max-w-6xl flex-col items-center gap-4 md:flex-row md:items-stretch"
         onClick={(e) => e.stopPropagation()}
       >
-        <img
-          src={item.src}
-          alt=""
-          className="max-h-[85vh] min-h-0 flex-1 rounded-xl object-contain shadow-2xl"
-        />
+        <div className="relative flex min-h-0 flex-1 items-center justify-center">
+          {loading && <Loader2 className="absolute size-8 animate-spin text-white/70" />}
+          {src && (
+            <img
+              src={src}
+              alt=""
+              className="animate-in fade-in max-h-[85vh] min-h-0 rounded-xl object-contain shadow-2xl duration-200"
+            />
+          )}
+        </div>
         {meta && <MetaPanel meta={meta} />}
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label={t("common.close")}
-        className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
-      >
-        <X className="size-5" />
-      </button>
     </div>
   );
 }

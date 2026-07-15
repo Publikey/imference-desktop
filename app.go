@@ -765,7 +765,7 @@ func (a *App) ListSavedImages(offset, limit int, filter types.GalleryFilter) ([]
 	sort.Slice(files, func(i, j int) bool { return files[i].mod.After(files[j].mod) })
 
 	// Filtering needs metadata for the whole set → use the cache.
-	active := filter.Engine != "" || filter.ModelCode != "" || filter.Source != ""
+	active := filter.Engine != "" || filter.ModelCode != "" || filter.Source != "" || filter.Text != ""
 	var cache map[string]*types.GenerationMeta
 	if active {
 		cache = a.galleryMeta(dir)
@@ -820,7 +820,7 @@ func readSidecar(imgPath string) *types.GenerationMeta {
 }
 
 func matchFilter(m *types.GenerationMeta, f types.GalleryFilter) bool {
-	if f.Engine == "" && f.ModelCode == "" && f.Source == "" {
+	if f.Engine == "" && f.ModelCode == "" && f.Source == "" && f.Text == "" {
 		return true
 	}
 	if m == nil {
@@ -833,6 +833,9 @@ func matchFilter(m *types.GenerationMeta, f types.GalleryFilter) bool {
 		return false
 	}
 	if f.Source != "" && m.Source != f.Source {
+		return false
+	}
+	if f.Text != "" && !strings.Contains(strings.ToLower(m.Prompt), strings.ToLower(f.Text)) {
 		return false
 	}
 	return true

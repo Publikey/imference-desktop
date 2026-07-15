@@ -206,7 +206,7 @@ export type GenerationMeta = {
   createdAt: string;
 };
 
-export type GalleryFilter = { engine: string; modelCode: string; source: string };
+export type GalleryFilter = { engine: string; modelCode: string; source: string; text: string };
 export type Facet = { value: string; label: string; count: number };
 export type GalleryFacets = { models: Facet[]; engines: Facet[]; sources: Facet[] };
 

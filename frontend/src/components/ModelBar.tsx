@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronsUpDown, Cloud, Cpu, Download, Loader2 } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,7 @@ export function ModelBar({
   onSelectCustom,
   onRemoveCustom,
 }: Props) {
+  const { t } = useTranslation();
   const [localModels, setLocalModels] = useState<ModelInfo[]>([]);
   const [cloudModels, setCloudModels] = useState<ModelInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,17 +133,17 @@ export function ModelBar({
             "flex size-9 shrink-0 items-center justify-center rounded-[10px] text-white shadow-sm",
             isCloud ? "bg-gradient-to-br from-sky-400 to-blue-600" : "brand-surface"
           )}
-          title={isCloud ? "Cloud model" : "Local model"}
+          title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
         >
           {isCloud ? <Cloud className="size-[18px]" /> : <Cpu className="size-[18px]" />}
         </span>
 
         {listError ? (
-          <span className="text-destructive flex-1 text-xs">Catalog unavailable</span>
+          <span className="text-destructive flex-1 text-xs">{t("modelBar.catalogUnavailable")}</span>
         ) : loading ? (
           <span className="text-muted-foreground inline-flex flex-1 items-center gap-1.5 text-xs">
             <Loader2 className="size-3.5 animate-spin" />
-            Loading…
+            {t("common.loading")}
           </span>
         ) : (
           <button
@@ -156,7 +158,7 @@ export function ModelBar({
           >
             <ModelThumb m={selected} isCloud={isCloud} className="size-7 rounded-lg" iconClassName="size-3.5" />
             <span className="min-w-0 flex-1 truncate font-medium">
-              {selected?.name ?? (allModels.length ? "Select a model" : "No models")}
+              {selected?.name ?? (allModels.length ? t("modelBar.selectModel") : t("modelBar.noModels"))}
             </span>
             {busy ? (
               <Loader2 className="size-4 shrink-0 animate-spin opacity-60" />
@@ -198,13 +200,14 @@ export function ModelBar({
 }
 
 function DownloadProgress({ p }: { p: InstallProgress }) {
+  const { t } = useTranslation();
   return (
     <div className="mt-2.5 space-y-1.5 pl-9">
       <div className="flex items-center justify-between gap-2 text-[11px]">
         <span className="text-muted-foreground inline-flex min-w-0 items-center gap-1.5">
           <Download className="text-primary size-3 shrink-0 animate-pulse" />
           <span className="truncate" title={p.message}>
-            {p.message || "Working…"}
+            {p.message || t("modelBar.working")}
           </span>
         </span>
         {p.percentEstimate > 0 && (

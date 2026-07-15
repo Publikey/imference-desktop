@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import type {
   EngineRuntimeSettings,
@@ -23,6 +24,7 @@ export function EngineRuntimeSection({
   value?: EngineRuntimeSettings;
   onChange: (next: EngineRuntimeSettings) => void;
 }) {
+  const { t } = useTranslation();
   const v = value ?? EMPTY;
   const image = v.image ?? {};
   const wan = v.wan ?? {};
@@ -34,21 +36,16 @@ export function EngineRuntimeSection({
   return (
     <section className="bg-card grid gap-4 rounded-2xl border p-4 shadow-sm">
       <div>
-        <h3 className="text-sm font-semibold">Engine / machine</h3>
-        <p className="text-muted-foreground text-[11px]">
-          How each engine runs on your machine. Defaults adapt automatically — change these only to
-          fit your GPU/RAM. Saving restarts the local engine.
-        </p>
+        <h3 className="text-sm font-semibold">{t("runtime.title")}</h3>
+        <p className="text-muted-foreground text-[11px]">{t("runtime.desc")}</p>
       </div>
 
       {/* Image — one block for every image backend (SDXL, SD 1.5, Z-Image,
           FLUX, Chroma, Qwen-Image, Anima); they share the IMAGE_* contract. */}
       <div id="settings-runtime-image" className="grid gap-3 scroll-mt-4">
         <span className="text-xs font-medium">
-          Image{" "}
-          <span className="text-muted-foreground font-normal">
-            — SDXL · SD 1.5 · Z-Image · FLUX · Chroma · Qwen-Image · Anima
-          </span>
+          {t("runtime.image")}{" "}
+          <span className="text-muted-foreground font-normal">{t("runtime.imageModels")}</span>
         </span>
         <DeviceMaxGrid
           device={image.device}
@@ -62,7 +59,7 @@ export function EngineRuntimeSection({
         <Toggle
           checked={!!image.useTinyVae}
           onChange={(useTinyVae) => setImage({ useTinyVae })}
-          label="Tiny VAE — much faster decode, slight quality loss (SDXL / SD 1.5 only)"
+          label={t("runtime.tinyVae")}
         />
         <OffloadSelect
           value={image.enableCpuOffload}
@@ -73,49 +70,49 @@ export function EngineRuntimeSection({
       {/* WAN video — applies once the video backend is enabled */}
       <div id="settings-runtime-wan" className="grid gap-3 border-t pt-3 scroll-mt-4">
         <span className="text-xs font-medium">
-          Video · WAN{" "}
-          <span className="text-muted-foreground font-normal">— applies once video is enabled</span>
+          {t("runtime.videoWan")}{" "}
+          <span className="text-muted-foreground font-normal">{t("runtime.wanApplies")}</span>
         </span>
         <div className="grid grid-cols-2 gap-3">
           <label className="grid gap-1 text-xs">
-            Device
+            {t("runtime.device")}
             <select
               className={selectCls}
               value={wan.device || "auto"}
               onChange={(e) => setWan({ device: e.target.value })}
             >
-              <option value="auto">Auto</option>
-              <option value="cuda">CUDA (GPU)</option>
-              <option value="cpu">CPU</option>
+              <option value="auto">{t("runtime.auto")}</option>
+              <option value="cuda">{t("runtime.cuda")}</option>
+              <option value="cpu">{t("runtime.cpu")}</option>
             </select>
           </label>
           <label className="grid gap-1 text-xs">
-            Quantization (GGUF)
+            {t("runtime.quant")}
             <select
               className={selectCls}
               value={wan.memoryProfile || "auto"}
               onChange={(e) => setWan({ memoryProfile: e.target.value })}
             >
-              <option value="auto">Auto (by VRAM)</option>
-              <option value="gguf_q8">Q8 — best, ≥ 20 GB</option>
-              <option value="gguf_q6">Q6 — ≥ 14 GB</option>
-              <option value="gguf_q5">Q5</option>
-              <option value="gguf_q4">Q4 — tightest cards</option>
+              <option value="auto">{t("runtime.quantAuto")}</option>
+              <option value="gguf_q8">{t("runtime.q8")}</option>
+              <option value="gguf_q6">{t("runtime.q6")}</option>
+              <option value="gguf_q5">{t("runtime.q5")}</option>
+              <option value="gguf_q4">{t("runtime.q4")}</option>
             </select>
           </label>
           <label className="grid gap-1 text-xs">
-            Text-encoder quant
+            {t("runtime.textEncoderQuant")}
             <select
               className={selectCls}
               value={wan.textEncoderQuant || "int8"}
               onChange={(e) => setWan({ textEncoderQuant: e.target.value })}
             >
-              <option value="int8">int8 — saves RAM</option>
-              <option value="none">none — bf16</option>
+              <option value="int8">{t("runtime.int8")}</option>
+              <option value="none">{t("runtime.noneBf16")}</option>
             </select>
           </label>
           <label className="grid gap-1 text-xs">
-            Max resident variants
+            {t("runtime.maxResident")}
             <Input
               value={wan.maxResident ?? ""}
               onChange={(e) => setWan({ maxResident: e.target.value })}
@@ -126,12 +123,12 @@ export function EngineRuntimeSection({
         <Toggle
           checked={wan.vaeTiling !== false}
           onChange={(vaeTiling) => setWan({ vaeTiling })}
-          label="VAE tiling — lower decode VRAM for long / large video"
+          label={t("runtime.vaeTiling")}
         />
         <Toggle
           checked={wan.enableOffload !== false}
           onChange={(enableOffload) => setWan({ enableOffload })}
-          label="CPU offload (video)"
+          label={t("runtime.cpuOffloadVideo")}
         />
       </div>
     </section>
@@ -156,23 +153,24 @@ function DeviceMaxGrid({
   onMaxCpu: (v: string) => void;
   mps?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-2 gap-3">
       <label className="grid gap-1 text-xs">
-        Device
+        {t("runtime.device")}
         <select className={selectCls} value={device || "auto"} onChange={(e) => onDevice(e.target.value)}>
-          <option value="auto">Auto</option>
-          <option value="cuda">CUDA (GPU)</option>
-          <option value="cpu">CPU</option>
-          {mps && <option value="mps">Apple MPS</option>}
+          <option value="auto">{t("runtime.auto")}</option>
+          <option value="cuda">{t("runtime.cuda")}</option>
+          <option value="cpu">{t("runtime.cpu")}</option>
+          {mps && <option value="mps">{t("runtime.mps")}</option>}
         </select>
       </label>
       <label className="grid gap-1 text-xs">
-        Max GPU models
+        {t("runtime.maxGpuModels")}
         <Input value={maxGpuModels ?? ""} onChange={(e) => onMaxGpu(e.target.value)} placeholder="auto" />
       </label>
       <label className="grid gap-1 text-xs">
-        Max CPU-cached models
+        {t("runtime.maxCpuModels")}
         <Input value={maxCpuModels ?? ""} onChange={(e) => onMaxCpu(e.target.value)} placeholder="auto" />
       </label>
     </div>
@@ -190,10 +188,11 @@ function OffloadSelect({
   value?: boolean;
   onChange: (v: boolean | undefined) => void;
 }) {
+  const { t } = useTranslation();
   const current = value === undefined ? "auto" : value ? "on" : "off";
   return (
     <label className="grid gap-1 text-xs">
-      CPU offload
+      {t("runtime.cpuOffload")}
       <select
         className={selectCls}
         value={current}
@@ -202,9 +201,9 @@ function OffloadSelect({
           onChange(v === "auto" ? undefined : v === "on");
         }}
       >
-        <option value="auto">Auto — enabled on low-VRAM GPUs (recommended)</option>
-        <option value="on">On — always (lowest peak VRAM)</option>
-        <option value="off">Off — full residency (needs ≳ 12 GB VRAM)</option>
+        <option value="auto">{t("runtime.offloadAuto")}</option>
+        <option value="on">{t("runtime.offloadOn")}</option>
+        <option value="off">{t("runtime.offloadOff")}</option>
       </select>
     </label>
   );

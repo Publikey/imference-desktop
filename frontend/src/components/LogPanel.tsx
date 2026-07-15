@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { X, Trash2, Pause, Play, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/wails-bridge";
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function LogPanel({ open, onOpenChange }: Props) {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [paused, setPaused] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -112,10 +114,10 @@ export function LogPanel({ open, onOpenChange }: Props) {
     >
       <div className="flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-3">
-          <h2 className="text-sm font-semibold">Logs</h2>
+          <h2 className="text-sm font-semibold">{t("logs.title")}</h2>
           <span className="text-muted-foreground text-xs">
-            {entries.length} total · {filtered.length} shown
-            {errorCount > 0 ? ` · ${errorCount} errors` : ""}
+            {t("logs.stats", { total: entries.length, shown: filtered.length })}
+            {errorCount > 0 ? t("logs.errors", { count: errorCount }) : ""}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -123,7 +125,7 @@ export function LogPanel({ open, onOpenChange }: Props) {
             variant="ghost"
             size="icon"
             onClick={() => setPaused((p) => !p)}
-            title={paused ? "Resume streaming" : "Pause streaming"}
+            title={paused ? t("logs.resume") : t("logs.pause")}
           >
             {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
           </Button>
@@ -131,7 +133,7 @@ export function LogPanel({ open, onOpenChange }: Props) {
             variant="ghost"
             size="icon"
             onClick={() => setAutoScroll((s) => !s)}
-            title={autoScroll ? "Auto-scroll on (click to disable)" : "Auto-scroll off"}
+            title={autoScroll ? t("logs.autoScrollOn") : t("logs.autoScrollOff")}
           >
             <ChevronDown
               className={"size-4 " + (autoScroll ? "" : "opacity-40")}
@@ -145,7 +147,7 @@ export function LogPanel({ open, onOpenChange }: Props) {
               setEntries([]);
               pausedBufferRef.current = [];
             }}
-            title="Clear"
+            title={t("common.clear")}
           >
             <Trash2 className="size-4" />
           </Button>
@@ -153,7 +155,7 @@ export function LogPanel({ open, onOpenChange }: Props) {
             variant="ghost"
             size="icon"
             onClick={() => onOpenChange(false)}
-            title="Close"
+            title={t("common.close")}
           >
             <X className="size-4" />
           </Button>
@@ -161,7 +163,7 @@ export function LogPanel({ open, onOpenChange }: Props) {
       </div>
 
       <div className="flex items-center gap-2 border-b px-4 py-2 text-xs">
-        <label className="text-muted-foreground">level ≥</label>
+        <label className="text-muted-foreground">{t("logs.levelFilter")}</label>
         <select
           className="rounded border bg-background px-2 py-1 text-xs"
           value={minLevel}
@@ -172,13 +174,13 @@ export function LogPanel({ open, onOpenChange }: Props) {
           <option value="warn">warn</option>
           <option value="error">error</option>
         </select>
-        <label className="text-muted-foreground ml-3">source</label>
+        <label className="text-muted-foreground ml-3">{t("logs.sourceFilter")}</label>
         <select
           className="rounded border bg-background px-2 py-1 text-xs"
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value)}
         >
-          <option value="">all</option>
+          <option value="">{t("logs.allSources")}</option>
           {sources.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -192,7 +194,7 @@ export function LogPanel({ open, onOpenChange }: Props) {
         className="h-[calc(100vh-92px)] overflow-y-auto font-mono text-xs"
       >
         {filtered.length === 0 ? (
-          <p className="text-muted-foreground p-6 text-center">No entries.</p>
+          <p className="text-muted-foreground p-6 text-center">{t("logs.empty")}</p>
         ) : (
           filtered.map((e) => <LogRow key={e.id} entry={e} />)
         )}

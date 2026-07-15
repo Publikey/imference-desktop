@@ -1,4 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   Settings,
   Cloud,
@@ -93,12 +95,19 @@ type GenParams = {
   scheduler: string; // local only
 };
 
-// Generic formats used only when the catalog (im_format) carries none.
+// Generic formats used only when the catalog (im_format) carries none. Names
+// are left empty so the UI resolves them via i18n (formatName below).
 const FALLBACK_FORMATS: FormatOption[] = [
-  { formatCode: "square", name: "Square", width: 1024, height: 1024, ratio: "1:1", isDefault: true },
-  { formatCode: "portrait", name: "Portrait", width: 832, height: 1216, ratio: "2:3", isDefault: false },
-  { formatCode: "landscape", name: "Landscape", width: 1216, height: 832, ratio: "3:2", isDefault: false },
+  { formatCode: "square", name: "", width: 1024, height: 1024, ratio: "1:1", isDefault: true },
+  { formatCode: "portrait", name: "", width: 832, height: 1216, ratio: "2:3", isDefault: false },
+  { formatCode: "landscape", name: "", width: 1216, height: 832, ratio: "3:2", isDefault: false },
 ];
+
+// Display name of a format: known codes are translated, otherwise the catalog
+// name (server-provided) then the raw code.
+function formatName(f: FormatOption, t: TFunction): string {
+  return t(`formats.${f.formatCode}`, { defaultValue: f.name || f.formatCode });
+}
 
 // A model's supported formats come from im_format; fall back to generic ones.
 function formatOptions(model: ModelInfo | null | undefined): FormatOption[] {
@@ -136,6 +145,7 @@ function defaultParams(model: ModelInfo): GenParams {
 }
 
 export default function App() {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [sidecar, setSidecar] = useState<SidecarStatus>({ state: "idle" });
   const [prompt, setPrompt] = useState("");
@@ -370,7 +380,7 @@ export default function App() {
     setDownloading(true);
     setDlProgress({
       phase: "model",
-      message: `Preparing ${pendingLocalModel.name}`,
+      message: t("hint.preparing", { name: pendingLocalModel.name }),
       percentEstimate: 0,
       done: false,
     });
@@ -384,7 +394,7 @@ export default function App() {
         error: e instanceof Error ? e.message : String(e),
       });
     });
-  }, [pendingLocalModel, downloading]);
+  }, [pendingLocalModel, downloading, t]);
 
   // The selected local model is "downloaded" when it matches the persisted one.
   const localDownloaded =
@@ -470,17 +480,17 @@ export default function App() {
   // triggers whichever is current.
   const primary: ComposerAction = useMemo(() => {
     if (mode === "local" && downloading)
-      return { label: "Downloading…", onClick: () => {}, disabled: true, busy: true, kind: "download" };
+      return { label: t("composer.downloadingBtn"), onClick: () => {}, disabled: true, busy: true, kind: "download" };
     if (mode === "local" && localNeedsDownload)
       return {
-        label: "Download model",
+        label: t("composer.downloadModelBtn"),
         onClick: downloadLocalModel,
         disabled: !pendingLocalModel,
         busy: false,
         kind: "download",
       };
     return {
-      label: "Generate",
+      label: t("composer.generateBtn"),
       onClick: () => {
         if (canGenerate) run(mode);
       },
@@ -488,25 +498,25 @@ export default function App() {
       busy: false,
       kind: "generate",
     };
-  }, [mode, downloading, localNeedsDownload, pendingLocalModel, downloadLocalModel, canGenerate, run]);
+  }, [mode, downloading, localNeedsDownload, pendingLocalModel, downloadLocalModel, canGenerate, run, t]);
 
   // Hint shown under the composer: what this generation will use (params live in
   // the Parameters panel now, so no steps/cfg duplication here).
   const contextHint = useMemo(() => {
     if (mode === "cloud") {
-      if (!cloudConfigured) return "Configure a payment method above";
+      if (!cloudConfigured) return t("hint.configurePayment");
       const c = settings?.cloudModelInfo;
-      if (!c) return "Pick a cloud model above";
-      return c.cost > 0 ? `${c.name} · ${c.cost} credits / run` : c.name;
+      if (!c) return t("hint.pickCloudModel");
+      return c.cost > 0 ? t("hint.creditsPerRun", { name: c.name, cost: c.cost }) : c.name;
     }
-    if (!engineInstalled) return "Local engine not installed — click Install engine";
-    if (downloading) return "Downloading model…";
-    if (localNeedsDownload) return `${pendingLocalModel?.name} — click Download model`;
-    if (sidecar.state === "starting") return "Local engine starting…";
-    if (sidecar.state === "error") return "Local engine error — see Logs";
-    if (sidecar.state !== "ready") return "Start the local engine to generate";
-    return settings?.localModel?.name ?? "Pick a model above";
-  }, [mode, cloudConfigured, downloading, localNeedsDownload, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, engineInstalled]);
+    if (!engineInstalled) return t("hint.engineNotInstalled");
+    if (downloading) return t("hint.downloadingModel");
+    if (localNeedsDownload) return t("hint.clickDownload", { name: pendingLocalModel?.name });
+    if (sidecar.state === "starting") return t("hint.engineStarting");
+    if (sidecar.state === "error") return t("hint.engineError");
+    if (sidecar.state !== "ready") return t("hint.startEngine");
+    return settings?.localModel?.name ?? t("hint.pickModel");
+  }, [mode, cloudConfigured, downloading, localNeedsDownload, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, engineInstalled, t]);
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
@@ -654,13 +664,14 @@ function Header({
   onToggleLogs: () => void;
   onOpenSettings: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <header className="bg-background/70 supports-[backdrop-filter]:bg-background/55 sticky top-0 z-10 flex items-center justify-between border-b px-5 py-3 backdrop-blur-xl">
       <div className="flex items-center gap-2.5">
         {/* Logo + app version stacked — the version is important operational info. */}
         <div className="flex flex-col items-center leading-none">
           <img src={logoUrl} alt="Imference" className="size-8" />
-          <span className="text-muted-foreground mt-0.5 text-[9px] tabular-nums" title="Imference Desktop version">
+          <span className="text-muted-foreground mt-0.5 text-[9px] tabular-nums" title={t("header.versionTitle")}>
             {appVersion === "dev" ? "dev" : appVersion ? `v${appVersion}` : ""}
           </span>
         </div>
@@ -681,15 +692,15 @@ function Header({
         {/* Settings — prominent, labelled entry point. */}
         <Button variant="outline" size="sm" onClick={onOpenSettings} className="h-9 gap-1.5">
           <Settings className="size-4" />
-          Settings
+          {t("common.settings")}
         </Button>
         {/* Logs — discreet, for debugging; a dot signals errors. */}
         <Button
           variant="ghost"
           size="icon"
           onClick={onToggleLogs}
-          aria-label={errorLogCount > 0 ? `Logs, ${errorLogCount} errors` : "Logs"}
-          title={errorLogCount > 0 ? `${errorLogCount} error${errorLogCount > 1 ? "s" : ""}` : "Logs"}
+          aria-label={errorLogCount > 0 ? t("header.logsWithErrors", { count: errorLogCount }) : t("common.logs")}
+          title={errorLogCount > 0 ? t("header.errors", { count: errorLogCount }) : t("common.logs")}
           className="text-muted-foreground/60 hover:text-foreground relative size-8"
         >
           <ScrollText className="size-4" />
@@ -726,13 +737,14 @@ function EngineControl({
   onStop: () => void;
   onSelectModel: () => void;
 }) {
+  const { t } = useTranslation();
   const pill =
     "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50";
 
   if (installing) {
     return (
       <span className={cn(pill, "border-border text-muted-foreground")}>
-        <Loader2 className="size-3 animate-spin" /> Installing engine…
+        <Loader2 className="size-3 animate-spin" /> {t("engineControl.installing")}
       </span>
     );
   }
@@ -743,14 +755,14 @@ function EngineControl({
         onClick={onInstall}
         className={cn(pill, "border-primary/30 bg-primary/10 text-primary hover:bg-primary/20")}
       >
-        <Download className="size-3" /> Install engine
+        <Download className="size-3" /> {t("engineControl.install")}
       </button>
     );
   }
   if (status.state === "starting") {
     return (
       <span className={cn(pill, "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300")}>
-        <Loader2 className="size-3 animate-spin" /> Starting…
+        <Loader2 className="size-3 animate-spin" /> {t("engineControl.starting")}
       </span>
     );
   }
@@ -759,7 +771,7 @@ function EngineControl({
       <button
         type="button"
         onClick={onStop}
-        title={`Local engine running · ${status.device} — click to stop`}
+        title={t("engineControl.runningTitle", { device: status.device })}
         className={cn(
           pill,
           // Fixed width + centered so swapping the label on hover doesn't reflow.
@@ -768,8 +780,8 @@ function EngineControl({
       >
         <span className="size-1.5 rounded-full bg-emerald-500 group-hover:hidden" />
         <Square className="hidden size-3 group-hover:inline" />
-        <span className="group-hover:hidden">Local engine on</span>
-        <span className="hidden group-hover:inline">Stop</span>
+        <span className="group-hover:hidden">{t("engineControl.on")}</span>
+        <span className="hidden group-hover:inline">{t("engineControl.stop")}</span>
       </button>
     );
   }
@@ -780,10 +792,10 @@ function EngineControl({
       <button
         type="button"
         onClick={onSelectModel}
-        title="Pick a local model — that's what the engine loads and runs"
+        title={t("engineControl.selectModelTitle")}
         className={cn(pill, "border-border text-muted-foreground hover:text-foreground hover:border-primary/40")}
       >
-        <Cpu className="size-3" /> Select a model
+        <Cpu className="size-3" /> {t("engineControl.selectModel")}
       </button>
     );
   }
@@ -795,7 +807,7 @@ function EngineControl({
     <button
       type="button"
       onClick={onStart}
-      title={errMsg || "Start the local engine (loads the selected model)"}
+      title={errMsg || t("engineControl.startTitle")}
       className={cn(
         pill,
         isError
@@ -804,7 +816,7 @@ function EngineControl({
       )}
     >
       <Play className="size-3" />
-      {isError ? "Restart engine" : "Start engine"}
+      {isError ? t("engineControl.restart") : t("engineControl.start")}
     </button>
   );
 }
@@ -845,6 +857,7 @@ function Composer({
   negativePrompt: string;
   onNegativePromptChange: (v: string) => void;
 }) {
+  const { t } = useTranslation();
   const onKeyDown = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
@@ -858,12 +871,12 @@ function Composer({
       {showModelFields && (
         <label className="hover:bg-muted/30 block rounded-t-[26px] px-5 pb-2 pt-2.5 transition-colors">
           <span className="text-muted-foreground/60 text-[10px] font-medium uppercase tracking-wide">
-            Quality tags
+            {t("composer.qualityTags")}
           </span>
           <textarea
             value={prePrompt}
             onChange={(e) => onPrePromptChange(e.target.value)}
-            placeholder="masterpiece, best quality, …"
+            placeholder={t("composer.qualityTagsPlaceholder")}
             rows={1}
             className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-20 w-full resize-none border-0 bg-transparent text-[12.5px] leading-snug outline-none"
           />
@@ -875,7 +888,7 @@ function Composer({
         value={prompt}
         onChange={(e) => onPromptChange(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="A serene mountain lake at golden hour, photorealistic…"
+        placeholder={t("composer.promptPlaceholder")}
         rows={3}
         className={cn(
           "placeholder:text-muted-foreground/60 border-border/60 block max-h-72 min-h-32 w-full resize-none border-0 bg-transparent px-5 py-4 text-[17px] font-medium leading-relaxed outline-none",
@@ -887,12 +900,12 @@ function Composer({
       {showModelFields && (
         <label className="hover:bg-muted/30 block px-5 pb-2.5 pt-2 transition-colors">
           <span className="text-muted-foreground/60 text-[10px] font-medium uppercase tracking-wide">
-            Negative prompt
+            {t("composer.negativePrompt")}
           </span>
           <textarea
             value={negativePrompt}
             onChange={(e) => onNegativePromptChange(e.target.value)}
-            placeholder="things to avoid…"
+            placeholder={t("composer.negativePlaceholder")}
             rows={1}
             className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-20 w-full resize-none border-0 bg-transparent text-[12.5px] leading-snug outline-none"
           />
@@ -951,6 +964,7 @@ function ParamsPanel({
   params: GenParams;
   onChange: (p: GenParams) => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const set = (patch: Partial<GenParams>) => onChange({ ...params, ...patch });
 
@@ -961,7 +975,11 @@ function ParamsPanel({
   const showClip = model.skipDefault > 0; // model uses clip-skip
   const formats = formatOptions(model);
   const dims = dimsForModel(model, params.formatCode);
-  const summary = `${dims.width}×${dims.height} · ${params.steps} steps · cfg ${params.cfg}`;
+  const summary = t("params.summary", {
+    dims: `${dims.width}×${dims.height}`,
+    steps: params.steps,
+    cfg: params.cfg,
+  });
 
   return (
     <section className="bg-card rounded-2xl border shadow-sm">
@@ -972,7 +990,7 @@ function ParamsPanel({
       >
         <div className="flex min-w-0 items-center gap-2">
           <SlidersHorizontal className="text-muted-foreground size-4 shrink-0" />
-          <span className="text-sm font-semibold">Parameters</span>
+          <span className="text-sm font-semibold">{t("params.title")}</span>
           <span className="text-muted-foreground/80 truncate text-[11px]">{summary}</span>
         </div>
         <ChevronDown
@@ -983,7 +1001,7 @@ function ParamsPanel({
       {open && (
         <div className="grid gap-4 border-t px-4 py-4">
           <div className="grid gap-1.5">
-            <span className="text-xs font-medium">Format</span>
+            <span className="text-xs font-medium">{t("params.format")}</span>
             <div className="bg-muted flex flex-wrap gap-1 rounded-lg p-0.5 text-xs">
               {formats.map((f) => (
                 <button
@@ -998,7 +1016,7 @@ function ParamsPanel({
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  {f.name || f.formatCode}
+                  {formatName(f, t)}
                   {f.ratio && (
                     <span className="text-muted-foreground/70 ml-1 text-[10px] normal-case">{f.ratio}</span>
                   )}
@@ -1007,19 +1025,19 @@ function ParamsPanel({
             </div>
           </div>
 
-          <RangeRow label="Steps" value={params.steps} min={stepsMin} max={stepsMax} step={1} onChange={(v) => set({ steps: v })} />
-          <RangeRow label="CFG" value={params.cfg} min={cfgMin} max={cfgMax} step={0.5} onChange={(v) => set({ cfg: v })} />
+          <RangeRow label={t("params.steps")} value={params.steps} min={stepsMin} max={stepsMax} step={1} onChange={(v) => set({ steps: v })} />
+          <RangeRow label={t("params.cfg")} value={params.cfg} min={cfgMin} max={cfgMax} step={0.5} onChange={(v) => set({ cfg: v })} />
 
           <div className="grid gap-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium">Seed</span>
+              <span className="text-xs font-medium">{t("params.seed")}</span>
               <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-[11px]">
                 <input
                   type="checkbox"
                   checked={params.seedMode === "random"}
                   onChange={(e) => set({ seedMode: e.target.checked ? "random" : "fixed" })}
                 />
-                Random
+                {t("params.random")}
               </label>
             </div>
             {params.seedMode === "fixed" && (
@@ -1035,11 +1053,11 @@ function ParamsPanel({
           {mode === "local" && (
             <div className="grid gap-3 border-t pt-3">
               <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
-                Advanced · local only
+                {t("params.advanced")}
               </span>
               {showClip && (
                 <RangeRow
-                  label="Clip skip"
+                  label={t("params.clipSkip")}
                   value={params.clipSkip ?? model.skipDefault}
                   min={0}
                   max={4}
@@ -1048,10 +1066,10 @@ function ParamsPanel({
                 />
               )}
               <div className="grid gap-1.5">
-                <span className="text-xs font-medium">Scheduler</span>
+                <span className="text-xs font-medium">{t("params.scheduler")}</span>
                 {/* Read-only until we expose a scheduler list — shows the model default. */}
                 <div className="border-input bg-muted/40 text-muted-foreground flex h-8 items-center rounded-md border px-2 text-xs">
-                  {params.scheduler || "model default"}
+                  {params.scheduler || t("params.modelDefault")}
                 </div>
               </div>
             </div>
@@ -1062,7 +1080,7 @@ function ParamsPanel({
             onClick={() => onChange(defaultParams(model))}
             className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 justify-self-start text-[11px]"
           >
-            <RotateCcw className="size-3" /> Reset to model defaults
+            <RotateCcw className="size-3" /> {t("params.reset")}
           </button>
         </div>
       )}
@@ -1118,6 +1136,7 @@ function Img2ImgBar({
   strength: number;
   onStrengthChange: (v: number) => void;
 }) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1137,20 +1156,20 @@ function Img2ImgBar({
         <div className="flex items-center gap-3">
           <img
             src={sourceImage}
-            alt="img2img source"
+            alt={t("img2img.sourceAlt")}
             className="size-11 shrink-0 rounded-lg border object-cover"
           />
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground text-[11px]">
-                Image-to-image · strength {strength.toFixed(2)}
+                {t("img2img.label", { strength: strength.toFixed(2) })}
               </span>
               <button
                 type="button"
                 onClick={() => onSourceImageChange(null)}
                 className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[11px]"
               >
-                <X className="size-3" /> Remove
+                <X className="size-3" /> {t("common.remove")}
               </button>
             </div>
             <input
@@ -1170,7 +1189,7 @@ function Img2ImgBar({
           onClick={() => inputRef.current?.click()}
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-[11px]"
         >
-          <ImageIcon className="size-3.5" /> Add source image (img2img)
+          <ImageIcon className="size-3.5" /> {t("img2img.add")}
         </button>
       )}
     </div>
@@ -1190,6 +1209,7 @@ function ModeToggle({
   localReady: boolean;
   cloudReady: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="bg-muted grid grid-cols-2 gap-1 rounded-2xl p-1 text-sm">
       <SegBtn
@@ -1197,14 +1217,14 @@ function ModeToggle({
         ready={localReady}
         onClick={() => onModeChange("local")}
         icon={<Cpu className="size-4" />}
-        label="Local"
+        label={t("mode.local")}
       />
       <SegBtn
         active={mode === "cloud"}
         ready={cloudReady}
         onClick={() => onModeChange("cloud")}
         icon={<Cloud className="size-4" />}
-        label="Cloud"
+        label={t("mode.cloud")}
       />
     </div>
   );
@@ -1259,6 +1279,7 @@ const EMPTY_FILTER: GalleryFilter = { engine: "", modelCode: "", source: "" };
 type LightboxItem = { src: string; meta?: GenerationMeta | null };
 
 function Gallery({ jobs }: { jobs: Job[] }) {
+  const { t } = useTranslation();
   const [saved, setSaved] = useState<SavedImage[]>([]);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -1322,7 +1343,7 @@ function Gallery({ jobs }: { jobs: Job[] }) {
 
   const onDelete = useCallback(
     (img: SavedImage) => {
-      if (!window.confirm(`Delete this image?\n${img.name}`)) return;
+      if (!window.confirm(t("gallery.deleteConfirm", { name: img.name }))) return;
       void api
         .deleteSavedImage(img.name)
         .then(() => {
@@ -1331,7 +1352,7 @@ function Gallery({ jobs }: { jobs: Job[] }) {
         })
         .catch(() => {});
     },
-    [refreshFacets]
+    [refreshFacets, t]
   );
 
   const filtered = filter.engine !== "" || filter.modelCode !== "" || filter.source !== "";
@@ -1365,7 +1386,7 @@ function Gallery({ jobs }: { jobs: Job[] }) {
             <ImageIcon className="size-5" strokeWidth={1.75} />
           </div>
           <p className="relative text-sm">
-            {filtered ? "No images match this filter" : "Your generations will appear here"}
+            {filtered ? t("gallery.emptyFiltered") : t("gallery.empty")}
           </p>
         </div>
       ) : (
@@ -1402,6 +1423,7 @@ function FilterBar({
   filter: GalleryFilter;
   onChange: (f: GalleryFilter) => void;
 }) {
+  const { t } = useTranslation();
   const active = filter.engine !== "" || filter.modelCode !== "" || filter.source !== "";
   // Guard against nil slices (Go marshals empty slices as null).
   const models = facets?.models ?? [];
@@ -1412,7 +1434,7 @@ function FilterBar({
     <div className="flex flex-wrap items-center gap-2">
       {models.length > 0 && (
         <FacetSelect
-          label="Model"
+          label={t("gallery.filterModel")}
           value={filter.modelCode}
           facets={models}
           onChange={(v) => onChange({ ...filter, modelCode: v })}
@@ -1420,7 +1442,7 @@ function FilterBar({
       )}
       {engines.length > 1 && (
         <FacetSelect
-          label="Engine"
+          label={t("gallery.filterEngine")}
           value={filter.engine}
           facets={engines}
           onChange={(v) => onChange({ ...filter, engine: v })}
@@ -1428,7 +1450,7 @@ function FilterBar({
       )}
       {sources.length > 1 && (
         <FacetSelect
-          label="Source"
+          label={t("gallery.filterSource")}
           value={filter.source}
           facets={sources}
           onChange={(v) => onChange({ ...filter, source: v })}
@@ -1440,7 +1462,7 @@ function FilterBar({
           onClick={() => onChange(EMPTY_FILTER)}
           className="text-muted-foreground hover:text-foreground text-xs font-medium"
         >
-          Clear
+          {t("common.clear")}
         </button>
       )}
     </div>
@@ -1458,6 +1480,7 @@ function FacetSelect({
   facets: { value: string; label: string; count: number }[];
   onChange: (v: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <select
       value={value}
@@ -1465,7 +1488,7 @@ function FacetSelect({
       className="border-input bg-background h-8 max-w-40 rounded-md border px-2 text-xs"
       aria-label={label}
     >
-      <option value="">{label}: all</option>
+      <option value="">{t("gallery.filterAll", { label })}</option>
       {facets.map((f) => (
         <option key={f.value} value={f.value}>
           {f.label} ({f.count})
@@ -1476,14 +1499,15 @@ function FacetSelect({
 }
 
 function ColumnPicker({ cols, onChange }: { cols: number; onChange: (n: number) => void }) {
+  const { t } = useTranslation();
   return (
-    <div className="bg-muted inline-flex items-center gap-0.5 rounded-lg p-0.5" role="group" aria-label="Columns">
+    <div className="bg-muted inline-flex items-center gap-0.5 rounded-lg p-0.5" role="group" aria-label={t("gallery.columns")}>
       {[1, 2, 3, 4].map((n) => (
         <button
           key={n}
           type="button"
           onClick={() => onChange(n)}
-          aria-label={`${n} column${n > 1 ? "s" : ""}`}
+          aria-label={t("gallery.columns", { count: n })}
           className={cn(
             "rounded-md px-2 py-1 text-xs font-medium tabular-nums transition",
             cols === n
@@ -1499,14 +1523,15 @@ function ColumnPicker({ cols, onChange }: { cols: number; onChange: (n: number) 
 }
 
 function JobTile({ job, onOpen }: { job: Job; onOpen: (item: LightboxItem) => void }) {
+  const { t } = useTranslation();
   if (job.status === "running") {
     const pct = job.progress && job.progress.total > 0 ? job.progress.percent : null;
     const sub =
       pct !== null
-        ? `step ${job.progress!.step}/${job.progress!.total}`
+        ? t("gallery.step", { step: job.progress!.step, total: job.progress!.total })
         : job.mode === "cloud"
-          ? "Cloud…"
-          : "Generating…";
+          ? t("gallery.cloudRunning")
+          : t("gallery.generating");
     return (
       <div className="bg-muted/40 relative aspect-square w-full overflow-hidden rounded-2xl border" title={job.prompt}>
         <div className="via-foreground/[0.04] absolute inset-0 -translate-x-full animate-[shimmer_1.6s_infinite] bg-gradient-to-r from-transparent to-transparent" />
@@ -1552,7 +1577,7 @@ function JobTile({ job, onOpen }: { job: Job; onOpen: (item: LightboxItem) => vo
       <img src={img.imageBase64} alt={job.prompt} title={job.prompt} className="block w-full" />
       <figcaption className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
         <span className="rounded-full bg-white/20 px-1.5 py-0.5 font-medium capitalize">{img.source}</span>
-        <span className="tabular-nums">seed {img.seed}</span>
+        <span className="tabular-nums">{t("gallery.seed", { seed: img.seed })}</span>
       </figcaption>
     </figure>
   );
@@ -1570,6 +1595,7 @@ function SavedTile({
   onOpen: (item: LightboxItem) => void;
   onDelete: (img: SavedImage) => void;
 }) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLElement>(null);
   const [src, setSrc] = useState<string | null>(null);
 
@@ -1625,7 +1651,7 @@ function SavedTile({
           e.stopPropagation();
           onDelete(image);
         }}
-        aria-label="Delete image"
+        aria-label={t("gallery.deleteImage")}
         className="absolute right-1.5 top-1.5 hidden rounded-full bg-black/50 p-1.5 text-white hover:bg-red-600/80 group-hover:block"
       >
         <Trash2 className="size-3.5" />
@@ -1636,7 +1662,7 @@ function SavedTile({
             {image.source}
           </span>
         )}
-        {image.seed > 0 && <span className="tabular-nums">seed {image.seed}</span>}
+        {image.seed > 0 && <span className="tabular-nums">{t("gallery.seed", { seed: image.seed })}</span>}
       </figcaption>
     </figure>
   );
@@ -1644,6 +1670,7 @@ function SavedTile({
 
 // Fullscreen viewer with a generation-details panel. Backdrop click or Esc closes.
 function Lightbox({ item, onClose }: { item: LightboxItem; onClose: () => void }) {
+  const { t } = useTranslation();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -1673,7 +1700,7 @@ function Lightbox({ item, onClose }: { item: LightboxItem; onClose: () => void }
       <button
         type="button"
         onClick={onClose}
-        aria-label="Close"
+        aria-label={t("common.close")}
         className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
       >
         <X className="size-5" />
@@ -1683,34 +1710,35 @@ function Lightbox({ item, onClose }: { item: LightboxItem; onClose: () => void }
 }
 
 function MetaPanel({ meta }: { meta: GenerationMeta }) {
+  const { t } = useTranslation();
   const rows: [string, string][] = [];
   const add = (k: string, v: string | number | undefined | null) => {
     if (v !== undefined && v !== null && v !== "" && v !== 0) rows.push([k, String(v)]);
   };
-  add("Model", meta.modelName || meta.modelCode);
-  add("Engine", meta.engine);
-  add("Source", meta.source);
-  add("Size", meta.width && meta.height ? `${meta.width}×${meta.height}` : "");
-  add("Format", meta.formatCode);
-  add("Steps", meta.numSteps);
-  add("CFG", meta.guidanceScale);
-  add("Scheduler", meta.scheduler);
-  add("Clip skip", meta.clipSkip);
-  add("Seed", meta.seed);
-  if (meta.img2img) add("img2img", `strength ${meta.strength ?? ""}`);
-  add("Created", meta.createdAt ? meta.createdAt.replace("T", " ").slice(0, 19) : "");
+  add(t("meta.model"), meta.modelName || meta.modelCode);
+  add(t("meta.engine"), meta.engine);
+  add(t("meta.source"), meta.source);
+  add(t("meta.size"), meta.width && meta.height ? `${meta.width}×${meta.height}` : "");
+  add(t("meta.format"), meta.formatCode);
+  add(t("meta.steps"), meta.numSteps);
+  add(t("meta.cfg"), meta.guidanceScale);
+  add(t("meta.scheduler"), meta.scheduler);
+  add(t("meta.clipSkip"), meta.clipSkip);
+  add(t("meta.seed"), meta.seed);
+  if (meta.img2img) add(t("meta.img2img"), t("meta.strength", { strength: meta.strength ?? "" }));
+  add(t("meta.created"), meta.createdAt ? meta.createdAt.replace("T", " ").slice(0, 19) : "");
 
   return (
     <div className="bg-background/95 flex w-full shrink-0 flex-col gap-3 overflow-y-auto rounded-xl p-4 text-sm shadow-2xl md:max-h-[85vh] md:w-80">
       {meta.prompt && (
         <div>
-          <div className="text-muted-foreground mb-1 text-[11px] font-medium uppercase tracking-wide">Prompt</div>
+          <div className="text-muted-foreground mb-1 text-[11px] font-medium uppercase tracking-wide">{t("meta.prompt")}</div>
           <p className="leading-relaxed">{meta.prompt}</p>
         </div>
       )}
       {meta.negativePrompt && (
         <div>
-          <div className="text-muted-foreground mb-1 text-[11px] font-medium uppercase tracking-wide">Negative</div>
+          <div className="text-muted-foreground mb-1 text-[11px] font-medium uppercase tracking-wide">{t("meta.negative")}</div>
           <p className="text-muted-foreground leading-relaxed">{meta.negativePrompt}</p>
         </div>
       )}
@@ -1731,29 +1759,31 @@ function MetaPanel({ meta }: { meta: GenerationMeta }) {
 // UpdateBanner announces a newer release. Download opens the GitHub release
 // page in the system browser — no in-app download while the app is unsigned.
 function UpdateBanner({ info, onDismiss }: { info: UpdateInfo; onDismiss: () => void }) {
+  const { t } = useTranslation();
   const url = info.url ?? "https://github.com/Publikey/imference-desktop/releases/latest";
   return (
     <div className="animate-in fade-in slide-in-from-top-1 flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-300">
       <Download className="size-4 shrink-0" />
       <p className="flex-1 leading-relaxed">
-        Imference Desktop <span className="font-semibold">v{info.latestVersion}</span> is available
+        {/* Split around the bolded version so both word orders (en/zh) work. */}
+        {t("update.availablePrefix")} <span className="font-semibold">v{info.latestVersion}</span>
+        {t("update.availableSuffix")}
         {info.currentVersion !== "dev" && (
-          <span className="opacity-70"> (you have v{info.currentVersion})</span>
+          <span className="opacity-70">{t("update.youHave", { version: info.currentVersion })}</span>
         )}
-        .
       </p>
       <Button
         size="sm"
         className="h-7 shrink-0 rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white hover:bg-amber-400"
         onClick={() => void Browser.OpenURL(url)}
       >
-        Download
+        {t("common.download")}
       </Button>
       <button
         onClick={onDismiss}
         className="shrink-0 opacity-60 transition-opacity hover:opacity-100"
-        aria-label="Dismiss"
-        title="Dismiss (shown again at next launch)"
+        aria-label={t("common.dismiss")}
+        title={t("update.dismissTitle")}
       >
         <X className="size-4" />
       </button>
@@ -1762,6 +1792,7 @@ function UpdateBanner({ info, onDismiss }: { info: UpdateInfo; onDismiss: () => 
 }
 
 function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="border-destructive/25 bg-destructive/5 text-destructive animate-in fade-in slide-in-from-top-1 flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm">
       <AlertCircle className="mt-0.5 size-4 shrink-0" />
@@ -1769,9 +1800,9 @@ function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () =>
       <button
         onClick={onDismiss}
         className="hover:text-destructive/70 shrink-0 text-xs font-medium"
-        aria-label="Dismiss"
+        aria-label={t("common.dismiss")}
       >
-        Dismiss
+        {t("common.dismiss")}
       </button>
     </div>
   );

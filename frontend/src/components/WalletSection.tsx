@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Copy, RefreshCw, Loader2, AlertTriangle, KeyRound, Wallet, Plus, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ type Props = {
 };
 
 export function WalletSection({ onChanged }: Props) {
+  const { t } = useTranslation();
   const [info, setInfo] = useState<WalletInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>("initial");
@@ -132,14 +134,14 @@ export function WalletSection({ onChanged }: Props) {
   };
 
   if (loading) {
-    return <section className="text-muted-foreground text-xs">Loading wallet…</section>;
+    return <section className="text-muted-foreground text-xs">{t("wallet.loading")}</section>;
   }
 
   return (
     <section className="bg-card rounded-2xl border p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2">
         <Wallet className="size-4" />
-        <h3 className="text-sm font-semibold">Wallet (Base mainnet · USDC)</h3>
+        <h3 className="text-sm font-semibold">{t("wallet.title")}</h3>
       </div>
 
       {error && (
@@ -203,9 +205,7 @@ export function WalletSection({ onChanged }: Props) {
       )}
 
       <p className="text-muted-foreground/70 mt-3 text-[11px] leading-snug italic">
-        This wallet's private key lives in your OS keychain on this machine (Windows Credential
-        Manager / macOS login keychain). Treat it as a burner: only fund what you're OK losing.
-        Use "Export private key" to back it up before relying on it.
+        {t("wallet.keychainNote")}
       </p>
     </section>
   );
@@ -220,21 +220,18 @@ function InitialView({
   onGenerate: () => void;
   onImport: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid gap-3">
-      <p className="text-sm">
-        x402 needs an EVM wallet on Base mainnet to pay per generation (0.05 USDC per image).
-        Recommended: generate a burner wallet here and fund it with a few dollars from your
-        MetaMask.
-      </p>
+      <p className="text-sm">{t("wallet.intro")}</p>
       <div className="flex gap-2">
         <Button onClick={onGenerate} disabled={busy} className="gap-1.5">
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-          Generate new wallet
+          {t("wallet.generate")}
         </Button>
         <Button variant="outline" onClick={onImport} disabled={busy} className="gap-1.5">
           <KeyRound className="size-3.5" />
-          Import existing private key
+          {t("wallet.importExisting")}
         </Button>
       </div>
     </div>
@@ -256,45 +253,44 @@ function SummaryView({
   onReplace: () => void;
   onExport: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid gap-3">
       <div className="grid gap-1">
-        <Label className="text-muted-foreground text-xs">Address</Label>
+        <Label className="text-muted-foreground text-xs">{t("wallet.address")}</Label>
         <div className="flex items-center gap-2">
           <code className="bg-muted/40 flex-1 truncate rounded px-2 py-1 font-mono text-xs" title={info.address}>
             {info.address}
           </code>
-          <Button size="icon" variant="ghost" onClick={() => onCopy(info.address)} title="Copy">
+          <Button size="icon" variant="ghost" onClick={() => onCopy(info.address)} title={t("common.copy")}>
             <Copy className="size-3.5" />
           </Button>
         </div>
       </div>
 
       <div className="grid gap-1">
-        <Label className="text-muted-foreground text-xs">USDC balance</Label>
+        <Label className="text-muted-foreground text-xs">{t("wallet.balance")}</Label>
         <div className="flex items-baseline gap-2">
           <span className="text-2xl font-semibold tabular-nums">{info.balanceUSDC || "0.0"}</span>
           <span className="text-muted-foreground text-xs">USDC</span>
-          <Button size="icon" variant="ghost" onClick={onRefresh} disabled={busy} className="ml-auto" title="Refresh">
+          <Button size="icon" variant="ghost" onClick={onRefresh} disabled={busy} className="ml-auto" title={t("common.refresh")}>
             <RefreshCw className={"size-3.5 " + (busy ? "animate-spin" : "")} />
           </Button>
         </div>
         {info.error && (
-          <p className="text-destructive text-[11px]">RPC error: {info.error}</p>
+          <p className="text-destructive text-[11px]">{t("wallet.rpcError", { error: info.error })}</p>
         )}
-        <p className="text-muted-foreground text-[11px]">
-          Fund this address with USDC on Base from your MetaMask (or any wallet). Balance refreshes every 30 s.
-        </p>
+        <p className="text-muted-foreground text-[11px]">{t("wallet.fundHint")}</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={onExport} disabled={busy} className="gap-1.5">
           <KeyRound className="size-3.5" />
-          Export private key
+          {t("wallet.exportKey")}
         </Button>
         <Button size="sm" variant="destructive" onClick={onReplace} disabled={busy} className="ml-auto gap-1.5">
           <AlertTriangle className="size-3.5" />
-          Replace wallet
+          {t("wallet.replaceWallet")}
         </Button>
       </div>
     </div>
@@ -314,9 +310,10 @@ function ImportView({
   onImport: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid gap-3">
-      <Label htmlFor="pk">Private key (64 hex chars, with or without 0x prefix)</Label>
+      <Label htmlFor="pk">{t("wallet.privateKeyLabel")}</Label>
       <Textarea
         id="pk"
         value={draft}
@@ -325,17 +322,14 @@ function ImportView({
         className="font-mono text-xs"
         rows={3}
       />
-      <p className="text-muted-foreground text-[11px]">
-        This will overwrite any existing wallet in your Credential Manager. Make sure you've
-        exported the current one if you want to keep it.
-      </p>
+      <p className="text-muted-foreground text-[11px]">{t("wallet.importWarning")}</p>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel} disabled={busy} size="sm">
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button onClick={onImport} disabled={busy || !draft.trim()} size="sm" className="gap-1.5">
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <KeyRound className="size-3.5" />}
-          Import
+          {t("common.import")}
         </Button>
       </div>
     </div>
@@ -353,30 +347,27 @@ function ConfirmReplaceView({
   onImport: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid gap-3 rounded border border-destructive/40 bg-destructive/5 p-3">
       <div className="flex items-start gap-2">
         <AlertTriangle className="text-destructive mt-0.5 size-4 shrink-0" />
         <div className="text-sm">
-          <p className="font-medium">Replace the current wallet?</p>
-          <p className="text-muted-foreground mt-1 text-xs">
-            The current private key will be overwritten in Credential Manager and is unrecoverable
-            unless you've exported it. Any USDC at the current address will become inaccessible from
-            this app.
-          </p>
+          <p className="font-medium">{t("wallet.replaceTitle")}</p>
+          <p className="text-muted-foreground mt-1 text-xs">{t("wallet.replaceWarning")}</p>
         </div>
       </div>
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" onClick={onCancel} disabled={busy} size="sm">
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button variant="destructive" onClick={onImport} disabled={busy} size="sm" className="gap-1.5">
           <KeyRound className="size-3.5" />
-          Replace by importing
+          {t("wallet.replaceImport")}
         </Button>
         <Button variant="destructive" onClick={onGenerate} disabled={busy} size="sm" className="gap-1.5">
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-          Replace with new burner
+          {t("wallet.replaceGenerate")}
         </Button>
       </div>
     </div>
@@ -396,13 +387,11 @@ function ExportView({
   onCopy: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid gap-3 rounded border border-yellow-500/40 bg-yellow-500/5 p-3">
-      <p className="text-sm font-medium">Your private key</p>
-      <p className="text-muted-foreground text-xs">
-        Anyone with this key can spend your USDC. Back it up to a password manager and then close
-        this dialog. We don't log or transmit it.
-      </p>
+      <p className="text-sm font-medium">{t("wallet.yourKey")}</p>
+      <p className="text-muted-foreground text-xs">{t("wallet.exportWarning")}</p>
       <div className="flex items-center gap-2">
         <Input
           value={shown ? privateKey : "•".repeat(64)}
@@ -410,16 +399,16 @@ function ExportView({
           className="bg-background/80 font-mono text-xs"
           onFocus={(e) => e.currentTarget.select()}
         />
-        <Button size="icon" variant="ghost" onClick={() => setShown(!shown)} title={shown ? "Hide" : "Show"}>
+        <Button size="icon" variant="ghost" onClick={() => setShown(!shown)} title={shown ? t("common.hide") : t("common.show")}>
           {shown ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
         </Button>
-        <Button size="icon" variant="ghost" onClick={onCopy} title="Copy">
+        <Button size="icon" variant="ghost" onClick={onCopy} title={t("common.copy")}>
           <Copy className="size-3.5" />
         </Button>
       </div>
       <div className="flex justify-end">
         <Button onClick={onClose} size="sm" variant="outline">
-          Done
+          {t("common.done")}
         </Button>
       </div>
     </div>

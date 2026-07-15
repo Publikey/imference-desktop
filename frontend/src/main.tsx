@@ -2,6 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
+// Side effect: initializes i18next (language detection + bundles) before render.
+import "./i18n";
 
 // System-following dark mode. Toggling `.dark` on <html> remaps the CSS color
 // tokens defined in index.css, so the whole app follows the OS appearance and

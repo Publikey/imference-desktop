@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FileBox, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -17,15 +18,15 @@ type Backend = "sdxl" | "sd15" | "zimage" | "flux" | "chroma" | "qwenimage" | "a
 // `base` (when set) is the shared base-components repo a transformer-only
 // checkpoint needs — shown as the default placeholder and applied server-side
 // when the user leaves the field blank (see cloud.DefaultBaseModel). Mirrors the
-// Go IsSingleFileBackend / DefaultBaseModel set.
-const BACKENDS: { id: Backend; label: string; hint: string; base?: string }[] = [
-  { id: "sdxl", label: "SDXL", hint: "Most Civitai models (SDXL, Pony, Illustrious…) — a single self-contained file." },
-  { id: "sd15", label: "SD 1.5", hint: "Classic Stable Diffusion 1.5 checkpoints — a single self-contained file." },
-  { id: "zimage", label: "Z-Image", hint: "Transformer-only weights; needs a base repo.", base: "Tongyi-MAI/Z-Image-Turbo" },
-  { id: "flux", label: "FLUX", hint: "FLUX.1 transformer-only checkpoint; needs a base repo.", base: "black-forest-labs/FLUX.1-dev" },
-  { id: "chroma", label: "Chroma", hint: "FLUX-derived (single T5 encoder); needs a base repo.", base: "lodestones/Chroma1-HD" },
-  { id: "qwenimage", label: "Qwen-Image", hint: "20B MMDiT, strong text rendering; needs a base repo.", base: "Qwen/Qwen-Image" },
-  { id: "anima", label: "Anima", hint: "Single-file DiT (Cosmos); needs the Anima base repo (Qwen3 encoder + VAE).", base: "circlestone-labs/Anima-Base-v1.0-Diffusers" },
+// Go IsSingleFileBackend / DefaultBaseModel set. Hints are i18n keys.
+const BACKENDS: { id: Backend; label: string; hintKey: string; base?: string }[] = [
+  { id: "sdxl", label: "SDXL", hintKey: "customModel.hintSdxl" },
+  { id: "sd15", label: "SD 1.5", hintKey: "customModel.hintSd15" },
+  { id: "zimage", label: "Z-Image", hintKey: "customModel.hintZimage", base: "Tongyi-MAI/Z-Image-Turbo" },
+  { id: "flux", label: "FLUX", hintKey: "customModel.hintFlux", base: "black-forest-labs/FLUX.1-dev" },
+  { id: "chroma", label: "Chroma", hintKey: "customModel.hintChroma", base: "lodestones/Chroma1-HD" },
+  { id: "qwenimage", label: "Qwen-Image", hintKey: "customModel.hintQwenimage", base: "Qwen/Qwen-Image" },
+  { id: "anima", label: "Anima", hintKey: "customModel.hintAnima", base: "circlestone-labs/Anima-Base-v1.0-Diffusers" },
 ];
 
 type Props = {
@@ -40,6 +41,7 @@ type Props = {
 // already chosen, the user picks which engine backend should load it (and, for
 // transformer-only backends, optionally overrides the base repo).
 export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
+  const { t } = useTranslation();
   const [backend, setBackend] = useState<Backend>("sdxl");
   const [baseModel, setBaseModel] = useState("");
   const [busy, setBusy] = useState(false);
@@ -67,10 +69,8 @@ export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
     <Dialog open={path !== null} onOpenChange={(o) => !o && !busy && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader className="space-y-1 text-left">
-          <DialogTitle className="text-lg">Add custom model</DialogTitle>
-          <DialogDescription>
-            The file stays where it is — nothing is copied or uploaded.
-          </DialogDescription>
+          <DialogTitle className="text-lg">{t("customModel.title")}</DialogTitle>
+          <DialogDescription>{t("customModel.desc")}</DialogDescription>
         </DialogHeader>
 
         <div className="bg-muted/40 flex items-center gap-2.5 rounded-xl border px-3 py-2.5">
@@ -85,7 +85,7 @@ export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
 
         <div className="grid gap-2">
           <Label htmlFor="custom-backend" className="text-xs">
-            Model type
+            {t("customModel.modelType")}
           </Label>
           <select
             id="custom-backend"
@@ -99,13 +99,13 @@ export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
               </option>
             ))}
           </select>
-          <p className="text-muted-foreground text-xs">{selected.hint}</p>
+          <p className="text-muted-foreground text-xs">{t(selected.hintKey)}</p>
         </div>
 
         {selected.base && (
           <div className="grid gap-2">
             <Label htmlFor="custom-base-model" className="text-xs">
-              Base model (Hugging Face repo id) — optional
+              {t("customModel.baseModel")}
             </Label>
             <Input
               id="custom-base-model"
@@ -114,7 +114,7 @@ export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
               placeholder={selected.base}
             />
             <p className="text-muted-foreground text-[11px]">
-              Leave blank to use the default ({selected.base}).
+              {t("customModel.baseModelHint", { base: selected.base })}
             </p>
           </div>
         )}
@@ -123,11 +123,11 @@ export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
 
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="outline" disabled={busy} onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button disabled={busy} onClick={confirm}>
             {busy && <Loader2 className="size-4 animate-spin" />}
-            Use this model
+            {t("customModel.use")}
           </Button>
         </div>
       </DialogContent>

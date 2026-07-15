@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Download, RefreshCw, Loader2, CheckCircle2, XCircle, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/wails-bridge";
 import type { EngineInfo, InstallPhase, InstallProgress, PythonInfo } from "@/lib/types";
 
-const PHASE_LABEL: Record<InstallPhase, string> = {
-  detect: "Detecting Python",
-  venv: "Creating venv",
-  torch: "Downloading torch",
-  "sidecar-deps": "Installing sidecar deps",
-  engine: "Downloading imference-engine",
-  extras: "Installing sd-embed (weighted prompts)",
-  model: "Downloading SDXL weights (~6.9 GB)",
-  done: "Done",
-  error: "Error",
+// i18n keys per install phase, resolved at render.
+const PHASE_KEY: Record<InstallPhase, string> = {
+  detect: "engineSection.phaseDetect",
+  venv: "engineSection.phaseVenv",
+  torch: "engineSection.phaseTorch",
+  "sidecar-deps": "engineSection.phaseSidecarDeps",
+  engine: "engineSection.phaseEngine",
+  extras: "engineSection.phaseExtras",
+  model: "engineSection.phaseModel",
+  done: "engineSection.phaseDone",
+  error: "engineSection.phaseError",
 };
 
 const PHASE_ORDER: InstallPhase[] = [
@@ -33,6 +35,7 @@ type Props = {
 };
 
 export function LocalEngineSection({ onInstallDone }: Props) {
+  const { t } = useTranslation();
   const [engineInfo, setEngineInfo] = useState<EngineInfo | null>(null);
   const [pythonProbe, setPythonProbe] = useState<PythonInfo | null>(null);
   const [pythonError, setPythonError] = useState<string | null>(null);
@@ -76,7 +79,7 @@ export function LocalEngineSection({ onInstallDone }: Props) {
 
   const startInstall = async () => {
     setInstalling(true);
-    setProgress({ phase: "detect", message: "Starting…", percentEstimate: 0, done: false });
+    setProgress({ phase: "detect", message: t("engineSection.startingMsg"), percentEstimate: 0, done: false });
     try {
       await api.installEngine();
     } catch (e) {
@@ -97,19 +100,19 @@ export function LocalEngineSection({ onInstallDone }: Props) {
     <section className="bg-card rounded-2xl border p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold">Local engine</h3>
+          <h3 className="text-sm font-semibold">{t("engineSection.title")}</h3>
           {statusPill}
         </div>
         <div className="flex items-center gap-2">
           {engineInfo?.installed ? (
             <Button size="sm" variant="outline" onClick={startInstall} disabled={installing}>
               <RefreshCw className="size-3.5" />
-              Reinstall
+              {t("common.reinstall")}
             </Button>
           ) : (
             <Button size="sm" onClick={startInstall} disabled={installing}>
               {installing ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
-              Install
+              {t("common.install")}
             </Button>
           )}
         </div>
@@ -122,12 +125,11 @@ export function LocalEngineSection({ onInstallDone }: Props) {
           <p className="text-muted-foreground mt-2 text-xs">
             imference-engine{" "}
             <span className="font-mono">
-              {engineInfo.engineVersion ? `v${engineInfo.engineVersion}` : "version unknown"}
+              {engineInfo.engineVersion ? `v${engineInfo.engineVersion}` : t("engineSection.versionUnknown")}
             </span>
             {engineInfo.outdated && engineInfo.pinnedVersion && (
               <span className="text-yellow-700">
-                {" "}
-                — updating to v{engineInfo.pinnedVersion}…
+                {t("engineSection.updatingTo", { version: engineInfo.pinnedVersion })}
               </span>
             )}
           </p>
@@ -147,10 +149,11 @@ export function LocalEngineSection({ onInstallDone }: Props) {
 }
 
 function PythonLine({ probe, err }: { probe: PythonInfo | null; err: string | null }) {
+  const { t } = useTranslation();
   if (err) {
     return (
       <p className="text-destructive text-xs">
-        Python not found. Install Python 3.10+ from{" "}
+        {t("engineSection.pythonNotFoundPrefix")}
         <a
           href="https://www.python.org/downloads/"
           target="_blank"
@@ -159,28 +162,29 @@ function PythonLine({ probe, err }: { probe: PythonInfo | null; err: string | nu
         >
           python.org/downloads
         </a>
-        .
+        {t("engineSection.pythonNotFoundSuffix")}
       </p>
     );
   }
   if (!probe) {
-    return <p className="text-muted-foreground text-xs">Checking for Python…</p>;
+    return <p className="text-muted-foreground text-xs">{t("engineSection.checkingPython")}</p>;
   }
   return (
     <p className="text-muted-foreground text-xs">
-      Python {probe.version} found at{" "}
+      {t("engineSection.pythonFoundPrefix", { version: probe.version })}
       <span className="font-mono">{probe.path}</span>
     </p>
   );
 }
 
 function ProgressView({ p }: { p: InstallProgress }) {
+  const { t } = useTranslation();
   const currentIdx = PHASE_ORDER.indexOf(p.phase);
   return (
     <div className="mt-3 space-y-2">
       <div className="flex items-center justify-between gap-2 text-xs">
         <span className="font-medium">
-          {PHASE_LABEL[p.phase] ?? p.phase}
+          {PHASE_KEY[p.phase] ? t(PHASE_KEY[p.phase]) : p.phase}
           {currentIdx >= 0 ? ` (${currentIdx + 1}/${PHASE_ORDER.length})` : ""}
         </span>
         {p.percentEstimate > 0 && <span className="tabular-nums">{p.percentEstimate}%</span>}
@@ -202,7 +206,7 @@ function ProgressView({ p }: { p: InstallProgress }) {
         </p>
       )}
       <p className="text-muted-foreground/70 text-[11px]">
-        Detailed pip output streams to the Logs panel (open it from the header).
+        {t("engineSection.pipHint")}
       </p>
     </div>
   );
@@ -216,29 +220,35 @@ function renderStatusPill(
   if (installing) {
     return (
       <Badge color="yellow">
-        <Loader2 className="size-3 animate-spin" /> installing
+        <Loader2 className="size-3 animate-spin" /> <BadgeText k="engineSection.badgeInstalling" />
       </Badge>
     );
   }
   if (p?.phase === "error") {
     return (
       <Badge color="red">
-        <XCircle className="size-3" /> error
+        <XCircle className="size-3" /> <BadgeText k="engineSection.badgeError" />
       </Badge>
     );
   }
   if (info?.installed) {
     return (
       <Badge color="green">
-        <CheckCircle2 className="size-3" /> installed
+        <CheckCircle2 className="size-3" /> <BadgeText k="engineSection.badgeInstalled" />
       </Badge>
     );
   }
   return (
     <Badge color="gray">
-      <Circle className="size-3" /> not installed
+      <Circle className="size-3" /> <BadgeText k="engineSection.badgeNotInstalled" />
     </Badge>
   );
+}
+
+// Tiny helper so renderStatusPill (a plain function, no hooks) stays usable.
+function BadgeText({ k }: { k: string }) {
+  const { t } = useTranslation();
+  return <>{t(k)}</>;
 }
 
 function Badge({

@@ -85,7 +85,7 @@ export function EngineRuntimeSection({
               onChange={(e) => setWan({ device: e.target.value })}
             >
               <option value="auto">Auto</option>
-              <option value="cuda">CUDA (GPU)</option>
+              <option value="cuda">GPU (NVIDIA CUDA / AMD ROCm)</option>
               <option value="cpu">CPU</option>
             </select>
           </label>
@@ -162,7 +162,7 @@ function DeviceMaxGrid({
         Device
         <select className={selectCls} value={device || "auto"} onChange={(e) => onDevice(e.target.value)}>
           <option value="auto">Auto</option>
-          <option value="cuda">CUDA (GPU)</option>
+          <option value="cuda">GPU (NVIDIA CUDA / AMD ROCm)</option>
           <option value="cpu">CPU</option>
           {mps && <option value="mps">Apple MPS</option>}
         </select>

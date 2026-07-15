@@ -69,13 +69,16 @@ type EngineRuntimeSettings struct {
 // contract). UseTinyVAE only affects SDXL / SD 1.5; the engine ignores it for
 // Z-Image / FLUX / Chroma / Qwen-Image / Anima.
 type ImageRuntimeSettings struct {
-	Device     string `json:"device,omitempty"`     // "" / "auto" | cuda | cuda:N | mps | cpu
+	// Device: "" / "auto" | cuda | cuda:N | mps | cpu. "cuda" covers BOTH
+	// NVIDIA and AMD GPUs — torch's ROCm build presents the AMD GPU under the
+	// cuda device string, so there is no separate "rocm" value.
+	Device     string `json:"device,omitempty"`
 	UseTinyVAE bool   `json:"useTinyVae,omitempty"` // SDXL/SD1.5 TAESD — ~10× faster VAE decode
 	// EnableCPUOffload is tri-state: nil = Auto (the desktop enables offload on
-	// CUDA cards below autoOffloadVRAMThresholdGiB — see resolveCPUOffload — so a
-	// small-VRAM GPU doesn't oversubscribe VRAM and crawl via WDDM shared-memory
-	// spill), *true = force on, *false = force off. On a card the full pipe fits
-	// on, Auto leaves it off (full residency is fastest).
+	// NVIDIA/AMD cards below autoOffloadVRAMThresholdGiB — see resolveCPUOffload
+	// — so a small-VRAM GPU doesn't oversubscribe VRAM and crawl via WDDM
+	// shared-memory spill), *true = force on, *false = force off. On a card the
+	// full pipe fits on, Auto leaves it off (full residency is fastest).
 	EnableCPUOffload *bool  `json:"enableCpuOffload,omitempty"`
 	MaxGPUModels     string `json:"maxGpuModels,omitempty"` // "" / "auto" / int
 	MaxCPUModels     string `json:"maxCpuModels,omitempty"` // "" / "auto" / int

@@ -31,6 +31,7 @@ import (
 	"syscall"
 	"time"
 
+	"imference-desktop-go/internal/gpu"
 	"imference-desktop-go/internal/logbus"
 	"imference-desktop-go/internal/types"
 )
@@ -90,10 +91,10 @@ const autoOffloadVRAMThresholdGiB = 12.0
 // resolveCPUOffload maps the tri-state offload setting to the sidecar's
 // IMAGE_ENABLE_CPU_OFFLOAD value ("0"/"1") plus a human-readable reason for the
 // log. An explicit *bool (user picked On/Off in Settings) always wins. nil =
-// Auto: enable offload only on an NVIDIA card whose total VRAM is below the
-// threshold — the case where full residency would spill and crawl. cpu/mps, or a
-// GPU we can't measure, leaves it off (model_cpu_offload is a CUDA-only win, and
-// we never silently slow a machine we couldn't probe).
+// Auto: enable offload only on a discrete GPU (NVIDIA or AMD — both present as
+// torch device "cuda") whose total VRAM is below the threshold — the case where
+// full residency would spill and crawl. cpu/mps, or a GPU we can't measure,
+// leaves it off (we never silently slow a machine we couldn't probe).
 func resolveCPUOffload(setting *bool, device string) (value string, reason string) {
 	if setting != nil {
 		if *setting {
@@ -103,19 +104,20 @@ func resolveCPUOffload(setting *bool, device string) (value string, reason strin
 	}
 	dev := strings.ToLower(strings.TrimSpace(device))
 	if dev != "" && dev != "auto" && !strings.HasPrefix(dev, "cuda") {
-		return "0", "Auto: device=" + dev + " (offload is NVIDIA-only)"
+		return "0", "Auto: device=" + dev + " (offload applies to CUDA/ROCm GPUs only)"
 	}
-	gib, ok := probeNvidiaVRAMGiB()
-	if !ok {
-		return "0", "Auto: VRAM undetectable (nvidia-smi absent?) — leaving offload off"
+	info := gpu.Detect(context.Background())
+	if (info.Vendor != gpu.VendorNVIDIA && info.Vendor != gpu.VendorAMD) || info.VRAMGiB <= 0 {
+		return "0", "Auto: VRAM undetectable (no NVIDIA/AMD probe succeeded) — leaving offload off"
 	}
-	g := strconv.FormatFloat(gib, 'f', 1, 64)
+	g := strconv.FormatFloat(info.VRAMGiB, 'f', 1, 64)
 	thr := strconv.FormatFloat(autoOffloadVRAMThresholdGiB, 'f', 0, 64)
-	if gib < autoOffloadVRAMThresholdGiB {
-		return "1", "Auto: " + g + " GiB VRAM < " + thr +
+	label := string(info.Vendor)
+	if gib := info.VRAMGiB; gib < autoOffloadVRAMThresholdGiB {
+		return "1", "Auto: " + g + " GiB VRAM (" + label + ") < " + thr +
 			" GiB threshold — enabling offload to avoid VRAM spill"
 	}
-	return "0", "Auto: " + g + " GiB VRAM ≥ " + thr + " GiB — full residency (offload off)"
+	return "0", "Auto: " + g + " GiB VRAM (" + label + ") ≥ " + thr + " GiB — full residency (offload off)"
 }
 
 // runtimeEnv builds the engine's env from the user's settings for the ACTIVE

@@ -19,6 +19,7 @@ import {
   Download,
   Play,
   Square,
+  Languages,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/SettingsDialog";
@@ -27,6 +28,7 @@ import { ModelBar } from "@/components/ModelBar";
 import { PaymentBar } from "@/components/PaymentBar";
 import { LogPanel } from "@/components/LogPanel";
 import { api } from "@/lib/wails-bridge";
+import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import logoUrl from "./assets/logo.svg";
 import { installLogCapture } from "@/lib/log-capture";
 import { cn } from "@/lib/utils";
@@ -689,6 +691,8 @@ function Header({
         </div>
       </div>
       <div className="flex items-center gap-1.5">
+        {/* Language — quick toggle; the Settings section offers "System" too. */}
+        <LanguageToggle />
         {/* Settings — prominent, labelled entry point. */}
         <Button variant="outline" size="sm" onClick={onOpenSettings} className="h-9 gap-1.5">
           <Settings className="size-4" />
@@ -710,6 +714,31 @@ function Header({
         </Button>
       </div>
     </header>
+  );
+}
+
+// LanguageToggle — cycles through SUPPORTED_LANGUAGES from the header. It sets
+// an explicit (persisted) choice, exactly like picking a language in Settings;
+// "follow the system" remains available there.
+function LanguageToggle() {
+  const { i18n } = useTranslation();
+  const idx = SUPPORTED_LANGUAGES.findIndex((l) => l.code === i18n.language);
+  const current = SUPPORTED_LANGUAGES[idx] ?? SUPPORTED_LANGUAGES[0];
+  const next = SUPPORTED_LANGUAGES[(Math.max(idx, 0) + 1) % SUPPORTED_LANGUAGES.length];
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => setLanguage(next.code)}
+      // The next language names itself (中文 reads it in Chinese, English in
+      // English), so the tooltip stays readable before AND after switching.
+      title={next.label}
+      aria-label={next.label}
+      className="text-muted-foreground hover:text-foreground h-9 gap-1.5"
+    >
+      <Languages className="size-4" />
+      <span className="text-xs font-medium">{current.short}</span>
+    </Button>
   );
 }
 

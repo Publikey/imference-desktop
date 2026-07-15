@@ -75,6 +75,9 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
       setDraft(s);
       savedRef.current = JSON.stringify(s);
     });
+    // Re-read the persisted language choice: the header toggle may have
+    // changed it since this dialog last opened.
+    setLangChoice(storedLanguage());
   }, [open]);
 
   // Auto-save: every change to the draft is persisted (debounced) — no Save

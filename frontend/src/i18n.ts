@@ -5,9 +5,10 @@ import zhCN from "./locales/zh-CN.json";
 
 // Languages the UI ships with. Labels are shown in their own language (the
 // convention for language pickers) so they stay readable whatever is active.
+// `short` is the compact form for the header toggle.
 export const SUPPORTED_LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "zh-CN", label: "简体中文" },
+  { code: "en", label: "English", short: "EN" },
+  { code: "zh-CN", label: "简体中文", short: "中文" },
 ] as const;
 
 // The user's explicit choice lives in the webview's localStorage ("" / absent =

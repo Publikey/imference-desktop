@@ -103,12 +103,15 @@
   "formats": {
     "square": "方形",
     "portrait": "竖版",
-    "landscape": "横版"
+    "landscape": "横版",
+    "custom": "自定义"
   },
   "params": {
     "title": "参数",
     "summary": "{{dims}} · {{steps}} 步 · cfg {{cfg}}",
     "format": "画幅",
+    "width": "宽度",
+    "height": "高度",
     "steps": "步数",
     "cfg": "CFG",
     "seed": "种子",

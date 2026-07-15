@@ -87,7 +87,7 @@ const nextJobId = () => `job-${Date.now()}-${jobSeq++}`;
 // defaults and reset when the model changes.
 type GenParams = {
   prePrompt: string; // quality-tag prefix, prepended to the user prompt (client-side)
-  formatCode: string; // "square" | "portrait" | "landscape"
+  formatCode: string; // a catalog format code, or "custom" (local only) for free dims
   steps: number;
   cfg: number;
   negativePrompt: string;
@@ -95,7 +95,14 @@ type GenParams = {
   seed: number;
   clipSkip: number | null; // local only
   scheduler: string; // local only
+  // Free width/height when formatCode === "custom" (local only). Seeded from the
+  // active preset, snapped to a multiple of 8 (latent constraint) at use.
+  customWidth: number;
+  customHeight: number;
 };
+
+// The "custom" pseudo-format (local only): free width/height instead of a preset.
+const CUSTOM_FORMAT = "custom";
 
 // Generic formats used only when the catalog (im_format) carries none. Names
 // are left empty so the UI resolves them via i18n (formatName below).
@@ -131,8 +138,27 @@ function dimsForModel(
   return f ? { width: f.width, height: f.height } : { width: 1024, height: 1024 };
 }
 
+// Clamp a free dimension to a diffusion-safe multiple of 8 within [256, 2048].
+function snapDim(n: number): number {
+  const v = Math.round((Number.isFinite(n) ? n : 1024) / 8) * 8;
+  return Math.max(256, Math.min(2048, v));
+}
+
+// The dimensions a generation will actually use: the picked preset, or the
+// (snapped) free width/height when the user chose "custom".
+function resolveDims(
+  model: ModelInfo | null | undefined,
+  params: GenParams
+): { width: number; height: number } {
+  if (params.formatCode === CUSTOM_FORMAT) {
+    return { width: snapDim(params.customWidth), height: snapDim(params.customHeight) };
+  }
+  return dimsForModel(model, params.formatCode);
+}
+
 // defaultParams seeds the tweakable params from a model's catalog config.
 function defaultParams(model: ModelInfo): GenParams {
+  const d = dimsForModel(model, defaultFormatCode(model));
   return {
     prePrompt: model.promptPre || "",
     formatCode: defaultFormatCode(model),
@@ -143,6 +169,8 @@ function defaultParams(model: ModelInfo): GenParams {
     seed: 0,
     clipSkip: model.skipDefault > 0 ? model.skipDefault : null,
     scheduler: model.schedulerDefault || "",
+    customWidth: d.width,
+    customHeight: d.height,
   };
 }
 
@@ -471,7 +499,7 @@ export default function App() {
 
       const req: GenerationRequest = {
         prompt: full,
-        ...dimsForModel(model, pr?.formatCode ?? ""),
+        ...(pr ? resolveDims(model, pr) : dimsForModel(model, "")),
         numSteps: pr?.steps ?? model?.stepsDefault ?? 28,
         guidanceScale: pr?.cfg ?? model?.cfgDefault ?? 6,
       };
@@ -812,17 +840,7 @@ export default function App() {
                       onPickerOpenChange={setModelPickerOpen}
                     />
 
-                    {/* 3. Format — a primary creative choice, always visible (no
-                        longer buried in the collapsible Parameters). */}
-                    {activeModel && params && (
-                      <FormatSelector
-                        model={activeModel}
-                        value={params.formatCode}
-                        onChange={(formatCode) => setParams((pp) => (pp ? { ...pp, formatCode } : pp))}
-                      />
-                    )}
-
-                    {/* 4. Prompt (with pre-prompt above + negative below) */}
+                    {/* 3. Prompt (with pre-prompt above + negative below) */}
                     <Composer
                       prompt={prompt}
                       onPromptChange={setPrompt}
@@ -840,8 +858,19 @@ export default function App() {
                       onNegativePromptChange={(v) => setParams((pp) => (pp ? { ...pp, negativePrompt: v } : pp))}
                     />
 
+                    {/* 4. Format — a primary creative choice, right under the
+                        prompt; local mode also allows free custom dimensions. */}
+                    {activeModel && params && (
+                      <FormatSelector
+                        model={activeModel}
+                        mode={mode}
+                        params={params}
+                        onChange={(patch) => setParams((pp) => (pp ? { ...pp, ...patch } : pp))}
+                      />
+                    )}
+
                     {/* 5. Parameters — seeded from the model, tweakable per
-                        generation. Below the prompt now (fine-tuning follows the
+                        generation. Below the format (fine-tuning follows the
                         main creative act). */}
                     {activeModel && params && (
                       <ParamsPanel model={activeModel} mode={mode} params={params} onChange={setParams} />
@@ -1287,21 +1316,34 @@ function Composer({
 }
 
 // FormatSelector — the image aspect (square / portrait / landscape …), pulled
-// out of the collapsible Parameters so it's always one tap away. Options and
-// per-model dimensions come from the catalog (im_format), falling back to the
-// generic set. Sits above the prompt as its own compact row.
+// out of the collapsible Parameters so it's always one tap away, right under the
+// prompt. Options and per-model dimensions come from the catalog (im_format),
+// falling back to the generic set. In local mode a "Custom" option unlocks free
+// width/height (the sidecar takes arbitrary dims; the cloud API doesn't).
 function FormatSelector({
   model,
-  value,
+  mode,
+  params,
   onChange,
 }: {
   model: ModelInfo;
-  value: string;
-  onChange: (formatCode: string) => void;
+  mode: Mode;
+  params: GenParams;
+  onChange: (patch: Partial<GenParams>) => void;
 }) {
   const { t } = useTranslation();
   const formats = formatOptions(model);
-  if (formats.length <= 1) return null; // nothing to choose
+  const allowCustom = mode === "local";
+  const isCustom = params.formatCode === CUSTOM_FORMAT;
+  if (formats.length <= 1 && !allowCustom) return null; // nothing to choose
+
+  // Entering custom seeds the free dims from the preset currently in view.
+  const enterCustom = () => {
+    if (isCustom) return;
+    const d = dimsForModel(model, params.formatCode);
+    onChange({ formatCode: CUSTOM_FORMAT, customWidth: d.width, customHeight: d.height });
+  };
+
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
       <div className="flex items-center gap-3">
@@ -1313,11 +1355,11 @@ function FormatSelector({
             <button
               key={f.formatCode}
               type="button"
-              onClick={() => onChange(f.formatCode)}
+              onClick={() => onChange({ formatCode: f.formatCode })}
               title={`${f.width}×${f.height}${f.ratio ? ` · ${f.ratio}` : ""}`}
               className={cn(
                 "flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium capitalize transition",
-                value === f.formatCode
+                params.formatCode === f.formatCode
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
@@ -1328,9 +1370,76 @@ function FormatSelector({
               )}
             </button>
           ))}
+          {allowCustom && (
+            <button
+              type="button"
+              onClick={enterCustom}
+              className={cn(
+                "flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium transition",
+                isCustom
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t("formats.custom")}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Free width × height (local, custom only). Snap to a multiple of 8 on
+          blur; the value is re-snapped at generation regardless. */}
+      {isCustom && (
+        <div className="mt-2.5 flex items-center gap-2">
+          <DimInput
+            label={t("params.width")}
+            value={params.customWidth}
+            onChange={(customWidth) => onChange({ customWidth })}
+            onCommit={(customWidth) => onChange({ customWidth: snapDim(customWidth) })}
+          />
+          <span className="text-muted-foreground/60 mt-4 shrink-0 text-xs">×</span>
+          <DimInput
+            label={t("params.height")}
+            value={params.customHeight}
+            onChange={(customHeight) => onChange({ customHeight })}
+            onCommit={(customHeight) => onChange({ customHeight: snapDim(customHeight) })}
+          />
+        </div>
+      )}
     </section>
+  );
+}
+
+// A single labelled width/height number input for the custom format. Typing sets
+// the raw value (so you can type freely); blur/Enter snaps it to a valid dim.
+function DimInput({
+  label,
+  value,
+  onChange,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  onCommit: (v: number) => void;
+}) {
+  return (
+    <label className="flex min-w-0 flex-1 flex-col gap-1">
+      <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">{label}</span>
+      <input
+        type="number"
+        min={256}
+        max={2048}
+        step={8}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        onBlur={(e) => onCommit(Number(e.target.value) || 512)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="border-input bg-background h-8 w-full rounded-md border px-2 text-xs tabular-nums outline-none"
+      />
+    </label>
   );
 }
 
@@ -1359,7 +1468,7 @@ function ParamsPanel({
   const cfgMin = model.cfgMin || 1;
   const cfgMax = Math.max(model.cfgMax || 20, cfgMin + 0.5);
   const showClip = model.skipDefault > 0; // model uses clip-skip
-  const dims = dimsForModel(model, params.formatCode);
+  const dims = resolveDims(model, params);
   const summary = t("params.summary", {
     dims: `${dims.width}×${dims.height}`,
     steps: params.steps,

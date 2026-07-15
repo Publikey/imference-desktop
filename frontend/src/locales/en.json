@@ -104,12 +104,15 @@
   "formats": {
     "square": "Square",
     "portrait": "Portrait",
-    "landscape": "Landscape"
+    "landscape": "Landscape",
+    "custom": "Custom"
   },
   "params": {
     "title": "Parameters",
     "summary": "{{dims}} · {{steps}} steps · cfg {{cfg}}",
     "format": "Format",
+    "width": "Width",
+    "height": "Height",
     "steps": "Steps",
     "cfg": "CFG",
     "seed": "Seed",

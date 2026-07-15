@@ -253,7 +253,7 @@
     "wanApplies": "— applies once video is enabled",
     "device": "Device",
     "auto": "Auto",
-    "cuda": "CUDA (GPU)",
+    "cuda": "GPU (NVIDIA CUDA / AMD ROCm)",
     "cpu": "CPU",
     "mps": "Apple MPS",
     "quant": "Quantization (GGUF)",

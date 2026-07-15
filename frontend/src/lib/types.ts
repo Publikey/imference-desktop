@@ -43,7 +43,10 @@ export type UpdateInfo = {
  * SDXL / SD 1.5; the engine ignores it for the others.
  */
 export type ImageRuntimeSettings = {
-  /** "" / "auto" | cuda | cuda:N | mps | cpu */
+  /**
+   * "" / "auto" | cuda | cuda:N | mps | cpu. "cuda" covers both NVIDIA and
+   * AMD GPUs (torch's ROCm build presents AMD under the cuda device string).
+   */
   device?: string;
   /** SDXL / SD 1.5 TAESD — faster VAE decode, slight quality loss. */
   useTinyVae?: boolean;

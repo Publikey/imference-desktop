@@ -1,6 +1,7 @@
 // Package installer creates a self-contained Python venv with imference-engine
-// and its CUDA-enabled torch installed. Used by App.InstallEngine to deliver
-// the one-click Local mode setup.
+// and a GPU-enabled torch installed (CUDA for NVIDIA, ROCm for AMD, MPS on
+// macOS — picked from internal/gpu's detection). Used by App.InstallEngine to
+// deliver the one-click Local mode setup.
 //
 // The package is intentionally Wails-free: callers wire the progress channel
 // to runtime.EventsEmit themselves, and stdout/stderr from pip is published
@@ -24,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"imference-desktop-go/internal/gpu"
 	"imference-desktop-go/internal/logbus"
 	"imference-desktop-go/internal/modelfetch"
 	"imference-desktop-go/internal/types"
@@ -95,33 +97,93 @@ func PinnedEngineVersion() string {
 // with NVIDIA drivers shipped from late 2024 onwards.
 const TorchIndexURL = "https://download.pytorch.org/whl/cu124"
 
+// TorchIndexURLROCm is the AMD ROCm 6.4 wheel index for Linux. rocm6.4 ships
+// torch 2.7–2.9 wheels, satisfying the engine's torch>=2.6 pin the same way
+// cu124 does. ROCm torch presents the GPU as device "cuda" (HIP layer), so
+// neither the engine nor the sidecar needs a different device string.
+// pytorch.org publishes no ROCm wheels for Windows — see rocmWinTorchWheel.
+const TorchIndexURLROCm = "https://download.pytorch.org/whl/rocm6.4"
+
+// AMD's PyTorch-on-Windows public preview: wheels are hosted on
+// repo.radeon.com (not on any pip index), are built for Python 3.12 ONLY
+// (cp312), and support Radeon RX 7000/9000 series + select Ryzen AI APUs with
+// a recent Adrenalin driver. Direct wheel URLs — pinned exactly like a lock
+// file; bump both together when adopting a newer AMD release.
+// https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/windows/install-pytorch.html
+const (
+	rocmWinTorchWheel       = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/torch-2.9.1+rocm7.2.1-cp312-cp312-win_amd64.whl"
+	rocmWinTorchvisionWheel = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/torchvision-0.24.1+rocm7.2.1-cp312-cp312-win_amd64.whl"
+)
+
+// rocmWindowsPythonSeries is the exact Python minor series the cp312 wheels
+// above require. Drives both interpreter detection and venv reuse checks.
+const rocmWindowsPythonSeries = "3.12"
+
 // TorchSpec is the version constraint we install. Mirroring the engine's
 // pyproject.toml exactly so pip is satisfied in one shot — no later "found a
 // version that doesn't match, let me swap it" surprises in the engine phase.
 const TorchSpec = "torch>=2.6"
 
 // torchInstallArgs returns the `pip` arguments (and a UI message) for the torch
-// phase, varying by OS:
+// phase, varying by OS and GPU vendor:
 //
 //   - macOS: the default PyPI wheels ship Apple's MPS (Metal) backend, so we
 //     install torch straight from PyPI with NO custom index. Pinning the cu124
 //     index here would fail — that index has no darwin wheels — and even a CPU
 //     fallback would lose GPU acceleration on Apple Silicon.
-//   - Windows/Linux: install the CUDA 12.4 build from the pytorch.org index.
+//   - AMD on Windows: AMD's preview wheels from repo.radeon.com (cp312-only —
+//     interpreter detection enforces Python 3.12 before we get here).
+//     --no-cache-dir per AMD's install docs: the ~4 GB wheels would otherwise
+//     double their disk cost in pip's cache.
+//   - AMD on Linux: the ROCm 6.4 build from the pytorch.org index.
+//   - NVIDIA / no GPU detected on Windows/Linux: the CUDA 12.4 build from the
+//     pytorch.org index (cu124 wheels run CPU-only too, so "no GPU" keeps the
+//     historical default rather than guessing).
 //
-// torchvision IS installed here (from the same index as torch, so the CUDA build
+// torchvision IS installed here (from the same source as torch, so the GPU build
 // matches): the Anima / Cosmos transformer forward calls
 // torchvision.transforms.functional.resize on its padding mask, and diffusers
 // only imports it under is_torchvision_available() — without torchvision the
 // forward raises "name 'transforms' is not defined". Pinning it to the same
-// index as torch avoids pip pulling a mismatched CPU wheel from PyPI.
-func torchInstallArgs() (args []string, message string) {
-	if runtime.GOOS == "darwin" {
+// source as torch avoids pip pulling a mismatched CPU wheel from PyPI.
+func torchInstallArgs(g gpu.Info) (args []string, message string) {
+	switch {
+	case runtime.GOOS == "darwin":
 		return []string{"install", "--upgrade", TorchSpec, "torchvision"},
 			"Downloading torch + torchvision (Apple Silicon / MPS) from PyPI"
+	case g.Vendor == gpu.VendorAMD && runtime.GOOS == "windows":
+		return []string{"install", "--upgrade", "--no-cache-dir", rocmWinTorchWheel, rocmWinTorchvisionWheel},
+			"Downloading torch + torchvision (AMD ROCm 7.2.1 Windows preview, ~4 GB) — this is the long one"
+	case g.Vendor == gpu.VendorAMD:
+		return []string{"install", "--upgrade", TorchSpec, "torchvision", "--index-url", TorchIndexURLROCm},
+			"Downloading torch + torchvision (AMD ROCm 6.4, ~4 GB) — this is the long one"
+	default:
+		return []string{"install", "--upgrade", TorchSpec, "torchvision", "--index-url", TorchIndexURL},
+			"Downloading torch + torchvision (CUDA 12.4, ~3 GB) — this is the long one"
 	}
-	return []string{"install", "--upgrade", TorchSpec, "torchvision", "--index-url", TorchIndexURL},
-		"Downloading torch + torchvision (CUDA 12.4, ~3 GB) — this is the long one"
+}
+
+// describeGPU renders the detection result for the install log / progress UI.
+func describeGPU(g gpu.Info) string {
+	switch g.Vendor {
+	case gpu.VendorNVIDIA, gpu.VendorAMD:
+		s := "Detected GPU: " + g.Name
+		if g.VRAMGiB > 0 {
+			s += fmt.Sprintf(" (%.0f GiB VRAM)", g.VRAMGiB)
+		}
+		if g.Vendor == gpu.VendorAMD {
+			if runtime.GOOS == "windows" {
+				s += " — using AMD's ROCm-for-Windows preview build (Radeon RX 7000/9000 + select Ryzen AI; needs a recent Adrenalin driver)"
+			} else {
+				s += " — using the ROCm torch build"
+			}
+		}
+		return s
+	case gpu.VendorApple:
+		return "Detected Apple Silicon — using the MPS torch build"
+	default:
+		return "No NVIDIA/AMD GPU detected — installing the default CUDA build (runs CPU-only without one)"
+	}
 }
 
 // SDEmbedTarball is the GitHub archive URL for sd_embed (weighted prompt
@@ -221,10 +283,30 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 		return i.reinstallEngineOnly(ctx, opts.VenvDir, emit)
 	}
 
-	// ----- Phase 1: detect Python -----
-	emit(types.InstallProgress{Phase: "detect", Message: "Looking for Python 3.10+ on PATH…"})
+	// ----- Phase 1: detect GPU + Python -----
+	// GPU first: the vendor decides the torch wheel source AND (for AMD on
+	// Windows, whose preview wheels are cp312-only) which interpreter is
+	// acceptable.
+	emit(types.InstallProgress{Phase: "detect", Message: "Detecting GPU…"})
 	i.bus.Info("installer", "detect phase start", nil)
-	py, err := DetectPython(ctx)
+	g := gpu.Detect(ctx)
+	i.bus.Info("installer", "gpu detected", map[string]any{
+		"vendor": string(g.Vendor), "name": g.Name, "vramGiB": g.VRAMGiB,
+	})
+	emit(types.InstallProgress{Phase: "detect", Message: describeGPU(g)})
+
+	amdWindows := g.Vendor == gpu.VendorAMD && runtime.GOOS == "windows"
+	pySeries := "" // "" = any Python >= 3.10
+	if amdWindows {
+		pySeries = rocmWindowsPythonSeries
+	}
+	pyMsg := "Looking for Python 3.10+ on PATH…"
+	if amdWindows {
+		pyMsg = "Looking for Python " + rocmWindowsPythonSeries +
+			" on PATH (required by AMD's ROCm-for-Windows torch wheels)…"
+	}
+	emit(types.InstallProgress{Phase: "detect", Message: pyMsg})
+	py, err := detectPythonSeries(ctx, pySeries)
 	if err != nil {
 		i.bus.Error("installer", "detect failed", map[string]any{"err": err.Error()})
 		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
@@ -239,7 +321,7 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 	// ----- Phase 2: ensure venv (create if missing, reuse if healthy) -----
 	emit(types.InstallProgress{Phase: "venv", Message: "Checking venv at " + opts.VenvDir})
 	i.bus.Info("installer", "venv phase start", map[string]any{"dir": opts.VenvDir})
-	reused, err := i.ensureVenv(ctx, py.Path, opts.VenvDir)
+	reused, err := i.ensureVenv(ctx, py.Path, opts.VenvDir, pySeries)
 	if err != nil {
 		i.bus.Error("installer", "venv failed", map[string]any{"err": err.Error()})
 		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
@@ -253,10 +335,12 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 	i.bus.Info("installer", "venv ok", map[string]any{"python": venvPython, "reused": reused})
 	emit(types.InstallProgress{Phase: "venv", Message: venvMsg})
 
-	// ----- Phase 3: pip install torch (CUDA on Win/Linux, MPS on macOS) -----
-	torchArgs, torchMsg := torchInstallArgs()
+	// ----- Phase 3: pip install torch (CUDA/ROCm on Win/Linux, MPS on macOS) -----
+	torchArgs, torchMsg := torchInstallArgs(g)
 	emit(types.InstallProgress{Phase: "torch", Message: torchMsg})
-	i.bus.Info("installer", "torch phase start", map[string]any{"os": runtime.GOOS, "args": torchArgs})
+	i.bus.Info("installer", "torch phase start", map[string]any{
+		"os": runtime.GOOS, "gpu": string(g.Vendor), "args": torchArgs,
+	})
 	if err := i.runPip(ctx, venvPython, "torch", emit, torchArgs...); err != nil {
 		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
 		return err
@@ -415,10 +499,15 @@ func (i *Installer) reinstallEngineOnly(
 }
 
 // ensureVenv returns (reused, error). When the venv at `dir` already has a
-// working python.exe, it's reused — pip in the subsequent phases will say
-// "already satisfied" for cached deps, turning a Reinstall click into a ~30s
-// no-op instead of a 9 min rebuild. When the venv is missing or its python
-// can't even report --version, we wipe + recreate from scratch.
+// working python.exe (of the required series, when one is required), it's
+// reused — pip in the subsequent phases will say "already satisfied" for
+// cached deps, turning a Reinstall click into a ~30s no-op instead of a 9 min
+// rebuild. When the venv is missing, its python can't even report --version,
+// or it's the wrong Python series (e.g. a 3.11 venv from a pre-AMD install on
+// a machine that now needs the cp312-only ROCm wheels), we wipe + recreate
+// from scratch.
+//
+// requireSeries is a "major.minor" string ("3.12") or "" for "any".
 //
 // To force a true fresh install (e.g. to refresh the engine code from main
 // when the version number hasn't bumped), delete the venv folder manually:
@@ -426,18 +515,27 @@ func (i *Installer) reinstallEngineOnly(
 //	Remove-Item -Recurse "$env:LOCALAPPDATA\imference-desktop-go\engine-venv"
 //
 // then click Reinstall.
-func (i *Installer) ensureVenv(ctx context.Context, pythonPath, dir string) (bool, error) {
+func (i *Installer) ensureVenv(ctx context.Context, pythonPath, dir, requireSeries string) (bool, error) {
 	venvPython := venvPythonPath(dir)
 	if _, err := os.Stat(venvPython); err == nil {
 		checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 		probe := exec.CommandContext(checkCtx, venvPython, "--version")
 		probe.SysProcAttr = hideWindowAttr() // no console flash under the GUI build
-		if probeErr := probe.Run(); probeErr == nil {
-			i.bus.Info("installer", "reusing existing venv", map[string]any{"dir": dir})
-			return true, nil
+		out, probeErr := probe.Output()
+		if probeErr == nil {
+			// "--version" prints "Python X.Y.Z".
+			version := strings.TrimPrefix(strings.TrimSpace(string(out)), "Python ")
+			if requireSeries == "" || strings.HasPrefix(version, requireSeries+".") {
+				i.bus.Info("installer", "reusing existing venv", map[string]any{"dir": dir, "version": version})
+				return true, nil
+			}
+			i.bus.Warn("installer", "existing venv is the wrong Python series, wiping", map[string]any{
+				"dir": dir, "have": version, "need": requireSeries,
+			})
+		} else {
+			i.bus.Warn("installer", "existing venv python is broken, wiping", map[string]any{"dir": dir})
 		}
-		i.bus.Warn("installer", "existing venv python is broken, wiping", map[string]any{"dir": dir})
 	}
 
 	if _, err := os.Stat(dir); err == nil {

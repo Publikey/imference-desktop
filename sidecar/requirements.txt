@@ -10,4 +10,5 @@ lark>=1.1
 
 # imference-engine itself is installed by the desktop's bundled installer with
 # the [runtime] extra (pip install "imference-engine[runtime] @ <github>").
-# Torch CUDA must be present first — the installer's torch phase covers that.
+# A GPU torch (CUDA or ROCm) must be present first — the installer's torch
+# phase covers that per detected vendor.

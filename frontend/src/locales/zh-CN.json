@@ -251,7 +251,7 @@
     "wanApplies": "— 启用视频后生效",
     "device": "设备",
     "auto": "自动",
-    "cuda": "CUDA（GPU）",
+    "cuda": "GPU（NVIDIA CUDA / AMD ROCm）",
     "cpu": "CPU",
     "mps": "Apple MPS",
     "quant": "量化（GGUF）",

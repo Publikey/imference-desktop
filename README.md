@@ -74,7 +74,7 @@ available; code signing and silent in-app auto-update are on the roadmap.
 
 | Mode | What you need |
 |---|---|
-| **Local** | Windows: an NVIDIA GPU (CUDA) · macOS: Apple Silicon. ~6–7 GB disk per model. |
+| **Local** | Windows: an NVIDIA GPU (CUDA), or an AMD Radeon RX 7000/9000 (ROCm preview — needs Python 3.12 + a recent Adrenalin driver) · Linux: NVIDIA (CUDA) or AMD (ROCm) · macOS: Apple Silicon. ~6–7 GB disk per model. |
 | **Cloud** | Any machine — an [imference.com API key](https://imference.com/payments), or a funded x402 wallet. |
 
 Learn more about the app on the

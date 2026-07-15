@@ -58,7 +58,7 @@
 
 | 模式 | 需要什么 |
 |---|---|
-| **本地** | Windows：NVIDIA GPU（CUDA）· macOS：Apple Silicon。每个模型约 6–7 GB 磁盘空间。 |
+| **本地** | Windows：NVIDIA GPU（CUDA），或 AMD Radeon RX 7000/9000（ROCm 预览版 — 需要 Python 3.12 和较新的 Adrenalin 驱动）· Linux：NVIDIA（CUDA）或 AMD（ROCm）· macOS：Apple Silicon。每个模型约 6–7 GB 磁盘空间。 |
 | **云端** | 任何电脑 — 一个 [imference.com API 密钥](https://imference.com/payments)，或一个有余额的 x402 钱包。 |
 
 更多信息见 [imference.com/desktop](https://imference.com/desktop) 页面。

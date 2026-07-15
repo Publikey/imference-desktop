@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronsUpDown, Cloud, Cpu, Download, Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
 import { ModelPickerDialog, ModelThumb } from "@/components/ModelPickerDialog";
@@ -132,19 +132,7 @@ export function ModelBar({
 
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
-      <div className="flex items-center gap-2.5">
-        <span
-          className={cn(
-            "flex size-9 shrink-0 items-center justify-center rounded-[10px] text-white shadow-sm",
-            isCloud
-              ? "bg-[linear-gradient(135deg,var(--cloud-from),var(--cloud-to))]"
-              : "brand-surface"
-          )}
-          title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
-        >
-          {isCloud ? <Cloud className="size-[18px]" /> : <Cpu className="size-[18px]" />}
-        </span>
-
+      <div className="flex items-center">
         {listError ? (
           <span className="text-destructive flex-1 text-xs">{t("modelBar.catalogUnavailable")}</span>
         ) : loading ? (
@@ -157,6 +145,7 @@ export function ModelBar({
             type="button"
             disabled={busy}
             onClick={() => onPickerOpenChange(true)}
+            title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
             className={cn(
               "group flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-xl border px-2.5 text-left text-sm shadow-sm transition",
               "bg-background/70 hover:border-primary/40 hover:bg-background",
@@ -167,11 +156,7 @@ export function ModelBar({
             <span className="min-w-0 flex-1 truncate font-medium">
               {selected?.name ?? (allModels.length ? t("modelBar.selectModel") : t("modelBar.noModels"))}
             </span>
-            {busy ? (
-              <Loader2 className="size-4 shrink-0 animate-spin opacity-60" />
-            ) : (
-              <ChevronsUpDown className="size-4 shrink-0 opacity-40 transition group-hover:opacity-70" />
-            )}
+            {busy && <Loader2 className="size-4 shrink-0 animate-spin opacity-60" />}
           </button>
         )}
       </div>

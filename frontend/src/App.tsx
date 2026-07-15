@@ -771,7 +771,14 @@ export default function App() {
                 className:
                   "mx-auto w-full max-w-2xl xl:sticky xl:top-4 xl:mx-0 xl:w-[25rem] xl:max-w-none xl:shrink-0",
                 content: (
-                  <div className="flex flex-col gap-4">
+                  // Mode-tinted, self-scrolling surface: the panel is felt in
+                  // the active mode's accent and, on desktop, scrolls internally
+                  // so a long open Parameters section stays reachable while the
+                  // column is sticky.
+                  <div
+                    className="create-surface flex flex-col gap-4 p-3 xl:max-h-[calc(100vh-6.5rem)] xl:overflow-y-auto xl:overflow-x-hidden"
+                    data-mode={mode}
+                  >
                     {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
                     <ModeToggle
                       mode={mode}
@@ -805,12 +812,17 @@ export default function App() {
                       onPickerOpenChange={setModelPickerOpen}
                     />
 
-                    {/* 2b. Parameters — seeded from the model, tweakable per generation. */}
+                    {/* 3. Format — a primary creative choice, always visible (no
+                        longer buried in the collapsible Parameters). */}
                     {activeModel && params && (
-                      <ParamsPanel model={activeModel} mode={mode} params={params} onChange={setParams} />
+                      <FormatSelector
+                        model={activeModel}
+                        value={params.formatCode}
+                        onChange={(formatCode) => setParams((pp) => (pp ? { ...pp, formatCode } : pp))}
+                      />
                     )}
 
-                    {/* 3. Prompt (with pre-prompt above + negative below) */}
+                    {/* 4. Prompt (with pre-prompt above + negative below) */}
                     <Composer
                       prompt={prompt}
                       onPromptChange={setPrompt}
@@ -827,6 +839,13 @@ export default function App() {
                       negativePrompt={params?.negativePrompt ?? ""}
                       onNegativePromptChange={(v) => setParams((pp) => (pp ? { ...pp, negativePrompt: v } : pp))}
                     />
+
+                    {/* 5. Parameters — seeded from the model, tweakable per
+                        generation. Below the prompt now (fine-tuning follows the
+                        main creative act). */}
+                    {activeModel && params && (
+                      <ParamsPanel model={activeModel} mode={mode} params={params} onChange={setParams} />
+                    )}
                   </div>
                 ),
               },
@@ -1267,9 +1286,58 @@ function Composer({
   );
 }
 
+// FormatSelector — the image aspect (square / portrait / landscape …), pulled
+// out of the collapsible Parameters so it's always one tap away. Options and
+// per-model dimensions come from the catalog (im_format), falling back to the
+// generic set. Sits above the prompt as its own compact row.
+function FormatSelector({
+  model,
+  value,
+  onChange,
+}: {
+  model: ModelInfo;
+  value: string;
+  onChange: (formatCode: string) => void;
+}) {
+  const { t } = useTranslation();
+  const formats = formatOptions(model);
+  if (formats.length <= 1) return null; // nothing to choose
+  return (
+    <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
+      <div className="flex items-center gap-3">
+        <span className="text-muted-foreground shrink-0 text-[11px] font-medium uppercase tracking-wide">
+          {t("params.format")}
+        </span>
+        <div className="bg-muted flex min-w-0 flex-1 gap-1 rounded-lg p-0.5 text-xs">
+          {formats.map((f) => (
+            <button
+              key={f.formatCode}
+              type="button"
+              onClick={() => onChange(f.formatCode)}
+              title={`${f.width}×${f.height}${f.ratio ? ` · ${f.ratio}` : ""}`}
+              className={cn(
+                "flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium capitalize transition",
+                value === f.formatCode
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {formatName(f, t)}
+              {f.ratio && (
+                <span className="text-muted-foreground/70 ml-1 text-[10px] normal-case">{f.ratio}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ParamsPanel — collapsible generation parameters, seeded from the model's
-// catalog defaults (steps/cfg bounds, negative prompt, format) and tweakable per
-// generation. Clip-skip / scheduler are local-only (the cloud API uses the
+// catalog defaults (steps/cfg bounds, negative prompt) and tweakable per
+// generation. Format now lives in its own always-visible FormatSelector above
+// the prompt. Clip-skip / scheduler are local-only (the cloud API uses the
 // model's server-side defaults).
 function ParamsPanel({
   model,
@@ -1291,7 +1359,6 @@ function ParamsPanel({
   const cfgMin = model.cfgMin || 1;
   const cfgMax = Math.max(model.cfgMax || 20, cfgMin + 0.5);
   const showClip = model.skipDefault > 0; // model uses clip-skip
-  const formats = formatOptions(model);
   const dims = dimsForModel(model, params.formatCode);
   const summary = t("params.summary", {
     dims: `${dims.width}×${dims.height}`,
@@ -1318,31 +1385,6 @@ function ParamsPanel({
 
       {open && (
         <div className="grid gap-4 border-t px-4 py-4">
-          <div className="grid gap-1.5">
-            <span className="text-xs font-medium">{t("params.format")}</span>
-            <div className="bg-muted flex flex-wrap gap-1 rounded-lg p-0.5 text-xs">
-              {formats.map((f) => (
-                <button
-                  key={f.formatCode}
-                  type="button"
-                  onClick={() => set({ formatCode: f.formatCode })}
-                  title={`${f.width}×${f.height}${f.ratio ? ` · ${f.ratio}` : ""}`}
-                  className={cn(
-                    "flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium capitalize transition",
-                    params.formatCode === f.formatCode
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {formatName(f, t)}
-                  {f.ratio && (
-                    <span className="text-muted-foreground/70 ml-1 text-[10px] normal-case">{f.ratio}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <RangeRow label={t("params.steps")} value={params.steps} min={stepsMin} max={stepsMax} step={1} onChange={(v) => set({ steps: v })} />
           <RangeRow label={t("params.cfg")} value={params.cfg} min={cfgMin} max={cfgMax} step={0.5} onChange={(v) => set({ cfg: v })} />
 

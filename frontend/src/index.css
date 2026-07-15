@@ -194,6 +194,31 @@
     );
   }
 
+  /* ---- Create-panel mode surface ----------------------------------------
+     The Create panel takes a faint wash + hairline in the active mode's accent
+     (blue for Local, cyan for Cloud) so the current mode is felt, not just read
+     off the toggle. Kept very low-alpha; cross-fades on mode switch. */
+  .create-surface {
+    border: 1px solid transparent;
+    border-radius: 1.5rem;
+    transition:
+      background-color 0.35s var(--ease-out-expo),
+      border-color 0.35s var(--ease-out-expo);
+  }
+  .create-surface[data-mode="local"] {
+    background-color: color-mix(in oklch, var(--brand-from) 5%, transparent);
+    border-color: color-mix(in oklch, var(--brand-from) 12%, transparent);
+  }
+  .create-surface[data-mode="cloud"] {
+    background-color: color-mix(in oklch, var(--cloud-from) 7%, transparent);
+    border-color: color-mix(in oklch, var(--cloud-from) 16%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .create-surface {
+      transition: none;
+    }
+  }
+
   /* ---- Panel system ------------------------------------------------------
      The main window is three drag-reorderable panels (Create / Activity /
      Gallery). Panels are light columns — a slim header over the content — so

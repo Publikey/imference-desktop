@@ -136,7 +136,9 @@ export function ModelBar({
         <span
           className={cn(
             "flex size-9 shrink-0 items-center justify-center rounded-[10px] text-white shadow-sm",
-            isCloud ? "bg-gradient-to-br from-sky-400 to-blue-600" : "brand-surface"
+            isCloud
+              ? "bg-[linear-gradient(135deg,var(--cloud-from),var(--cloud-to))]"
+              : "brand-surface"
           )}
           title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
         >

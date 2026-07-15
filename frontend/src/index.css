@@ -4,60 +4,67 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Neutrals carry a whisper of the brand hue (violet, h≈286) so surfaces feel
-   intentional rather than gray-out-of-the-box — the chroma is far below the
-   threshold where anyone would call them "purple". */
+/* Neutrals carry a whisper of the brand hue (blue, h≈250, matching the logo)
+   so surfaces feel intentional rather than gray-out-of-the-box — the chroma is
+   far below the threshold where anyone would call them "blue". */
 :root {
-  --background: oklch(0.985 0.003 286);
-  --foreground: oklch(0.155 0.008 285);
-  --card: oklch(0.999 0.001 286);
-  --card-foreground: oklch(0.155 0.008 285);
-  --popover: oklch(0.999 0.001 286);
-  --popover-foreground: oklch(0.155 0.008 285);
-  --primary: oklch(0.21 0.015 285);
-  --primary-foreground: oklch(0.985 0.002 286);
-  --secondary: oklch(0.965 0.004 286);
-  --secondary-foreground: oklch(0.21 0.015 285);
-  --muted: oklch(0.962 0.004 286);
-  --muted-foreground: oklch(0.545 0.014 285);
-  --accent: oklch(0.965 0.004 286);
-  --accent-foreground: oklch(0.21 0.015 285);
+  --background: oklch(0.985 0.003 250);
+  --foreground: oklch(0.155 0.008 252);
+  --card: oklch(0.999 0.001 250);
+  --card-foreground: oklch(0.155 0.008 252);
+  --popover: oklch(0.999 0.001 250);
+  --popover-foreground: oklch(0.155 0.008 252);
+  --primary: oklch(0.21 0.015 252);
+  --primary-foreground: oklch(0.985 0.002 250);
+  --secondary: oklch(0.965 0.004 250);
+  --secondary-foreground: oklch(0.21 0.015 252);
+  --muted: oklch(0.962 0.004 250);
+  --muted-foreground: oklch(0.545 0.014 252);
+  --accent: oklch(0.965 0.004 250);
+  --accent-foreground: oklch(0.21 0.015 252);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.915 0.006 286);
-  --input: oklch(0.915 0.006 286);
-  --ring: oklch(0.62 0.11 288);
+  --border: oklch(0.915 0.006 250);
+  --input: oklch(0.915 0.006 250);
+  --ring: oklch(0.62 0.13 245);
   --radius: 0.625rem;
-  /* Signature brand gradient — the one spot of color in an otherwise neutral
-     app. Indigo → violet, tuned for a creative/imaginative feel. */
-  --brand-from: oklch(0.58 0.2 280);
-  --brand-to: oklch(0.62 0.23 330);
+  /* Signature brand gradient, derived from the logo — deep royal blue → cyan.
+     The cyan end is nudged a touch deeper than the logo's #00D8FE so white
+     button text stays legible on it. */
+  --brand-from: oklch(0.52 0.18 256);
+  --brand-to: oklch(0.7 0.15 220);
+  /* Cloud-mode accent — brighter, cyan-forward so it reads distinct from the
+     deep-blue local brand (local = brand-surface, cloud = these). */
+  --cloud-from: oklch(0.72 0.13 218);
+  --cloud-to: oklch(0.82 0.11 205);
   /* Motion vocabulary — one easing family for the whole app. */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
 }
 
 .dark {
-  --background: oklch(0.152 0.01 285);
-  --foreground: oklch(0.975 0.003 286);
-  --card: oklch(0.205 0.012 285);
-  --card-foreground: oklch(0.975 0.003 286);
-  --popover: oklch(0.205 0.012 285);
-  --popover-foreground: oklch(0.975 0.003 286);
-  --primary: oklch(0.925 0.006 286);
-  --primary-foreground: oklch(0.21 0.012 285);
-  --secondary: oklch(0.268 0.01 285);
-  --secondary-foreground: oklch(0.975 0.003 286);
-  --muted: oklch(0.268 0.01 285);
-  --muted-foreground: oklch(0.715 0.012 286);
-  --accent: oklch(0.268 0.01 285);
-  --accent-foreground: oklch(0.975 0.003 286);
+  --background: oklch(0.152 0.01 251);
+  --foreground: oklch(0.975 0.003 250);
+  --card: oklch(0.205 0.012 251);
+  --card-foreground: oklch(0.975 0.003 250);
+  --popover: oklch(0.205 0.012 251);
+  --popover-foreground: oklch(0.975 0.003 250);
+  --primary: oklch(0.925 0.006 250);
+  --primary-foreground: oklch(0.21 0.012 251);
+  --secondary: oklch(0.268 0.01 251);
+  --secondary-foreground: oklch(0.975 0.003 250);
+  --muted: oklch(0.268 0.01 251);
+  --muted-foreground: oklch(0.715 0.012 252);
+  --accent: oklch(0.268 0.01 251);
+  --accent-foreground: oklch(0.975 0.003 250);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 11%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.62 0.11 288);
+  --ring: oklch(0.62 0.13 245);
   /* Slightly brighter brand on dark so it still reads as vivid, not muddy. */
-  --brand-from: oklch(0.66 0.19 280);
-  --brand-to: oklch(0.69 0.22 330);
+  --brand-from: oklch(0.58 0.17 254);
+  --brand-to: oklch(0.76 0.14 218);
+  --cloud-from: oklch(0.76 0.13 216);
+  --cloud-to: oklch(0.85 0.11 203);
 }
 
 @theme inline {

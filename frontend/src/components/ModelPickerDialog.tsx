@@ -367,7 +367,7 @@ export function ModelThumb({
         isCustom
           ? "bg-amber-500/15 text-amber-600 dark:text-amber-300"
           : isCloud
-            ? "bg-gradient-to-br from-sky-400 to-blue-600 text-white"
+            ? "bg-[linear-gradient(135deg,var(--cloud-from),var(--cloud-to))] text-white"
             : "brand-surface text-white",
         className
       )}

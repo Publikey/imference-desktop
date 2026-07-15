@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Check, FileBox, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import {
   Dialog,
@@ -12,7 +14,8 @@ import type { ModelInfo } from "@/lib/types";
 
 // Display label + ordering for each backend "type" the cards group by. Keys are
 // the normalized BackendType (cloud.normalizeEngine); "" is the cloud-only
-// external family (GPT-Image, Veo, …) with no local backend.
+// external family (GPT-Image, Veo, …) with no local backend. Family names are
+// proper nouns (not translated); only "Cloud API" / "Other" go through i18n.
 const TYPE_LABEL: Record<string, string> = {
   sdxl: "SDXL",
   sd15: "SD 1.5",
@@ -22,12 +25,12 @@ const TYPE_LABEL: Record<string, string> = {
   qwenimage: "Qwen-Image",
   anima: "Anima",
   wan: "WAN Video",
-  "": "Cloud API",
 };
 const TYPE_ORDER = ["sdxl", "sd15", "zimage", "flux", "chroma", "qwenimage", "anima", "wan", ""];
 
-function typeLabel(t: string): string {
-  return TYPE_LABEL[t] ?? (t ? t.toUpperCase() : "Other");
+function typeLabel(type: string, t: TFunction): string {
+  if (type === "") return t("modelPicker.typeCloudApi");
+  return TYPE_LABEL[type] ?? (type ? type.toUpperCase() : t("modelPicker.typeOther"));
 }
 
 function matches(m: ModelInfo, q: string): boolean {
@@ -42,7 +45,7 @@ function matches(m: ModelInfo, q: string): boolean {
 
 // Group models by backend type, ordered by TYPE_ORDER (unknown types last,
 // alphabetical), models within a group by catalog `order` then name.
-function groupByType(models: ModelInfo[]): { type: string; label: string; items: ModelInfo[] }[] {
+function groupByType(models: ModelInfo[], t: TFunction): { type: string; label: string; items: ModelInfo[] }[] {
   const byType = new Map<string, ModelInfo[]>();
   for (const m of models) {
     const t = m.backendType ?? "";
@@ -56,7 +59,7 @@ function groupByType(models: ModelInfo[]): { type: string; label: string; items:
     .sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]))
     .map(([type, items]) => ({
       type,
-      label: typeLabel(type),
+      label: typeLabel(type, t),
       items: items.sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name)),
     }));
 }
@@ -84,6 +87,7 @@ export function ModelPickerDialog({
   onAddCustom: () => void;
   onRemoveCustom: (m: ModelInfo) => void;
 }) {
+  const { t } = useTranslation();
   const isCloud = mode === "cloud";
   const [tab, setTab] = useState<"catalog" | "mine">("catalog");
   const [search, setSearch] = useState("");
@@ -106,8 +110,8 @@ export function ModelPickerDialog({
     const filtered = source.filter(
       (m) => (typeFilter === "all" || (m.backendType ?? "") === typeFilter) && matches(m, search)
     );
-    return groupByType(filtered);
-  }, [source, typeFilter, search]);
+    return groupByType(filtered, t);
+  }, [source, typeFilter, search, t]);
 
   const total = groups.reduce((n, g) => n + g.items.length, 0);
   const showMine = !isCloud && tab === "mine";
@@ -116,28 +120,26 @@ export function ModelPickerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] gap-0 overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="border-b px-5 pt-5 pb-4">
-          <DialogTitle>{isCloud ? "Cloud models" : "Local models"}</DialogTitle>
+          <DialogTitle>{isCloud ? t("modelPicker.cloudTitle") : t("modelPicker.localTitle")}</DialogTitle>
           <DialogDescription>
-            {isCloud
-              ? "Pick a model to run in the cloud — grouped by type."
-              : "Pick a model to run on your machine, or bring your own checkpoint."}
+            {isCloud ? t("modelPicker.cloudDesc") : t("modelPicker.localDesc")}
           </DialogDescription>
 
           {/* Local: Catalog / My models tabs */}
           {!isCloud && (
             <div className="mt-1 flex gap-1">
-              {(["catalog", "mine"] as const).map((t) => (
+              {(["catalog", "mine"] as const).map((tabId) => (
                 <button
-                  key={t}
+                  key={tabId}
                   type="button"
-                  onClick={() => setTab(t)}
+                  onClick={() => setTab(tabId)}
                   className={cn(
                     "rounded-lg px-3 py-1.5 text-xs font-medium transition",
-                    tab === t ? "bg-primary text-primary-foreground" : "hover:bg-accent text-muted-foreground"
+                    tab === tabId ? "bg-primary text-primary-foreground" : "hover:bg-accent text-muted-foreground"
                   )}
                 >
-                  {t === "catalog" ? "Catalog" : "My models"}
-                  {t === "mine" && customModels.length > 0 && (
+                  {tabId === "catalog" ? t("modelPicker.catalogTab") : t("modelPicker.mineTab")}
+                  {tabId === "mine" && customModels.length > 0 && (
                     <span className="ml-1.5 opacity-70">{customModels.length}</span>
                   )}
                 </button>
@@ -153,18 +155,18 @@ export function ModelPickerDialog({
                 autoFocus
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search models…"
+                placeholder={t("modelPicker.searchPlaceholder")}
                 className="border-input bg-background h-9 w-full rounded-md border pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
               />
             </div>
             {presentTypes.length > 1 && (
               <div className="flex flex-wrap gap-1.5">
                 <Chip active={typeFilter === "all"} onClick={() => setTypeFilter("all")}>
-                  All
+                  {t("common.all")}
                 </Chip>
-                {presentTypes.map((t) => (
-                  <Chip key={t} active={typeFilter === t} onClick={() => setTypeFilter(t)}>
-                    {typeLabel(t)}
+                {presentTypes.map((ty) => (
+                  <Chip key={ty} active={typeFilter === ty} onClick={() => setTypeFilter(ty)}>
+                    {typeLabel(ty, t)}
                   </Chip>
                 ))}
               </div>
@@ -184,9 +186,9 @@ export function ModelPickerDialog({
                 <Plus className="size-5" />
               </span>
               <div>
-                <div className="text-sm font-medium">Add a checkpoint…</div>
+                <div className="text-sm font-medium">{t("modelPicker.addCheckpoint")}</div>
                 <div className="text-muted-foreground text-xs">
-                  Load your own .safetensors (e.g. from Civitai)
+                  {t("modelPicker.addCheckpointHint")}
                 </div>
               </div>
             </button>
@@ -195,10 +197,10 @@ export function ModelPickerDialog({
           {total === 0 ? (
             <p className="text-muted-foreground py-10 text-center text-sm">
               {showMine
-                ? "No custom models yet — add one above."
+                ? t("modelPicker.emptyMine")
                 : search || typeFilter !== "all"
-                  ? "No models match your filters."
-                  : "No models available."}
+                  ? t("modelPicker.emptyFiltered")
+                  : t("modelPicker.empty")}
             </p>
           ) : (
             groups.map((g) => (
@@ -270,6 +272,7 @@ function ModelCard({
   onPick: () => void;
   onRemove?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className={cn(
@@ -292,14 +295,14 @@ function ModelCard({
           )}
           <div className="absolute top-1.5 left-1.5 flex gap-1">
             {m.localPath ? (
-              <Badge className="bg-amber-500/90 text-white">custom</Badge>
+              <Badge className="bg-amber-500/90 text-white">{t("modelPicker.badgeCustom")}</Badge>
             ) : !m.modelUrl && !isCloud ? (
-              <Badge className="bg-black/60 text-white">cloud-only</Badge>
+              <Badge className="bg-black/60 text-white">{t("modelPicker.badgeCloudOnly")}</Badge>
             ) : null}
           </div>
           {isCloud && m.cost > 0 && (
             <Badge className="bg-background/85 text-foreground absolute right-1.5 bottom-1.5">
-              {m.cost} cr
+              {t("modelPicker.cost", { cost: m.cost })}
             </Badge>
           )}
         </div>
@@ -320,8 +323,8 @@ function ModelCard({
         <button
           type="button"
           onClick={onRemove}
-          title="Remove from list (the file is not deleted)"
-          aria-label="Remove custom model"
+          title={t("modelPicker.removeTitle")}
+          aria-label={t("modelPicker.removeAria")}
           className="text-muted-foreground hover:text-destructive hover:bg-background absolute right-1.5 bottom-1.5 rounded-md p-1 opacity-0 transition group-hover:opacity-100"
         >
           <Trash2 className="size-3.5" />

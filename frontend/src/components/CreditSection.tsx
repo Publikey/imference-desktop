@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { RefreshCw, Coins, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ type Props = {
 // for the configured Bearer key. Auto-checks on mount and (debounced) whenever
 // the key changes, plus a manual refresh button.
 export function CreditSection({ apiKey }: Props) {
+  const { t } = useTranslation();
   const [info, setInfo] = useState<CreditInfo | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -45,23 +47,21 @@ export function CreditSection({ apiKey }: Props) {
     <div className="bg-muted/30 mt-3 grid gap-1 rounded-lg border p-3">
       <div className="flex items-center gap-2">
         <Coins className="text-muted-foreground size-3.5" />
-        <Label className="text-muted-foreground text-xs">Credit balance</Label>
+        <Label className="text-muted-foreground text-xs">{t("credit.balance")}</Label>
         <Button
           size="icon"
           variant="ghost"
           onClick={() => void check()}
           disabled={loading}
           className="ml-auto size-6"
-          title="Refresh balance"
+          title={t("credit.refreshTitle")}
         >
           <RefreshCw className={"size-3.5 " + (loading ? "animate-spin" : "")} />
         </Button>
       </div>
 
       {info && !info.configured && (
-        <p className="text-muted-foreground text-xs">
-          Enter your API key above to see your remaining credits.
-        </p>
+        <p className="text-muted-foreground text-xs">{t("credit.enterKey")}</p>
       )}
 
       {info?.configured && info.error && (
@@ -74,11 +74,11 @@ export function CreditSection({ apiKey }: Props) {
       {info?.configured && !info.error && (
         <div className="flex items-baseline gap-2">
           <span className="text-2xl font-semibold tabular-nums">{info.credits}</span>
-          <span className="text-muted-foreground text-xs">credits</span>
+          <span className="text-muted-foreground text-xs">{t("credit.credits")}</span>
         </div>
       )}
 
-      {!info && loading && <p className="text-muted-foreground text-xs">Checking…</p>}
+      {!info && loading && <p className="text-muted-foreground text-xs">{t("common.checking")}</p>}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
 import {
   Dialog,
@@ -16,6 +17,7 @@ import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
 import { CreditSection } from "@/components/CreditSection";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
+import { SUPPORTED_LANGUAGES, setLanguage, storedLanguage } from "@/i18n";
 import type { AppSettings, EngineRuntimeSettings, PaymentMode } from "@/lib/types";
 
 type Props = {
@@ -27,18 +29,23 @@ type Props = {
 };
 
 // Left-nav table of contents. Sub-items (indented) scroll to a subsection.
-const NAV: { id: string; label: string; sub?: boolean }[] = [
-  { id: "engine", label: "Local engine" },
-  { id: "runtime", label: "Advanced runtime" },
-  { id: "runtime-image", label: "Image", sub: true },
-  { id: "runtime-wan", label: "WAN video", sub: true },
-  { id: "payment", label: "Cloud payment" },
-  { id: "apikey", label: "API key", sub: true },
-  { id: "x402", label: "x402 wallet", sub: true },
-  { id: "paths", label: "Paths" },
+// Labels are i18n keys, resolved at render.
+const NAV: { id: string; labelKey: string; sub?: boolean }[] = [
+  { id: "engine", labelKey: "settings.navEngine" },
+  { id: "runtime", labelKey: "settings.navRuntime" },
+  { id: "runtime-image", labelKey: "settings.navImage", sub: true },
+  { id: "runtime-wan", labelKey: "settings.navWan", sub: true },
+  { id: "payment", labelKey: "settings.navPayment" },
+  { id: "apikey", labelKey: "settings.navApiKey", sub: true },
+  { id: "x402", labelKey: "settings.navWallet", sub: true },
+  { id: "paths", labelKey: "settings.navPaths" },
+  { id: "language", labelKey: "settings.navLanguage" },
 ];
 
 export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: Props) {
+  const { t } = useTranslation();
+  // The persisted UI-language choice ("" = follow the OS language).
+  const [langChoice, setLangChoice] = useState(storedLanguage());
   const [draft, setDraft] = useState<AppSettings>({
     apiKey: "",
     pythonPath: "",
@@ -68,6 +75,9 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
       setDraft(s);
       savedRef.current = JSON.stringify(s);
     });
+    // Re-read the persisted language choice: the header toggle may have
+    // changed it since this dialog last opened.
+    setLangChoice(storedLanguage());
   }, [open]);
 
   // Auto-save: every change to the draft is persisted (debounced) — no Save
@@ -134,7 +144,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
           {/* Nav — VS Code-style table of contents. */}
           <nav className="bg-muted/30 w-48 shrink-0 space-y-0.5 overflow-y-auto border-r p-3">
             <p className="text-muted-foreground mb-2 px-2 text-[11px] font-semibold uppercase tracking-wide">
-              Settings
+              {t("settings.title")}
             </p>
             {NAV.map((n) => (
               <button
@@ -149,7 +159,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                     : "text-muted-foreground hover:text-foreground hover:bg-background/60"
                 )}
               >
-                {n.label}
+                {t(n.labelKey)}
               </button>
             ))}
           </nav>
@@ -157,10 +167,8 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
           {/* Content — the scroll container the nav links jump within. */}
           <div className="min-w-0 flex-1 space-y-4 overflow-y-auto p-5">
             <DialogHeader className="space-y-1 text-left">
-              <DialogTitle className="text-lg">Settings</DialogTitle>
-              <DialogDescription>
-                Required for cloud and local generation. Saved to settings.json in your OS config dir.
-              </DialogDescription>
+              <DialogTitle className="text-lg">{t("settings.title")}</DialogTitle>
+              <DialogDescription>{t("settings.desc")}</DialogDescription>
             </DialogHeader>
 
             <section id="settings-engine" className="scroll-mt-4">
@@ -177,9 +185,9 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             </section>
 
             <section id="settings-payment" className="bg-card scroll-mt-4 rounded-2xl border p-4 shadow-sm">
-              <h3 className="mb-3 text-sm font-semibold">Cloud payment</h3>
+              <h3 className="mb-3 text-sm font-semibold">{t("settings.cloudPayment")}</h3>
               <div className="grid gap-2">
-                <Label className="text-xs">Active method</Label>
+                <Label className="text-xs">{t("settings.activeMethod")}</Label>
                 <div className="flex gap-4 text-sm">
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
@@ -188,7 +196,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                       checked={draft.paymentMode !== "x402"}
                       onChange={() => setDraft({ ...draft, paymentMode: "bearer" as PaymentMode })}
                     />
-                    API key (credit)
+                    {t("settings.apiKeyCredit")}
                   </label>
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
@@ -197,25 +205,25 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                       checked={draft.paymentMode === "x402"}
                       onChange={() => setDraft({ ...draft, paymentMode: "x402" as PaymentMode })}
                     />
-                    x402 (USDC wallet)
+                    {t("settings.x402Wallet")}
                   </label>
                 </div>
               </div>
 
               <div id="settings-apikey" className="mt-4 grid gap-2 scroll-mt-4">
-                <Label htmlFor="apiKey">API key (credit)</Label>
+                <Label htmlFor="apiKey">{t("settings.apiKeyCredit")}</Label>
                 <Input
                   id="apiKey"
                   type="password"
                   value={draft.apiKey}
                   onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
-                  placeholder="Bearer token from imference.com"
+                  placeholder={t("settings.apiKeyPlaceholder")}
                 />
                 <CreditSection apiKey={draft.apiKey} />
               </div>
 
               <div id="settings-x402" className="mt-5 scroll-mt-4">
-                <Label className="text-xs">x402 wallet (USDC on Base)</Label>
+                <Label className="text-xs">{t("settings.x402WalletLabel")}</Label>
                 <div className="mt-2">
                   <WalletSection
                     onChanged={(newAddress) =>
@@ -230,15 +238,13 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
               id="settings-paths"
               className="bg-card scroll-mt-4 grid gap-4 rounded-2xl border p-4 shadow-sm"
             >
-              <h3 className="text-sm font-semibold">Paths</h3>
-              <p className="text-muted-foreground -mt-2 text-xs">
-                The cloud and local models are chosen from the form, above the prompt.
-              </p>
+              <h3 className="text-sm font-semibold">{t("settings.paths")}</h3>
+              <p className="text-muted-foreground -mt-2 text-xs">{t("settings.pathsHint")}</p>
               <div className="grid gap-2">
                 <Label htmlFor="pythonPath">
-                  Python path{" "}
+                  {t("settings.pythonPath")}{" "}
                   <span className="text-muted-foreground font-normal">
-                    (auto-filled by Install — override only for a custom venv)
+                    {t("settings.pythonPathHint")}
                   </span>
                 </Label>
                 <Input
@@ -249,21 +255,44 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="outputDir">Auto-save folder (optional)</Label>
+                <Label htmlFor="outputDir">{t("settings.outputDir")}</Label>
                 <Input
                   id="outputDir"
                   value={draft.outputDir}
                   onChange={(e) => setDraft({ ...draft, outputDir: e.target.value })}
-                  placeholder="Leave empty to use ~/Pictures/Imference"
+                  placeholder={t("settings.outputDirPlaceholder")}
                 />
               </div>
             </section>
 
+            <section
+              id="settings-language"
+              className="bg-card scroll-mt-4 grid gap-2 rounded-2xl border p-4 shadow-sm"
+            >
+              <h3 className="text-sm font-semibold">{t("settings.language")}</h3>
+              <select
+                value={langChoice}
+                onChange={(e) => {
+                  setLangChoice(e.target.value);
+                  setLanguage(e.target.value);
+                }}
+                className="border-input bg-background h-9 w-full max-w-xs rounded-md border px-2 text-sm"
+              >
+                <option value="">{t("settings.languageSystem")}</option>
+                {SUPPORTED_LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-muted-foreground text-xs">{t("settings.languageHint")}</p>
+            </section>
+
             <div className="bg-background/80 sticky bottom-0 flex items-center justify-between gap-2 border-t py-3 backdrop-blur">
               <span className="text-muted-foreground text-xs">
-                Imference Desktop {appVersion === "dev" ? "(dev build)" : appVersion ? `v${appVersion}` : ""}
+                Imference Desktop {appVersion === "dev" ? t("settings.devBuild") : appVersion ? `v${appVersion}` : ""}
               </span>
-              <Button onClick={() => onOpenChange(false)}>Done</Button>
+              <Button onClick={() => onOpenChange(false)}>{t("common.done")}</Button>
             </div>
           </div>
         </div>
@@ -273,7 +302,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
     {/* Transient "Saved" toast (sibling of the Dialog so `fixed` is viewport-relative). */}
     {savedAt > 0 && (
       <div className="animate-in fade-in slide-in-from-bottom-2 bg-foreground text-background pointer-events-none fixed bottom-6 right-6 z-[60] inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium shadow-lg">
-        <Check className="size-3.5" /> Saved
+        <Check className="size-3.5" /> {t("settings.saved")}
       </div>
     )}
     </>

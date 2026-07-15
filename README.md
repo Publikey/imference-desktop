@@ -11,6 +11,8 @@ Free · No subscription · Windows & macOS
 [![Latest release](https://img.shields.io/github/v/release/Publikey/imference-desktop?label=latest&color=f59e0b)](https://github.com/Publikey/imference-desktop/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Publikey/imference-desktop/total?color=38bdf8)](https://github.com/Publikey/imference-desktop/releases)
 
+**English** · [简体中文](README.zh-CN.md)
+
 <img src="docs/screenshots/hero.png" alt="Imference Desktop — generation view" width="800" />
 
 </div>

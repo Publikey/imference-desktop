@@ -27,6 +27,10 @@ import {
   Moon,
   Monitor,
   Search,
+  Check,
+  Copy,
+  FolderOpen,
+  Maximize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsDialog } from "@/components/SettingsDialog";
@@ -154,6 +158,30 @@ function resolveDims(
     return { width: snapDim(params.customWidth), height: snapDim(params.customHeight) };
   }
   return dimsForModel(model, params.formatCode);
+}
+
+// Read a picked/dropped File into a data-URL (the img2img source shape).
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+// Custom drag types a gallery tile carries so a drop onto the Create panel can
+// resolve back to an image (inline data-URL when we already have it, else the
+// saved-file name to fetch).
+const DRAG_SRC = "application/x-imference-src";
+const DRAG_NAME = "application/x-imference-name";
+
+// True when a drag carries something we can turn into an img2img source (an OS
+// image file or a gallery tile). Only `types` are readable during dragover.
+function dragHasImage(dt: DataTransfer | null): boolean {
+  if (!dt) return false;
+  const types = Array.from(dt.types);
+  return types.includes("Files") || types.includes(DRAG_SRC) || types.includes(DRAG_NAME);
 }
 
 // defaultParams seeds the tweakable params from a model's catalog config.
@@ -581,6 +609,89 @@ export default function App() {
     []
   );
 
+  // --- Gallery → composer bridges ------------------------------------------
+  // Send an image into the img2img source and switch to local (img2img is
+  // local-only). Used by the gallery context menu and by dropping onto the panel.
+  const useAsImg2img = useCallback(async (getSrc: () => Promise<string>) => {
+    try {
+      const src = await getSrc();
+      if (src) {
+        setSourceImage(src);
+        setMode("local");
+      }
+    } catch {
+      /* fetch/read failure — ignore */
+    }
+  }, []);
+
+  // Load a past image's metadata back into the composer (prompt + parameters) to
+  // re-run or remix it. Doesn't switch model or mode; the original img2img source
+  // isn't stored, so it's not restored.
+  const reuseSettings = useCallback(
+    (meta: GenerationMeta) => {
+      if (meta.prompt != null) setPrompt(meta.prompt);
+      setParams((pp) => {
+        const base = pp ?? (activeModel ? defaultParams(activeModel) : null);
+        if (!base) return pp;
+        const opts = formatOptions(activeModel);
+        const known = !!meta.formatCode && opts.some((o) => o.formatCode === meta.formatCode);
+        const fmt = known
+          ? { formatCode: meta.formatCode! }
+          : meta.width && meta.height
+            ? { formatCode: CUSTOM_FORMAT, customWidth: snapDim(meta.width), customHeight: snapDim(meta.height) }
+            : {};
+        return {
+          ...base,
+          prePrompt: "", // meta.prompt already includes the quality-tag prefix
+          negativePrompt: meta.negativePrompt ?? base.negativePrompt,
+          steps: meta.numSteps ?? base.steps,
+          cfg: meta.guidanceScale ?? base.cfg,
+          seedMode: "fixed" as const,
+          seed: meta.seed ?? base.seed,
+          scheduler: meta.scheduler ?? base.scheduler,
+          clipSkip: meta.clipSkip ?? base.clipSkip,
+          ...fmt,
+        };
+      });
+    },
+    [activeModel]
+  );
+
+  // Drop-an-image-to-img2img target (the Create panel). Only image drags arm it.
+  const [dropActive, setDropActive] = useState(false);
+  const onPanelDragOver = useCallback((e: React.DragEvent) => {
+    if (!dragHasImage(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setDropActive(true);
+  }, []);
+  const onPanelDragLeave = useCallback((e: React.DragEvent) => {
+    // Ignore leaves into descendants — only clear when the pointer truly exits.
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDropActive(false);
+  }, []);
+  const onPanelDrop = useCallback(
+    (e: React.DragEvent) => {
+      if (!dragHasImage(e.dataTransfer)) return;
+      e.preventDefault();
+      setDropActive(false);
+      const dt = e.dataTransfer;
+      const file = Array.from(dt.files).find((f) => f.type.startsWith("image/"));
+      if (file) {
+        void readFileAsDataURL(file).then((src) => void useAsImg2img(async () => src));
+        return;
+      }
+      const inline = dt.getData(DRAG_SRC);
+      if (inline) {
+        void useAsImg2img(async () => inline);
+        return;
+      }
+      const name = dt.getData(DRAG_NAME);
+      if (name) void useAsImg2img(() => api.getSavedImage(name));
+    },
+    [useAsImg2img]
+  );
+
   // Primary button: in local mode, download the pending model first (dedicated
   // action — no auto-download on select); otherwise generate. Cmd/Ctrl+Enter
   // triggers whichever is current.
@@ -804,9 +915,22 @@ export default function App() {
                   // so a long open Parameters section stays reachable while the
                   // column is sticky.
                   <div
-                    className="create-surface flex flex-col gap-4 p-3 xl:max-h-[calc(100vh-6.5rem)] xl:overflow-y-auto xl:overflow-x-hidden"
+                    className={cn(
+                      "create-surface relative flex flex-col gap-4 p-3 xl:max-h-[calc(100vh-6.5rem)] xl:overflow-y-auto xl:overflow-x-hidden",
+                      dropActive && "create-drop-active"
+                    )}
                     data-mode={mode}
+                    onDragOver={onPanelDragOver}
+                    onDragLeave={onPanelDragLeave}
+                    onDrop={onPanelDrop}
                   >
+                    {/* Drop hint: shown while an image is dragged over the panel. */}
+                    {dropActive && (
+                      <div className="bg-background/70 border-primary/50 pointer-events-none absolute inset-1 z-20 flex flex-col items-center justify-center gap-2 rounded-[1.35rem] border-2 border-dashed backdrop-blur-sm">
+                        <ImageIcon className="text-primary size-6" />
+                        <span className="text-foreground text-sm font-semibold">{t("img2img.dropHere")}</span>
+                      </div>
+                    )}
                     {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
                     <ModeToggle
                       mode={mode}
@@ -905,7 +1029,15 @@ export default function App() {
                 title: t("panels.gallery"),
                 icon: <Images />,
                 className: "w-full min-w-0 xl:flex-1",
-                content: <Gallery jobs={doneJobs} onOpen={setLightbox} />,
+                content: (
+                  <Gallery
+                    jobs={doneJobs}
+                    onOpen={setLightbox}
+                    onUseAsSource={useAsImg2img}
+                    onReuseSettings={reuseSettings}
+                    onHideJob={dismissJob}
+                  />
+                ),
               },
             }}
           />
@@ -1748,7 +1880,42 @@ const EMPTY_FILTER: GalleryFilter = { engine: "", modelCode: "", source: "" };
 
 type LightboxItem = { src: string; meta?: GenerationMeta | null };
 
-function Gallery({ jobs, onOpen }: { jobs: Job[]; onOpen: (item: LightboxItem) => void }) {
+// What a tile hands to the context menu / drag layer. `name` (a filename) keys
+// delete/reveal; it's null for a session job that hasn't been saved yet.
+type TileTarget = {
+  name: string | null;
+  savedPath?: string;
+  meta?: GenerationMeta | null;
+  getSrc: () => Promise<string>;
+};
+
+// Shared gallery behaviors handed to every tile (context menu, selection, drag).
+type GalleryShared = {
+  onOpen: (item: LightboxItem) => void;
+  openMenu: (e: React.MouseEvent, target: TileTarget) => void;
+  selectionActive: boolean;
+  isSelected: (name: string) => boolean;
+  tileClick: (e: React.MouseEvent, name: string | null, index: number, open: () => void) => void;
+  toggle: (name: string | null, index: number) => void;
+  startDrag: (e: React.DragEvent, name: string | null, src: string | null) => void;
+};
+
+// Basename of a saved path, for matching a session job to its file on disk.
+const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
+
+function Gallery({
+  jobs,
+  onOpen,
+  onUseAsSource,
+  onReuseSettings,
+  onHideJob,
+}: {
+  jobs: Job[];
+  onOpen: (item: LightboxItem) => void;
+  onUseAsSource: (getSrc: () => Promise<string>) => void;
+  onReuseSettings: (meta: GenerationMeta) => void;
+  onHideJob: (id: string) => void;
+}) {
   const { t } = useTranslation();
   const [saved, setSaved] = useState<SavedImage[]>([]);
   const [done, setDone] = useState(false);
@@ -1756,10 +1923,17 @@ function Gallery({ jobs, onOpen }: { jobs: Job[]; onOpen: (item: LightboxItem) =
   const [cols, setCols] = useState(3);
   const [filter, setFilter] = useState<GalleryFilter>(EMPTY_FILTER);
   const [facets, setFacets] = useState<GalleryFacets | null>(null);
+  // Multi-selection (keyed by filename) + the context menu.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [menu, setMenu] = useState<{ x: number; y: number; target: TileTarget } | null>(null);
+  const anchorRef = useRef<number | null>(null); // last-toggled index, for Shift-range
+  const selectableRef = useRef<string[]>([]); // names in display order
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false); // guards against overlapping page loads
   const savedRef = useRef<SavedImage[]>([]);
   savedRef.current = saved;
+  const jobsRef = useRef<Job[]>(jobs);
+  jobsRef.current = jobs;
 
   const refreshFacets = useCallback(() => {
     void api.galleryFacets().then(setFacets).catch(() => {});
@@ -1810,33 +1984,129 @@ function Gallery({ jobs, onOpen }: { jobs: Job[]; onOpen: (item: LightboxItem) =
     return () => io.disconnect();
   }, [loadMore, done]);
 
-  const onDelete = useCallback(
-    (img: SavedImage) => {
-      if (!window.confirm(t("gallery.deleteConfirm", { name: img.name }))) return;
-      void api
-        .deleteSavedImage(img.name)
-        .then(() => {
-          setSaved((s) => s.filter((x) => x.name !== img.name));
-          refreshFacets();
-        })
-        .catch(() => {});
+  // Hide session job-tiles whose on-disk file was just deleted (so the deleted
+  // image doesn't linger as a fresh tile).
+  const hideJobsFor = useCallback(
+    (names: Set<string>) => {
+      for (const j of jobsRef.current) {
+        const n = j.image?.savedPath ? baseName(j.image.savedPath) : null;
+        if (n && names.has(n)) onHideJob(j.id);
+      }
     },
-    [refreshFacets, t]
+    [onHideJob]
   );
 
+  const deleteNames = useCallback(
+    (names: string[]) => {
+      if (names.length === 0) return;
+      void Promise.allSettled(names.map((n) => api.deleteSavedImage(n))).then(() => {
+        const set = new Set(names);
+        setSaved((s) => s.filter((x) => !set.has(x.name)));
+        setSelected((cur) => {
+          const next = new Set(cur);
+          names.forEach((n) => next.delete(n));
+          return next;
+        });
+        hideJobsFor(set);
+        refreshFacets();
+      });
+    },
+    [hideJobsFor, refreshFacets]
+  );
+
+  const deleteOne = useCallback(
+    (name: string) => {
+      if (!window.confirm(t("gallery.deleteConfirm", { name }))) return;
+      deleteNames([name]);
+    },
+    [deleteNames, t]
+  );
+
+  const deleteSelected = useCallback(() => {
+    const names = [...selected];
+    if (names.length === 0) return;
+    if (!window.confirm(t("gallery.deleteSelectedConfirm", { count: names.length }))) return;
+    deleteNames(names);
+  }, [selected, deleteNames, t]);
+
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+
+  // Toggle one tile's selection; remember it as the Shift-range anchor.
+  const toggle = useCallback((name: string | null, index: number) => {
+    if (!name) return;
+    anchorRef.current = index;
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  // Click on a tile: modifier-click selects (⌘/Ctrl toggles, Shift extends the
+  // range from the anchor); a plain click opens the lightbox.
+  const tileClick = useCallback(
+    (e: React.MouseEvent, name: string | null, index: number, open: () => void) => {
+      if ((e.metaKey || e.ctrlKey) && name) {
+        toggle(name, index);
+        return;
+      }
+      if (e.shiftKey && name && anchorRef.current != null) {
+        const [lo, hi] = [Math.min(anchorRef.current, index), Math.max(anchorRef.current, index)];
+        const range = selectableRef.current.slice(lo, hi + 1);
+        setSelected((cur) => new Set([...cur, ...range]));
+        return;
+      }
+      open();
+    },
+    [toggle]
+  );
+
+  const startDrag = useCallback((e: React.DragEvent, name: string | null, src: string | null) => {
+    if (src) e.dataTransfer.setData(DRAG_SRC, src);
+    if (name) e.dataTransfer.setData(DRAG_NAME, name);
+    e.dataTransfer.effectAllowed = "copy";
+  }, []);
+
+  const openMenu = useCallback((e: React.MouseEvent, target: TileTarget) => {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY, target });
+  }, []);
+
   const filtered = filter.engine !== "" || filter.modelCode !== "" || filter.source !== "";
+
+  const shared: GalleryShared = {
+    onOpen,
+    openMenu,
+    selectionActive: selected.size > 0,
+    isSelected: (name) => selected.has(name),
+    tileClick,
+    toggle,
+    startDrag,
+  };
 
   // Build the tile list (session jobs first, then saved), then spread it across
   // `cols` columns round-robin so the reading order is LEFT-TO-RIGHT (item 0 →
   // col 0, item 1 → col 1, …). CSS `columns` would fill top-to-bottom instead.
-  // Each column stacks its tiles at natural height → true masonry.
+  // Each column stacks its tiles at natural height → true masonry. `selectable`
+  // records each tile's filename in display order so Shift-range works.
   const tiles: { key: string; el: React.ReactElement }[] = [];
+  const selectable: string[] = [];
+  const nextIndex = (name: string | null) => {
+    if (!name) return -1;
+    selectable.push(name);
+    return selectable.length - 1;
+  };
   if (!filtered) {
-    for (const j of jobs) tiles.push({ key: j.id, el: <JobTile job={j} onOpen={onOpen} /> });
+    for (const j of jobs) {
+      const name = j.image?.savedPath ? baseName(j.image.savedPath) : null;
+      tiles.push({ key: j.id, el: <JobTile job={j} index={nextIndex(name)} name={name} shared={shared} /> });
+    }
   }
   for (const g of saved) {
-    tiles.push({ key: g.name, el: <SavedTile image={g} onOpen={onOpen} onDelete={onDelete} /> });
+    tiles.push({ key: g.name, el: <SavedTile image={g} index={nextIndex(g.name)} shared={shared} onDelete={deleteOne} /> });
   }
+  selectableRef.current = selectable;
   const columns: { key: string; el: React.ReactElement }[][] = Array.from({ length: cols }, () => []);
   tiles.forEach((t, i) => columns[i % cols].push(t));
   const empty = tiles.length === 0;
@@ -1877,6 +2147,41 @@ function Gallery({ jobs, onOpen }: { jobs: Job[]; onOpen: (item: LightboxItem) =
         </div>
       )}
 
+      {/* Floating selection bar. */}
+      {selected.size > 0 && (
+        <div className="animate-in fade-in slide-in-from-bottom-2 fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border bg-popover/95 px-2 py-2 pl-4 shadow-2xl backdrop-blur">
+          <span className="text-sm font-medium tabular-nums">
+            {t("gallery.selectedCount", { count: selected.size })}
+          </span>
+          <button
+            type="button"
+            onClick={deleteSelected}
+            className="text-destructive hover:bg-destructive/10 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
+          >
+            <Trash2 className="size-3.5" /> {t("gallery.deleteSelected")}
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
+          >
+            {t("gallery.clearSelection")}
+          </button>
+        </div>
+      )}
+
+      {menu && (
+        <TileContextMenu
+          x={menu.x}
+          y={menu.y}
+          target={menu.target}
+          onClose={() => setMenu(null)}
+          onOpen={onOpen}
+          onUseAsSource={onUseAsSource}
+          onReuseSettings={onReuseSettings}
+          onDelete={deleteOne}
+        />
+      )}
     </div>
   );
 }
@@ -1989,21 +2294,83 @@ function ColumnPicker({ cols, onChange }: { cols: number; onChange: (n: number) 
   );
 }
 
+// A small selection checkbox overlaid on a tile — visible on hover or whenever a
+// selection is in progress.
+function SelectCheckbox({
+  checked,
+  active,
+  onToggle,
+}: {
+  checked: boolean;
+  active: boolean;
+  onToggle: (e: React.MouseEvent) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle(e);
+      }}
+      aria-label={t("gallery.select")}
+      aria-pressed={checked}
+      className={cn(
+        "absolute left-1.5 top-1.5 z-10 flex size-5 items-center justify-center rounded-md border-2 shadow-sm transition",
+        checked
+          ? "border-[var(--brand-to)] bg-[var(--brand-to)] text-white"
+          : "border-white/85 bg-black/35 text-transparent hover:bg-black/50",
+        active || checked ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+      )}
+    >
+      <Check className="size-3.5" strokeWidth={3} />
+    </button>
+  );
+}
+
 // A finished generation from this session (in-flight ones render in the
 // Activity panel; only `status === "done"` jobs reach the gallery).
-function JobTile({ job, onOpen }: { job: Job; onOpen: (item: LightboxItem) => void }) {
+function JobTile({
+  job,
+  index,
+  name,
+  shared,
+}: {
+  job: Job;
+  index: number;
+  name: string | null;
+  shared: GalleryShared;
+}) {
   const { t } = useTranslation();
   const img = job.image!;
+  const meta = img.meta ?? { prompt: job.prompt, source: img.source, seed: img.seed, createdAt: "" };
+  const open = () => shared.onOpen({ src: img.imageBase64, meta });
+  const selected = !!name && shared.isSelected(name);
   return (
     <figure
-      className="group animate-in fade-in zoom-in-95 ring-border/60 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1 duration-500"
-      onClick={() =>
-        onOpen({
-          src: img.imageBase64,
-          meta: img.meta ?? { prompt: job.prompt, source: img.source, seed: img.seed, createdAt: "" },
+      draggable
+      onDragStart={(e) => shared.startDrag(e, name, img.imageBase64)}
+      className={cn(
+        "group animate-in fade-in zoom-in-95 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1 duration-500",
+        selected ? "ring-2 ring-[var(--brand-to)]" : "ring-border/60"
+      )}
+      onClick={(e) => shared.tileClick(e, name, index, open)}
+      onContextMenu={(e) =>
+        shared.openMenu(e, {
+          name,
+          savedPath: img.savedPath || undefined,
+          meta,
+          getSrc: async () => img.imageBase64,
         })
       }
     >
+      {name && (
+        <SelectCheckbox
+          checked={selected}
+          active={shared.selectionActive}
+          onToggle={() => shared.toggle(name, index)}
+        />
+      )}
       <img src={img.imageBase64} alt={job.prompt} title={job.prompt} className="block w-full" />
       <figcaption className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
         <span className="rounded-full bg-white/20 px-1.5 py-0.5 font-medium capitalize">{img.source}</span>
@@ -2018,16 +2385,20 @@ function JobTile({ job, onOpen }: { job: Job; onOpen: (item: LightboxItem) => vo
 // from the known dimensions so the masonry lays out any format without jumps.
 function SavedTile({
   image,
-  onOpen,
+  index,
+  shared,
   onDelete,
 }: {
   image: SavedImage;
-  onOpen: (item: LightboxItem) => void;
-  onDelete: (img: SavedImage) => void;
+  index: number;
+  shared: GalleryShared;
+  onDelete: (name: string) => void;
 }) {
   const { t } = useTranslation();
   const ref = useRef<HTMLElement>(null);
   const [src, setSrc] = useState<string | null>(null);
+  const srcRef = useRef<string | null>(null);
+  srcRef.current = src;
 
   useEffect(() => {
     const el = ref.current;
@@ -2048,25 +2419,32 @@ function SavedTile({
   }, [image.name]);
 
   const aspect = image.width > 0 && image.height > 0 ? image.width / image.height : 1;
+  const selected = shared.isSelected(image.name);
 
-  const open = () => {
-    if (src) {
-      onOpen({ src, meta: image.meta });
-      return;
-    }
-    void api.getSavedImage(image.name).then((d) => {
-      setSrc(d);
-      onOpen({ src: d, meta: image.meta });
-    }).catch(() => {});
-  };
+  // Ensure the bytes are available (open / img2img / drag from an un-scrolled tile).
+  const ensureSrc = () => (srcRef.current ? Promise.resolve(srcRef.current) : api.getSavedImage(image.name).then((d) => { setSrc(d); return d; }));
+  const open = () => void ensureSrc().then((d) => shared.onOpen({ src: d, meta: image.meta })).catch(() => {});
 
   return (
     <figure
       ref={ref}
-      className="group ring-border/60 bg-muted/40 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1"
+      draggable
+      onDragStart={(e) => shared.startDrag(e, image.name, srcRef.current)}
+      className={cn(
+        "group bg-muted/40 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1",
+        selected ? "ring-2 ring-[var(--brand-to)]" : "ring-border/60"
+      )}
       title={image.name}
       style={{ aspectRatio: aspect }}
-      onClick={open}
+      onClick={(e) => shared.tileClick(e, image.name, index, open)}
+      onContextMenu={(e) =>
+        shared.openMenu(e, {
+          name: image.name,
+          savedPath: image.savedPath || undefined,
+          meta: image.meta,
+          getSrc: ensureSrc,
+        })
+      }
     >
       {src ? (
         <img src={src} alt={image.name} className="animate-in fade-in h-full w-full object-cover duration-300" />
@@ -2075,11 +2453,16 @@ function SavedTile({
           <ImageIcon className="size-5" />
         </div>
       )}
+      <SelectCheckbox
+        checked={selected}
+        active={shared.selectionActive}
+        onToggle={() => shared.toggle(image.name, index)}
+      />
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          onDelete(image);
+          onDelete(image.name);
         }}
         aria-label={t("gallery.deleteImage")}
         className="absolute right-1.5 top-1.5 hidden rounded-full bg-black/50 p-1.5 text-white hover:bg-red-600/80 group-hover:block"
@@ -2095,6 +2478,138 @@ function SavedTile({
         {image.seed > 0 && <span className="tabular-nums">{t("gallery.seed", { seed: image.seed })}</span>}
       </figcaption>
     </figure>
+  );
+}
+
+// TileContextMenu — a small right-click menu positioned at the cursor. A
+// full-screen backdrop captures the next click (and Escape) to dismiss.
+function TileContextMenu({
+  x,
+  y,
+  target,
+  onClose,
+  onOpen,
+  onUseAsSource,
+  onReuseSettings,
+  onDelete,
+}: {
+  x: number;
+  y: number;
+  target: TileTarget;
+  onClose: () => void;
+  onOpen: (item: LightboxItem) => void;
+  onUseAsSource: (getSrc: () => Promise<string>) => void;
+  onReuseSettings: (meta: GenerationMeta) => void;
+  onDelete: (name: string) => void;
+}) {
+  const { t } = useTranslation();
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // Clamp so the menu stays on screen (approx sizes; good enough without measuring).
+  const W = 232;
+  const H = 300;
+  const left = Math.min(x, window.innerWidth - W - 8);
+  const top = Math.min(y, window.innerHeight - H - 8);
+  const meta = target.meta;
+  const run = (fn: () => void) => () => {
+    fn();
+    onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50"
+      onClick={onClose}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+    >
+      <div
+        className="animate-in fade-in zoom-in-95 bg-popover absolute overflow-hidden rounded-xl border p-1 shadow-2xl duration-100"
+        style={{ left, top, width: W }}
+        onClick={(e) => e.stopPropagation()}
+        role="menu"
+      >
+        <MenuItem
+          icon={<Maximize2 />}
+          label={t("gallery.ctxOpen")}
+          onClick={run(() => void target.getSrc().then((src) => onOpen({ src, meta })).catch(() => {}))}
+        />
+        <MenuItem
+          icon={<ImageIcon />}
+          label={t("gallery.ctxUseAsSource")}
+          onClick={run(() => onUseAsSource(target.getSrc))}
+        />
+        {meta?.prompt && (
+          <MenuItem
+            icon={<RotateCcw />}
+            label={t("gallery.ctxReuse")}
+            onClick={run(() => onReuseSettings(meta))}
+          />
+        )}
+        {meta?.prompt && (
+          <MenuItem
+            icon={<Copy />}
+            label={t("gallery.ctxCopyPrompt")}
+            onClick={run(() => void navigator.clipboard?.writeText(meta.prompt).catch(() => {}))}
+          />
+        )}
+        {target.savedPath && (
+          <MenuItem
+            icon={<FolderOpen />}
+            label={t("gallery.ctxReveal")}
+            onClick={run(() => void api.revealInFolder(target.savedPath!).catch(() => {}))}
+          />
+        )}
+        {target.name && (
+          <>
+            <div className="bg-border/70 my-1 h-px" />
+            <MenuItem
+              icon={<Trash2 />}
+              label={t("gallery.ctxDelete")}
+              destructive
+              onClick={run(() => onDelete(target.name!))}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MenuItem({
+  icon,
+  label,
+  onClick,
+  destructive,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  destructive?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors [&_svg]:size-4",
+        destructive
+          ? "text-destructive hover:bg-destructive/10"
+          : "text-foreground hover:bg-accent"
+      )}
+    >
+      <span className={cn("shrink-0", destructive ? "" : "text-muted-foreground")}>{icon}</span>
+      {label}
+    </button>
   );
 }
 

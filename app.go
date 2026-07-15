@@ -14,8 +14,10 @@ import (
 	"mime"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -954,6 +956,47 @@ func (a *App) DeleteSavedImage(name string) error {
 	_ = os.Remove(p + ".json") // best-effort: drop the metadata sidecar too
 	a.invalidateGalleryCache()
 	a.bus.Info("app", "deleted saved image", map[string]any{"name": name})
+	return nil
+}
+
+// RevealInFolder opens the OS file manager with the given file highlighted
+// (Finder / Explorer / the default Linux file manager). The path is confined to
+// the output directory so the renderer can't ask us to reveal arbitrary files.
+func (a *App) RevealInFolder(imgPath string) error {
+	if imgPath == "" {
+		return errors.New("empty path")
+	}
+	abs, err := filepath.Abs(imgPath)
+	if err != nil {
+		return err
+	}
+	// Confinement: only files under the output dir may be revealed.
+	dir, err := filepath.Abs(a.outputDir())
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(dir, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return errors.New("path is outside the output folder")
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", "-R", abs)
+	case "windows":
+		// explorer returns a non-zero exit code even on success; ignore its error.
+		_ = exec.Command("explorer", "/select,"+abs).Start()
+		a.bus.Info("app", "revealed in folder", map[string]any{"path": abs})
+		return nil
+	default: // linux, *bsd — no universal "select" flag; open the parent dir.
+		cmd = exec.Command("xdg-open", filepath.Dir(abs))
+	}
+	if err := cmd.Start(); err != nil {
+		a.bus.Warn("app", "reveal in folder failed", map[string]any{"err": err.Error()})
+		return err
+	}
+	a.bus.Info("app", "revealed in folder", map[string]any{"path": abs})
 	return nil
 }
 

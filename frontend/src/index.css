@@ -213,6 +213,10 @@
     background-color: color-mix(in oklch, var(--cloud-from) 7%, transparent);
     border-color: color-mix(in oklch, var(--cloud-from) 16%, transparent);
   }
+  /* An image is being dragged over the panel (drop → img2img). */
+  .create-drop-active {
+    border-color: color-mix(in oklch, var(--brand-from) 55%, transparent) !important;
+  }
   @media (prefers-reduced-motion: reduce) {
     .create-surface {
       transition: none;

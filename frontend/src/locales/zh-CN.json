@@ -125,7 +125,8 @@
   "img2img": {
     "label": "图生图 · 强度 {{strength}}",
     "add": "添加参考图（图生图）",
-    "sourceAlt": "图生图参考图"
+    "sourceAlt": "图生图参考图",
+    "dropHere": "拖放到此处作为参考图"
   },
   "panels": {
     "create": "创作",
@@ -151,6 +152,7 @@
   },
   "gallery": {
     "deleteConfirm": "删除这张图片？\n{{name}}",
+    "deleteSelectedConfirm": "删除选中的 {{count}} 张图片？",
     "emptyFiltered": "没有符合筛选条件的图片",
     "empty": "你生成的图片将显示在这里",
     "filterModel": "模型",
@@ -160,7 +162,17 @@
     "columns": "列数",
     "columns_other": "{{count}} 列",
     "seed": "种子 {{seed}}",
-    "deleteImage": "删除图片"
+    "deleteImage": "删除图片",
+    "select": "选择",
+    "selectedCount_other": "已选 {{count}} 张",
+    "deleteSelected": "删除",
+    "clearSelection": "清除",
+    "ctxOpen": "打开",
+    "ctxUseAsSource": "用作参考图",
+    "ctxReuse": "复用提示词和参数",
+    "ctxCopyPrompt": "复制提示词",
+    "ctxReveal": "在文件夹中显示",
+    "ctxDelete": "删除"
   },
   "meta": {
     "model": "模型",

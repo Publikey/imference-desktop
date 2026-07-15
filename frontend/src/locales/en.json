@@ -126,7 +126,8 @@
   "img2img": {
     "label": "Image-to-image · strength {{strength}}",
     "add": "Add source image (img2img)",
-    "sourceAlt": "img2img source"
+    "sourceAlt": "img2img source",
+    "dropHere": "Drop to use as image reference"
   },
   "panels": {
     "create": "Create",
@@ -152,6 +153,7 @@
   },
   "gallery": {
     "deleteConfirm": "Delete this image?\n{{name}}",
+    "deleteSelectedConfirm": "Delete {{count}} selected images?",
     "emptyFiltered": "No images match this filter",
     "empty": "Your generations will appear here",
     "filterModel": "Model",
@@ -162,7 +164,18 @@
     "columns_one": "{{count}} column",
     "columns_other": "{{count}} columns",
     "seed": "seed {{seed}}",
-    "deleteImage": "Delete image"
+    "deleteImage": "Delete image",
+    "select": "Select",
+    "selectedCount_one": "{{count}} selected",
+    "selectedCount_other": "{{count}} selected",
+    "deleteSelected": "Delete",
+    "clearSelection": "Clear",
+    "ctxOpen": "Open",
+    "ctxUseAsSource": "Use as image reference",
+    "ctxReuse": "Reuse prompt & settings",
+    "ctxCopyPrompt": "Copy prompt",
+    "ctxReveal": "Reveal in folder",
+    "ctxDelete": "Delete"
   },
   "meta": {
     "model": "Model",

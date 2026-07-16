@@ -258,8 +258,7 @@
     "usdc": "{{balance}} USDC",
     "checkFailed": "检查失败",
     "manageTitle": "在设置中管理",
-    "configureTitle": "在设置中配置",
-    "walletMethod": "x402 钱包"
+    "configureTitle": "在设置中配置"
   },
   "settings": {
     "title": "设置",

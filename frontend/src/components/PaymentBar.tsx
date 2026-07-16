@@ -7,15 +7,17 @@ import type { AppSettings, PaymentMode } from "@/lib/types";
 
 type Status = { ok: boolean; label: string };
 
-// PaymentBar — a read-only status for the active cloud payment method. The
-// method itself is chosen in Settings (not here); this just shows which one is
-// active and whether it's usable. When it isn't (no key / no wallet / 0 USDC)
-// the row turns into an amber warning that deep-links to Settings → Cloud payment.
+// PaymentBar — cloud-mode payment method picker. A small toggle switches between
+// "API key (credit)" and "x402 (USDC wallet)"; below it, a live status for the
+// active method. When it isn't usable (no key / no wallet / 0 USDC) the status
+// row turns into an amber warning that deep-links to Settings → Cloud payment.
 export function PaymentBar({
   settings,
+  onModeChange,
   onConfigure,
 }: {
   settings: AppSettings | null;
+  onModeChange: (mode: PaymentMode) => void;
   onConfigure: (section: string) => void;
 }) {
   const { t } = useTranslation();
@@ -56,7 +58,6 @@ export function PaymentBar({
 
   const section = mode === "bearer" ? "apikey" : "x402";
   const Icon = mode === "bearer" ? KeyRound : Wallet;
-  const methodLabel = mode === "bearer" ? t("payment.apiKey") : t("payment.walletMethod");
 
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
@@ -64,11 +65,29 @@ export function PaymentBar({
         <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
           {t("payment.title")}
         </span>
-        {/* What's chosen — set in Settings, shown read-only here. */}
-        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs font-medium">
-          <Icon className="size-3.5 shrink-0" />
-          {methodLabel}
-        </span>
+        {/* Method toggle — the full form of each method still lives in Settings. */}
+        <div className="bg-muted inline-flex items-center gap-0.5 rounded-lg p-0.5 text-xs">
+          {(
+            [
+              ["bearer", t("payment.apiKey")],
+              ["x402", "x402"],
+            ] as const
+          ).map(([m, label]) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onModeChange(m)}
+              className={cn(
+                "rounded-md px-2.5 py-1 font-medium transition",
+                mode === m
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <button
@@ -82,6 +101,7 @@ export function PaymentBar({
             : "border-border/60 text-muted-foreground hover:bg-muted/40"
         )}
       >
+        <Icon className="size-3.5 shrink-0" />
         {loading ? (
           <Loader2 className="size-3.5 shrink-0 animate-spin" />
         ) : status?.ok ? (

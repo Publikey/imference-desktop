@@ -62,6 +62,7 @@ import type {
   Job,
   LogEntry,
   ModelInfo,
+  PaymentMode,
   SavedImage,
   SidecarStatus,
   UpdateInfo,
@@ -319,6 +320,17 @@ export default function App() {
       // removal failure is non-fatal; the row stays
     }
   }, []);
+
+  // Switch the cloud payment method (persisted; cloud generation reads it).
+  const setPaymentMode = useCallback(
+    (m: PaymentMode) => {
+      if (!settings) return;
+      const next = { ...settings, paymentMode: m };
+      setSettings(next); // optimistic
+      void api.saveSettings(next).then(setSettings).catch(() => {});
+    },
+    [settings]
+  );
 
   useEffect(() => {
     void api.getSettings().then(setSettings);
@@ -938,6 +950,7 @@ export default function App() {
                     {mode === "cloud" && (
                       <PaymentBar
                         settings={settings}
+                        onModeChange={setPaymentMode}
                         onConfigure={openSettings}
                       />
                     )}

@@ -261,8 +261,7 @@
     "usdc": "{{balance}} USDC",
     "checkFailed": "Check failed",
     "manageTitle": "Manage in Settings",
-    "configureTitle": "Configure in Settings",
-    "walletMethod": "x402 wallet"
+    "configureTitle": "Configure in Settings"
   },
   "settings": {
     "title": "Settings",

@@ -43,6 +43,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
 import { PaymentBar } from "@/components/PaymentBar";
+import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
 import { PanelBoard, usePanelLayout } from "@/components/PanelBoard";
 import { QueuePanel } from "@/components/QueuePanel";
@@ -232,6 +233,15 @@ export default function App() {
   // initially to avoid a flash before the first probe resolves.
   const [engineInstalled, setEngineInstalled] = useState(true);
   const [installing, setInstalling] = useState(false);
+  // First-run onboarding is skippable; the choice persists so a deliberate skip
+  // isn't undone on reload.
+  const [onboardingSkipped, setOnboardingSkipped] = useState(
+    () => localStorage.getItem("imference.onboarding.skipped") === "1"
+  );
+  const skipOnboarding = useCallback(() => {
+    localStorage.setItem("imference.onboarding.skipped", "1");
+    setOnboardingSkipped(true);
+  }, []);
   // Tweakable generation params, seeded from the active model's defaults.
   const [params, setParams] = useState<GenParams | null>(null);
   // Local model selection is decoupled from its (heavy) download: picking a model
@@ -417,6 +427,11 @@ export default function App() {
   const cloudConfigured =
     settings?.paymentMode === "x402" ? walletConfigured : !!settings?.apiKey;
   const cloudReady = cloudConfigured && !!settings?.cloudModel;
+
+  // First run: nothing is usable yet (no local engine AND no cloud payment).
+  // The Create panel shows a guided setup instead of the (non-functional)
+  // composer, unless the user has skipped it.
+  const firstRun = !engineInstalled && !cloudConfigured && !onboardingSkipped;
 
   // Refresh wallet-configured state whenever x402 is (or becomes) the mode, or a
   // wallet is generated/imported (walletAddress changes). Reads the keychain.
@@ -958,7 +973,7 @@ export default function App() {
                     />
 
                     {/* 1b. Payment — cloud only: pick x402 or API key, deep-link to config. */}
-                    {mode === "cloud" && (
+                    {!firstRun && mode === "cloud" && (
                       <PaymentBar
                         settings={settings}
                         onModeChange={setPaymentMode}
@@ -967,55 +982,69 @@ export default function App() {
                     )}
 
                     {/* 2. Model */}
-                    <ModelBar
-                      mode={mode}
-                      settings={settings}
-                      onModelSwitched={handleSettingsSaved}
-                      pendingLocalModel={pendingLocalModel}
-                      onSelectLocal={setPendingLocalModel}
-                      downloading={downloading}
-                      progress={dlProgress}
-                      onAddCustom={addCustomModel}
-                      onSelectCustom={selectCustomModel}
-                      onRemoveCustom={removeCustomModel}
-                      pickerOpen={modelPickerOpen}
-                      onPickerOpenChange={setModelPickerOpen}
-                    />
-
-                    {/* 3. Prompt (with pre-prompt above + negative below) */}
-                    <Composer
-                      prompt={prompt}
-                      onPromptChange={setPrompt}
-                      mode={mode}
-                      action={primary}
-                      contextHint={contextHint}
-                      sourceImage={sourceImage}
-                      onSourceImageChange={setSourceImage}
-                      strength={strength}
-                      onStrengthChange={setStrength}
-                      showModelFields={!!params}
-                      prePrompt={params?.prePrompt ?? ""}
-                      onPrePromptChange={(v) => setParams((pp) => (pp ? { ...pp, prePrompt: v } : pp))}
-                      negativePrompt={params?.negativePrompt ?? ""}
-                      onNegativePromptChange={(v) => setParams((pp) => (pp ? { ...pp, negativePrompt: v } : pp))}
-                    />
-
-                    {/* 4. Format — a primary creative choice, right under the
-                        prompt; local mode also allows free custom dimensions. */}
-                    {activeModel && params && (
-                      <FormatSelector
-                        model={activeModel}
+                    {!firstRun && (
+                      <ModelBar
                         mode={mode}
-                        params={params}
-                        onChange={(patch) => setParams((pp) => (pp ? { ...pp, ...patch } : pp))}
+                        settings={settings}
+                        onModelSwitched={handleSettingsSaved}
+                        pendingLocalModel={pendingLocalModel}
+                        onSelectLocal={setPendingLocalModel}
+                        downloading={downloading}
+                        progress={dlProgress}
+                        onAddCustom={addCustomModel}
+                        onSelectCustom={selectCustomModel}
+                        onRemoveCustom={removeCustomModel}
+                        pickerOpen={modelPickerOpen}
+                        onPickerOpenChange={setModelPickerOpen}
                       />
                     )}
 
-                    {/* 5. Parameters — seeded from the model, tweakable per
-                        generation. Below the format (fine-tuning follows the
-                        main creative act). */}
-                    {activeModel && params && (
-                      <ParamsPanel model={activeModel} mode={mode} params={params} onChange={setParams} />
+                    {firstRun ? (
+                      /* First run: a guided setup replaces the (non-functional)
+                         composer until the engine is installed or cloud is set up. */
+                      <FirstRunSetup
+                        onInstallDone={() => void api.getSettings().then(setSettings)}
+                        onOpenCloudSettings={() => openSettings("cloud")}
+                        onSkip={skipOnboarding}
+                      />
+                    ) : (
+                      <>
+                        {/* 3. Prompt (with pre-prompt above + negative below) */}
+                        <Composer
+                          prompt={prompt}
+                          onPromptChange={setPrompt}
+                          mode={mode}
+                          action={primary}
+                          contextHint={contextHint}
+                          sourceImage={sourceImage}
+                          onSourceImageChange={setSourceImage}
+                          strength={strength}
+                          onStrengthChange={setStrength}
+                          showModelFields={!!params}
+                          prePrompt={params?.prePrompt ?? ""}
+                          onPrePromptChange={(v) => setParams((pp) => (pp ? { ...pp, prePrompt: v } : pp))}
+                          negativePrompt={params?.negativePrompt ?? ""}
+                          onNegativePromptChange={(v) => setParams((pp) => (pp ? { ...pp, negativePrompt: v } : pp))}
+                        />
+
+                        {/* 4. Format — a primary creative choice, right under the
+                            prompt; local mode also allows free custom dimensions. */}
+                        {activeModel && params && (
+                          <FormatSelector
+                            model={activeModel}
+                            mode={mode}
+                            params={params}
+                            onChange={(patch) => setParams((pp) => (pp ? { ...pp, ...patch } : pp))}
+                          />
+                        )}
+
+                        {/* 5. Parameters — seeded from the model, tweakable per
+                            generation. Below the format (fine-tuning follows the
+                            main creative act). */}
+                        {activeModel && params && (
+                          <ParamsPanel model={activeModel} mode={mode} params={params} onChange={setParams} />
+                        )}
+                      </>
                     )}
                   </div>
                 ),
@@ -1351,6 +1380,78 @@ function EngineControl({
       <Play className="size-3" />
       {isError ? t("engineControl.restart") : t("engineControl.start")}
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FirstRunSetup — a guided welcome shown in the Create panel on first run (no
+// local engine AND no cloud payment configured). Reuses LocalEngineSection for
+// the install step; offers the cloud path as an alternative; skippable. As soon
+// as either path completes, `firstRun` flips false and the normal composer
+// returns — this component doesn't drive that transition itself.
+// ---------------------------------------------------------------------------
+function FirstRunSetup({
+  onInstallDone,
+  onOpenCloudSettings,
+  onSkip,
+}: {
+  onInstallDone: () => void;
+  onOpenCloudSettings: () => void;
+  onSkip: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section className="bg-card relative overflow-hidden rounded-2xl border p-4 shadow-sm">
+      <div className="canvas-glow pointer-events-none absolute inset-0" />
+      <div className="relative flex flex-col gap-4">
+        <div className="flex items-start gap-3">
+          <div className="brand-surface flex size-10 shrink-0 items-center justify-center rounded-xl text-white shadow-[0_8px_24px_-8px_color-mix(in_oklch,var(--brand-to)_60%,transparent)]">
+            <Sparkles className="size-5" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">{t("onboarding.title")}</h2>
+            <p className="text-muted-foreground text-xs leading-snug">{t("onboarding.subtitle")}</p>
+          </div>
+        </div>
+
+        {/* Path A — install the local engine (self-contained install UI). */}
+        <div className="grid gap-1.5">
+          <span className="text-muted-foreground/70 text-[10px] font-medium uppercase tracking-wide">
+            {t("onboarding.localLabel")}
+          </span>
+          <LocalEngineSection onInstallDone={onInstallDone} />
+        </div>
+
+        {/* Path B — use the cloud (opens Settings → Cloud payment). */}
+        <div className="grid gap-1.5">
+          <span className="text-muted-foreground/70 text-[10px] font-medium uppercase tracking-wide">
+            {t("onboarding.cloudLabel")}
+          </span>
+          <button
+            type="button"
+            onClick={onOpenCloudSettings}
+            className="border-border/60 hover:border-primary/40 hover:bg-muted/40 group flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors"
+          >
+            <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+              <Cloud className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium">{t("onboarding.cloudTitle")}</div>
+              <div className="text-muted-foreground text-xs">{t("onboarding.cloudHint")}</div>
+            </div>
+            <ChevronRight className="text-muted-foreground size-4 shrink-0" />
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={onSkip}
+          className="text-muted-foreground hover:text-foreground justify-self-start text-[11px] font-medium transition-colors"
+        >
+          {t("onboarding.skip")}
+        </button>
+      </div>
+    </section>
   );
 }
 

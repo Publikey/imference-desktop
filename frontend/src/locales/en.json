@@ -407,5 +407,14 @@
     "genFailed": "Generation failed",
     "deleted_one": "Image deleted",
     "deleted_other": "{{count}} images deleted"
+  },
+  "onboarding": {
+    "title": "Welcome to Imference",
+    "subtitle": "Generate images locally on your machine, or in the cloud. Pick a path to get started.",
+    "localLabel": "Run locally",
+    "cloudLabel": "Or use the cloud",
+    "cloudTitle": "Generate in the cloud",
+    "cloudHint": "Add an API key or connect a wallet — no install needed.",
+    "skip": "Skip for now"
   }
 }

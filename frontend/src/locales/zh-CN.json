@@ -402,5 +402,14 @@
     "modelFailed": "模型下载失败",
     "genFailed": "生成失败",
     "deleted_other": "已删除 {{count}} 张图片"
+  },
+  "onboarding": {
+    "title": "欢迎使用 Imference",
+    "subtitle": "在本机本地生成图像，或使用云端。选择一种方式开始。",
+    "localLabel": "本地运行",
+    "cloudLabel": "或使用云端",
+    "cloudTitle": "在云端生成",
+    "cloudHint": "添加 API 密钥或连接钱包 —— 无需安装。",
+    "skip": "暂时跳过"
   }
 }

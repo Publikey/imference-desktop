@@ -155,8 +155,8 @@
     "failed": "Failed"
   },
   "gallery": {
-    "deleteConfirm": "Delete this image?\n{{name}}",
-    "deleteSelectedConfirm": "Delete {{count}} selected images?",
+    "deleteConfirm": "{{name}} will be permanently removed from disk.",
+    "deleteSelectedConfirm": "{{count}} images will be permanently removed from disk.",
     "emptyFiltered": "No images match this filter",
     "empty": "Your generations will appear here",
     "filterModel": "Model",
@@ -183,7 +183,10 @@
     "ctxCopyPrompt": "Copy prompt",
     "ctxReveal": "Reveal in folder",
     "ctxDelete": "Delete",
-    "clearFilters": "Clear filters"
+    "clearFilters": "Clear filters",
+    "deleteTitle_one": "Delete image?",
+    "deleteTitle_other": "Delete {{count}} images?",
+    "deleteAction": "Delete"
   },
   "meta": {
     "model": "Model",

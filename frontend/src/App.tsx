@@ -39,6 +39,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
@@ -2068,6 +2069,7 @@ function Gallery({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const confirm = useConfirm();
   const [saved, setSaved] = useState<SavedImage[]>([]);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -2209,19 +2211,29 @@ function Gallery({
   );
 
   const deleteOne = useCallback(
-    (name: string) => {
-      if (!window.confirm(t("gallery.deleteConfirm", { name }))) return;
-      deleteNames([name]);
+    async (name: string) => {
+      const ok = await confirm({
+        title: t("gallery.deleteTitle", { count: 1 }),
+        description: t("gallery.deleteConfirm", { name }),
+        confirmLabel: t("gallery.deleteAction"),
+        cancelLabel: t("common.cancel"),
+      });
+      if (ok) deleteNames([name]);
     },
-    [deleteNames, t]
+    [deleteNames, confirm, t]
   );
 
-  const deleteSelected = useCallback(() => {
+  const deleteSelected = useCallback(async () => {
     const names = [...selected];
     if (names.length === 0) return;
-    if (!window.confirm(t("gallery.deleteSelectedConfirm", { count: names.length }))) return;
-    deleteNames(names);
-  }, [selected, deleteNames, t]);
+    const ok = await confirm({
+      title: t("gallery.deleteTitle", { count: names.length }),
+      description: t("gallery.deleteSelectedConfirm", { count: names.length }),
+      confirmLabel: t("gallery.deleteAction"),
+      cancelLabel: t("common.cancel"),
+    });
+    if (ok) deleteNames(names);
+  }, [selected, deleteNames, confirm, t]);
 
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 

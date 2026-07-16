@@ -239,7 +239,7 @@ export default function App() {
   // not settings.walletAddress). Drives cloud gating in x402 mode.
   const [walletConfigured, setWalletConfigured] = useState(false);
   // Panel arrangement (Create / Activity / Gallery) — drag-reorderable, persisted.
-  const { order: panelOrder, collapsed: panelCollapsed, setOrder: setPanelOrder, toggleCollapsed: togglePanelCollapsed } = usePanelLayout();
+  const { columns: panelColumns, collapsed: panelCollapsed, setColumns: setPanelColumns, toggleCollapsed: togglePanelCollapsed } = usePanelLayout();
   // Fullscreen viewer — shared by the gallery and the Activity panel.
   const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
   // Command palette (⌘K) + the model-picker open state it drives (lifted here so
@@ -776,7 +776,9 @@ export default function App() {
     () => jobs.some((j) => !j.hidden && (j.status === "done" || j.status === "error")),
     [jobs]
   );
-  const doneJobs = useMemo(() => jobs.filter((j) => j.status === "done"), [jobs]);
+  // Fresh session tiles for the gallery — done AND not dismissed/deleted (a
+  // deleted tile is hidden; without this it would linger after its file is gone).
+  const doneJobs = useMemo(() => jobs.filter((j) => j.status === "done" && !j.hidden), [jobs]);
 
   // --- Command palette registry --------------------------------------------
   // The single source of truth for app actions. The ⌘K palette renders it now;
@@ -901,16 +903,15 @@ export default function App() {
             side on desktop, stacked (in the same order) on narrow windows. */}
         <div className="mx-auto w-full max-w-[110rem] px-6 pt-5 pb-16">
           <PanelBoard
-            order={panelOrder}
-            onOrderChange={setPanelOrder}
+            columns={panelColumns}
+            onColumnsChange={setPanelColumns}
             collapsed={panelCollapsed}
             onToggleCollapsed={togglePanelCollapsed}
             panels={{
               create: {
                 title: t("panels.create"),
                 icon: <Wand2 />,
-                className:
-                  "mx-auto w-full max-w-2xl xl:sticky xl:top-4 xl:mx-0 xl:w-[25rem] xl:max-w-none xl:shrink-0",
+                width: 25,
                 content: (
                   // Mode-tinted, self-scrolling surface: the panel is felt in
                   // the active mode's accent and, on desktop, scrolls internally
@@ -1023,14 +1024,13 @@ export default function App() {
                   </button>
                 ) : undefined,
                 collapsible: true,
-                className:
-                  "mx-auto w-full max-w-2xl xl:sticky xl:top-4 xl:mx-0 xl:w-[18rem] xl:max-w-none xl:shrink-0",
+                width: 18,
                 content: <QueuePanel jobs={jobs} onDismiss={dismissJob} onOpenImage={setLightbox} />,
               },
               gallery: {
                 title: t("panels.gallery"),
                 icon: <Images />,
-                className: "w-full min-w-0 xl:flex-1",
+                grow: true,
                 content: (
                   <Gallery
                     jobs={doneJobs}
@@ -1491,11 +1491,13 @@ function FormatSelector({
 
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
-      <div className="flex items-center gap-3">
-        <span className="text-muted-foreground shrink-0 text-[11px] font-medium uppercase tracking-wide">
+      {/* Label on its own line + a wrapping segmented control, so 4 options (with
+          ratio hints) never overflow the narrow panel — they flow to a 2nd row. */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
           {t("params.format")}
         </span>
-        <div className="bg-muted flex min-w-0 flex-1 gap-1 rounded-lg p-0.5 text-xs">
+        <div className="bg-muted flex flex-wrap gap-1 rounded-lg p-0.5 text-xs">
           {formats.map((f) => (
             <button
               key={f.formatCode}
@@ -1503,7 +1505,7 @@ function FormatSelector({
               onClick={() => onChange({ formatCode: f.formatCode })}
               title={`${f.width}×${f.height}${f.ratio ? ` · ${f.ratio}` : ""}`}
               className={cn(
-                "flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium capitalize transition",
+                "flex-1 basis-[4.5rem] whitespace-nowrap rounded-md px-2 py-1.5 text-center font-medium capitalize transition",
                 params.formatCode === f.formatCode
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -1520,7 +1522,7 @@ function FormatSelector({
               type="button"
               onClick={enterCustom}
               className={cn(
-                "flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium transition",
+                "flex-1 basis-[4.5rem] whitespace-nowrap rounded-md px-2 py-1.5 text-center font-medium transition",
                 isCustom
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -2169,10 +2171,15 @@ function Gallery({
     viewItems.push(v);
     return viewItems.length - 1;
   };
+  // A freshly-generated image shows as a session JobTile until a reload folds it
+  // into `saved`. Skip the JobTile once its file is already in `saved` (the
+  // SavedTile is the source of truth) so the same image never appears twice.
+  const savedNames = new Set(saved.map((s) => s.name));
   if (!filtered) {
     for (const j of jobs) {
       const img = j.image!;
       const name = img.savedPath ? baseName(img.savedPath) : null;
+      if (name && savedNames.has(name)) continue; // deduped by the SavedTile
       const meta = img.meta ?? { prompt: j.prompt, source: img.source, seed: img.seed, createdAt: "" };
       const index = pushView({ name, savedPath: img.savedPath || undefined, meta, getSrc: async () => img.imageBase64 });
       tiles.push({ key: j.id, el: <JobTile job={j} index={index} name={name} shared={shared} /> });

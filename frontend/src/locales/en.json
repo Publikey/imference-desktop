@@ -88,7 +88,10 @@
     "negativePlaceholder": "things to avoid…",
     "downloadingBtn": "Downloading…",
     "downloadModelBtn": "Download model",
-    "generateBtn": "Generate"
+    "generateBtn": "Generate",
+    "clear": "Clear prompt",
+    "charCount_one": "{{count}} char",
+    "charCount_other": "{{count}} chars"
   },
   "hint": {
     "configurePayment": "Configure a payment method above",

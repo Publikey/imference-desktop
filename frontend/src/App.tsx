@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
@@ -1474,6 +1474,20 @@ function FirstRunSetup({
 // not here; several generations can be launched back-to-back.
 // ---------------------------------------------------------------------------
 
+// Grow a textarea to fit its content (clamped by the element's CSS min/max-h),
+// re-measuring whenever the value changes — including external edits like
+// "reuse settings" or an img2img drop that repopulate the prompt.
+function useAutoGrow(value: string) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return ref;
+}
+
 function Composer({
   prompt,
   onPromptChange,
@@ -1508,6 +1522,9 @@ function Composer({
   const { t } = useTranslation();
   // ⌘/Ctrl+Enter is handled globally in App (works from anywhere, not just this
   // field), so the textarea needs no key handler of its own.
+  const promptRef = useAutoGrow(prompt);
+  const preRef = useAutoGrow(prePrompt);
+  const negRef = useAutoGrow(negativePrompt);
 
   return (
     <div className="composer bg-card rounded-2xl border">
@@ -1518,26 +1535,48 @@ function Composer({
             {t("composer.qualityTags")}
           </span>
           <textarea
+            ref={preRef}
             value={prePrompt}
             onChange={(e) => onPrePromptChange(e.target.value)}
             placeholder={t("composer.qualityTagsPlaceholder")}
             rows={1}
-            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-20 w-full resize-none border-0 bg-transparent text-xs leading-snug outline-none"
+            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-24 w-full resize-none border-0 bg-transparent text-xs leading-snug outline-none"
           />
         </label>
       )}
 
       {/* Prompt — the hero: largest text, most room, clear separation. */}
-      <textarea
-        value={prompt}
-        onChange={(e) => onPromptChange(e.target.value)}
-        placeholder={t("composer.promptPlaceholder")}
-        rows={3}
-        className={cn(
-          "placeholder:text-muted-foreground/60 border-border/60 focus:bg-muted/15 block max-h-72 min-h-32 w-full resize-none border-0 bg-transparent px-5 py-4 text-base font-medium leading-relaxed outline-none transition-colors",
-          showModelFields ? "border-y" : "rounded-t-2xl"
+      <div className={cn("relative", showModelFields ? "border-border/60 border-y" : "")}>
+        <textarea
+          ref={promptRef}
+          value={prompt}
+          onChange={(e) => onPromptChange(e.target.value)}
+          placeholder={t("composer.promptPlaceholder")}
+          rows={3}
+          className={cn(
+            "placeholder:text-muted-foreground/60 focus:bg-muted/15 block max-h-72 min-h-32 w-full resize-none border-0 bg-transparent px-5 pb-7 pt-4 text-base font-medium leading-relaxed outline-none transition-colors",
+            showModelFields ? "" : "rounded-t-2xl"
+          )}
+        />
+        {/* Clear + character count — only while there's something to clear. The
+            count sits in a faint pill so it stays legible over the last line. */}
+        {prompt.length > 0 && (
+          <div className="absolute bottom-1.5 right-2.5 flex items-center gap-1.5">
+            <span className="bg-card/70 text-muted-foreground/60 rounded px-1 text-[10px] tabular-nums backdrop-blur-sm">
+              {t("composer.charCount", { count: prompt.length })}
+            </span>
+            <button
+              type="button"
+              onClick={() => onPromptChange("")}
+              title={t("composer.clear")}
+              aria-label={t("composer.clear")}
+              className="text-muted-foreground/50 hover:text-foreground hover:bg-muted rounded p-0.5 transition-colors"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
         )}
-      />
+      </div>
 
       {/* Negative prompt — secondary, mirrors the pre-prompt styling. */}
       {showModelFields && (
@@ -1546,11 +1585,12 @@ function Composer({
             {t("composer.negativePrompt")}
           </span>
           <textarea
+            ref={negRef}
             value={negativePrompt}
             onChange={(e) => onNegativePromptChange(e.target.value)}
             placeholder={t("composer.negativePlaceholder")}
             rows={1}
-            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-20 w-full resize-none border-0 bg-transparent text-xs leading-snug outline-none"
+            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-24 w-full resize-none border-0 bg-transparent text-xs leading-snug outline-none"
           />
         </label>
       )}

@@ -87,7 +87,9 @@
     "negativePlaceholder": "不想出现的内容…",
     "downloadingBtn": "下载中…",
     "downloadModelBtn": "下载模型",
-    "generateBtn": "生成"
+    "generateBtn": "生成",
+    "clear": "清除提示词",
+    "charCount_other": "{{count}} 字符"
   },
   "hint": {
     "configurePayment": "请先在上方配置支付方式",

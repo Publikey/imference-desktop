@@ -398,5 +398,14 @@
     "sourceFilter": "source",
     "allSources": "all",
     "empty": "No entries."
+  },
+  "toast": {
+    "engineInstalled": "Local engine installed",
+    "engineFailed": "Engine install failed",
+    "modelReady": "Model ready",
+    "modelFailed": "Model download failed",
+    "genFailed": "Generation failed",
+    "deleted_one": "Image deleted",
+    "deleted_other": "{{count}} images deleted"
   }
 }

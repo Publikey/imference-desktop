@@ -394,5 +394,13 @@
     "sourceFilter": "来源",
     "allSources": "全部",
     "empty": "暂无日志。"
+  },
+  "toast": {
+    "engineInstalled": "本地引擎已安装",
+    "engineFailed": "引擎安装失败",
+    "modelReady": "模型已就绪",
+    "modelFailed": "模型下载失败",
+    "genFailed": "生成失败",
+    "deleted_other": "已删除 {{count}} 张图片"
   }
 }

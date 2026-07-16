@@ -38,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
@@ -209,6 +210,7 @@ function defaultParams(model: ModelInfo): GenParams {
 
 export default function App() {
   const { t } = useTranslation();
+  const toast = useToast();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [sidecar, setSidecar] = useState<SidecarStatus>({ state: "idle" });
   const [prompt, setPrompt] = useState("");
@@ -370,12 +372,14 @@ export default function App() {
       api.onInstallProgress((p) => {
         if (p.phase === "done" || p.phase === "error") {
           setInstalling(false);
+          if (p.phase === "done") toast.success(t("toast.engineInstalled"));
+          else toast.error(p.error || t("toast.engineFailed"));
           void api.getEngineInfo().then((i) => setEngineInstalled(i.installed)).catch(() => {});
         } else {
           setInstalling(true);
         }
       }),
-    []
+    [toast, t]
   );
 
   // Home-screen engine control: install / start / stop the local engine on demand.
@@ -435,16 +439,19 @@ export default function App() {
       if (p.done || p.phase === "done" || p.phase === "error") {
         setDownloading(false);
         if (p.phase === "done") {
+          toast.success(t("toast.modelReady"));
           void api.getSettings().then((s) => {
             setSettings(s);
             if (s.localModel) setPendingLocalModel(s.localModel);
           });
+        } else if (p.phase === "error") {
+          toast.error(p.error || t("toast.modelFailed"));
         }
       } else {
         setDownloading(true);
       }
     });
-  }, []);
+  }, [toast, t]);
 
   const downloadLocalModel = useCallback(() => {
     if (!pendingLocalModel || downloading) return;
@@ -516,8 +523,9 @@ export default function App() {
         setJobs((js) =>
           js.map((j) => (j.id === id ? { ...j, status: "error", error: msg, endedAt: Date.now() } : j))
         );
+        toast.error(t("toast.genFailed"));
       });
-  }, []);
+  }, [toast, t]);
 
   const run = useCallback(
     (which: Mode) => {
@@ -1958,6 +1966,7 @@ function Gallery({
   onHideJob: (id: string) => void;
 }) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [saved, setSaved] = useState<SavedImage[]>([]);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -2092,9 +2101,10 @@ function Gallery({
         });
         hideJobsFor(set);
         refreshFacets();
+        toast.toast(t("toast.deleted", { count: names.length }));
       });
     },
-    [hideJobsFor, refreshFacets]
+    [hideJobsFor, refreshFacets, toast, t]
   );
 
   const deleteOne = useCallback(

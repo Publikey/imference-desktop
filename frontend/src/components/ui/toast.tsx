@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,11 +29,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((cur) => [...cur, { id, message, variant: opts?.variant ?? "default", duration }]);
   }, []);
 
-  const api: ToastApi = {
-    toast: push,
-    success: (m, o) => push(m, { ...o, variant: "success" }),
-    error: (m, o) => push(m, { ...o, variant: "error" }),
-  };
+  // Stable identity so callers can safely list `toast` in effect deps.
+  const api = useMemo<ToastApi>(
+    () => ({
+      toast: push,
+      success: (m, o) => push(m, { ...o, variant: "success" }),
+      error: (m, o) => push(m, { ...o, variant: "error" }),
+    }),
+    [push]
+  );
 
   return (
     <ToastContext.Provider value={api}>

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { X, Trash2, Pause, Play, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/wails-bridge";
+import { cn } from "@/lib/utils";
 import type { LogEntry, LogLevel } from "@/lib/types";
 
 const MAX_ENTRIES = 2000;
@@ -103,15 +104,25 @@ export function LogPanel({ open, onOpenChange }: Props) {
   );
 
   return (
-    <div
-      className={
-        "fixed top-0 right-0 z-40 h-screen w-[640px] max-w-[100vw] transform border-l bg-background shadow-2xl transition-transform duration-200 " +
-        (open ? "translate-x-0" : "translate-x-full")
-      }
-      // Don't unmount on close — keep the subscription alive so the panel
-      // doesn't miss entries when hidden.
-      aria-hidden={!open}
-    >
+    <>
+      {/* Scrim — dims the app behind the slide-over; click to dismiss. */}
+      <div
+        onClick={() => onOpenChange(false)}
+        aria-hidden
+        className={cn(
+          "fixed inset-0 z-30 bg-black/25 backdrop-blur-[1px] transition-opacity duration-300 ease-[var(--ease-out-expo)]",
+          open ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+      />
+      <div
+        className={cn(
+          "fixed top-0 right-0 z-40 flex h-screen w-[640px] max-w-[100vw] transform flex-col border-l bg-background shadow-2xl transition-transform duration-300 ease-[var(--ease-out-expo)]",
+          open ? "translate-x-0" : "translate-x-full"
+        )}
+        // Don't unmount on close — keep the subscription alive so the panel
+        // doesn't miss entries when hidden.
+        aria-hidden={!open}
+      >
       <div className="flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold">{t("logs.title")}</h2>
@@ -164,41 +175,56 @@ export function LogPanel({ open, onOpenChange }: Props) {
 
       <div className="flex items-center gap-2 border-b px-4 py-2 text-xs">
         <label className="text-muted-foreground">{t("logs.levelFilter")}</label>
-        <select
-          className="rounded border bg-background px-2 py-1 text-xs"
-          value={minLevel}
-          onChange={(e) => setMinLevel(e.target.value as LogLevel)}
-        >
+        <LogSelect value={minLevel} onChange={(v) => setMinLevel(v as LogLevel)}>
           <option value="trace">trace</option>
           <option value="info">info</option>
           <option value="warn">warn</option>
           <option value="error">error</option>
-        </select>
+        </LogSelect>
         <label className="text-muted-foreground ml-3">{t("logs.sourceFilter")}</label>
-        <select
-          className="rounded border bg-background px-2 py-1 text-xs"
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value)}
-        >
+        <LogSelect value={sourceFilter} onChange={setSourceFilter}>
           <option value="">{t("logs.allSources")}</option>
           {sources.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
           ))}
-        </select>
+        </LogSelect>
       </div>
 
-      <div
-        ref={scrollRef}
-        className="h-[calc(100vh-92px)] overflow-y-auto font-mono text-xs"
-      >
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto font-mono text-xs">
         {filtered.length === 0 ? (
           <p className="text-muted-foreground p-6 text-center">{t("logs.empty")}</p>
         ) : (
           filtered.map((e) => <LogRow key={e.id} entry={e} />)
         )}
       </div>
+      </div>
+    </>
+  );
+}
+
+// A styled select matching the app's control language (native <select> chrome
+// removed, custom border + chevron), used for the level/source filters.
+function LogSelect({
+  value,
+  onChange,
+  children,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative inline-flex">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="border-input bg-background hover:border-primary/40 focus-visible:ring-[var(--brand-from)]/30 h-7 appearance-none rounded-md border pl-2.5 pr-7 text-xs transition-colors outline-none focus-visible:ring-2"
+      >
+        {children}
+      </select>
+      <ChevronDown className="text-muted-foreground pointer-events-none absolute right-1.5 top-1/2 size-3.5 -translate-y-1/2" />
     </div>
   );
 }
@@ -241,9 +267,9 @@ function levelRank(l: LogLevel): number {
 function levelBg(l: LogLevel): string {
   switch (l) {
     case "error":
-      return "bg-red-500/8";
+      return "bg-red-500/10";
     case "warn":
-      return "bg-yellow-500/8";
+      return "bg-amber-500/10";
     case "trace":
       return "opacity-70";
     default:
@@ -251,14 +277,15 @@ function levelBg(l: LogLevel): string {
   }
 }
 
+// Dark-aware level colors (the raw -600/-700 values washed out in dark mode).
 function levelText(l: LogLevel): string {
   switch (l) {
     case "error":
-      return "text-red-600";
+      return "text-red-600 dark:text-red-400";
     case "warn":
-      return "text-yellow-700";
+      return "text-amber-600 dark:text-amber-400";
     case "info":
-      return "text-blue-600";
+      return "text-blue-600 dark:text-blue-400";
     default:
       return "text-muted-foreground";
   }

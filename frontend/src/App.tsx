@@ -2719,11 +2719,13 @@ function SavedTile({
       draggable
       onDragStart={(e) => shared.startDrag(e, image.name, srcRef.current)}
       className={cn(
-        "group bg-muted/40 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1",
+        "rise-in group bg-muted/40 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1 transition-shadow duration-200 hover:shadow-lg",
         selected ? "ring-2 ring-[var(--brand-to)]" : "ring-border/60"
       )}
       title={image.name}
-      style={{ aspectRatio: aspect }}
+      // Capped, repeating stagger so a page of tiles cascades in without long
+      // delays on later pages (infinite scroll).
+      style={{ aspectRatio: aspect, animationDelay: `${(index % 10) * 30}ms` }}
       onClick={(e) => shared.tileClick(e, image.name, index)}
       onContextMenu={(e) =>
         shared.openMenu(e, {

@@ -397,6 +397,12 @@
     .toast-in {
       animation: none;
     }
+    /* Decorative pulses off; functional spinners (animate-spin) stay — a loading
+       spinner is essential feedback, not incidental motion. Hover transforms are
+       user-initiated, so they're left alone too. */
+    .animate-pulse {
+      animation: none;
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, Check, Clock, Cloud, Cpu, Loader2, Wind, X } from "lucide-react";
+import { AlertCircle, Check, Clock, Cloud, Cpu, Loader2, Sparkles, X } from "lucide-react";
+import { ProgressBar } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type { GenerationMeta, Job } from "@/lib/types";
 
@@ -55,10 +56,13 @@ export function QueuePanel({
 
   if (visible.length === 0) {
     return (
-      <div className="bg-card/60 text-muted-foreground/70 flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-10 text-center backdrop-blur-sm">
-        <Wind className="size-5" strokeWidth={1.75} />
-        <p className="text-xs font-medium">{t("queue.empty")}</p>
-        <p className="text-muted-foreground/50 text-[11px] leading-snug">{t("queue.emptyHint")}</p>
+      <div className="border-border/60 text-muted-foreground/70 relative flex flex-col items-center justify-center gap-2.5 overflow-hidden rounded-2xl border border-dashed px-4 py-10 text-center">
+        <div className="canvas-glow pointer-events-none absolute inset-0" />
+        <div className="brand-surface relative flex size-11 items-center justify-center rounded-2xl text-white shadow-[0_8px_24px_-8px_color-mix(in_oklch,var(--brand-to)_60%,transparent)]">
+          <Sparkles className="size-5" strokeWidth={1.75} />
+        </div>
+        <p className="relative text-xs font-medium">{t("queue.empty")}</p>
+        <p className="text-muted-foreground/60 relative text-[11px] leading-snug">{t("queue.emptyHint")}</p>
       </div>
     );
   }
@@ -146,11 +150,9 @@ function QueueRow({
             {queued ? (
               <Clock className="size-4" />
             ) : running ? (
-              pct !== null ? (
-                <ProgressRing percent={pct} />
-              ) : (
-                <Loader2 className="size-4 animate-spin" />
-              )
+              // One progress language: the glyph is just a spinner; the actual
+              // percent/step lives in the linear bar + status line below.
+              <Loader2 className="size-4 animate-spin" />
             ) : job.status === "error" ? (
               <AlertCircle className="size-4" />
             ) : (
@@ -193,40 +195,7 @@ function QueueRow({
       </div>
 
       {/* Progress: determinate brand bar for local steps, sweeping pulse for cloud. */}
-      {running && (
-        <div className="bg-muted mt-2 h-1 w-full overflow-hidden rounded-full">
-          {pct !== null ? (
-            <div
-              className="brand-surface h-full rounded-full transition-[width] duration-300 ease-out"
-              style={{ width: `${pct}%` }}
-            />
-          ) : (
-            <div className="bar-indeterminate h-full w-full" />
-          )}
-        </div>
-      )}
+      {running && <ProgressBar percent={pct} height="h-1" className="mt-2" />}
     </li>
-  );
-}
-
-/** Tiny circular progress — the running job's leading visual. */
-function ProgressRing({ percent }: { percent: number }) {
-  const r = 7;
-  const c = 2 * Math.PI * r;
-  const filled = (Math.min(100, Math.max(0, percent)) / 100) * c;
-  return (
-    <svg viewBox="0 0 18 18" className="size-[18px] -rotate-90">
-      <circle cx="9" cy="9" r={r} fill="none" strokeWidth="2.5" className="stroke-border" />
-      <circle
-        cx="9"
-        cy="9"
-        r={r}
-        fill="none"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeDasharray={`${filled} ${c - filled}`}
-        className="stroke-[var(--brand-to)] transition-[stroke-dasharray] duration-300 ease-out"
-      />
-    </svg>
   );
 }

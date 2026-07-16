@@ -2247,6 +2247,9 @@ function Gallery({
   const columns: { key: string; el: React.ReactElement }[][] = Array.from({ length: cols }, () => []);
   tiles.forEach((t, i) => columns[i % cols].push(t));
   const empty = tiles.length === 0;
+  // First page still loading → show a skeleton grid, not the "no images" empty
+  // state (which used to flash before the first page arrived).
+  const initialLoading = empty && loading;
 
   return (
     <div className="flex flex-col gap-3">
@@ -2255,8 +2258,10 @@ function Gallery({
         <ColumnPicker cols={cols} onChange={setCols} />
       </div>
 
-      {empty ? (
-        <div className="border-border/60 text-muted-foreground/70 relative flex min-h-[60vh] w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-[26px] border border-dashed lg:min-h-[70vh]">
+      {initialLoading ? (
+        <GallerySkeleton cols={cols} />
+      ) : empty ? (
+        <div className="border-border/60 text-muted-foreground/70 relative flex min-h-[60vh] w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border border-dashed lg:min-h-[70vh]">
           <div className="canvas-glow pointer-events-none absolute inset-0" />
           <div className="brand-surface relative flex size-12 items-center justify-center rounded-2xl text-white shadow-[0_8px_24px_-8px_color-mix(in_oklch,var(--brand-to)_60%,transparent)]">
             <ImageIcon className="size-5" strokeWidth={1.75} />
@@ -2264,6 +2269,15 @@ function Gallery({
           <p className="relative text-sm">
             {filtered ? t("gallery.emptyFiltered") : t("gallery.empty")}
           </p>
+          {filtered && (
+            <button
+              type="button"
+              onClick={() => setFilter({ engine: "", modelCode: "", source: "", text: "" })}
+              className="text-foreground hover:bg-muted relative inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+            >
+              <X className="size-3.5" /> {t("gallery.clearFilters")}
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex items-start gap-3">
@@ -2278,11 +2292,8 @@ function Gallery({
       )}
 
       {!done && <div ref={sentinelRef} className="h-4 w-full" />}
-      {loading && (
-        <div className="text-muted-foreground flex justify-center py-2">
-          <Loader2 className="size-4 animate-spin" />
-        </div>
-      )}
+      {/* Loading the NEXT page (not the first) → append a row of skeleton tiles. */}
+      {loading && !initialLoading && <GallerySkeleton cols={cols} rows={1} />}
 
       {/* Floating selection bar. */}
       {selected.size > 0 && (
@@ -2465,6 +2476,27 @@ function ColumnPicker({ cols, onChange }: { cols: number; onChange: (n: number) 
   );
 }
 
+// Masonry-shaped skeleton grid shown while a gallery page loads, so the layout
+// is reserved instead of a bare spinner (no reflow when the images arrive).
+function GallerySkeleton({ cols, rows = 3 }: { cols: number; rows?: number }) {
+  const ratios = [1, 1.3, 0.82, 1.15, 0.95, 1.25];
+  return (
+    <div className="flex items-start gap-3">
+      {Array.from({ length: cols }).map((_, ci) => (
+        <div key={ci} className="flex min-w-0 flex-1 flex-col gap-3">
+          {Array.from({ length: rows }).map((_, ri) => (
+            <Skeleton
+              key={ri}
+              className="w-full rounded-2xl"
+              style={{ aspectRatio: ratios[(ci + ri * cols) % ratios.length] }}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // A small selection checkbox overlaid on a tile — visible on hover or whenever a
 // selection is in progress.
 function SelectCheckbox({
@@ -2571,9 +2603,7 @@ function SavedTile({
       {src ? (
         <img src={src} alt={image.name} className="animate-in fade-in h-full w-full object-cover duration-300" />
       ) : (
-        <div className="text-muted-foreground/30 flex h-full w-full items-center justify-center">
-          <ImageIcon className="size-5" />
-        </div>
+        <Skeleton className="h-full w-full rounded-none" />
       )}
       <SelectCheckbox
         checked={selected}
@@ -2763,6 +2793,8 @@ function Lightbox({
 
   const total = items.length;
   const current = items[index];
+  const lightboxAspect =
+    current?.meta?.width && current?.meta?.height ? current.meta.width / current.meta.height : 1;
   const hasPrev = index > 0;
   const hasNext = index < total - 1;
   const prev = useCallback(() => onIndex(Math.max(0, index - 1)), [index, onIndex]);
@@ -2858,7 +2890,16 @@ function Lightbox({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative flex min-h-0 flex-1 items-center justify-center">
-          {loading && <Loader2 className="absolute size-8 animate-spin text-white/70" />}
+          {loading && !src && (
+            // A dimensioned placeholder (from the known aspect) so the frame
+            // doesn't jump when the full image resolves.
+            <div
+              className="skeleton max-h-[85vh] w-full max-w-[80vmin] rounded-xl bg-white/10"
+              style={{ aspectRatio: lightboxAspect }}
+            >
+              <Loader2 className="absolute left-1/2 top-1/2 size-8 -translate-x-1/2 -translate-y-1/2 animate-spin text-white/70" />
+            </div>
+          )}
           {src && (
             <img
               src={src}

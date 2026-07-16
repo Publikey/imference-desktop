@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Check, FileBox, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { Check, FileBox, PackageOpen, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -200,13 +200,27 @@ export function ModelPickerDialog({
           )}
 
           {total === 0 ? (
-            <p className="text-muted-foreground py-10 text-center text-sm">
-              {showMine
-                ? t("modelPicker.emptyMine")
-                : search || typeFilter !== "all"
-                  ? t("modelPicker.emptyFiltered")
-                  : t("modelPicker.empty")}
-            </p>
+            <div className="text-muted-foreground flex flex-col items-center gap-3 py-12 text-center">
+              <div className="bg-muted flex size-12 items-center justify-center rounded-2xl">
+                <PackageOpen className="size-6 opacity-70" strokeWidth={1.75} />
+              </div>
+              <p className="text-sm">
+                {showMine
+                  ? t("modelPicker.emptyMine")
+                  : search || typeFilter !== "all"
+                    ? t("modelPicker.emptyFiltered")
+                    : t("modelPicker.empty")}
+              </p>
+              {showMine && (
+                <button
+                  type="button"
+                  onClick={onAddCustom}
+                  className="text-primary hover:bg-primary/10 border-primary/30 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+                >
+                  <Plus className="size-3.5" /> {t("modelPicker.addCheckpoint")}
+                </button>
+              )}
+            </div>
           ) : (
             groups.map((g) => (
               <section key={g.type} className="mb-5 last:mb-0">

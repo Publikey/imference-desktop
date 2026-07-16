@@ -179,7 +179,8 @@
     "ctxReuse": "复用提示词和参数",
     "ctxCopyPrompt": "复制提示词",
     "ctxReveal": "在文件夹中显示",
-    "ctxDelete": "删除"
+    "ctxDelete": "删除",
+    "clearFilters": "清除筛选"
   },
   "meta": {
     "model": "模型",

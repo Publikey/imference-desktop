@@ -182,7 +182,8 @@
     "ctxReuse": "Reuse prompt & settings",
     "ctxCopyPrompt": "Copy prompt",
     "ctxReveal": "Reveal in folder",
-    "ctxDelete": "Delete"
+    "ctxDelete": "Delete",
+    "clearFilters": "Clear filters"
   },
   "meta": {
     "model": "Model",

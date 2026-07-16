@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Download, Loader2 } from "lucide-react";
+import { AlertTriangle, Download, Loader2, RefreshCw } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ProgressBar } from "@/components/ui/progress";
 import { ModelPickerDialog, ModelThumb } from "@/components/ModelPickerDialog";
 import type { AppSettings, InstallProgress, ModelInfo } from "@/lib/types";
 
@@ -63,9 +65,11 @@ export function ModelBar({
   const [switching, setSwitching] = useState(false); // cloud quick-switch
   const [customError, setCustomError] = useState<string | null>(null); // custom activation
 
-  // Load both catalogs once.
-  useEffect(() => {
+  // Load both catalogs — extracted so the error state can offer a Retry.
+  const loadCatalogs = useCallback(() => {
     let alive = true;
+    setLoading(true);
+    setListError(null);
     Promise.all([api.listLocalModels(), api.listCloudModels()])
       .then(([local, cloud]) => {
         if (!alive) return;
@@ -79,6 +83,8 @@ export function ModelBar({
       alive = false;
     };
   }, []);
+
+  useEffect(() => loadCatalogs(), [loadCatalogs]);
 
   const isCloud = mode === "cloud";
   const customModels = settings?.customModels ?? [];
@@ -134,12 +140,26 @@ export function ModelBar({
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
       <div className="flex items-center">
         {listError ? (
-          <span className="text-destructive flex-1 text-xs">{t("modelBar.catalogUnavailable")}</span>
+          <div className="flex h-10 flex-1 items-center gap-2">
+            <AlertTriangle className="text-destructive size-4 shrink-0" />
+            <span className="text-destructive min-w-0 flex-1 truncate text-xs" title={listError}>
+              {t("modelBar.catalogUnavailable")}
+            </span>
+            <button
+              type="button"
+              onClick={loadCatalogs}
+              className="text-muted-foreground hover:text-foreground inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors"
+            >
+              <RefreshCw className="size-3" /> {t("common.refresh")}
+            </button>
+          </div>
         ) : loading ? (
-          <span className="text-muted-foreground inline-flex flex-1 items-center gap-1.5 text-xs">
-            <Loader2 className="size-3.5 animate-spin" />
-            {t("common.loading")}
-          </span>
+          // Fixed-height skeleton matching the resolved button, so the card
+          // doesn't reflow when the catalog arrives.
+          <div className="flex h-10 flex-1 items-center gap-2.5 rounded-xl border px-2.5">
+            <Skeleton className="size-7 rounded-lg" />
+            <Skeleton className="h-3.5 w-28" />
+          </div>
         ) : (
           <button
             type="button"
@@ -207,15 +227,7 @@ function DownloadProgress({ p }: { p: InstallProgress }) {
           <span className="text-muted-foreground shrink-0 tabular-nums">{p.percentEstimate}%</span>
         )}
       </div>
-      <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
-        <div
-          className={cn(
-            "h-full rounded-full transition-all",
-            p.percentEstimate > 0 ? "btn-brand" : "bg-primary/50 w-full animate-pulse"
-          )}
-          style={p.percentEstimate > 0 ? { width: `${p.percentEstimate}%` } : undefined}
-        />
-      </div>
+      <ProgressBar percent={p.percentEstimate > 0 ? p.percentEstimate : null} />
     </div>
   );
 }

@@ -223,6 +223,14 @@
     }
   }
 
+  /* Settings rail — the active category gets a faint brand wash + hairline so
+     it reads as selected without the heavy solid fill a plain button would use. */
+  .settings-nav-active {
+    color: var(--foreground);
+    background-color: color-mix(in oklch, var(--brand-from) 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--brand-from) 22%, transparent);
+  }
+
   /* ---- Panel system ------------------------------------------------------
      The main window is three drag-reorderable panels (Create / Activity /
      Gallery). Panels are light columns — a slim header over the content — so

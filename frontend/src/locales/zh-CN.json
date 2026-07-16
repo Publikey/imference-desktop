@@ -286,7 +286,12 @@
     "outputDir": "自动保存文件夹（可选）",
     "outputDirPlaceholder": "留空则使用 ~/Pictures/Imference",
     "devBuild": "（开发版）",
-    "saved": "已保存"
+    "saved": "已保存",
+    "engineDesc": "在本机安装和管理本地生成引擎。",
+    "runtimeDesc": "引擎的本机调优 — 设备、显存与量化。",
+    "cloudDesc": "云端生成的付费方式 — 积分 API 密钥或链上 USDC 钱包。",
+    "pathsDesc": "Python 所在位置以及生成图像的保存位置。",
+    "languageDesc": "应用界面的语言。"
   },
   "engineSection": {
     "title": "本地引擎",

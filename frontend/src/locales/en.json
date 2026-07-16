@@ -289,7 +289,12 @@
     "outputDir": "Auto-save folder (optional)",
     "outputDirPlaceholder": "Leave empty to use ~/Pictures/Imference",
     "devBuild": "(dev build)",
-    "saved": "Saved"
+    "saved": "Saved",
+    "engineDesc": "Install and manage the local generation engine on this machine.",
+    "runtimeDesc": "Host-machine tuning for the engine — device, memory, and quantization.",
+    "cloudDesc": "How cloud generations are paid for — a credit API key or an on-chain USDC wallet.",
+    "pathsDesc": "Where Python lives and where finished images are saved.",
+    "languageDesc": "The language of the app interface."
   },
   "engineSection": {
     "title": "Local engine",

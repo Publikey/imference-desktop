@@ -137,8 +137,10 @@ export function ModelPickerDialog({
                   type="button"
                   onClick={() => setTab(tabId)}
                   className={cn(
-                    "rounded-lg px-3 py-1.5 text-xs font-medium transition",
-                    tab === tabId ? "bg-primary text-primary-foreground" : "hover:bg-accent text-muted-foreground"
+                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                    tab === tabId
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "hover:bg-accent border-transparent text-muted-foreground"
                   )}
                 >
                   {tabId === "catalog" ? t("modelPicker.catalogTab") : t("modelPicker.mineTab")}
@@ -282,7 +284,7 @@ function ModelCard({
   return (
     <div
       className={cn(
-        "group bg-card relative flex flex-col overflow-hidden rounded-xl border text-left transition",
+        "group bg-card relative flex flex-col overflow-hidden rounded-xl border text-left transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-md",
         active ? "border-primary ring-primary/20 ring-2" : "hover:border-primary/40"
       )}
     >
@@ -293,7 +295,12 @@ function ModelCard({
         className="flex flex-col text-left disabled:cursor-not-allowed disabled:opacity-60"
       >
         <div className="bg-muted relative aspect-square w-full overflow-hidden">
-          <ModelThumb m={m} isCloud={isCloud} className="size-full" iconClassName="size-8" />
+          <ModelThumb
+            m={m}
+            isCloud={isCloud}
+            className="size-full transition-transform duration-300 group-hover:scale-[1.04]"
+            iconClassName="size-8"
+          />
           {active && (
             <span className="bg-primary text-primary-foreground absolute top-1.5 right-1.5 flex size-5 items-center justify-center rounded-full shadow">
               <Check className="size-3.5" />

@@ -35,6 +35,9 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/segmented";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
@@ -1123,7 +1126,7 @@ function Header({
         {/* Logo + app version stacked — the version is important operational info. */}
         <div className="flex flex-col items-center leading-none">
           <img src={logoUrl} alt="Imference" className="size-8" />
-          <span className="text-muted-foreground mt-0.5 text-[9px] tabular-nums" title={t("header.versionTitle")}>
+          <span className="text-muted-foreground mt-0.5 text-[10px] tabular-nums" title={t("header.versionTitle")}>
             {appVersion === "dev" ? "dev" : appVersion ? `v${appVersion}` : ""}
           </span>
         </div>
@@ -1147,7 +1150,7 @@ function Header({
           onClick={onOpenPalette}
           title={t("palette.title")}
           aria-label={t("palette.title")}
-          className="text-muted-foreground hover:text-foreground hover:border-primary/40 hidden h-9 items-center gap-2 rounded-lg border pl-2.5 pr-2 text-xs transition-colors sm:inline-flex"
+          className="text-muted-foreground hover:text-foreground hover:border-primary/40 hidden h-9 items-center gap-2 rounded-md border pl-2.5 pr-2 text-xs transition-colors sm:inline-flex"
         >
           <Search className="size-3.5" />
           <span className="flex items-center gap-0.5">
@@ -1171,7 +1174,7 @@ function Header({
           onClick={onToggleLogs}
           aria-label={errorLogCount > 0 ? t("header.logsWithErrors", { count: errorLogCount }) : t("common.logs")}
           title={errorLogCount > 0 ? t("header.errors", { count: errorLogCount }) : t("common.logs")}
-          className="text-muted-foreground/60 hover:text-foreground relative size-8"
+          className="text-muted-foreground/60 hover:text-foreground relative size-9"
         >
           <ScrollText className="size-4" />
           {errorLogCount > 0 && (
@@ -1258,8 +1261,11 @@ function EngineControl({
   onSelectModel: () => void;
 }) {
   const { t } = useTranslation();
+  // A shared floor width + centering so the pill keeps a stable footprint as the
+  // engine moves through install → select → start → running (the left header
+  // cluster no longer shifts on every state change).
   const pill =
-    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex min-w-[7.5rem] items-center justify-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-[color,background-color,border-color] disabled:cursor-not-allowed disabled:opacity-50";
 
   if (installing) {
     return (
@@ -1294,8 +1300,7 @@ function EngineControl({
         title={t("engineControl.runningTitle", { device: status.device })}
         className={cn(
           pill,
-          // Fixed width + centered so swapping the label on hover doesn't reflow.
-          "group min-w-[7.5rem] justify-center border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-600 dark:text-emerald-300"
+          "group border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-600 dark:text-emerald-300"
         )}
       >
         <span className="size-1.5 rounded-full bg-emerald-500 group-hover:hidden" />
@@ -1382,11 +1387,11 @@ function Composer({
   // field), so the textarea needs no key handler of its own.
 
   return (
-    <div className="composer bg-card rounded-[26px] border">
+    <div className="composer bg-card rounded-2xl border">
       {/* Pre-prompt (quality tags) — secondary: small, dim, tucked at the top. */}
       {showModelFields && (
-        <label className="hover:bg-muted/30 block rounded-t-[26px] px-5 pb-2 pt-2.5 transition-colors">
-          <span className="text-muted-foreground/60 text-[10px] font-medium uppercase tracking-wide">
+        <label className="hover:bg-muted/30 focus-within:bg-muted/30 block rounded-t-2xl px-5 pb-2 pt-2.5 transition-colors">
+          <span className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wide">
             {t("composer.qualityTags")}
           </span>
           <textarea
@@ -1394,7 +1399,7 @@ function Composer({
             onChange={(e) => onPrePromptChange(e.target.value)}
             placeholder={t("composer.qualityTagsPlaceholder")}
             rows={1}
-            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-20 w-full resize-none border-0 bg-transparent text-[12.5px] leading-snug outline-none"
+            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-20 w-full resize-none border-0 bg-transparent text-xs leading-snug outline-none"
           />
         </label>
       )}
@@ -1406,15 +1411,15 @@ function Composer({
         placeholder={t("composer.promptPlaceholder")}
         rows={3}
         className={cn(
-          "placeholder:text-muted-foreground/60 border-border/60 block max-h-72 min-h-32 w-full resize-none border-0 bg-transparent px-5 py-4 text-[17px] font-medium leading-relaxed outline-none",
-          showModelFields ? "border-y" : "rounded-t-[26px]"
+          "placeholder:text-muted-foreground/60 border-border/60 focus:bg-muted/15 block max-h-72 min-h-32 w-full resize-none border-0 bg-transparent px-5 py-4 text-base font-medium leading-relaxed outline-none transition-colors",
+          showModelFields ? "border-y" : "rounded-t-2xl"
         )}
       />
 
       {/* Negative prompt — secondary, mirrors the pre-prompt styling. */}
       {showModelFields && (
-        <label className="hover:bg-muted/30 block px-5 pb-2.5 pt-2 transition-colors">
-          <span className="text-muted-foreground/60 text-[10px] font-medium uppercase tracking-wide">
+        <label className="hover:bg-muted/30 focus-within:bg-muted/30 block px-5 pb-2.5 pt-2 transition-colors">
+          <span className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wide">
             {t("composer.negativePrompt")}
           </span>
           <textarea
@@ -1422,7 +1427,7 @@ function Composer({
             onChange={(e) => onNegativePromptChange(e.target.value)}
             placeholder={t("composer.negativePlaceholder")}
             rows={1}
-            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-20 w-full resize-none border-0 bg-transparent text-[12.5px] leading-snug outline-none"
+            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-20 w-full resize-none border-0 bg-transparent text-xs leading-snug outline-none"
           />
         </label>
       )}
@@ -1435,8 +1440,8 @@ function Composer({
           onStrengthChange={onStrengthChange}
         />
       )}
-      <div className="flex items-end justify-between gap-3 px-3 pt-2 pb-3">
-        <span className="text-muted-foreground/80 min-w-0 truncate pl-1 text-[11px]" title={contextHint}>
+      <div className="flex items-end justify-between gap-3 px-5 pt-2 pb-4">
+        <span className="text-muted-foreground/80 min-w-0 truncate text-[11px]" title={contextHint}>
           {contextHint}
         </span>
         <Button
@@ -1501,41 +1506,27 @@ function FormatSelector({
         <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
           {t("params.format")}
         </span>
-        <div className="bg-muted flex flex-wrap gap-1 rounded-lg p-0.5 text-xs">
-          {formats.map((f) => (
-            <button
-              key={f.formatCode}
-              type="button"
-              onClick={() => onChange({ formatCode: f.formatCode })}
-              title={`${f.width}×${f.height}${f.ratio ? ` · ${f.ratio}` : ""}`}
-              className={cn(
-                "flex-1 basis-[4.5rem] whitespace-nowrap rounded-md px-2 py-1.5 text-center font-medium capitalize transition",
-                params.formatCode === f.formatCode
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {formatName(f, t)}
-              {f.ratio && (
-                <span className="text-muted-foreground/70 ml-1 text-[10px] normal-case">{f.ratio}</span>
-              )}
-            </button>
-          ))}
-          {allowCustom && (
-            <button
-              type="button"
-              onClick={enterCustom}
-              className={cn(
-                "flex-1 basis-[4.5rem] whitespace-nowrap rounded-md px-2 py-1.5 text-center font-medium transition",
-                isCustom
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {t("formats.custom")}
-            </button>
-          )}
-        </div>
+        <Segmented
+          wrap
+          size="sm"
+          value={isCustom ? CUSTOM_FORMAT : params.formatCode}
+          onChange={(code) => (code === CUSTOM_FORMAT ? enterCustom() : onChange({ formatCode: code }))}
+          items={[
+            ...formats.map((f) => ({
+              value: f.formatCode,
+              title: `${f.width}×${f.height}${f.ratio ? ` · ${f.ratio}` : ""}`,
+              label: (
+                <span className="capitalize">
+                  {formatName(f, t)}
+                  {f.ratio && (
+                    <span className="text-muted-foreground/70 ml-1 text-[10px] normal-case">{f.ratio}</span>
+                  )}
+                </span>
+              ),
+            })),
+            ...(allowCustom ? [{ value: CUSTOM_FORMAT, label: t("formats.custom") }] : []),
+          ]}
+        />
       </div>
 
       {/* Free width × height (local, custom only). Snap to a multiple of 8 on
@@ -1588,7 +1579,7 @@ function DimInput({
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
-        className="border-input bg-background h-8 w-full rounded-md border px-2 text-xs tabular-nums outline-none"
+        className="border-input bg-background field-focus h-8 w-full rounded-md border px-2 text-xs tabular-nums"
       />
     </label>
   );
@@ -1643,67 +1634,76 @@ function ParamsPanel({
         />
       </button>
 
-      {open && (
-        <div className="grid gap-4 border-t px-4 py-4">
-          <RangeRow label={t("params.steps")} value={params.steps} min={stepsMin} max={stepsMax} step={1} onChange={(v) => set({ steps: v })} />
-          <RangeRow label={t("params.cfg")} value={params.cfg} min={cfgMin} max={cfgMax} step={0.5} onChange={(v) => set({ cfg: v })} />
+      {/* Animate open/close via a grid-rows 0fr→1fr collapse (auto-height, no JS
+          measuring) so the body eases in to match the chevron rotation. */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-300 ease-[var(--ease-out-expo)]",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="grid gap-4 border-t px-4 py-4">
+            <RangeRow label={t("params.steps")} value={params.steps} min={stepsMin} max={stepsMax} step={1} onChange={(v) => set({ steps: v })} />
+            <RangeRow label={t("params.cfg")} value={params.cfg} min={cfgMin} max={cfgMax} step={0.5} onChange={(v) => set({ cfg: v })} />
 
-          <div className="grid gap-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium">{t("params.seed")}</span>
-              <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-[11px]">
+            <div className="grid gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium">{t("params.seed")}</span>
+                <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-[11px]">
+                  <Checkbox
+                    checked={params.seedMode === "random"}
+                    onCheckedChange={(c) => set({ seedMode: c ? "random" : "fixed" })}
+                  />
+                  {t("params.random")}
+                </label>
+              </div>
+              {params.seedMode === "fixed" && (
                 <input
-                  type="checkbox"
-                  checked={params.seedMode === "random"}
-                  onChange={(e) => set({ seedMode: e.target.checked ? "random" : "fixed" })}
-                />
-                {t("params.random")}
-              </label>
-            </div>
-            {params.seedMode === "fixed" && (
-              <input
-                type="number"
-                value={params.seed}
-                onChange={(e) => set({ seed: Number(e.target.value) || 0 })}
-                className="border-input bg-background h-8 rounded-md border px-2 text-xs outline-none"
-              />
-            )}
-          </div>
-
-          {mode === "local" && (
-            <div className="grid gap-3 border-t pt-3">
-              <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
-                {t("params.advanced")}
-              </span>
-              {showClip && (
-                <RangeRow
-                  label={t("params.clipSkip")}
-                  value={params.clipSkip ?? model.skipDefault}
-                  min={0}
-                  max={4}
-                  step={1}
-                  onChange={(v) => set({ clipSkip: v })}
+                  type="number"
+                  value={params.seed}
+                  onChange={(e) => set({ seed: Number(e.target.value) || 0 })}
+                  className="border-input bg-background field-focus h-8 rounded-md border px-2 text-xs tabular-nums"
                 />
               )}
-              <div className="grid gap-1.5">
-                <span className="text-xs font-medium">{t("params.scheduler")}</span>
-                {/* Read-only until we expose a scheduler list — shows the model default. */}
-                <div className="border-input bg-muted/40 text-muted-foreground flex h-8 items-center rounded-md border px-2 text-xs">
-                  {params.scheduler || t("params.modelDefault")}
+            </div>
+
+            {mode === "local" && (
+              <div className="grid gap-3 border-t pt-3">
+                <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                  {t("params.advanced")}
+                </span>
+                {showClip && (
+                  <RangeRow
+                    label={t("params.clipSkip")}
+                    value={params.clipSkip ?? model.skipDefault}
+                    min={0}
+                    max={4}
+                    step={1}
+                    onChange={(v) => set({ clipSkip: v })}
+                  />
+                )}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium">{t("params.scheduler")}</span>
+                  {/* Informational (no scheduler list yet) — a value chip, not a
+                      disabled input, so it doesn't read as interactive. */}
+                  <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-[11px] font-medium">
+                    {params.scheduler || t("params.modelDefault")}
+                  </span>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <button
-            type="button"
-            onClick={() => onChange(defaultParams(model))}
-            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 justify-self-start text-[11px]"
-          >
-            <RotateCcw className="size-3" /> {t("params.reset")}
-          </button>
+            <button
+              type="button"
+              onClick={() => onChange(defaultParams(model))}
+              className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 justify-self-start text-[11px]"
+            >
+              <RotateCcw className="size-3" /> {t("params.reset")}
+            </button>
+          </div>
         </div>
-      )}
+      </div>
     </section>
   );
 }
@@ -1736,7 +1736,7 @@ function RangeRow({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="h-1 w-full cursor-pointer accent-[var(--brand-to)]"
+        className="range w-full"
       />
     </div>
   );
@@ -1770,7 +1770,7 @@ function Img2ImgBar({
   };
 
   return (
-    <div className="border-border/60 mx-3 mt-1 border-t pt-2">
+    <div className="border-border/60 mx-5 mt-1 border-t pt-2">
       <input ref={inputRef} type="file" accept="image/*" onChange={onPick} className="hidden" />
       {sourceImage ? (
         <div className="flex items-center gap-3">
@@ -1799,7 +1799,7 @@ function Img2ImgBar({
               step={0.05}
               value={strength}
               onChange={(e) => onStrengthChange(Number(e.target.value))}
-              className="h-1 w-full cursor-pointer accent-[var(--brand-to)]"
+              className="range w-full"
             />
           </div>
         </div>
@@ -1835,6 +1835,7 @@ function ModeToggle({
       <SegBtn
         active={mode === "local"}
         ready={localReady}
+        tone="brand"
         onClick={() => onModeChange("local")}
         icon={<Cpu className="size-4" />}
         label={t("mode.local")}
@@ -1842,6 +1843,7 @@ function ModeToggle({
       <SegBtn
         active={mode === "cloud"}
         ready={cloudReady}
+        tone="cloud"
         onClick={() => onModeChange("cloud")}
         icon={<Cloud className="size-4" />}
         label={t("mode.cloud")}
@@ -1853,33 +1855,49 @@ function ModeToggle({
 function SegBtn({
   active,
   ready,
+  tone,
   onClick,
   icon,
   label,
 }: {
   active: boolean;
   ready: boolean;
+  tone: "brand" | "cloud";
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
 }) {
+  const { t } = useTranslation();
+  // Concentric radii: rounded-2xl track − p-1 gap = rounded-xl thumb.
   return (
     <button
       type="button"
       onClick={onClick}
+      // Readiness is shown on BOTH tabs (so you can see the other mode is ready
+      // before switching) but always labelled via the title; the active mode is
+      // carried by the accent + surface, not the dot.
+      title={`${label} · ${ready ? t("mode.ready") : t("mode.notReady")}`}
       className={cn(
-        "relative inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 font-medium transition-all",
+        "relative inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 font-medium transition-[color,background-color,box-shadow] duration-200",
         active
           ? "bg-background text-foreground shadow-sm"
           : "text-muted-foreground hover:text-foreground"
       )}
     >
-      {icon}
-      {label}
       <span
         className={cn(
-          "size-1.5 rounded-full",
-          ready ? "bg-emerald-500" : "bg-muted-foreground/30"
+          active && (tone === "brand" ? "text-[var(--brand-from)]" : "text-[var(--cloud-from)]")
+        )}
+      >
+        {icon}
+      </span>
+      {label}
+      <span
+        aria-hidden
+        className={cn(
+          "size-1.5 rounded-full transition-colors",
+          ready ? "bg-emerald-500" : "bg-muted-foreground/30",
+          !active && "opacity-60"
         )}
       />
     </button>

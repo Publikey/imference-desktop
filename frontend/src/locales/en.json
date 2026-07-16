@@ -43,7 +43,9 @@
   },
   "mode": {
     "local": "Local",
-    "cloud": "Cloud"
+    "cloud": "Cloud",
+    "ready": "ready",
+    "notReady": "not ready"
   },
   "theme": {
     "system": "System",

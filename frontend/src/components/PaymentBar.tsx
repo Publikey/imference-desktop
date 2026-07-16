@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, Wallet, AlertTriangle, Check, Loader2, ChevronRight } from "lucide-react";
+import { Segmented } from "@/components/ui/segmented";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
 import type { AppSettings, PaymentMode } from "@/lib/types";
@@ -66,28 +67,15 @@ export function PaymentBar({
           {t("payment.title")}
         </span>
         {/* Method toggle — the full form of each method still lives in Settings. */}
-        <div className="bg-muted inline-flex items-center gap-0.5 rounded-lg p-0.5 text-xs">
-          {(
-            [
-              ["bearer", t("payment.apiKey")],
-              ["x402", "x402"],
-            ] as const
-          ).map(([m, label]) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => onModeChange(m)}
-              className={cn(
-                "rounded-md px-2.5 py-1 font-medium transition",
-                mode === m
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          size="sm"
+          value={mode}
+          onChange={(m) => onModeChange(m as PaymentMode)}
+          items={[
+            { value: "bearer", label: t("payment.apiKey") },
+            { value: "x402", label: "x402" },
+          ]}
+        />
       </div>
 
       <button

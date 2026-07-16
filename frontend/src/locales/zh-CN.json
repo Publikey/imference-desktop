@@ -42,7 +42,9 @@
   },
   "mode": {
     "local": "本地",
-    "cloud": "云端"
+    "cloud": "云端",
+    "ready": "就绪",
+    "notReady": "未就绪"
   },
   "theme": {
     "system": "跟随系统",

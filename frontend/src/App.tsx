@@ -48,7 +48,7 @@ import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/theme";
 import logoUrl from "./assets/logo.svg";
 import { installLogCapture } from "@/lib/log-capture";
-import { cn } from "@/lib/utils";
+import { cn, creditsToUSD } from "@/lib/utils";
 import type {
   AppSettings,
   GalleryFacets,
@@ -742,7 +742,11 @@ export default function App() {
       if (!cloudConfigured) return t("hint.configurePayment");
       const c = settings?.cloudModelInfo;
       if (!c) return t("hint.pickCloudModel");
-      return c.cost > 0 ? t("hint.creditsPerRun", { name: c.name, cost: c.cost }) : c.name;
+      if (!(c.cost > 0)) return c.name;
+      // x402 pays in on-chain USDC; bearer pays in credits — show the matching unit.
+      return settings?.paymentMode === "x402"
+        ? t("hint.usdPerRun", { name: c.name, usd: creditsToUSD(c.cost) })
+        : t("hint.creditsPerRun", { name: c.name, cost: c.cost });
     }
     if (!engineInstalled) return t("hint.engineNotInstalled");
     if (downloading) return t("hint.downloadingModel");
@@ -751,7 +755,7 @@ export default function App() {
     if (sidecar.state === "error") return t("hint.engineError");
     if (sidecar.state !== "ready") return t("hint.startEngine");
     return settings?.localModel?.name ?? t("hint.pickModel");
-  }, [mode, cloudConfigured, downloading, localNeedsDownload, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, engineInstalled, t]);
+  }, [mode, cloudConfigured, downloading, localNeedsDownload, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, engineInstalled, t]);
 
   // Activity-panel derivations: in-flight count (running + queued) for the badge,
   // finished rows for the Clear action, and the done subset the gallery shows as

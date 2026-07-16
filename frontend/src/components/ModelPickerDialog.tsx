@@ -9,8 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
-import type { ModelInfo } from "@/lib/types";
+import { cn, creditsToUSD } from "@/lib/utils";
+import type { ModelInfo, PaymentMode } from "@/lib/types";
 
 // Display label + ordering for each backend "type" the cards group by. Keys are
 // the normalized BackendType (cloud.normalizeEngine); "" is the cloud-only
@@ -68,6 +68,7 @@ export function ModelPickerDialog({
   open,
   onOpenChange,
   mode,
+  paymentMode,
   catalog,
   customModels,
   activeCode,
@@ -79,6 +80,8 @@ export function ModelPickerDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "local" | "cloud";
+  /** Active cloud payment method — decides whether cost shows as credits or USD. */
+  paymentMode: PaymentMode;
   catalog: ModelInfo[];
   customModels: ModelInfo[];
   activeCode: string | null;
@@ -216,6 +219,7 @@ export function ModelPickerDialog({
                       key={m.modelCode}
                       m={m}
                       isCloud={isCloud}
+                      paymentMode={paymentMode}
                       active={m.modelCode === activeCode}
                       disabled={busy}
                       onPick={() => onPick(m)}
@@ -260,6 +264,7 @@ function Chip({
 function ModelCard({
   m,
   isCloud,
+  paymentMode,
   active,
   disabled,
   onPick,
@@ -267,6 +272,7 @@ function ModelCard({
 }: {
   m: ModelInfo;
   isCloud: boolean;
+  paymentMode: PaymentMode;
   active: boolean;
   disabled: boolean;
   onPick: () => void;
@@ -302,7 +308,9 @@ function ModelCard({
           </div>
           {isCloud && m.cost > 0 && (
             <Badge className="bg-background/85 text-foreground absolute right-1.5 bottom-1.5">
-              {t("modelPicker.cost", { cost: m.cost })}
+              {paymentMode === "x402"
+                ? t("modelPicker.costUsd", { usd: creditsToUSD(m.cost) })
+                : t("modelPicker.cost", { cost: m.cost })}
             </Badge>
           )}
         </div>

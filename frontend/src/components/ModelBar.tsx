@@ -173,6 +173,7 @@ export function ModelBar({
         open={pickerOpen}
         onOpenChange={onPickerOpenChange}
         mode={mode}
+        paymentMode={settings?.paymentMode === "x402" ? "x402" : "bearer"}
         catalog={isCloud ? cloudModels : localModels}
         customModels={customModels}
         activeCode={activeCode}

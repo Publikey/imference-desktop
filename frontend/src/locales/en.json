@@ -99,7 +99,8 @@
     "engineError": "Local engine error — see Logs",
     "startEngine": "Start the local engine to generate",
     "pickModel": "Pick a model above",
-    "preparing": "Preparing {{name}}"
+    "preparing": "Preparing {{name}}",
+    "usdPerRun": "{{name}} · ${{usd}} / run"
   },
   "formats": {
     "square": "Square",
@@ -231,7 +232,8 @@
     "removeTitle": "Remove from list (the file is not deleted)",
     "removeAria": "Remove custom model",
     "typeCloudApi": "Cloud API",
-    "typeOther": "Other"
+    "typeOther": "Other",
+    "costUsd": "${{usd}}"
   },
   "customModel": {
     "title": "Add custom model",
@@ -357,7 +359,7 @@
     "loading": "Loading wallet…",
     "title": "Wallet (Base mainnet · USDC)",
     "keychainNote": "This wallet's private key lives in your OS keychain on this machine (Windows Credential Manager / macOS login keychain). Treat it as a burner: only fund what you're OK losing. Use \"Export private key\" to back it up before relying on it.",
-    "intro": "x402 needs an EVM wallet on Base mainnet to pay per generation (0.05 USDC per image). Recommended: generate a burner wallet here and fund it with a few dollars from your MetaMask.",
+    "intro": "x402 needs an EVM wallet on Base mainnet to pay per generation (cost varies by model — shown on each cloud model). Recommended: generate a burner wallet here and fund it with a few dollars from your MetaMask.",
     "generate": "Generate new wallet",
     "importExisting": "Import existing private key",
     "address": "Address",

@@ -98,7 +98,8 @@
     "engineError": "本地引擎出错 — 请查看日志",
     "startEngine": "启动本地引擎后即可生成",
     "pickModel": "请在上方选择模型",
-    "preparing": "正在准备 {{name}}"
+    "preparing": "正在准备 {{name}}",
+    "usdPerRun": "{{name}} · ${{usd}} / 次"
   },
   "formats": {
     "square": "方形",
@@ -228,7 +229,8 @@
     "removeTitle": "从列表中移除（不会删除文件）",
     "removeAria": "移除自定义模型",
     "typeCloudApi": "云端 API",
-    "typeOther": "其他"
+    "typeOther": "其他",
+    "costUsd": "${{usd}}"
   },
   "customModel": {
     "title": "添加自定义模型",
@@ -354,7 +356,7 @@
     "loading": "正在加载钱包…",
     "title": "钱包（Base 主网 · USDC）",
     "keychainNote": "该钱包的私钥保存在本机的系统密钥库中（Windows 凭据管理器 / macOS 登录钥匙串）。请将其视为一次性钱包：只存入你可以承受损失的金额。在依赖它之前，请先用“导出私钥”进行备份。",
-    "intro": "x402 需要一个 Base 主网上的 EVM 钱包来按次付费（每张图 0.05 USDC）。建议：在此生成一个一次性钱包，再从你的 MetaMask 转入几美元。",
+    "intro": "x402 需要一个 Base 主网上的 EVM 钱包来按次付费（费用因模型而异 —— 在每个云端模型上标注）。建议：在此生成一个一次性钱包，再从你的 MetaMask 转入几美元。",
     "generate": "生成新钱包",
     "importExisting": "导入已有私钥",
     "address": "地址",

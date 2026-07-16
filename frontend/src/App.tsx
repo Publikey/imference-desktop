@@ -185,9 +185,19 @@ function readFileAsDataURL(file: File): Promise<string> {
 const DRAG_SRC = "application/x-imference-src";
 const DRAG_NAME = "application/x-imference-name";
 
+// Set for the lifetime of a gallery-tile drag (dragstart → dragend). WebKit
+// (WKWebView, the macOS app's engine) hides custom dataTransfer types during
+// `dragover` — "protected drag data" — so a gallery image, whose drag carries
+// only our custom types (no OS "Files"), can't be recognised mid-drag by types
+// alone, and the Create panel never arms its drop zone. This flag lets us detect
+// an in-app image drag regardless of what the webview exposes.
+let imageDragActive = false;
+
 // True when a drag carries something we can turn into an img2img source (an OS
-// image file or a gallery tile). Only `types` are readable during dragover.
+// image file or a gallery tile). During `dragover` only `types` are readable —
+// and WebKit may not expose our custom ones — so we also trust the drag flag.
 function dragHasImage(dt: DataTransfer | null): boolean {
+  if (imageDragActive) return true;
   if (!dt) return false;
   const types = Array.from(dt.types);
   return types.includes("Files") || types.includes(DRAG_SRC) || types.includes(DRAG_NAME);
@@ -2286,6 +2296,10 @@ function Gallery({
     }
     if (name) e.dataTransfer.setData(DRAG_NAME, name);
     e.dataTransfer.effectAllowed = "copyMove";
+    // Arm the Create panel's drop zone independently of the webview exposing our
+    // custom types mid-drag (WebKit doesn't). Cleared when the drag ends.
+    imageDragActive = true;
+    window.addEventListener("dragend", () => { imageDragActive = false; }, { once: true });
   }, []);
 
   const openMenu = useCallback((e: React.MouseEvent, target: TileTarget) => {

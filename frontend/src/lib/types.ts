@@ -183,6 +183,12 @@ export type SavedImage = {
   height: number;
   /** Generation metadata from the sidecar JSON. Absent for pre-feature images. */
   meta?: GenerationMeta | null;
+  /**
+   * Runtime-only in-memory bytes (data-URL) for an image merged from a just-
+   * finished generation — lets its tile render instantly without a disk read.
+   * Never sent by the backend; absent for images loaded from the folder.
+   */
+  src?: string;
 };
 
 /** How an image was generated — from the "<image>.json" sidecar. */

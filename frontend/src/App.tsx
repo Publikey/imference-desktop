@@ -1955,6 +1955,12 @@ function Gallery({
   savedRef.current = saved;
   const jobsRef = useRef<Job[]>(jobs);
   jobsRef.current = jobs;
+  // Disk-pagination offset, tracked separately from `saved.length` because we
+  // also PREPEND freshly-generated images (below) — using saved.length as the
+  // offset would then skip disk rows.
+  const diskCountRef = useRef(0);
+  // Session jobs already folded into `saved`, so we don't merge them twice.
+  const mergedRef = useRef<Set<string>>(new Set());
 
   const refreshFacets = useCallback(() => {
     void api.galleryFacets().then(setFacets).catch(() => {});
@@ -1966,8 +1972,9 @@ function Gallery({
     loadingRef.current = true;
     setLoading(true);
     api
-      .listSavedImages(savedRef.current.length, GALLERY_PAGE, filter)
+      .listSavedImages(diskCountRef.current, GALLERY_PAGE, filter)
       .then((page) => {
+        diskCountRef.current += page.length;
         setSaved((cur) => {
           const seen = new Set(cur.map((x) => x.name));
           return [...cur, ...page.filter((p) => !seen.has(p.name))];
@@ -1984,12 +1991,45 @@ function Gallery({
   // Initial load + reset-and-reload whenever the filter changes.
   useEffect(() => {
     savedRef.current = [];
+    diskCountRef.current = 0;
     setSaved([]);
     setDone(false);
     loadingRef.current = false;
     loadMore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  // Fold freshly-finished session generations into the gallery as real saved
+  // images (the Activity panel already covers live progress, so the gallery no
+  // longer shows transient session tiles). Prepended newest-first with their
+  // in-memory bytes so they appear instantly; a later disk page dedupes them.
+  useEffect(() => {
+    const fresh: SavedImage[] = [];
+    for (const j of jobs) {
+      if (mergedRef.current.has(j.id)) continue;
+      const img = j.image;
+      if (!img?.savedPath) continue; // save failed → only visible in Activity
+      mergedRef.current.add(j.id);
+      const m = img.meta;
+      fresh.push({
+        name: baseName(img.savedPath),
+        source: img.source,
+        seed: img.seed ?? m?.seed ?? 0,
+        savedPath: img.savedPath,
+        width: m?.width ?? 0,
+        height: m?.height ?? 0,
+        meta: m,
+        src: img.imageBase64,
+      });
+    }
+    if (fresh.length) {
+      setSaved((cur) => {
+        const seen = new Set(cur.map((s) => s.name));
+        const add = fresh.filter((s) => !seen.has(s.name)).reverse();
+        return add.length ? [...add, ...cur] : cur;
+      });
+    }
+  }, [jobs]);
 
   // Infinite scroll: load the next page as the sentinel nears the viewport.
   useEffect(() => {
@@ -2161,36 +2201,23 @@ function Gallery({
     startDrag,
   };
 
-  // Build the tile list (session jobs first, then saved) + the parallel viewer
-  // sequence (same order) whose index every tile, the menu, and the lightbox
-  // share. Tiles are then spread across `cols` columns round-robin so the reading
-  // order is LEFT-TO-RIGHT; each column stacks at natural height → true masonry.
+  // Build the tile list + the parallel viewer sequence (same order) whose index
+  // every tile, the menu, and the lightbox share. Tiles are spread across `cols`
+  // columns round-robin so the reading order is LEFT-TO-RIGHT; each column stacks
+  // at natural height → true masonry. Session generations are folded into `saved`
+  // (see the merge effect), so the gallery is a single uniform stream.
   const tiles: { key: string; el: React.ReactElement }[] = [];
   const viewItems: ViewerItem[] = [];
   const pushView = (v: ViewerItem) => {
     viewItems.push(v);
     return viewItems.length - 1;
   };
-  // A freshly-generated image shows as a session JobTile until a reload folds it
-  // into `saved`. Skip the JobTile once its file is already in `saved` (the
-  // SavedTile is the source of truth) so the same image never appears twice.
-  const savedNames = new Set(saved.map((s) => s.name));
-  if (!filtered) {
-    for (const j of jobs) {
-      const img = j.image!;
-      const name = img.savedPath ? baseName(img.savedPath) : null;
-      if (name && savedNames.has(name)) continue; // deduped by the SavedTile
-      const meta = img.meta ?? { prompt: j.prompt, source: img.source, seed: img.seed, createdAt: "" };
-      const index = pushView({ name, savedPath: img.savedPath || undefined, meta, getSrc: async () => img.imageBase64 });
-      tiles.push({ key: j.id, el: <JobTile job={j} index={index} name={name} shared={shared} /> });
-    }
-  }
   for (const g of saved) {
     const index = pushView({
       name: g.name,
       savedPath: g.savedPath || undefined,
       meta: g.meta,
-      getSrc: () => api.getSavedImage(g.name),
+      getSrc: () => (g.src ? Promise.resolve(g.src) : api.getSavedImage(g.name)),
     });
     tiles.push({ key: g.name, el: <SavedTile image={g} index={index} shared={shared} onDelete={deleteOne} /> });
   }
@@ -2450,58 +2477,6 @@ function SelectCheckbox({
   );
 }
 
-// A finished generation from this session (in-flight ones render in the
-// Activity panel; only `status === "done"` jobs reach the gallery).
-function JobTile({
-  job,
-  index,
-  name,
-  shared,
-}: {
-  job: Job;
-  index: number;
-  name: string | null;
-  shared: GalleryShared;
-}) {
-  const { t } = useTranslation();
-  const img = job.image!;
-  const meta = img.meta ?? { prompt: job.prompt, source: img.source, seed: img.seed, createdAt: "" };
-  const selected = !!name && shared.isSelected(name);
-  return (
-    <figure
-      draggable
-      onDragStart={(e) => shared.startDrag(e, name, img.imageBase64)}
-      className={cn(
-        "group animate-in fade-in zoom-in-95 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1 duration-500",
-        selected ? "ring-2 ring-[var(--brand-to)]" : "ring-border/60"
-      )}
-      onClick={(e) => shared.tileClick(e, name, index)}
-      onContextMenu={(e) =>
-        shared.openMenu(e, {
-          index,
-          name,
-          savedPath: img.savedPath || undefined,
-          meta,
-          getSrc: async () => img.imageBase64,
-        })
-      }
-    >
-      {name && (
-        <SelectCheckbox
-          checked={selected}
-          active={shared.selectionActive}
-          onToggle={() => shared.toggle(name, index)}
-        />
-      )}
-      <img src={img.imageBase64} alt={job.prompt} title={job.prompt} className="block w-full" />
-      <figcaption className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
-        <span className="rounded-full bg-white/20 px-1.5 py-0.5 font-medium capitalize">{img.source}</span>
-        <span className="tabular-nums">{t("gallery.seed", { seed: img.seed })}</span>
-      </figcaption>
-    </figure>
-  );
-}
-
 // A saved image from the output folder. Bytes are fetched lazily (base64 over the
 // Wails bridge) only when the tile scrolls into view; its aspect box is reserved
 // from the known dimensions so the masonry lays out any format without jumps.
@@ -2518,11 +2493,14 @@ function SavedTile({
 }) {
   const { t } = useTranslation();
   const ref = useRef<HTMLElement>(null);
-  const [src, setSrc] = useState<string | null>(null);
-  const srcRef = useRef<string | null>(null);
+  // Freshly-merged images carry their bytes in memory (image.src) → render at
+  // once, no disk read; folder images fetch lazily on scroll-in.
+  const [src, setSrc] = useState<string | null>(image.src ?? null);
+  const srcRef = useRef<string | null>(src);
   srcRef.current = src;
 
   useEffect(() => {
+    if (srcRef.current) return; // already have the bytes (fresh image)
     const el = ref.current;
     if (!el) return;
     let fetched = false;

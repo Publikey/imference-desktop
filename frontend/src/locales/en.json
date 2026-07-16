@@ -425,5 +425,26 @@
     "cloudTitle": "Generate in the cloud",
     "cloudHint": "Add an API key or connect a wallet — no install needed.",
     "skip": "Skip for now"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "desc": "Speed up your workflow.",
+    "general": "General",
+    "gallery": "Gallery",
+    "viewer": "Image viewer",
+    "palette": "Command palette",
+    "help": "This sheet",
+    "generate": "Generate",
+    "click": "click",
+    "rightClick": "Right-click",
+    "multiSelect": "Add to selection",
+    "rangeSelect": "Select range",
+    "selectAll": "Select all",
+    "deleteSel": "Delete selected",
+    "clearSel": "Clear selection",
+    "context": "Context menu",
+    "prevNext": "Previous / next",
+    "zoom": "Zoom",
+    "close": "Close"
   }
 }

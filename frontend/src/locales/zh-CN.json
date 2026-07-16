@@ -418,5 +418,26 @@
     "cloudTitle": "在云端生成",
     "cloudHint": "添加 API 密钥或连接钱包 —— 无需安装。",
     "skip": "暂时跳过"
+  },
+  "shortcuts": {
+    "title": "键盘快捷键",
+    "desc": "加快你的工作流程。",
+    "general": "通用",
+    "gallery": "图库",
+    "viewer": "图片查看器",
+    "palette": "命令面板",
+    "help": "本速查表",
+    "generate": "生成",
+    "click": "点击",
+    "rightClick": "右键点击",
+    "multiSelect": "加入选择",
+    "rangeSelect": "范围选择",
+    "selectAll": "全选",
+    "deleteSel": "删除所选",
+    "clearSel": "清除选择",
+    "context": "上下文菜单",
+    "prevNext": "上一张 / 下一张",
+    "zoom": "缩放",
+    "close": "关闭"
   }
 }

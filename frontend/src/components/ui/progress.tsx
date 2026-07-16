@@ -16,7 +16,13 @@ export function ProgressBar({
 }) {
   const determinate = typeof percent === "number" && percent > 0;
   return (
-    <div className={cn("bg-muted w-full overflow-hidden rounded-full", height, className)}>
+    <div
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={determinate ? Math.round(percent!) : undefined}
+      className={cn("bg-muted w-full overflow-hidden rounded-full", height, className)}
+    >
       {determinate ? (
         <div
           className="brand-surface h-full rounded-full transition-[width] duration-300 ease-out"

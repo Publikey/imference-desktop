@@ -7,6 +7,7 @@ import {
   Cpu,
   Loader2,
   ScrollText,
+  Keyboard,
   Sparkles,
   ImageIcon,
   AlertCircle,
@@ -50,6 +51,7 @@ import { LogPanel } from "@/components/LogPanel";
 import { PanelBoard, usePanelLayout } from "@/components/PanelBoard";
 import { QueuePanel } from "@/components/QueuePanel";
 import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
+import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { api } from "@/lib/wails-bridge";
 import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/theme";
@@ -272,6 +274,7 @@ export default function App() {
   // Command palette (⌘K) + the model-picker open state it drives (lifted here so
   // the palette can open the picker, not just ModelBar's own trigger).
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
 
   // Per-step progress is a single global stream (the sidecar runs local jobs
@@ -770,7 +773,7 @@ export default function App() {
   primaryHotkeyRef.current = {
     disabled: primary.disabled,
     onClick: primary.onClick,
-    blocked: paletteOpen || settingsOpen || modelPickerOpen || !!customModelPath || !!lightbox,
+    blocked: paletteOpen || shortcutsOpen || settingsOpen || modelPickerOpen || !!customModelPath || !!lightbox,
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -779,6 +782,12 @@ export default function App() {
         if (s.blocked || s.disabled) return;
         e.preventDefault();
         s.onClick();
+      } else if (e.key === "?" && !primaryHotkeyRef.current.blocked) {
+        // Open the shortcuts sheet — but not while typing in a field.
+        const el = e.target as HTMLElement | null;
+        if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+        e.preventDefault();
+        setShortcutsOpen(true);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -903,6 +912,7 @@ export default function App() {
 
     cmds.push({ id: "settings", group: gApp, label: t("palette.settings"), icon: <Settings />, keywords: "preferences", run: () => openSettings() });
     cmds.push({ id: "logs", group: gApp, label: t("palette.logs"), icon: <ScrollText />, keywords: "console debug", run: () => setLogsOpen((o) => !o) });
+    cmds.push({ id: "shortcuts", group: gApp, label: t("shortcuts.title"), icon: <Keyboard />, keywords: "keyboard keys help", run: () => setShortcutsOpen(true) });
 
     return cmds;
   }, [
@@ -1133,6 +1143,7 @@ export default function App() {
       />
       <LogPanel open={logsOpen} onOpenChange={setLogsOpen} />
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} commands={commands} />
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 }

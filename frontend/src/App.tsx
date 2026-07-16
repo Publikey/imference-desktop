@@ -38,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { SettingsDialog } from "@/components/SettingsDialog";
@@ -2559,19 +2560,14 @@ function FacetSelect({
 }) {
   const { t } = useTranslation();
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="border-input bg-background h-8 max-w-40 rounded-md border px-2 text-xs"
-      aria-label={label}
-    >
+    <Select size="sm" value={value} onChange={onChange} className="max-w-40" aria-label={label}>
       <option value="">{t("gallery.filterAll", { label })}</option>
       {facets.map((f) => (
         <option key={f.value} value={f.value}>
           {f.label} ({f.count})
         </option>
       ))}
-    </select>
+    </Select>
   );
 }
 

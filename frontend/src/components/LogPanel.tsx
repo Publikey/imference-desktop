@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Trash2, Pause, Play, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
 import type { LogEntry, LogLevel } from "@/lib/types";
@@ -175,21 +176,21 @@ export function LogPanel({ open, onOpenChange }: Props) {
 
       <div className="flex items-center gap-2 border-b px-4 py-2 text-xs">
         <label className="text-muted-foreground">{t("logs.levelFilter")}</label>
-        <LogSelect value={minLevel} onChange={(v) => setMinLevel(v as LogLevel)}>
+        <Select size="sm" value={minLevel} onChange={(v) => setMinLevel(v as LogLevel)}>
           <option value="trace">trace</option>
           <option value="info">info</option>
           <option value="warn">warn</option>
           <option value="error">error</option>
-        </LogSelect>
+        </Select>
         <label className="text-muted-foreground ml-3">{t("logs.sourceFilter")}</label>
-        <LogSelect value={sourceFilter} onChange={setSourceFilter}>
+        <Select size="sm" value={sourceFilter} onChange={setSourceFilter}>
           <option value="">{t("logs.allSources")}</option>
           {sources.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
           ))}
-        </LogSelect>
+        </Select>
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto font-mono text-xs">
@@ -201,31 +202,6 @@ export function LogPanel({ open, onOpenChange }: Props) {
       </div>
       </div>
     </>
-  );
-}
-
-// A styled select matching the app's control language (native <select> chrome
-// removed, custom border + chevron), used for the level/source filters.
-function LogSelect({
-  value,
-  onChange,
-  children,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="relative inline-flex">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="border-input bg-background hover:border-primary/40 focus-visible:ring-[var(--brand-from)]/30 h-7 appearance-none rounded-md border pl-2.5 pr-7 text-xs transition-colors outline-none focus-visible:ring-2"
-      >
-        {children}
-      </select>
-      <ChevronDown className="text-muted-foreground pointer-events-none absolute right-1.5 top-1/2 size-3.5 -translate-y-1/2" />
-    </div>
   );
 }
 

@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { WalletSection } from "@/components/WalletSection";
 import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
@@ -330,14 +331,15 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             {pane === "language" && (
               <div className="bg-card grid gap-2 rounded-2xl border p-4 shadow-sm">
                 <Label htmlFor="lang">{t("settings.language")}</Label>
-                <select
+                <Select
                   id="lang"
+                  fullWidth
+                  className="max-w-xs"
                   value={langChoice}
-                  onChange={(e) => {
-                    setLangChoice(e.target.value);
-                    setLanguage(e.target.value);
+                  onChange={(v) => {
+                    setLangChoice(v);
+                    setLanguage(v);
                   }}
-                  className="border-input bg-background h-9 w-full max-w-xs rounded-md border px-2 text-sm"
                 >
                   <option value="">{t("settings.languageSystem")}</option>
                   {SUPPORTED_LANGUAGES.map((l) => (
@@ -345,7 +347,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                       {l.label}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <p className="text-muted-foreground text-xs">{t("settings.languageHint")}</p>
               </div>
             )}

@@ -185,7 +185,9 @@
     "ctxDelete": "删除",
     "clearFilters": "清除筛选",
     "deleteTitle_other": "删除 {{count}} 张图片？",
-    "deleteAction": "删除"
+    "deleteAction": "删除",
+    "lbNav": "浏览",
+    "lbZoom": "点击图片放大"
   },
   "meta": {
     "model": "模型",

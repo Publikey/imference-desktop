@@ -190,7 +190,9 @@
     "clearFilters": "Clear filters",
     "deleteTitle_one": "Delete image?",
     "deleteTitle_other": "Delete {{count}} images?",
-    "deleteAction": "Delete"
+    "deleteAction": "Delete",
+    "lbNav": "Navigate",
+    "lbZoom": "Click image to zoom"
   },
   "meta": {
     "model": "Model",

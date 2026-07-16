@@ -2967,6 +2967,10 @@ function Lightbox({
   itemsRef.current = items;
   const [src, setSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Click-to-zoom: a 2× magnifier whose focus follows the cursor. Reset on nav.
+  const [zoom, setZoom] = useState(false);
+  const [origin, setOrigin] = useState("50% 50%");
+  useEffect(() => setZoom(false), [index]);
 
   const total = items.length;
   const current = items[index];
@@ -3066,7 +3070,7 @@ function Lightbox({
         className="flex max-h-full w-full max-w-6xl flex-col items-center gap-4 md:flex-row md:items-stretch"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative flex min-h-0 flex-1 items-center justify-center">
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
           {loading && !src && (
             // A dimensioned placeholder (from the known aspect) so the frame
             // doesn't jump when the full image resolves.
@@ -3081,11 +3085,41 @@ function Lightbox({
             <img
               src={src}
               alt=""
-              className="animate-in fade-in max-h-[85vh] min-h-0 rounded-xl object-contain shadow-2xl duration-200"
+              draggable={false}
+              onClick={(e) => { e.stopPropagation(); setZoom((z) => !z); }}
+              onMouseMove={(e) => {
+                if (!zoom) return;
+                const r = e.currentTarget.getBoundingClientRect();
+                setOrigin(`${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`);
+              }}
+              onMouseLeave={() => setOrigin("50% 50%")}
+              style={{ transformOrigin: origin, transform: zoom ? "scale(2)" : "scale(1)" }}
+              className={cn(
+                "animate-in fade-in zoom-in-95 max-h-[85vh] min-h-0 rounded-xl object-contain shadow-2xl transition-transform duration-150",
+                zoom ? "cursor-zoom-out" : "cursor-zoom-in"
+              )}
             />
           )}
         </div>
         {meta && <MetaPanel meta={meta} />}
+      </div>
+
+      {/* Keyboard-hint footer — discoverable navigation + zoom affordance. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center">
+        <div className="flex items-center gap-3 rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/70 backdrop-blur">
+          {total > 1 && (
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-white/15 px-1">←</kbd>
+              <kbd className="rounded bg-white/15 px-1">→</kbd>
+              {t("gallery.lbNav")}
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <kbd className="rounded bg-white/15 px-1">Esc</kbd>
+            {t("common.close")}
+          </span>
+          <span className="hidden sm:inline">{t("gallery.lbZoom")}</span>
+        </div>
       </div>
     </div>
   );

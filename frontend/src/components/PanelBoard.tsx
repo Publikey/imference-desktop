@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronsLeftRight, ChevronsRightLeft, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,13 +19,16 @@ const DEFAULT_COLUMNS: PanelColumns = [["create"], ["queue"], ["gallery"]];
 const STORAGE_KEY = "imference.panels.v2";
 const LEGACY_KEY = "imference.panels.v1"; // flat order → migrate to one-per-column
 
-// Static width classes (Tailwind needs the literals in source). Sidebar columns
-// take the widest panel they hold; the gallery column grows.
-const WIDTH_CLASS: Record<number, string> = { 18: "xl:w-[18rem]", 25: "xl:w-[25rem]" };
+// Manual-resize bounds for a sidebar column (px). The gallery column always
+// grows to fill the rest, so it isn't width-controlled.
+const MIN_COL_PX = 240;
+const MAX_COL_PX = 640;
 
 type PersistedLayout = {
   columns: PanelColumns;
   collapsed: Partial<Record<PanelId, boolean>>;
+  /** Per-panel manual width override in px (drag-to-resize). */
+  widths: Partial<Record<PanelId, number>>;
 };
 
 // A stored layout is valid only if its columns are a partition of the exact
@@ -47,20 +50,20 @@ function loadLayout(): PersistedLayout {
     if (raw) {
       const p = JSON.parse(raw) as Partial<PersistedLayout>;
       const columns = validColumns(p.columns) ? (p.columns as PanelColumns) : DEFAULT_COLUMNS;
-      return { columns, collapsed: p.collapsed ?? {} };
+      return { columns, collapsed: p.collapsed ?? {}, widths: p.widths ?? {} };
     }
     // Migrate a v1 flat order (each panel becomes its own column).
     const legacy = localStorage.getItem(LEGACY_KEY);
     if (legacy) {
       const p = JSON.parse(legacy) as { order?: PanelId[]; collapsed?: Record<string, boolean> };
       if (Array.isArray(p.order) && validColumns(p.order.map((id) => [id]))) {
-        return { columns: p.order.map((id) => [id]), collapsed: p.collapsed ?? {} };
+        return { columns: p.order.map((id) => [id]), collapsed: p.collapsed ?? {}, widths: {} };
       }
     }
   } catch {
     // corrupted storage → defaults
   }
-  return { columns: DEFAULT_COLUMNS, collapsed: {} };
+  return { columns: DEFAULT_COLUMNS, collapsed: {}, widths: {} };
 }
 
 /** Panel arrangement state (2D columns), persisted to localStorage. */
@@ -84,8 +87,19 @@ export function usePanelLayout() {
       setLayout((l) => ({ ...l, collapsed: { ...l.collapsed, [id]: !l.collapsed[id] } })),
     []
   );
+  const setWidths = useCallback(
+    (widths: Partial<Record<PanelId, number>>) => setLayout((l) => ({ ...l, widths })),
+    []
+  );
 
-  return { columns: layout.columns, collapsed: layout.collapsed, setColumns, toggleCollapsed };
+  return {
+    columns: layout.columns,
+    collapsed: layout.collapsed,
+    widths: layout.widths,
+    setColumns,
+    toggleCollapsed,
+    setWidths,
+  };
 }
 
 export type PanelSpec = {
@@ -163,16 +177,83 @@ export function PanelBoard({
   onColumnsChange,
   collapsed,
   onToggleCollapsed,
+  widths,
+  onWidthsChange,
   panels,
 }: {
   columns: PanelColumns;
   onColumnsChange: (c: PanelColumns) => void;
   collapsed: Partial<Record<PanelId, boolean>>;
   onToggleCollapsed: (id: PanelId) => void;
+  widths: Partial<Record<PanelId, number>>;
+  onWidthsChange: (w: Partial<Record<PanelId, number>>) => void;
   panels: Record<PanelId, PanelSpec>;
 }) {
+  const { t } = useTranslation();
   const [dragId, setDragId] = useState<PanelId | null>(null);
+  const [resizing, setResizing] = useState(false);
   const registerNode = usePanelFlip(JSON.stringify(columns) + JSON.stringify(collapsed), dragId);
+
+  // A non-grow column's width: the widest manual override among its panels, else
+  // its spec default (rem → px). The gallery column grows and isn't sized here.
+  const colWidthPx = useCallback(
+    (col: PanelId[]) =>
+      Math.max(...col.map((id) => widths[id] ?? (panels[id].width ?? 25) * 16)),
+    [widths, panels]
+  );
+
+  // Drag the divider between columns ci and ci+1. Resizes the non-grow neighbour
+  // (prefer the left column); the gallery flexes to absorb the change. Live —
+  // every pointermove writes the new width (persisted on release).
+  const startResize = useCallback(
+    (e: React.PointerEvent, ci: number) => {
+      const left = columns[ci];
+      const right = columns[ci + 1];
+      const leftGrow = left?.some((id) => panels[id].grow);
+      const rightGrow = right?.some((id) => panels[id].grow);
+      let target: PanelId[];
+      let sign: number;
+      if (left && !leftGrow) {
+        target = left;
+        sign = 1; // drag right → widen the left column
+      } else if (right && !rightGrow) {
+        target = right;
+        sign = -1; // left is the gallery → drag right shrinks the right column
+      } else {
+        return; // both sides flexible — nothing to size
+      }
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = colWidthPx(target);
+      setResizing(true);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      const onMove = (ev: PointerEvent) => {
+        const w = Math.min(MAX_COL_PX, Math.max(MIN_COL_PX, startW + (ev.clientX - startX) * sign));
+        const next = { ...widths };
+        for (const id of target) next[id] = w;
+        onWidthsChange(next);
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        setResizing(false);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [columns, panels, widths, colWidthPx, onWidthsChange]
+  );
+
+  const canResize = (ci: number) => {
+    const left = columns[ci];
+    const right = columns[ci + 1];
+    const leftFixed = left && !left.some((id) => panels[id].grow);
+    const rightFixed = right && !right.some((id) => panels[id].grow);
+    return !!(leftFixed || rightFixed);
+  };
 
   // Live 2D reorder while dragging: place `from` relative to the hovered `to`.
   const moveTo = useCallback(
@@ -198,39 +279,78 @@ export function PanelBoard({
   );
 
   return (
-    <div className="flex w-full flex-col gap-6 xl:flex-row xl:items-start xl:gap-5">
+    <div className="flex w-full flex-col gap-6 xl:flex-row xl:items-start xl:gap-2">
       {columns.map((col, ci) => {
         const grow = col.some((id) => panels[id].grow);
         const rail = col.length === 1 && !!collapsed[col[0]] && !!panels[col[0]].collapsible;
-        const width = Math.max(...col.map((id) => panels[id].width ?? 25));
+        // A collapsed rail keeps its fixed slim width; otherwise the manual /
+        // default width drives the column via a CSS var (only applied at xl).
         const columnClass = cn(
           "flex flex-col gap-4",
           grow
             ? "min-w-0 xl:flex-1"
             : rail
               ? "mx-auto xl:mx-0 xl:sticky xl:top-4 xl:w-12 xl:shrink-0"
-              : cn(
-                  "mx-auto w-full max-w-2xl xl:mx-0 xl:max-w-none xl:shrink-0 xl:sticky xl:top-4",
-                  WIDTH_CLASS[width] ?? WIDTH_CLASS[25]
-                )
+              : "mx-auto w-full max-w-2xl xl:mx-0 xl:max-w-none xl:w-[var(--col-w)] xl:shrink-0 xl:sticky xl:top-4"
         );
+        const style =
+          grow || rail
+            ? undefined
+            : ({ "--col-w": `${colWidthPx(col)}px` } as React.CSSProperties);
         return (
-          <div key={col.join("-") || ci} className={columnClass}>
-            {col.map((id) => (
-              <Panel
-                key={id}
-                id={id}
-                spec={panels[id]}
-                collapsed={!!collapsed[id]}
-                rail={rail}
-                onToggleCollapsed={() => onToggleCollapsed(id)}
-                dragId={dragId}
-                setDragId={setDragId}
-                moveTo={moveTo}
-                registerNode={registerNode}
-              />
-            ))}
-          </div>
+          <Fragment key={col.join("-") || ci}>
+            <div className={columnClass} style={style}>
+              {col.map((id) => (
+                <Panel
+                  key={id}
+                  id={id}
+                  spec={panels[id]}
+                  collapsed={!!collapsed[id]}
+                  rail={rail}
+                  onToggleCollapsed={() => onToggleCollapsed(id)}
+                  dragId={dragId}
+                  setDragId={setDragId}
+                  moveTo={moveTo}
+                  registerNode={registerNode}
+                />
+              ))}
+            </div>
+            {/* Resize divider — only between columns, only on the desktop row
+                layout, and only when a neighbour has a fixed (non-grow) width. */}
+            {ci < columns.length - 1 &&
+              (canResize(ci) ? (
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label={t("panels.resize")}
+                  onPointerDown={(e) => startResize(e, ci)}
+                  onDoubleClick={() => {
+                    // Double-click resets the adjacent fixed column to its default.
+                    const target = columns[ci].some((id) => panels[id].grow)
+                      ? columns[ci + 1]
+                      : columns[ci];
+                    const next = { ...widths };
+                    for (const id of target) delete next[id];
+                    onWidthsChange(next);
+                  }}
+                  className={cn(
+                    "group hidden shrink-0 cursor-col-resize items-center justify-center xl:flex xl:w-2 xl:self-stretch",
+                    resizing && "select-none"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "h-16 w-0.5 rounded-full transition-colors",
+                      resizing
+                        ? "bg-[var(--brand-from)]"
+                        : "bg-border/50 group-hover:bg-[var(--brand-from)]/60"
+                    )}
+                  />
+                </div>
+              ) : (
+                <div className="hidden xl:block xl:w-2 xl:shrink-0" />
+              ))}
+          </Fragment>
         );
       })}
     </div>

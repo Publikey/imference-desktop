@@ -256,7 +256,7 @@ export default function App() {
   // not settings.walletAddress). Drives cloud gating in x402 mode.
   const [walletConfigured, setWalletConfigured] = useState(false);
   // Panel arrangement (Create / Activity / Gallery) — drag-reorderable, persisted.
-  const { columns: panelColumns, collapsed: panelCollapsed, setColumns: setPanelColumns, toggleCollapsed: togglePanelCollapsed } = usePanelLayout();
+  const { columns: panelColumns, collapsed: panelCollapsed, widths: panelWidths, setColumns: setPanelColumns, toggleCollapsed: togglePanelCollapsed, setWidths: setPanelWidths } = usePanelLayout();
   // Fullscreen viewer — shared by the gallery and the Activity panel.
   const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
   // Command palette (⌘K) + the model-picker open state it drives (lifted here so
@@ -939,6 +939,8 @@ export default function App() {
             onColumnsChange={setPanelColumns}
             collapsed={panelCollapsed}
             onToggleCollapsed={togglePanelCollapsed}
+            widths={panelWidths}
+            onWidthsChange={setPanelWidths}
             panels={{
               create: {
                 title: t("panels.create"),

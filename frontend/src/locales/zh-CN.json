@@ -137,7 +137,8 @@
     "gallery": "画廊",
     "dragToReorder": "拖动以重新排列面板",
     "collapse": "折叠面板",
-    "expand": "展开面板"
+    "expand": "展开面板",
+    "resize": "拖动以调整大小（双击重置）"
   },
   "queue": {
     "empty": "暂无任务",

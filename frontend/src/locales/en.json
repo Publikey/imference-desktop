@@ -138,7 +138,8 @@
     "gallery": "Gallery",
     "dragToReorder": "Drag to rearrange panels",
     "collapse": "Collapse panel",
-    "expand": "Expand panel"
+    "expand": "Expand panel",
+    "resize": "Drag to resize (double-click to reset)"
   },
   "queue": {
     "empty": "Nothing running",

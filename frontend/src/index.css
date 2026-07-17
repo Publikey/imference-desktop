@@ -336,6 +336,43 @@
     }
   }
 
+  /* ActivityDock attention cues — fired for a beat when a run starts, finishes,
+     or errors, so a background event is noticed without being noisy.
+     .dock-pop bounces the pill; .dock-ring blooms a one-shot halo behind it
+     (tinted per event via the inline --dock-ring custom property). */
+  .dock-pop {
+    animation: dock-pop 0.55s var(--ease-spring);
+  }
+  @keyframes dock-pop {
+    0% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.13);
+    }
+    70% {
+      transform: scale(0.98);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  .dock-ring {
+    background: var(--dock-ring, var(--brand-from));
+    opacity: 0.5;
+    animation: dock-ring 0.7s var(--ease-out-expo) forwards;
+  }
+  @keyframes dock-ring {
+    0% {
+      transform: scale(0.96);
+      opacity: 0.5;
+    }
+    100% {
+      transform: scale(1.8);
+      opacity: 0;
+    }
+  }
+
   /* Shared focus ring for bespoke inputs (dims, seed) that don't use the ui/Input
      component — a soft brand halo so keyboard focus is always visible. */
   .field-focus {
@@ -396,6 +433,13 @@
     }
     .toast-in {
       animation: none;
+    }
+    .dock-pop {
+      animation: none;
+    }
+    .dock-ring {
+      animation: none;
+      opacity: 0;
     }
     /* Decorative pulses off; functional spinners (animate-spin) stay — a loading
        spinner is essential feedback, not incidental motion. Hover transforms are

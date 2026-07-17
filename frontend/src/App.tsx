@@ -995,7 +995,10 @@ export default function App() {
                       // (topbar + panel header + sticky top-4), so subtract that
                       // plus breathing room — otherwise the last card (Parameters)
                       // sits flush against / just under the window edge.
-                      "create-surface relative flex flex-col gap-4 p-3 pb-4 xl:max-h-[calc(100vh-9rem)] xl:overflow-y-auto xl:overflow-x-hidden",
+                      // scrollbar-gutter:stable reserves the scrollbar its own lane
+                      // beyond the right padding, so it never clips the cards'
+                      // rounded corners (Windows/WebView2 shows a wide scrollbar).
+                      "create-surface relative flex flex-col gap-4 p-3 pb-4 xl:max-h-[calc(100vh-9rem)] xl:overflow-y-auto xl:overflow-x-hidden xl:[scrollbar-gutter:stable]",
                       dropActive && "create-drop-active"
                     )}
                     data-mode={mode}

@@ -991,7 +991,11 @@ export default function App() {
                   // column is sticky.
                   <div
                     className={cn(
-                      "create-surface relative flex flex-col gap-4 p-3 xl:max-h-[calc(100vh-6.5rem)] xl:overflow-y-auto xl:overflow-x-hidden",
+                      // max-h leaves a bottom gap: the surface starts ~118px down
+                      // (topbar + panel header + sticky top-4), so subtract that
+                      // plus breathing room — otherwise the last card (Parameters)
+                      // sits flush against / just under the window edge.
+                      "create-surface relative flex flex-col gap-4 p-3 pb-4 xl:max-h-[calc(100vh-9rem)] xl:overflow-y-auto xl:overflow-x-hidden",
                       dropActive && "create-drop-active"
                     )}
                     data-mode={mode}

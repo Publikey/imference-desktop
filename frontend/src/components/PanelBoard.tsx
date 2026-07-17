@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, ty
 import { useTranslation } from "react-i18next";
 import { ChevronsLeftRight, ChevronsRightLeft, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { beginPointerDrag } from "@/lib/pointer-drag";
 
 // ---------------------------------------------------------------------------
 // PanelBoard — the main window's panels (Create / Activity / Gallery), arranged
@@ -194,15 +195,6 @@ export function PanelBoard({
   const [resizing, setResizing] = useState(false);
   const registerNode = usePanelFlip(JSON.stringify(columns) + JSON.stringify(collapsed), dragId);
 
-  // Live reorder remounts the dragged panel (its column changes), so the grip's
-  // own `onDragEnd` is often lost — leaving the drop-hint outlines stuck on. A
-  // window-level dragend always clears the drag state (the drop handlers below
-  // also clear it for the common drop-on-a-panel case).
-  useEffect(() => {
-    const clear = () => setDragId(null);
-    window.addEventListener("dragend", clear);
-    return () => window.removeEventListener("dragend", clear);
-  }, []);
 
   // A non-grow column's width: the widest manual override among its panels, else
   // its spec default (rem → px). The gallery column grows and isn't sized here.
@@ -288,6 +280,33 @@ export function PanelBoard({
     [columns, onColumnsChange]
   );
 
+  // Reorder via pointer events (not native HTML5 drag): WebKit/WKWebView doesn't
+  // fire drop/dragend reliably for in-page drags, which left the drag state stuck
+  // on. pointerup always fires, so the state always clears. Live reorder is
+  // driven by hit-testing the panel under the cursor (data-panel-id).
+  const startReorder = useCallback(
+    (e: React.PointerEvent, from: PanelId) => {
+      beginPointerDrag(e, {
+        onStart: () => setDragId(from),
+        onMove: (x, y) => {
+          const target = document
+            .elementFromPoint(x, y)
+            ?.closest<HTMLElement>("[data-panel-id]");
+          const to = target?.dataset.panelId as PanelId | undefined;
+          if (!to || to === from) return;
+          const r = target!.getBoundingClientRect();
+          const rx = (x - (r.left + r.width / 2)) / r.width;
+          const ry = (y - (r.top + r.height / 2)) / r.height;
+          const horizontal = window.innerWidth >= 1280 && Math.abs(rx) > Math.abs(ry);
+          const mode: DropMode = horizontal ? (rx < 0 ? "left" : "right") : ry < 0 ? "above" : "below";
+          moveTo(from, to, mode);
+        },
+        onEnd: () => setDragId(null),
+      });
+    },
+    [moveTo]
+  );
+
   return (
     <div className="flex w-full flex-col gap-6 xl:flex-row xl:items-start xl:gap-2">
       {columns.map((col, ci) => {
@@ -322,8 +341,7 @@ export function PanelBoard({
                   rail={rail}
                   onToggleCollapsed={() => onToggleCollapsed(id)}
                   dragId={dragId}
-                  setDragId={setDragId}
-                  moveTo={moveTo}
+                  startReorder={startReorder}
                   registerNode={registerNode}
                 />
               ))}
@@ -377,8 +395,7 @@ function Panel({
   rail,
   onToggleCollapsed,
   dragId,
-  setDragId,
-  moveTo,
+  startReorder,
   registerNode,
 }: {
   id: PanelId;
@@ -387,39 +404,17 @@ function Panel({
   rail: boolean; // collapsed AND alone in its column → slim vertical rail
   onToggleCollapsed: () => void;
   dragId: PanelId | null;
-  setDragId: (id: PanelId | null) => void;
-  moveTo: (from: PanelId, to: PanelId, mode: DropMode) => void;
+  startReorder: (e: React.PointerEvent, id: PanelId) => void;
   registerNode: (id: PanelId, el: HTMLElement | null) => void;
 }) {
   const { t } = useTranslation();
   const dragging = dragId === id;
   const droppable = dragId !== null && dragId !== id;
 
-  const onDragOver = (e: React.DragEvent) => {
-    if (!droppable) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    const r = e.currentTarget.getBoundingClientRect();
-    // Dominant-axis intent: nearer the top/bottom edge → stack in this column;
-    // nearer the left/right edge → break out into a neighbouring column. Below
-    // xl the board is a single column, so only vertical stacking applies.
-    const rx = (e.clientX - (r.left + r.width / 2)) / r.width;
-    const ry = (e.clientY - (r.top + r.height / 2)) / r.height;
-    const horizontal = window.innerWidth >= 1280 && Math.abs(rx) > Math.abs(ry);
-    const mode: DropMode = horizontal ? (rx < 0 ? "left" : "right") : ry < 0 ? "above" : "below";
-    moveTo(dragId!, id, mode);
-  };
-
   const grip = (
     <button
       type="button"
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", id); // some webviews need data to start
-        setDragId(id);
-      }}
-      onDragEnd={() => setDragId(null)}
+      onPointerDown={(e) => startReorder(e, id)}
       title={t("panels.dragToReorder")}
       aria-label={t("panels.dragToReorder")}
       className="panel-grip text-muted-foreground/40 hover:text-muted-foreground -ml-1 rounded p-0.5 transition-colors"
@@ -434,8 +429,7 @@ function Panel({
       <section
         ref={(el) => registerNode(id, el)}
         className={cn("shrink-0 transition-opacity", dragging && "panel-dragging", droppable && "panel-drop-hint")}
-        onDragOver={onDragOver}
-        onDrop={(e) => { e.preventDefault(); setDragId(null); }}
+        data-panel-id={id}
         aria-label={spec.title}
       >
         <button
@@ -465,8 +459,7 @@ function Panel({
       <section
         ref={(el) => registerNode(id, el)}
         className={cn("min-w-0 transition-opacity", dragging && "panel-dragging", droppable && "panel-drop-hint")}
-        onDragOver={onDragOver}
-        onDrop={(e) => { e.preventDefault(); setDragId(null); }}
+        data-panel-id={id}
         aria-label={spec.title}
       >
         <div className="flex items-center gap-1.5 px-1">
@@ -494,8 +487,7 @@ function Panel({
     <section
       ref={(el) => registerNode(id, el)}
       className={cn("flex min-w-0 flex-col gap-3 transition-opacity", dragging && "panel-dragging", droppable && "panel-drop-hint")}
-      onDragOver={onDragOver}
-      onDrop={(e) => { e.preventDefault(); setDragId(null); }}
+      data-panel-id={id}
       aria-label={spec.title}
     >
       <header className="flex h-6 select-none items-center gap-1.5 px-1">

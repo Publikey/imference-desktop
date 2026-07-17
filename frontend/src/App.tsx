@@ -57,6 +57,7 @@ import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/theme";
 import logoUrl from "./assets/logo.svg";
 import { installLogCapture } from "@/lib/log-capture";
+import { beginPointerDrag } from "@/lib/pointer-drag";
 import { cn, creditsToUSD } from "@/lib/utils";
 import type {
   AppSettings,
@@ -181,28 +182,20 @@ function readFileAsDataURL(file: File): Promise<string> {
   });
 }
 
-// Custom drag types a gallery tile carries so a drop onto the Create panel can
-// resolve back to an image (inline data-URL when we already have it, else the
-// saved-file name to fetch).
-const DRAG_SRC = "application/x-imference-src";
-const DRAG_NAME = "application/x-imference-name";
+// In-app drags (gallery tile → Create panel for img2img) use POINTER events, not
+// native HTML5 drag — WebKit/WKWebView (the macOS app's engine) doesn't fire
+// drop/dragend reliably for in-page drags. The native path below handles only
+// OS file drops (dragging an image file in from Finder), where "Files" is always
+// exposed. See lib/pointer-drag.ts and startImageDrag.
 
-// The in-app image drag currently in flight (a gallery tile), set at dragstart
-// and cleared at dragend. WebKit (WKWebView, the macOS app's engine) restricts
-// custom dataTransfer types to a whitelist and withholds them during BOTH
-// `dragover` (protected drag data) AND `drop` — so a gallery image, whose drag
-// carries only our custom types (no OS "Files"), can neither be recognised
-// mid-drag nor read on drop through the DataTransfer. Carrying the payload in
-// this module variable sidesteps the DataTransfer entirely for in-app drags.
-let dragImage: { name: string | null; getSrc: () => Promise<string> } | null = null;
+// Set true for the moment after a pointer image-drag ends, so the click that may
+// follow pointerup doesn't also open the lightbox / toggle selection.
+let suppressTileClick = false;
 
-// True when a drag can become an img2img source: an in-app gallery tile (module
-// var) or an OS image file (the "Files" type, which every webview exposes).
+// True when a native (OS-originated) drag carries an image file we can drop.
 function dragHasImage(dt: DataTransfer | null): boolean {
-  if (dragImage) return true;
   if (!dt) return false;
-  const types = Array.from(dt.types);
-  return types.includes("Files") || types.includes(DRAG_SRC) || types.includes(DRAG_NAME);
+  return Array.from(dt.types).includes("Files");
 }
 
 // defaultParams seeds the tweakable params from a model's catalog config.
@@ -700,8 +693,12 @@ export default function App() {
     [activeModel]
   );
 
-  // Drop-an-image-to-img2img target (the Create panel). Only image drags arm it.
+  // Create panel = img2img drop target. Highlighted (dropActive) both by a native
+  // OS-file drag over it and by an in-app pointer image-drag (startImageDrag).
   const [dropActive, setDropActive] = useState(false);
+  // The in-app pointer image-drag ghost (a gallery tile following the cursor).
+  const [imageDrag, setImageDrag] = useState<{ src: string | null; x: number; y: number } | null>(null);
+
   const onPanelDragOver = useCallback((e: React.DragEvent) => {
     if (!dragHasImage(e.dataTransfer)) return;
     e.preventDefault();
@@ -713,32 +710,43 @@ export default function App() {
     if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setDropActive(false);
   }, []);
+  // Native drop path — OS image files dragged in from Finder only.
   const onPanelDrop = useCallback(
     (e: React.DragEvent) => {
       if (!dragHasImage(e.dataTransfer)) return;
       e.preventDefault();
       setDropActive(false);
-      // In-app gallery drag → use the module-var payload (works even when the
-      // webview won't hand back custom DataTransfer types on drop).
-      if (dragImage) {
-        const getSrc = dragImage.getSrc;
-        void useAsImg2img(getSrc);
-        return;
-      }
-      const dt = e.dataTransfer;
-      const file = Array.from(dt.files).find((f) => f.type.startsWith("image/"));
-      if (file) {
-        void readFileAsDataURL(file).then((src) => void useAsImg2img(async () => src));
-        return;
-      }
-      // Fallbacks for webviews that DO expose custom types (Chromium/Edge).
-      const inline = dt.getData(DRAG_SRC);
-      if (inline) {
-        void useAsImg2img(async () => inline);
-        return;
-      }
-      const name = dt.getData(DRAG_NAME);
-      if (name) void useAsImg2img(() => api.getSavedImage(name));
+      const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+      if (file) void readFileAsDataURL(file).then((src) => void useAsImg2img(async () => src));
+    },
+    [useAsImg2img]
+  );
+
+  // In-app image drag (gallery tile → Create panel) via pointer events. A ghost
+  // follows the cursor; the Create panel highlights while hovered; on release
+  // over it, the tile becomes the img2img source. pointerup always fires, so this
+  // is reliable in WKWebView (unlike native drop).
+  const startImageDrag = useCallback(
+    (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null) => {
+      const sx = e.clientX, sy = e.clientY;
+      const overCreate = (x: number, y: number) =>
+        !!document.elementFromPoint(x, y)?.closest(".create-surface");
+      beginPointerDrag(e, {
+        onStart: () => setImageDrag({ src: previewSrc, x: sx, y: sy }),
+        onMove: (x, y) => {
+          setImageDrag((d) => (d ? { ...d, x, y } : d));
+          setDropActive(overCreate(x, y));
+        },
+        onEnd: (x, y, moved) => {
+          if (!moved) return;
+          suppressTileClick = true;
+          window.setTimeout(() => { suppressTileClick = false; }, 0);
+          const drop = overCreate(x, y);
+          setImageDrag(null);
+          setDropActive(false);
+          if (drop) void useAsImg2img(getSrc);
+        },
+      });
     },
     [useAsImg2img]
   );
@@ -1111,6 +1119,7 @@ export default function App() {
                   <Gallery
                     jobs={doneJobs}
                     onUseAsSource={useAsImg2img}
+                    onImageDragStart={startImageDrag}
                     onReuseSettings={reuseSettings}
                     onHideJob={dismissJob}
                   />
@@ -1133,6 +1142,25 @@ export default function App() {
           onReuseSettings={reuseSettings}
           onDelete={() => {}}
         />
+      )}
+
+      {/* Drag ghost — a gallery tile following the cursor during a pointer
+          image-drag toward the Create panel. */}
+      {imageDrag && (
+        <div
+          className="pointer-events-none fixed z-[100] -translate-x-1/2 -translate-y-1/2"
+          style={{ left: imageDrag.x, top: imageDrag.y }}
+        >
+          <div className="size-24 rotate-3 overflow-hidden rounded-xl border-2 border-[var(--brand-from)] opacity-90 shadow-2xl">
+            {imageDrag.src ? (
+              <img src={imageDrag.src} alt="" className="size-full object-cover" />
+            ) : (
+              <div className="bg-muted flex size-full items-center justify-center">
+                <ImageIcon className="text-muted-foreground/50 size-6" />
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       <SettingsDialog
@@ -2122,7 +2150,7 @@ type GalleryShared = {
   isSelected: (name: string) => boolean;
   tileClick: (e: React.MouseEvent, name: string | null, index: number) => void;
   toggle: (name: string | null, index: number) => void;
-  startDrag: (e: React.DragEvent, name: string | null, src: string | null) => void;
+  startImageDrag: (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null) => void;
 };
 
 // Basename of a saved path, for matching a session job to its file on disk.
@@ -2131,11 +2159,13 @@ const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
 function Gallery({
   jobs,
   onUseAsSource,
+  onImageDragStart,
   onReuseSettings,
   onHideJob,
 }: {
   jobs: Job[];
   onUseAsSource: (getSrc: () => Promise<string>) => void;
+  onImageDragStart: (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
   onHideJob: (id: string) => void;
 }) {
@@ -2329,6 +2359,9 @@ function Gallery({
   // range from the anchor); a plain click opens the fullscreen viewer.
   const tileClick = useCallback(
     (e: React.MouseEvent, name: string | null, index: number) => {
+      // A click that immediately followed a pointer image-drag isn't a real
+      // click — swallow it so the lightbox doesn't open on drop.
+      if (suppressTileClick) return;
       if ((e.metaKey || e.ctrlKey) && name) {
         toggle(name, index);
         return;
@@ -2346,24 +2379,6 @@ function Gallery({
     },
     [toggle, openAt]
   );
-
-  const startDrag = useCallback((e: React.DragEvent, name: string | null, src: string | null) => {
-    if (src) {
-      e.dataTransfer.setData(DRAG_SRC, src);
-      // Let the OS/other apps accept a drop as a real file (Chromium/Edge webviews).
-      e.dataTransfer.setData("DownloadURL", `image/png:${name || "image.png"}:${src}`);
-    }
-    if (name) e.dataTransfer.setData(DRAG_NAME, name);
-    e.dataTransfer.effectAllowed = "copyMove";
-    // Carry the payload in a module var so the Create panel can both arm its drop
-    // zone AND read the image on drop, without depending on the webview exposing
-    // our custom DataTransfer types (WebKit doesn't). Cleared when the drag ends.
-    dragImage = {
-      name,
-      getSrc: () => (src ? Promise.resolve(src) : name ? api.getSavedImage(name) : Promise.resolve("")),
-    };
-    window.addEventListener("dragend", () => { dragImage = null; }, { once: true });
-  }, []);
 
   const openMenu = useCallback((e: React.MouseEvent, target: TileTarget) => {
     e.preventDefault();
@@ -2423,7 +2438,7 @@ function Gallery({
     isSelected: (name) => selected.has(name),
     tileClick,
     toggle,
-    startDrag,
+    startImageDrag: onImageDragStart,
   };
 
   // Build the tile list + the parallel viewer sequence (same order) whose index
@@ -2779,8 +2794,9 @@ function SavedTile({
   return (
     <figure
       ref={ref}
-      draggable
-      onDragStart={(e) => shared.startDrag(e, image.name, srcRef.current)}
+      // Pointer-based drag (not native HTML5) → reliable in WKWebView. A move
+      // past threshold starts the img2img drag; a plain click still opens the tile.
+      onPointerDown={(e) => shared.startImageDrag(e, ensureSrc, srcRef.current)}
       className={cn(
         "rise-in group bg-muted/40 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1 transition-shadow duration-200 hover:shadow-lg",
         selected ? "ring-2 ring-[var(--brand-to)]" : "ring-border/60"
@@ -2801,7 +2817,14 @@ function SavedTile({
       }
     >
       {src ? (
-        <img src={src} alt={image.name} className="animate-in fade-in h-full w-full object-cover duration-300" />
+        // draggable=false: an <img> is natively draggable, which would start a
+        // browser image-drag and cancel our pointer-based img2img drag.
+        <img
+          src={src}
+          alt={image.name}
+          draggable={false}
+          className="animate-in fade-in h-full w-full object-cover duration-300"
+        />
       ) : (
         <Skeleton className="h-full w-full rounded-none" />
       )}

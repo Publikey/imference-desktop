@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronsUpDown, Cloud, Cpu, Download, Loader2 } from "lucide-react";
+import { AlertTriangle, Download, Loader2, RefreshCw, X } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ProgressBar } from "@/components/ui/progress";
 import { ModelPickerDialog, ModelThumb } from "@/components/ModelPickerDialog";
 import type { AppSettings, InstallProgress, ModelInfo } from "@/lib/types";
 
@@ -23,11 +25,17 @@ type Props = {
   onSelectLocal: (m: ModelInfo) => void;
   downloading: boolean;
   progress: InstallProgress | null;
+  // Abort an in-flight local download.
+  onCancelDownload: () => void;
   // Custom user checkpoints: open the add flow (native picker + backend
   // dialog), activate a registered one, or drop one from the registry.
   onAddCustom: () => void;
   onSelectCustom: (m: ModelInfo) => Promise<void>;
   onRemoveCustom: (m: ModelInfo) => void;
+  // Picker open state is controlled by App so the command palette (and later
+  // keyboard shortcuts) can open it too, not just the trigger button.
+  pickerOpen: boolean;
+  onPickerOpenChange: (open: boolean) => void;
 };
 
 // ModelBar — the single model selector for the whole app. Shows the active
@@ -45,9 +53,12 @@ export function ModelBar({
   onSelectLocal,
   downloading,
   progress,
+  onCancelDownload,
   onAddCustom,
   onSelectCustom,
   onRemoveCustom,
+  pickerOpen,
+  onPickerOpenChange,
 }: Props) {
   const { t } = useTranslation();
   const [localModels, setLocalModels] = useState<ModelInfo[]>([]);
@@ -56,11 +67,12 @@ export function ModelBar({
   const [listError, setListError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false); // cloud quick-switch
   const [customError, setCustomError] = useState<string | null>(null); // custom activation
-  const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Load both catalogs once.
-  useEffect(() => {
+  // Load both catalogs — extracted so the error state can offer a Retry.
+  const loadCatalogs = useCallback(() => {
     let alive = true;
+    setLoading(true);
+    setListError(null);
     Promise.all([api.listLocalModels(), api.listCloudModels()])
       .then(([local, cloud]) => {
         if (!alive) return;
@@ -75,6 +87,8 @@ export function ModelBar({
     };
   }, []);
 
+  useEffect(() => loadCatalogs(), [loadCatalogs]);
+
   const isCloud = mode === "cloud";
   const customModels = settings?.customModels ?? [];
   // For lookups on pick: local mode resolves both the user's checkpoints and the
@@ -84,7 +98,9 @@ export function ModelBar({
     ? settings?.cloudModel || null
     : pendingLocalModel?.modelCode ?? null;
   const selected = allModels.find((m) => m.modelCode === activeCode) ?? null;
-  const busy = downloading || switching;
+  // A local download must not block the CLOUD picker — switching mode should let
+  // you pick a cloud model even while a local model is still downloading.
+  const busy = switching || (downloading && !isCloud);
 
   const pick = useCallback(
     async (code: string) => {
@@ -127,29 +143,34 @@ export function ModelBar({
 
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
-      <div className="flex items-center gap-2.5">
-        <span
-          className={cn(
-            "flex size-9 shrink-0 items-center justify-center rounded-[10px] text-white shadow-sm",
-            isCloud ? "bg-gradient-to-br from-sky-400 to-blue-600" : "brand-surface"
-          )}
-          title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
-        >
-          {isCloud ? <Cloud className="size-[18px]" /> : <Cpu className="size-[18px]" />}
-        </span>
-
+      <div className="flex items-center">
         {listError ? (
-          <span className="text-destructive flex-1 text-xs">{t("modelBar.catalogUnavailable")}</span>
+          <div className="flex h-10 flex-1 items-center gap-2">
+            <AlertTriangle className="text-destructive size-4 shrink-0" />
+            <span className="text-destructive min-w-0 flex-1 truncate text-xs" title={listError}>
+              {t("modelBar.catalogUnavailable")}
+            </span>
+            <button
+              type="button"
+              onClick={loadCatalogs}
+              className="text-muted-foreground hover:text-foreground inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors"
+            >
+              <RefreshCw className="size-3" /> {t("common.refresh")}
+            </button>
+          </div>
         ) : loading ? (
-          <span className="text-muted-foreground inline-flex flex-1 items-center gap-1.5 text-xs">
-            <Loader2 className="size-3.5 animate-spin" />
-            {t("common.loading")}
-          </span>
+          // Fixed-height skeleton matching the resolved button, so the card
+          // doesn't reflow when the catalog arrives.
+          <div className="flex h-10 flex-1 items-center gap-2.5 rounded-xl border px-2.5">
+            <Skeleton className="size-7 rounded-lg" />
+            <Skeleton className="h-3.5 w-28" />
+          </div>
         ) : (
           <button
             type="button"
             disabled={busy}
-            onClick={() => setPickerOpen(true)}
+            onClick={() => onPickerOpenChange(true)}
+            title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
             className={cn(
               "group flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-xl border px-2.5 text-left text-sm shadow-sm transition",
               "bg-background/70 hover:border-primary/40 hover:bg-background",
@@ -160,17 +181,13 @@ export function ModelBar({
             <span className="min-w-0 flex-1 truncate font-medium">
               {selected?.name ?? (allModels.length ? t("modelBar.selectModel") : t("modelBar.noModels"))}
             </span>
-            {busy ? (
-              <Loader2 className="size-4 shrink-0 animate-spin opacity-60" />
-            ) : (
-              <ChevronsUpDown className="size-4 shrink-0 opacity-40 transition group-hover:opacity-70" />
-            )}
+            {busy && <Loader2 className="size-4 shrink-0 animate-spin opacity-60" />}
           </button>
         )}
       </div>
 
       {downloading && progress ? (
-        <DownloadProgress p={progress} />
+        <DownloadProgress p={progress} onCancel={onCancelDownload} />
       ) : customError && mode === "local" ? (
         <p className="text-destructive mt-2 text-xs">{customError}</p>
       ) : progress?.error && mode === "local" ? (
@@ -179,18 +196,19 @@ export function ModelBar({
 
       <ModelPickerDialog
         open={pickerOpen}
-        onOpenChange={setPickerOpen}
+        onOpenChange={onPickerOpenChange}
         mode={mode}
+        paymentMode={settings?.paymentMode === "x402" ? "x402" : "bearer"}
         catalog={isCloud ? cloudModels : localModels}
         customModels={customModels}
         activeCode={activeCode}
         busy={busy}
         onPick={(m) => {
-          setPickerOpen(false);
+          onPickerOpenChange(false);
           void pick(m.modelCode);
         }}
         onAddCustom={() => {
-          setPickerOpen(false); // hand off to the native picker + CustomModelDialog
+          onPickerOpenChange(false); // hand off to the native picker + CustomModelDialog
           onAddCustom();
         }}
         onRemoveCustom={onRemoveCustom}
@@ -199,7 +217,7 @@ export function ModelBar({
   );
 }
 
-function DownloadProgress({ p }: { p: InstallProgress }) {
+function DownloadProgress({ p, onCancel }: { p: InstallProgress; onCancel: () => void }) {
   const { t } = useTranslation();
   return (
     <div className="mt-2.5 space-y-1.5 pl-9">
@@ -210,19 +228,22 @@ function DownloadProgress({ p }: { p: InstallProgress }) {
             {p.message || t("modelBar.working")}
           </span>
         </span>
-        {p.percentEstimate > 0 && (
-          <span className="text-muted-foreground shrink-0 tabular-nums">{p.percentEstimate}%</span>
-        )}
-      </div>
-      <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
-        <div
-          className={cn(
-            "h-full rounded-full transition-all",
-            p.percentEstimate > 0 ? "btn-brand" : "bg-primary/50 w-full animate-pulse"
+        <div className="flex shrink-0 items-center gap-2">
+          {p.percentEstimate > 0 && (
+            <span className="text-muted-foreground tabular-nums">{p.percentEstimate}%</span>
           )}
-          style={p.percentEstimate > 0 ? { width: `${p.percentEstimate}%` } : undefined}
-        />
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-muted-foreground/70 hover:text-destructive inline-flex items-center gap-1 rounded font-medium transition-colors"
+            title={t("common.cancel")}
+          >
+            <X className="size-3" />
+            {t("common.cancel")}
+          </button>
+        </div>
       </div>
+      <ProgressBar percent={p.percentEstimate > 0 ? p.percentEstimate : null} />
     </div>
   );
 }

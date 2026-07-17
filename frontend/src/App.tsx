@@ -1,4 +1,5 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
@@ -7,6 +8,7 @@ import {
   Cpu,
   Loader2,
   ScrollText,
+  Keyboard,
   Sparkles,
   ImageIcon,
   AlertCircle,
@@ -20,18 +22,45 @@ import {
   Play,
   Square,
   Languages,
+  Wand2,
+  Activity,
+  Images,
+  Sun,
+  Moon,
+  Monitor,
+  Search,
+  Check,
+  Copy,
+  FolderOpen,
+  Maximize2,
+  Minimize2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/segmented";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select } from "@/components/ui/select";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
 import { PaymentBar } from "@/components/PaymentBar";
+import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
+import { PanelBoard, usePanelLayout } from "@/components/PanelBoard";
+import { ActivityDock } from "@/components/ActivityDock";
+import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
+import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { api } from "@/lib/wails-bridge";
 import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
+import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/theme";
 import logoUrl from "./assets/logo.svg";
 import { installLogCapture } from "@/lib/log-capture";
-import { cn } from "@/lib/utils";
+import { beginPointerDrag } from "@/lib/pointer-drag";
+import { cn, creditsToUSD } from "@/lib/utils";
 import type {
   AppSettings,
   GalleryFacets,
@@ -42,6 +71,7 @@ import type {
   GenerationRequest,
   GenerationResult,
   InstallProgress,
+  Job,
   LogEntry,
   ModelInfo,
   PaymentMode,
@@ -68,18 +98,6 @@ type ComposerAction = {
   kind: "generate" | "download";
 };
 
-// A single generation, tracked independently so several can run at once and
-// completed ones stay visible in the grid (newest first).
-type Job = {
-  id: string;
-  mode: Mode;
-  prompt: string;
-  status: "running" | "done" | "error";
-  image?: GenerationResult;
-  error?: string;
-  progress?: GenerateProgress | null; // per-step (local only)
-};
-
 let jobSeq = 0;
 const nextJobId = () => `job-${Date.now()}-${jobSeq++}`;
 
@@ -87,7 +105,7 @@ const nextJobId = () => `job-${Date.now()}-${jobSeq++}`;
 // defaults and reset when the model changes.
 type GenParams = {
   prePrompt: string; // quality-tag prefix, prepended to the user prompt (client-side)
-  formatCode: string; // "square" | "portrait" | "landscape"
+  formatCode: string; // a catalog format code, or "custom" (local only) for free dims
   steps: number;
   cfg: number;
   negativePrompt: string;
@@ -95,7 +113,14 @@ type GenParams = {
   seed: number;
   clipSkip: number | null; // local only
   scheduler: string; // local only
+  // Free width/height when formatCode === "custom" (local only). Seeded from the
+  // active preset, snapped to a multiple of 8 (latent constraint) at use.
+  customWidth: number;
+  customHeight: number;
 };
+
+// The "custom" pseudo-format (local only): free width/height instead of a preset.
+const CUSTOM_FORMAT = "custom";
 
 // Generic formats used only when the catalog (im_format) carries none. Names
 // are left empty so the UI resolves them via i18n (formatName below).
@@ -131,8 +156,53 @@ function dimsForModel(
   return f ? { width: f.width, height: f.height } : { width: 1024, height: 1024 };
 }
 
+// Clamp a free dimension to a diffusion-safe multiple of 8 within [256, 2048].
+function snapDim(n: number): number {
+  const v = Math.round((Number.isFinite(n) ? n : 1024) / 8) * 8;
+  return Math.max(256, Math.min(2048, v));
+}
+
+// The dimensions a generation will actually use: the picked preset, or the
+// (snapped) free width/height when the user chose "custom".
+function resolveDims(
+  model: ModelInfo | null | undefined,
+  params: GenParams
+): { width: number; height: number } {
+  if (params.formatCode === CUSTOM_FORMAT) {
+    return { width: snapDim(params.customWidth), height: snapDim(params.customHeight) };
+  }
+  return dimsForModel(model, params.formatCode);
+}
+
+// Read a picked/dropped File into a data-URL (the img2img source shape).
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+// In-app drags (gallery tile → Create panel for img2img) use POINTER events, not
+// native HTML5 drag — WebKit/WKWebView (the macOS app's engine) doesn't fire
+// drop/dragend reliably for in-page drags. The native path below handles only
+// OS file drops (dragging an image file in from Finder), where "Files" is always
+// exposed. See lib/pointer-drag.ts and startImageDrag.
+
+// Set true for the moment after a pointer image-drag ends, so the click that may
+// follow pointerup doesn't also open the lightbox / toggle selection.
+let suppressTileClick = false;
+
+// True when a native (OS-originated) drag carries an image file we can drop.
+function dragHasImage(dt: DataTransfer | null): boolean {
+  if (!dt) return false;
+  return Array.from(dt.types).includes("Files");
+}
+
 // defaultParams seeds the tweakable params from a model's catalog config.
 function defaultParams(model: ModelInfo): GenParams {
+  const d = dimsForModel(model, defaultFormatCode(model));
   return {
     prePrompt: model.promptPre || "",
     formatCode: defaultFormatCode(model),
@@ -143,11 +213,14 @@ function defaultParams(model: ModelInfo): GenParams {
     seed: 0,
     clipSkip: model.skipDefault > 0 ? model.skipDefault : null,
     scheduler: model.schedulerDefault || "",
+    customWidth: d.width,
+    customHeight: d.height,
   };
 }
 
 export default function App() {
   const { t } = useTranslation();
+  const toast = useToast();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [sidecar, setSidecar] = useState<SidecarStatus>({ state: "idle" });
   const [prompt, setPrompt] = useState("");
@@ -169,6 +242,15 @@ export default function App() {
   // initially to avoid a flash before the first probe resolves.
   const [engineInstalled, setEngineInstalled] = useState(true);
   const [installing, setInstalling] = useState(false);
+  // First-run onboarding is skippable; the choice persists so a deliberate skip
+  // isn't undone on reload.
+  const [onboardingSkipped, setOnboardingSkipped] = useState(
+    () => localStorage.getItem("imference.onboarding.skipped") === "1"
+  );
+  const skipOnboarding = useCallback(() => {
+    localStorage.setItem("imference.onboarding.skipped", "1");
+    setOnboardingSkipped(true);
+  }, []);
   // Tweakable generation params, seeded from the active model's defaults.
   const [params, setParams] = useState<GenParams | null>(null);
   // Local model selection is decoupled from its (heavy) download: picking a model
@@ -180,6 +262,16 @@ export default function App() {
   // Whether a usable x402 wallet exists (keychain — the real source of truth,
   // not settings.walletAddress). Drives cloud gating in x402 mode.
   const [walletConfigured, setWalletConfigured] = useState(false);
+  // Panel arrangement (Create / Activity / Gallery) — drag-reorderable, persisted.
+  const { columns: panelColumns, collapsed: panelCollapsed, widths: panelWidths, setColumns: setPanelColumns, toggleCollapsed: togglePanelCollapsed, setWidths: setPanelWidths } = usePanelLayout();
+  // Fullscreen viewer — shared by the gallery and the Activity panel.
+  const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
+  // Command palette (⌘K) + the model-picker open state it drives (lifted here so
+  // the palette can open the picker, not just ModelBar's own trigger).
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
 
   // Per-step progress is a single global stream (the sidecar runs local jobs
   // serially), so attribute each tick to the oldest still-running local job —
@@ -301,12 +393,14 @@ export default function App() {
       api.onInstallProgress((p) => {
         if (p.phase === "done" || p.phase === "error") {
           setInstalling(false);
+          if (p.phase === "done") toast.success(t("toast.engineInstalled"));
+          else toast.error(p.error || t("toast.engineFailed"));
           void api.getEngineInfo().then((i) => setEngineInstalled(i.installed)).catch(() => {});
         } else {
           setInstalling(true);
         }
       }),
-    []
+    [toast, t]
   );
 
   // Home-screen engine control: install / start / stop the local engine on demand.
@@ -345,6 +439,11 @@ export default function App() {
     settings?.paymentMode === "x402" ? walletConfigured : !!settings?.apiKey;
   const cloudReady = cloudConfigured && !!settings?.cloudModel;
 
+  // First run: nothing is usable yet (no local engine AND no cloud payment).
+  // The Create panel shows a guided setup instead of the (non-functional)
+  // composer, unless the user has skipped it.
+  const firstRun = !engineInstalled && !cloudConfigured && !onboardingSkipped;
+
   // Refresh wallet-configured state whenever x402 is (or becomes) the mode, or a
   // wallet is generated/imported (walletAddress changes). Reads the keychain.
   useEffect(() => {
@@ -362,20 +461,30 @@ export default function App() {
   // subscription for the whole app lifetime.
   useEffect(() => {
     return api.onModelProgress((p) => {
+      // Cancelled: clear the progress UI entirely, no error styling.
+      if (p.phase === "cancelled") {
+        setDownloading(false);
+        setDlProgress(null);
+        toast.toast(t("toast.downloadCancelled"));
+        return;
+      }
       setDlProgress(p);
       if (p.done || p.phase === "done" || p.phase === "error") {
         setDownloading(false);
         if (p.phase === "done") {
+          toast.success(t("toast.modelReady"));
           void api.getSettings().then((s) => {
             setSettings(s);
             if (s.localModel) setPendingLocalModel(s.localModel);
           });
+        } else if (p.phase === "error") {
+          toast.error(p.error || t("toast.modelFailed"));
         }
       } else {
         setDownloading(true);
       }
     });
-  }, []);
+  }, [toast, t]);
 
   const downloadLocalModel = useCallback(() => {
     if (!pendingLocalModel || downloading) return;
@@ -397,6 +506,12 @@ export default function App() {
       });
     });
   }, [pendingLocalModel, downloading, t]);
+
+  // Abort an in-flight download. The backend emits a "cancelled" progress event
+  // that resets the UI (handled in onModelProgress above).
+  const cancelDownload = useCallback(() => {
+    void api.cancelModelDownload().catch(() => {});
+  }, []);
 
   // The selected local model is "downloaded" when it matches the persisted one.
   const localDownloaded =
@@ -429,8 +544,27 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
-  // Multiple generations may run at once — the button isn't gated on a running job.
+  // The composer never gates on in-flight work: cloud runs fire concurrently and
+  // local runs are enqueued, so the user can keep launching either way.
   const canGenerate = (mode === "cloud" ? cloudReady : localReady) && !!prompt.trim();
+
+  // Settle a job from its generate() promise — shared by the immediate cloud path
+  // and the local queue dispatcher.
+  const settleJob = useCallback((id: string, call: Promise<GenerationResult>) => {
+    call
+      .then((result) =>
+        setJobs((js) =>
+          js.map((j) => (j.id === id ? { ...j, status: "done", image: result, endedAt: Date.now() } : j))
+        )
+      )
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        setJobs((js) =>
+          js.map((j) => (j.id === id ? { ...j, status: "error", error: msg, endedAt: Date.now() } : j))
+        );
+        toast.error(t("toast.genFailed"));
+      });
+  }, [toast, t]);
 
   const run = useCallback(
     (which: Mode) => {
@@ -442,12 +576,10 @@ export default function App() {
       // nothing, and it matters a lot for SDXL quality. The catalog's prompt_pre
       // already ends with a separator.
       const full = (pr?.prePrompt ?? "") + p;
-      const id = nextJobId();
-      setJobs((js) => [{ id, mode: which, prompt: full, status: "running", progress: null }, ...js]);
 
       const req: GenerationRequest = {
         prompt: full,
-        ...dimsForModel(model, pr?.formatCode ?? ""),
+        ...(pr ? resolveDims(model, pr) : dimsForModel(model, "")),
         numSteps: pr?.steps ?? model?.stepsDefault ?? 28,
         guidanceScale: pr?.cfg ?? model?.cfgDefault ?? 6,
       };
@@ -464,17 +596,175 @@ export default function App() {
         }
       }
 
-      const call = which === "cloud" ? api.generateCloud(req) : api.generateLocal(req);
-      call
-        .then((result) =>
-          setJobs((js) => js.map((j) => (j.id === id ? { ...j, status: "done", image: result } : j)))
-        )
-        .catch((e) => {
-          const msg = e instanceof Error ? e.message : String(e);
-          setJobs((js) => js.map((j) => (j.id === id ? { ...j, status: "error", error: msg } : j)));
-        });
+      const id = nextJobId();
+      const now = Date.now();
+      if (which === "cloud") {
+        // Cloud fires immediately — the API handles concurrency server-side.
+        setJobs((js) => [
+          { id, mode: "cloud", prompt: full, status: "running", progress: null, queuedAt: now, startedAt: now },
+          ...js,
+        ]);
+        settleJob(id, api.generateCloud(req));
+      } else {
+        // Local is enqueued: the sidecar denoises one image at a time, so the
+        // dispatcher starts it (and each queued job after it) one by one. The
+        // request is frozen now so later param tweaks never leak into a job
+        // already waiting in line.
+        setJobs((js) => [
+          { id, mode: "local", prompt: full, status: "queued", progress: null, queuedAt: now, request: req },
+          ...js,
+        ]);
+      }
     },
-    [prompt, settings?.localModel, settings?.cloudModelInfo, params, sourceImage, strength]
+    [prompt, settings?.localModel, settings?.cloudModelInfo, params, sourceImage, strength, settleJob]
+  );
+
+  // Local FIFO dispatcher — the sidecar runs one local job at a time. Whenever
+  // no local job is running, start the oldest still-queued (non-cancelled) one.
+  // dispatchedRef makes each job fire its generateLocal exactly once, even though
+  // this effect re-runs on every jobs change (and under StrictMode double-invoke).
+  const dispatchedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (jobs.some((j) => j.mode === "local" && j.status === "running")) return;
+    let next: Job | undefined;
+    for (let i = jobs.length - 1; i >= 0; i--) {
+      const j = jobs[i];
+      if (j.mode === "local" && j.status === "queued" && !j.hidden) {
+        next = j;
+        break;
+      }
+    }
+    if (!next || !next.request || dispatchedRef.current.has(next.id)) return;
+    const job = next;
+    const request = next.request;
+    dispatchedRef.current.add(job.id);
+    setJobs((js) =>
+      js.map((j) => (j.id === job.id ? { ...j, status: "running", startedAt: Date.now(), progress: null } : j))
+    );
+    settleJob(job.id, api.generateLocal(request));
+  }, [jobs, settleJob]);
+
+  // --- Activity panel bookkeeping ------------------------------------------
+  // Dismissing hides a finished OR queued row: for a queued local job this also
+  // cancels it (the dispatcher skips hidden jobs, so it never runs). A running
+  // job can't be dismissed (no cancel API yet). Finished images stay in the
+  // gallery regardless — jobs are only the source of this session's fresh tiles.
+  const dismissJob = useCallback(
+    (id: string) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, hidden: true } : j))),
+    []
+  );
+  const clearFinished = useCallback(
+    () =>
+      setJobs((js) =>
+        js.map((j) => (j.status === "running" || j.status === "queued" ? j : { ...j, hidden: true }))
+      ),
+    []
+  );
+
+  // --- Gallery → composer bridges ------------------------------------------
+  // Send an image into the img2img source and switch to local (img2img is
+  // local-only). Used by the gallery context menu and by dropping onto the panel.
+  const useAsImg2img = useCallback(async (getSrc: () => Promise<string>) => {
+    try {
+      const src = await getSrc();
+      if (src) {
+        setSourceImage(src);
+        setMode("local");
+      }
+    } catch {
+      /* fetch/read failure — ignore */
+    }
+  }, []);
+
+  // Load a past image's metadata back into the composer (prompt + parameters) to
+  // re-run or remix it. Doesn't switch model or mode; the original img2img source
+  // isn't stored, so it's not restored.
+  const reuseSettings = useCallback(
+    (meta: GenerationMeta) => {
+      if (meta.prompt != null) setPrompt(meta.prompt);
+      setParams((pp) => {
+        const base = pp ?? (activeModel ? defaultParams(activeModel) : null);
+        if (!base) return pp;
+        const opts = formatOptions(activeModel);
+        const known = !!meta.formatCode && opts.some((o) => o.formatCode === meta.formatCode);
+        const fmt = known
+          ? { formatCode: meta.formatCode! }
+          : meta.width && meta.height
+            ? { formatCode: CUSTOM_FORMAT, customWidth: snapDim(meta.width), customHeight: snapDim(meta.height) }
+            : {};
+        return {
+          ...base,
+          prePrompt: "", // meta.prompt already includes the quality-tag prefix
+          negativePrompt: meta.negativePrompt ?? base.negativePrompt,
+          steps: meta.numSteps ?? base.steps,
+          cfg: meta.guidanceScale ?? base.cfg,
+          seedMode: "fixed" as const,
+          seed: meta.seed ?? base.seed,
+          scheduler: meta.scheduler ?? base.scheduler,
+          clipSkip: meta.clipSkip ?? base.clipSkip,
+          ...fmt,
+        };
+      });
+    },
+    [activeModel]
+  );
+
+  // Create panel = img2img drop target. Highlighted (dropActive) both by a native
+  // OS-file drag over it and by an in-app pointer image-drag (startImageDrag).
+  const [dropActive, setDropActive] = useState(false);
+  // The in-app pointer image-drag ghost (a gallery tile following the cursor).
+  const [imageDrag, setImageDrag] = useState<{ src: string | null; x: number; y: number } | null>(null);
+
+  const onPanelDragOver = useCallback((e: React.DragEvent) => {
+    if (!dragHasImage(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setDropActive(true);
+  }, []);
+  const onPanelDragLeave = useCallback((e: React.DragEvent) => {
+    // Ignore leaves into descendants — only clear when the pointer truly exits.
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDropActive(false);
+  }, []);
+  // Native drop path — OS image files dragged in from Finder only.
+  const onPanelDrop = useCallback(
+    (e: React.DragEvent) => {
+      if (!dragHasImage(e.dataTransfer)) return;
+      e.preventDefault();
+      setDropActive(false);
+      const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+      if (file) void readFileAsDataURL(file).then((src) => void useAsImg2img(async () => src));
+    },
+    [useAsImg2img]
+  );
+
+  // In-app image drag (gallery tile → Create panel) via pointer events. A ghost
+  // follows the cursor; the Create panel highlights while hovered; on release
+  // over it, the tile becomes the img2img source. pointerup always fires, so this
+  // is reliable in WKWebView (unlike native drop).
+  const startImageDrag = useCallback(
+    (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null) => {
+      const sx = e.clientX, sy = e.clientY;
+      const overCreate = (x: number, y: number) =>
+        !!document.elementFromPoint(x, y)?.closest(".create-surface");
+      beginPointerDrag(e, {
+        onStart: () => setImageDrag({ src: previewSrc, x: sx, y: sy }),
+        onMove: (x, y) => {
+          setImageDrag((d) => (d ? { ...d, x, y } : d));
+          setDropActive(overCreate(x, y));
+        },
+        onEnd: (x, y, moved) => {
+          if (!moved) return;
+          suppressTileClick = true;
+          window.setTimeout(() => { suppressTileClick = false; }, 0);
+          const drop = overCreate(x, y);
+          setImageDrag(null);
+          setDropActive(false);
+          if (drop) void useAsImg2img(getSrc);
+        },
+      });
+    },
+    [useAsImg2img]
   );
 
   // Primary button: in local mode, download the pending model first (dedicated
@@ -502,6 +792,40 @@ export default function App() {
     };
   }, [mode, downloading, localNeedsDownload, pendingLocalModel, downloadLocalModel, canGenerate, run, t]);
 
+  // Global ⌘/Ctrl+Enter → run the primary action from anywhere in the app, not
+  // only when the prompt field has focus. Suppressed while a modal that captures
+  // typing is open (palette, settings, model picker, custom-model, lightbox), and
+  // preventDefault still swallows the newline when focus IS in the prompt. A ref
+  // holds the latest action/guards so the listener subscribes just once.
+  const primaryHotkeyRef = useRef<{ disabled: boolean; onClick: () => void; blocked: boolean }>({
+    disabled: true,
+    onClick: () => {},
+    blocked: false,
+  });
+  primaryHotkeyRef.current = {
+    disabled: primary.disabled,
+    onClick: primary.onClick,
+    blocked: paletteOpen || shortcutsOpen || settingsOpen || modelPickerOpen || !!customModelPath || !!lightbox,
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        const s = primaryHotkeyRef.current;
+        if (s.blocked || s.disabled) return;
+        e.preventDefault();
+        s.onClick();
+      } else if (e.key === "?" && !primaryHotkeyRef.current.blocked) {
+        // Open the shortcuts sheet — but not while typing in a field.
+        const el = e.target as HTMLElement | null;
+        if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+        e.preventDefault();
+        setShortcutsOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Hint shown under the composer: what this generation will use (params live in
   // the Parameters panel now, so no steps/cfg duplication here).
   const contextHint = useMemo(() => {
@@ -509,7 +833,11 @@ export default function App() {
       if (!cloudConfigured) return t("hint.configurePayment");
       const c = settings?.cloudModelInfo;
       if (!c) return t("hint.pickCloudModel");
-      return c.cost > 0 ? t("hint.creditsPerRun", { name: c.name, cost: c.cost }) : c.name;
+      if (!(c.cost > 0)) return c.name;
+      // x402 pays in on-chain USDC; bearer pays in credits — show the matching unit.
+      return settings?.paymentMode === "x402"
+        ? t("hint.usdPerRun", { name: c.name, usd: creditsToUSD(c.cost) })
+        : t("hint.creditsPerRun", { name: c.name, cost: c.cost });
     }
     if (!engineInstalled) return t("hint.engineNotInstalled");
     if (downloading) return t("hint.downloadingModel");
@@ -518,7 +846,113 @@ export default function App() {
     if (sidecar.state === "error") return t("hint.engineError");
     if (sidecar.state !== "ready") return t("hint.startEngine");
     return settings?.localModel?.name ?? t("hint.pickModel");
-  }, [mode, cloudConfigured, downloading, localNeedsDownload, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, engineInstalled, t]);
+  }, [mode, cloudConfigured, downloading, localNeedsDownload, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, engineInstalled, t]);
+
+  // Activity-panel derivations: in-flight count (running + queued) for the badge,
+  // finished rows for the Clear action, and the done subset the gallery shows as
+  // fresh tiles.
+  const activeCount = useMemo(
+    () => jobs.filter((j) => !j.hidden && (j.status === "running" || j.status === "queued")).length,
+    [jobs]
+  );
+  const hasFinished = useMemo(
+    () => jobs.some((j) => !j.hidden && (j.status === "done" || j.status === "error")),
+    [jobs]
+  );
+  // Fresh session tiles for the gallery — done AND not dismissed/deleted (a
+  // deleted tile is hidden; without this it would linger after its file is gone).
+  const doneJobs = useMemo(() => jobs.filter((j) => j.status === "done" && !j.hidden), [jobs]);
+
+  // --- Command palette registry --------------------------------------------
+  // The single source of truth for app actions. The ⌘K palette renders it now;
+  // direct keyboard shortcuts can bind to the same list later.
+  const commands: Command[] = useMemo(() => {
+    const cmds: Command[] = [];
+    const gGenerate = t("palette.groupGenerate");
+    const gMode = t("palette.groupMode");
+    const gModel = t("palette.groupModel");
+    const gEngine = t("palette.groupEngine");
+    const gPanels = t("palette.groupPanels");
+    const gAppearance = t("palette.groupAppearance");
+    const gApp = t("palette.groupApp");
+
+    if (canGenerate)
+      cmds.push({
+        id: "generate",
+        group: gGenerate,
+        label: t("palette.generate"),
+        icon: <Sparkles />,
+        shortcut: [modLabel, "↵"],
+        run: () => run(mode),
+      });
+
+    cmds.push(
+      mode === "local"
+        ? { id: "mode-cloud", group: gMode, label: t("palette.switchCloud"), icon: <Cloud />, keywords: "cloud", run: () => setMode("cloud") }
+        : { id: "mode-local", group: gMode, label: t("palette.switchLocal"), icon: <Cpu />, keywords: "local", run: () => setMode("local") }
+    );
+
+    cmds.push({
+      id: "model",
+      group: gModel,
+      label: t("palette.chooseModel"),
+      icon: <Wand2 />,
+      keywords: "model checkpoint",
+      run: () => setModelPickerOpen(true),
+    });
+
+    // Engine (local-only, contextual — mirrors the header EngineControl states).
+    if (mode === "local") {
+      if (!engineInstalled)
+        cmds.push({ id: "engine-install", group: gEngine, label: t("engineControl.install"), icon: <Download />, run: installEngine });
+      else if (sidecar.state === "ready")
+        cmds.push({ id: "engine-stop", group: gEngine, label: t("engineControl.stop"), icon: <Square />, run: stopEngine });
+      else if (settings?.localModel)
+        cmds.push({ id: "engine-start", group: gEngine, label: t("engineControl.start"), icon: <Play />, run: startEngine });
+    }
+
+    cmds.push({
+      id: "open-activity",
+      group: gPanels,
+      label: t("palette.openActivity"),
+      icon: <Activity />,
+      keywords: "queue runs jobs",
+      run: () => setActivityOpen(true),
+    });
+    if (hasFinished)
+      cmds.push({ id: "clear-activity", group: gPanels, label: t("palette.clearActivity"), icon: <Trash2 />, run: clearFinished });
+
+    (["system", "light", "dark"] as const).forEach((p) =>
+      cmds.push({
+        id: `theme-${p}`,
+        group: gAppearance,
+        label: t("palette.theme", { mode: t(`theme.${p}`) }),
+        icon: p === "system" ? <Monitor /> : p === "light" ? <Sun /> : <Moon />,
+        keywords: "theme appearance dark light",
+        run: () => setThemePref(p),
+      })
+    );
+    SUPPORTED_LANGUAGES.forEach((l) =>
+      cmds.push({
+        id: `lang-${l.code}`,
+        group: gAppearance,
+        label: t("palette.language", { lang: l.label }),
+        icon: <Languages />,
+        keywords: "language locale",
+        run: () => setLanguage(l.code),
+      })
+    );
+
+    cmds.push({ id: "settings", group: gApp, label: t("palette.settings"), icon: <Settings />, keywords: "preferences", run: () => openSettings() });
+    cmds.push({ id: "logs", group: gApp, label: t("palette.logs"), icon: <ScrollText />, keywords: "console debug", run: () => setLogsOpen((o) => !o) });
+    cmds.push({ id: "shortcuts", group: gApp, label: t("shortcuts.title"), icon: <Keyboard />, keywords: "keyboard keys help", run: () => setShortcutsOpen(true) });
+
+    return cmds;
+  }, [
+    t, canGenerate, run, mode, engineInstalled, sidecar.state, settings?.localModel,
+    installEngine, stopEngine, startEngine,
+    hasFinished, clearFinished, openSettings,
+  ]);
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
@@ -540,81 +974,208 @@ export default function App() {
         errorLogCount={errorLogCount}
         onToggleLogs={() => setLogsOpen((o) => !o)}
         onOpenSettings={() => openSettings()}
+        onOpenPalette={() => setPaletteOpen(true)}
       />
 
       {updateInfo?.updateAvailable && updateInfo.latestVersion && (
-        <div className="relative z-10 mx-auto w-full max-w-[100rem] px-6 pt-4">
+        <div className="relative z-10 mx-auto w-full max-w-[110rem] px-6 pt-4">
           <UpdateBanner info={updateInfo} onDismiss={dismissUpdate} />
         </div>
       )}
 
       <main className="relative z-10 flex-1 overflow-y-auto">
-        {/* Desktop two-zone layout: controls on the left (fixed, sticky), the
-            results grid fills the rest. Stacks vertically on narrow windows. */}
-        <div className="mx-auto flex w-full max-w-[100rem] flex-col gap-6 px-6 pt-6 pb-16 lg:flex-row lg:items-start">
-          {/* Controls — capped/centered when stacked; a fixed left rail on desktop. */}
-          <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 lg:sticky lg:top-4 lg:mx-0 lg:w-[26rem] lg:max-w-none lg:shrink-0">
-            {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
-            <ModeToggle
-              mode={mode}
-              onModeChange={setMode}
-              localReady={localReady}
-              cloudReady={cloudReady}
-            />
+        {/* Three drag-reorderable panels — Create / Activity / Gallery — side by
+            side on desktop, stacked (in the same order) on narrow windows. */}
+        <div className="mx-auto w-full max-w-[110rem] px-6 pt-5 pb-16">
+          <PanelBoard
+            columns={panelColumns}
+            onColumnsChange={setPanelColumns}
+            collapsed={panelCollapsed}
+            onToggleCollapsed={togglePanelCollapsed}
+            widths={panelWidths}
+            onWidthsChange={setPanelWidths}
+            panels={{
+              create: {
+                title: t("panels.create"),
+                icon: <Wand2 />,
+                width: 25,
+                content: (
+                  // Mode-tinted, self-scrolling surface: the panel is felt in
+                  // the active mode's accent and, on desktop, scrolls internally
+                  // so a long open Parameters section stays reachable while the
+                  // column is sticky.
+                  <div
+                    className={cn(
+                      // max-h leaves a bottom gap: the surface starts ~118px down
+                      // (topbar + panel header + sticky top-4), so subtract that
+                      // plus breathing room — otherwise the last card (Parameters)
+                      // sits flush against / just under the window edge.
+                      // scrollbar-gutter:stable reserves the scrollbar its own lane
+                      // beyond the right padding, so it never clips the cards'
+                      // rounded corners (Windows/WebView2 shows a wide scrollbar).
+                      "create-surface relative flex flex-col gap-4 p-3 pb-4 xl:max-h-[calc(100vh-9rem)] xl:overflow-y-auto xl:overflow-x-hidden xl:[scrollbar-gutter:stable]",
+                      dropActive && "create-drop-active"
+                    )}
+                    data-mode={mode}
+                    onDragOver={onPanelDragOver}
+                    onDragLeave={onPanelDragLeave}
+                    onDrop={onPanelDrop}
+                  >
+                    {/* Drop hint: shown while an image is dragged over the panel. */}
+                    {dropActive && (
+                      <div className="bg-background/70 border-primary/50 pointer-events-none absolute inset-1 z-20 flex flex-col items-center justify-center gap-2 rounded-[1.35rem] border-2 border-dashed backdrop-blur-sm">
+                        <ImageIcon className="text-primary size-6" />
+                        <span className="text-foreground text-sm font-semibold">{t("img2img.dropHere")}</span>
+                      </div>
+                    )}
+                    {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
+                    <ModeToggle
+                      mode={mode}
+                      onModeChange={setMode}
+                      localReady={localReady}
+                      cloudReady={cloudReady}
+                    />
 
-            {/* 1b. Payment — cloud only: pick x402 or API key, deep-link to config. */}
-            {mode === "cloud" && (
-              <PaymentBar
-                settings={settings}
-                onModeChange={setPaymentMode}
-                onConfigure={openSettings}
-              />
-            )}
+                    {/* 1b. Payment — cloud only: pick x402 or API key, deep-link to config. */}
+                    {!firstRun && mode === "cloud" && (
+                      <PaymentBar
+                        settings={settings}
+                        onModeChange={setPaymentMode}
+                        onConfigure={openSettings}
+                      />
+                    )}
 
-            {/* 2. Model */}
-            <ModelBar
-              mode={mode}
-              settings={settings}
-              onModelSwitched={handleSettingsSaved}
-              pendingLocalModel={pendingLocalModel}
-              onSelectLocal={setPendingLocalModel}
-              downloading={downloading}
-              progress={dlProgress}
-              onAddCustom={addCustomModel}
-              onSelectCustom={selectCustomModel}
-              onRemoveCustom={removeCustomModel}
-            />
+                    {/* 2. Model */}
+                    {!firstRun && (
+                      <ModelBar
+                        mode={mode}
+                        settings={settings}
+                        onModelSwitched={handleSettingsSaved}
+                        pendingLocalModel={pendingLocalModel}
+                        onSelectLocal={setPendingLocalModel}
+                        downloading={downloading}
+                        progress={dlProgress}
+                        onCancelDownload={cancelDownload}
+                        onAddCustom={addCustomModel}
+                        onSelectCustom={selectCustomModel}
+                        onRemoveCustom={removeCustomModel}
+                        pickerOpen={modelPickerOpen}
+                        onPickerOpenChange={setModelPickerOpen}
+                      />
+                    )}
 
-            {/* 2b. Parameters — seeded from the model, tweakable per generation. */}
-            {activeModel && params && (
-              <ParamsPanel model={activeModel} mode={mode} params={params} onChange={setParams} />
-            )}
+                    {firstRun ? (
+                      /* First run: a guided setup replaces the (non-functional)
+                         composer until the engine is installed or cloud is set up. */
+                      <FirstRunSetup
+                        onInstallDone={() => void api.getSettings().then(setSettings)}
+                        onOpenCloudSettings={() => openSettings("cloud")}
+                        onSkip={skipOnboarding}
+                      />
+                    ) : (
+                      <>
+                        {/* 3. Prompt (with pre-prompt above + negative below) */}
+                        <Composer
+                          prompt={prompt}
+                          onPromptChange={setPrompt}
+                          mode={mode}
+                          action={primary}
+                          contextHint={contextHint}
+                          sourceImage={sourceImage}
+                          onSourceImageChange={setSourceImage}
+                          strength={strength}
+                          onStrengthChange={setStrength}
+                          showModelFields={!!params}
+                          prePrompt={params?.prePrompt ?? ""}
+                          onPrePromptChange={(v) => setParams((pp) => (pp ? { ...pp, prePrompt: v } : pp))}
+                          negativePrompt={params?.negativePrompt ?? ""}
+                          onNegativePromptChange={(v) => setParams((pp) => (pp ? { ...pp, negativePrompt: v } : pp))}
+                        />
 
-            {/* 3. Prompt (with pre-prompt above + negative below) */}
-            <Composer
-              prompt={prompt}
-              onPromptChange={setPrompt}
-              mode={mode}
-              action={primary}
-              contextHint={contextHint}
-              sourceImage={sourceImage}
-              onSourceImageChange={setSourceImage}
-              strength={strength}
-              onStrengthChange={setStrength}
-              showModelFields={!!params}
-              prePrompt={params?.prePrompt ?? ""}
-              onPrePromptChange={(v) => setParams((pp) => (pp ? { ...pp, prePrompt: v } : pp))}
-              negativePrompt={params?.negativePrompt ?? ""}
-              onNegativePromptChange={(v) => setParams((pp) => (pp ? { ...pp, negativePrompt: v } : pp))}
-            />
-          </div>
+                        {/* 4. Format — a primary creative choice, right under the
+                            prompt; local mode also allows free custom dimensions. */}
+                        {activeModel && params && (
+                          <FormatSelector
+                            model={activeModel}
+                            mode={mode}
+                            params={params}
+                            onChange={(patch) => setParams((pp) => (pp ? { ...pp, ...patch } : pp))}
+                          />
+                        )}
 
-          {/* 4. Generations — this session's jobs + the saved-image gallery. */}
-          <div className="min-w-0 flex-1">
-            <Gallery jobs={jobs} />
-          </div>
+                        {/* 5. Parameters — seeded from the model, tweakable per
+                            generation. Below the format (fine-tuning follows the
+                            main creative act). */}
+                        {activeModel && params && (
+                          <ParamsPanel model={activeModel} mode={mode} params={params} onChange={setParams} />
+                        )}
+                      </>
+                    )}
+                  </div>
+                ),
+              },
+              gallery: {
+                title: t("panels.gallery"),
+                icon: <Images />,
+                grow: true,
+                content: (
+                  <Gallery
+                    jobs={doneJobs}
+                    onUseAsSource={useAsImg2img}
+                    onImageDragStart={startImageDrag}
+                    onReuseSettings={reuseSettings}
+                    onHideJob={dismissJob}
+                  />
+                ),
+              },
+            }}
+          />
         </div>
       </main>
+
+      {/* Activity — a persistent bottom-right dock (widget + overlay) instead of
+          an in-layout panel, so it's always reachable and never pushed off-screen. */}
+      <ActivityDock
+        jobs={jobs}
+        open={activityOpen}
+        onOpenChange={setActivityOpen}
+        onDismiss={dismissJob}
+        onOpenImage={setLightbox}
+        onClear={clearFinished}
+      />
+
+      {/* Activity-panel viewer: a single image (no prev/next, no delete) but the
+          same action bar — reuses the gallery Lightbox with a one-item sequence. */}
+      {lightbox && (
+        <Lightbox
+          items={[{ name: null, meta: lightbox.meta, getSrc: async () => lightbox.src }]}
+          index={0}
+          onIndex={() => {}}
+          onClose={() => setLightbox(null)}
+          onUseAsSource={useAsImg2img}
+          onReuseSettings={reuseSettings}
+          onDelete={() => {}}
+        />
+      )}
+
+      {/* Drag ghost — a gallery tile following the cursor during a pointer
+          image-drag toward the Create panel. */}
+      {imageDrag && (
+        <div
+          className="pointer-events-none fixed z-[100] -translate-x-1/2 -translate-y-1/2"
+          style={{ left: imageDrag.x, top: imageDrag.y }}
+        >
+          <div className="size-24 rotate-3 overflow-hidden rounded-xl border-2 border-[var(--brand-from)] opacity-90 shadow-2xl">
+            {imageDrag.src ? (
+              <img src={imageDrag.src} alt="" className="size-full object-cover" />
+            ) : (
+              <div className="bg-muted flex size-full items-center justify-center">
+                <ImageIcon className="text-muted-foreground/50 size-6" />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <SettingsDialog
         open={settingsOpen}
@@ -631,6 +1192,8 @@ export default function App() {
         onConfirm={confirmCustomModel}
       />
       <LogPanel open={logsOpen} onOpenChange={setLogsOpen} />
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} commands={commands} />
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 }
@@ -652,6 +1215,7 @@ function Header({
   errorLogCount,
   onToggleLogs,
   onOpenSettings,
+  onOpenPalette,
 }: {
   appVersion: string;
   sidecar: SidecarStatus;
@@ -665,6 +1229,7 @@ function Header({
   errorLogCount: number;
   onToggleLogs: () => void;
   onOpenSettings: () => void;
+  onOpenPalette: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -673,7 +1238,7 @@ function Header({
         {/* Logo + app version stacked — the version is important operational info. */}
         <div className="flex flex-col items-center leading-none">
           <img src={logoUrl} alt="Imference" className="size-8" />
-          <span className="text-muted-foreground mt-0.5 text-[9px] tabular-nums" title={t("header.versionTitle")}>
+          <span className="text-muted-foreground mt-0.5 text-[10px] tabular-nums" title={t("header.versionTitle")}>
             {appVersion === "dev" ? "dev" : appVersion ? `v${appVersion}` : ""}
           </span>
         </div>
@@ -691,6 +1256,22 @@ function Header({
         </div>
       </div>
       <div className="flex items-center gap-1.5">
+        {/* Command palette launcher — discoverable entry point for ⌘K. */}
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          title={t("palette.title")}
+          aria-label={t("palette.title")}
+          className="text-muted-foreground hover:text-foreground hover:border-primary/40 hidden h-9 items-center gap-2 rounded-md border pl-2.5 pr-2 text-xs transition-colors sm:inline-flex"
+        >
+          <Search className="size-3.5" />
+          <span className="flex items-center gap-0.5">
+            <kbd className="bg-muted rounded px-1 py-0.5 text-[10px] font-medium leading-none">{modLabel}</kbd>
+            <kbd className="bg-muted rounded px-1 py-0.5 text-[10px] font-medium leading-none">K</kbd>
+          </span>
+        </button>
+        {/* Theme — cycles System → Light → Dark, persisted; System follows the OS. */}
+        <ThemeToggle />
         {/* Language — quick toggle; the Settings section offers "System" too. */}
         <LanguageToggle />
         {/* Settings — prominent, labelled entry point. */}
@@ -705,7 +1286,7 @@ function Header({
           onClick={onToggleLogs}
           aria-label={errorLogCount > 0 ? t("header.logsWithErrors", { count: errorLogCount }) : t("common.logs")}
           title={errorLogCount > 0 ? t("header.errors", { count: errorLogCount }) : t("common.logs")}
-          className="text-muted-foreground/60 hover:text-foreground relative size-8"
+          className="text-muted-foreground/60 hover:text-foreground relative size-9"
         >
           <ScrollText className="size-4" />
           {errorLogCount > 0 && (
@@ -742,6 +1323,31 @@ function LanguageToggle() {
   );
 }
 
+// ThemeToggle — cycles the appearance System → Light → Dark from the header.
+// The choice is persisted (localStorage); "System" follows the OS live. The
+// icon shows the ACTIVE preference and the tooltip names what a click switches
+// TO, so the control reads correctly before and after pressing it.
+const THEME_CYCLE: ThemePref[] = ["system", "light", "dark"];
+function ThemeToggle() {
+  const { t } = useTranslation();
+  const pref = useSyncExternalStore(subscribeTheme, themePref, () => "system" as ThemePref);
+  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(pref) + 1) % THEME_CYCLE.length];
+  const Icon = pref === "system" ? Monitor : pref === "light" ? Sun : Moon;
+  const nextLabel = t(`theme.${next}`);
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setThemePref(next)}
+      title={t("theme.switchTo", { mode: nextLabel })}
+      aria-label={t("theme.current", { mode: t(`theme.${pref}`) })}
+      className="text-muted-foreground hover:text-foreground size-9"
+    >
+      <Icon className="size-4" />
+    </Button>
+  );
+}
+
 // EngineControl — the local engine's status *and* its lifecycle switch. Because
 // the backend (sdxl/zimage/wan) and weights are chosen BY the model, "starting
 // the engine" means "load the selected model"; there is no model-agnostic start.
@@ -767,8 +1373,11 @@ function EngineControl({
   onSelectModel: () => void;
 }) {
   const { t } = useTranslation();
+  // A shared floor width + centering so the pill keeps a stable footprint as the
+  // engine moves through install → select → start → running (the left header
+  // cluster no longer shifts on every state change).
   const pill =
-    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex min-w-[7.5rem] items-center justify-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-[color,background-color,border-color] disabled:cursor-not-allowed disabled:opacity-50";
 
   if (installing) {
     return (
@@ -803,8 +1412,7 @@ function EngineControl({
         title={t("engineControl.runningTitle", { device: status.device })}
         className={cn(
           pill,
-          // Fixed width + centered so swapping the label on hover doesn't reflow.
-          "group min-w-[7.5rem] justify-center border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-600 dark:text-emerald-300"
+          "group border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-600 dark:text-emerald-300"
         )}
       >
         <span className="size-1.5 rounded-full bg-emerald-500 group-hover:hidden" />
@@ -851,9 +1459,95 @@ function EngineControl({
 }
 
 // ---------------------------------------------------------------------------
+// FirstRunSetup — a guided welcome shown in the Create panel on first run (no
+// local engine AND no cloud payment configured). Reuses LocalEngineSection for
+// the install step; offers the cloud path as an alternative; skippable. As soon
+// as either path completes, `firstRun` flips false and the normal composer
+// returns — this component doesn't drive that transition itself.
+// ---------------------------------------------------------------------------
+function FirstRunSetup({
+  onInstallDone,
+  onOpenCloudSettings,
+  onSkip,
+}: {
+  onInstallDone: () => void;
+  onOpenCloudSettings: () => void;
+  onSkip: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section className="bg-card relative overflow-hidden rounded-2xl border p-4 shadow-sm">
+      <div className="canvas-glow pointer-events-none absolute inset-0" />
+      <div className="relative flex flex-col gap-4">
+        <div className="flex items-start gap-3">
+          <div className="brand-surface flex size-10 shrink-0 items-center justify-center rounded-xl text-white shadow-[0_8px_24px_-8px_color-mix(in_oklch,var(--brand-to)_60%,transparent)]">
+            <Sparkles className="size-5" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">{t("onboarding.title")}</h2>
+            <p className="text-muted-foreground text-xs leading-snug">{t("onboarding.subtitle")}</p>
+          </div>
+        </div>
+
+        {/* Path A — install the local engine (self-contained install UI). */}
+        <div className="grid gap-1.5">
+          <span className="text-muted-foreground/70 text-[10px] font-medium uppercase tracking-wide">
+            {t("onboarding.localLabel")}
+          </span>
+          <LocalEngineSection onInstallDone={onInstallDone} />
+        </div>
+
+        {/* Path B — use the cloud (opens Settings → Cloud payment). */}
+        <div className="grid gap-1.5">
+          <span className="text-muted-foreground/70 text-[10px] font-medium uppercase tracking-wide">
+            {t("onboarding.cloudLabel")}
+          </span>
+          <button
+            type="button"
+            onClick={onOpenCloudSettings}
+            className="border-border/60 hover:border-primary/40 hover:bg-muted/40 group flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors"
+          >
+            <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+              <Cloud className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium">{t("onboarding.cloudTitle")}</div>
+              <div className="text-muted-foreground text-xs">{t("onboarding.cloudHint")}</div>
+            </div>
+            <ChevronRight className="text-muted-foreground size-4 shrink-0" />
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={onSkip}
+          className="text-muted-foreground hover:text-foreground justify-self-start text-[11px] font-medium transition-colors"
+        >
+          {t("onboarding.skip")}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Composer — the prompt input + primary action. Mode lives above (ModeToggle),
 // not here; several generations can be launched back-to-back.
 // ---------------------------------------------------------------------------
+
+// Grow a textarea to fit its content (clamped by the element's CSS min/max-h),
+// re-measuring whenever the value changes — including external edits like
+// "reuse settings" or an img2img drop that repopulate the prompt.
+function useAutoGrow(value: string) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return ref;
+}
 
 function Composer({
   prompt,
@@ -887,56 +1581,77 @@ function Composer({
   onNegativePromptChange: (v: string) => void;
 }) {
   const { t } = useTranslation();
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      if (!action.disabled) action.onClick();
-    }
-  };
+  // ⌘/Ctrl+Enter is handled globally in App (works from anywhere, not just this
+  // field), so the textarea needs no key handler of its own.
+  const promptRef = useAutoGrow(prompt);
+  const preRef = useAutoGrow(prePrompt);
+  const negRef = useAutoGrow(negativePrompt);
 
   return (
-    <div className="composer bg-card rounded-[26px] border">
+    <div className="composer bg-card rounded-2xl border">
       {/* Pre-prompt (quality tags) — secondary: small, dim, tucked at the top. */}
       {showModelFields && (
-        <label className="hover:bg-muted/30 block rounded-t-[26px] px-5 pb-2 pt-2.5 transition-colors">
-          <span className="text-muted-foreground/60 text-[10px] font-medium uppercase tracking-wide">
+        <label className="hover:bg-muted/30 focus-within:bg-muted/30 block rounded-t-2xl px-5 pb-2 pt-2.5 transition-colors">
+          <span className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wide">
             {t("composer.qualityTags")}
           </span>
           <textarea
+            ref={preRef}
             value={prePrompt}
             onChange={(e) => onPrePromptChange(e.target.value)}
             placeholder={t("composer.qualityTagsPlaceholder")}
             rows={1}
-            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-20 w-full resize-none border-0 bg-transparent text-[12.5px] leading-snug outline-none"
+            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-24 w-full resize-none border-0 bg-transparent text-xs leading-snug outline-none"
           />
         </label>
       )}
 
       {/* Prompt — the hero: largest text, most room, clear separation. */}
-      <textarea
-        value={prompt}
-        onChange={(e) => onPromptChange(e.target.value)}
-        onKeyDown={onKeyDown}
-        placeholder={t("composer.promptPlaceholder")}
-        rows={3}
-        className={cn(
-          "placeholder:text-muted-foreground/60 border-border/60 block max-h-72 min-h-32 w-full resize-none border-0 bg-transparent px-5 py-4 text-[17px] font-medium leading-relaxed outline-none",
-          showModelFields ? "border-y" : "rounded-t-[26px]"
+      <div className={cn("relative", showModelFields ? "border-border/60 border-y" : "")}>
+        <textarea
+          ref={promptRef}
+          value={prompt}
+          onChange={(e) => onPromptChange(e.target.value)}
+          placeholder={t("composer.promptPlaceholder")}
+          rows={3}
+          className={cn(
+            "placeholder:text-muted-foreground/60 focus:bg-muted/15 block max-h-72 min-h-32 w-full resize-none border-0 bg-transparent px-5 pb-7 pt-4 text-base font-medium leading-relaxed outline-none transition-colors",
+            showModelFields ? "" : "rounded-t-2xl"
+          )}
+        />
+        {/* Clear + character count — only while there's something to clear. The
+            count sits in a faint pill so it stays legible over the last line. */}
+        {prompt.length > 0 && (
+          <div className="absolute bottom-1.5 right-2.5 flex items-center gap-1.5">
+            <span className="bg-card/70 text-muted-foreground/60 rounded px-1 text-[10px] tabular-nums backdrop-blur-sm">
+              {t("composer.charCount", { count: prompt.length })}
+            </span>
+            <button
+              type="button"
+              onClick={() => onPromptChange("")}
+              title={t("composer.clear")}
+              aria-label={t("composer.clear")}
+              className="text-muted-foreground/50 hover:text-foreground hover:bg-muted rounded p-0.5 transition-colors"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
         )}
-      />
+      </div>
 
       {/* Negative prompt — secondary, mirrors the pre-prompt styling. */}
       {showModelFields && (
-        <label className="hover:bg-muted/30 block px-5 pb-2.5 pt-2 transition-colors">
-          <span className="text-muted-foreground/60 text-[10px] font-medium uppercase tracking-wide">
+        <label className="hover:bg-muted/30 focus-within:bg-muted/30 block px-5 pb-2.5 pt-2 transition-colors">
+          <span className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wide">
             {t("composer.negativePrompt")}
           </span>
           <textarea
+            ref={negRef}
             value={negativePrompt}
             onChange={(e) => onNegativePromptChange(e.target.value)}
             placeholder={t("composer.negativePlaceholder")}
             rows={1}
-            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-20 w-full resize-none border-0 bg-transparent text-[12.5px] leading-snug outline-none"
+            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-24 w-full resize-none border-0 bg-transparent text-xs leading-snug outline-none"
           />
         </label>
       )}
@@ -949,8 +1664,8 @@ function Composer({
           onStrengthChange={onStrengthChange}
         />
       )}
-      <div className="flex items-end justify-between gap-3 px-3 pt-2 pb-3">
-        <span className="text-muted-foreground/80 min-w-0 truncate pl-1 text-[11px]" title={contextHint}>
+      <div className="flex items-end justify-between gap-3 px-5 pt-2 pb-4">
+        <span className="text-muted-foreground/80 min-w-0 truncate text-[11px]" title={contextHint}>
           {contextHint}
         </span>
         <Button
@@ -978,9 +1693,126 @@ function Composer({
   );
 }
 
+// FormatSelector — the image aspect (square / portrait / landscape …), pulled
+// out of the collapsible Parameters so it's always one tap away, right under the
+// prompt. Options and per-model dimensions come from the catalog (im_format),
+// falling back to the generic set. In local mode a "Custom" option unlocks free
+// width/height (the sidecar takes arbitrary dims; the cloud API doesn't).
+function FormatSelector({
+  model,
+  mode,
+  params,
+  onChange,
+}: {
+  model: ModelInfo;
+  mode: Mode;
+  params: GenParams;
+  onChange: (patch: Partial<GenParams>) => void;
+}) {
+  const { t } = useTranslation();
+  const formats = formatOptions(model);
+  const allowCustom = mode === "local";
+  const isCustom = params.formatCode === CUSTOM_FORMAT;
+  if (formats.length <= 1 && !allowCustom) return null; // nothing to choose
+
+  // Entering custom seeds the free dims from the preset currently in view.
+  const enterCustom = () => {
+    if (isCustom) return;
+    const d = dimsForModel(model, params.formatCode);
+    onChange({ formatCode: CUSTOM_FORMAT, customWidth: d.width, customHeight: d.height });
+  };
+
+  return (
+    <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
+      {/* Label on its own line + a wrapping segmented control, so 4 options (with
+          ratio hints) never overflow the narrow panel — they flow to a 2nd row. */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+          {t("params.format")}
+        </span>
+        <Segmented
+          wrap
+          size="sm"
+          value={isCustom ? CUSTOM_FORMAT : params.formatCode}
+          onChange={(code) => (code === CUSTOM_FORMAT ? enterCustom() : onChange({ formatCode: code }))}
+          items={[
+            ...formats.map((f) => ({
+              value: f.formatCode,
+              title: `${f.width}×${f.height}${f.ratio ? ` · ${f.ratio}` : ""}`,
+              label: (
+                <span className="capitalize">
+                  {formatName(f, t)}
+                  {f.ratio && (
+                    <span className="text-muted-foreground/70 ml-1 text-[10px] normal-case">{f.ratio}</span>
+                  )}
+                </span>
+              ),
+            })),
+            ...(allowCustom ? [{ value: CUSTOM_FORMAT, label: t("formats.custom") }] : []),
+          ]}
+        />
+      </div>
+
+      {/* Free width × height (local, custom only). Snap to a multiple of 8 on
+          blur; the value is re-snapped at generation regardless. */}
+      {isCustom && (
+        <div className="mt-2.5 flex items-center gap-2">
+          <DimInput
+            label={t("params.width")}
+            value={params.customWidth}
+            onChange={(customWidth) => onChange({ customWidth })}
+            onCommit={(customWidth) => onChange({ customWidth: snapDim(customWidth) })}
+          />
+          <span className="text-muted-foreground/60 mt-4 shrink-0 text-xs">×</span>
+          <DimInput
+            label={t("params.height")}
+            value={params.customHeight}
+            onChange={(customHeight) => onChange({ customHeight })}
+            onCommit={(customHeight) => onChange({ customHeight: snapDim(customHeight) })}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+// A single labelled width/height number input for the custom format. Typing sets
+// the raw value (so you can type freely); blur/Enter snaps it to a valid dim.
+function DimInput({
+  label,
+  value,
+  onChange,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  onCommit: (v: number) => void;
+}) {
+  return (
+    <label className="flex min-w-0 flex-1 flex-col gap-1">
+      <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">{label}</span>
+      <input
+        type="number"
+        min={256}
+        max={2048}
+        step={8}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        onBlur={(e) => onCommit(Number(e.target.value) || 512)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="border-input bg-background field-focus h-8 w-full rounded-md border px-2 text-xs tabular-nums"
+      />
+    </label>
+  );
+}
+
 // ParamsPanel — collapsible generation parameters, seeded from the model's
-// catalog defaults (steps/cfg bounds, negative prompt, format) and tweakable per
-// generation. Clip-skip / scheduler are local-only (the cloud API uses the
+// catalog defaults (steps/cfg bounds, negative prompt) and tweakable per
+// generation. Format now lives in its own always-visible FormatSelector above
+// the prompt. Clip-skip / scheduler are local-only (the cloud API uses the
 // model's server-side defaults).
 function ParamsPanel({
   model,
@@ -1002,8 +1834,7 @@ function ParamsPanel({
   const cfgMin = model.cfgMin || 1;
   const cfgMax = Math.max(model.cfgMax || 20, cfgMin + 0.5);
   const showClip = model.skipDefault > 0; // model uses clip-skip
-  const formats = formatOptions(model);
-  const dims = dimsForModel(model, params.formatCode);
+  const dims = resolveDims(model, params);
   const summary = t("params.summary", {
     dims: `${dims.width}×${dims.height}`,
     steps: params.steps,
@@ -1027,92 +1858,76 @@ function ParamsPanel({
         />
       </button>
 
-      {open && (
-        <div className="grid gap-4 border-t px-4 py-4">
-          <div className="grid gap-1.5">
-            <span className="text-xs font-medium">{t("params.format")}</span>
-            <div className="bg-muted flex flex-wrap gap-1 rounded-lg p-0.5 text-xs">
-              {formats.map((f) => (
-                <button
-                  key={f.formatCode}
-                  type="button"
-                  onClick={() => set({ formatCode: f.formatCode })}
-                  title={`${f.width}×${f.height}${f.ratio ? ` · ${f.ratio}` : ""}`}
-                  className={cn(
-                    "flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium capitalize transition",
-                    params.formatCode === f.formatCode
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {formatName(f, t)}
-                  {f.ratio && (
-                    <span className="text-muted-foreground/70 ml-1 text-[10px] normal-case">{f.ratio}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* Animate open/close via a grid-rows 0fr→1fr collapse (auto-height, no JS
+          measuring) so the body eases in to match the chevron rotation. */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-300 ease-[var(--ease-out-expo)]",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="grid gap-4 border-t px-4 py-4">
+            <RangeRow label={t("params.steps")} value={params.steps} min={stepsMin} max={stepsMax} step={1} onChange={(v) => set({ steps: v })} />
+            <RangeRow label={t("params.cfg")} value={params.cfg} min={cfgMin} max={cfgMax} step={0.5} onChange={(v) => set({ cfg: v })} />
 
-          <RangeRow label={t("params.steps")} value={params.steps} min={stepsMin} max={stepsMax} step={1} onChange={(v) => set({ steps: v })} />
-          <RangeRow label={t("params.cfg")} value={params.cfg} min={cfgMin} max={cfgMax} step={0.5} onChange={(v) => set({ cfg: v })} />
-
-          <div className="grid gap-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium">{t("params.seed")}</span>
-              <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-[11px]">
+            <div className="grid gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium">{t("params.seed")}</span>
+                <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-[11px]">
+                  <Checkbox
+                    checked={params.seedMode === "random"}
+                    onCheckedChange={(c) => set({ seedMode: c ? "random" : "fixed" })}
+                  />
+                  {t("params.random")}
+                </label>
+              </div>
+              {params.seedMode === "fixed" && (
                 <input
-                  type="checkbox"
-                  checked={params.seedMode === "random"}
-                  onChange={(e) => set({ seedMode: e.target.checked ? "random" : "fixed" })}
-                />
-                {t("params.random")}
-              </label>
-            </div>
-            {params.seedMode === "fixed" && (
-              <input
-                type="number"
-                value={params.seed}
-                onChange={(e) => set({ seed: Number(e.target.value) || 0 })}
-                className="border-input bg-background h-8 rounded-md border px-2 text-xs outline-none"
-              />
-            )}
-          </div>
-
-          {mode === "local" && (
-            <div className="grid gap-3 border-t pt-3">
-              <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
-                {t("params.advanced")}
-              </span>
-              {showClip && (
-                <RangeRow
-                  label={t("params.clipSkip")}
-                  value={params.clipSkip ?? model.skipDefault}
-                  min={0}
-                  max={4}
-                  step={1}
-                  onChange={(v) => set({ clipSkip: v })}
+                  type="number"
+                  value={params.seed}
+                  onChange={(e) => set({ seed: Number(e.target.value) || 0 })}
+                  className="border-input bg-background field-focus h-8 rounded-md border px-2 text-xs tabular-nums"
                 />
               )}
-              <div className="grid gap-1.5">
-                <span className="text-xs font-medium">{t("params.scheduler")}</span>
-                {/* Read-only until we expose a scheduler list — shows the model default. */}
-                <div className="border-input bg-muted/40 text-muted-foreground flex h-8 items-center rounded-md border px-2 text-xs">
-                  {params.scheduler || t("params.modelDefault")}
+            </div>
+
+            {mode === "local" && (
+              <div className="grid gap-3 border-t pt-3">
+                <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                  {t("params.advanced")}
+                </span>
+                {showClip && (
+                  <RangeRow
+                    label={t("params.clipSkip")}
+                    value={params.clipSkip ?? model.skipDefault}
+                    min={0}
+                    max={4}
+                    step={1}
+                    onChange={(v) => set({ clipSkip: v })}
+                  />
+                )}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium">{t("params.scheduler")}</span>
+                  {/* Informational (no scheduler list yet) — a value chip, not a
+                      disabled input, so it doesn't read as interactive. */}
+                  <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-[11px] font-medium">
+                    {params.scheduler || t("params.modelDefault")}
+                  </span>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <button
-            type="button"
-            onClick={() => onChange(defaultParams(model))}
-            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 justify-self-start text-[11px]"
-          >
-            <RotateCcw className="size-3" /> {t("params.reset")}
-          </button>
+            <button
+              type="button"
+              onClick={() => onChange(defaultParams(model))}
+              className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 justify-self-start text-[11px]"
+            >
+              <RotateCcw className="size-3" /> {t("params.reset")}
+            </button>
+          </div>
         </div>
-      )}
+      </div>
     </section>
   );
 }
@@ -1145,7 +1960,7 @@ function RangeRow({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="h-1 w-full cursor-pointer accent-[var(--brand-to)]"
+        className="range w-full"
       />
     </div>
   );
@@ -1179,7 +1994,7 @@ function Img2ImgBar({
   };
 
   return (
-    <div className="border-border/60 mx-3 mt-1 border-t pt-2">
+    <div className="border-border/60 mx-5 mt-1 border-t pt-2">
       <input ref={inputRef} type="file" accept="image/*" onChange={onPick} className="hidden" />
       {sourceImage ? (
         <div className="flex items-center gap-3">
@@ -1208,7 +2023,7 @@ function Img2ImgBar({
               step={0.05}
               value={strength}
               onChange={(e) => onStrengthChange(Number(e.target.value))}
-              className="h-1 w-full cursor-pointer accent-[var(--brand-to)]"
+              className="range w-full"
             />
           </div>
         </div>
@@ -1244,6 +2059,7 @@ function ModeToggle({
       <SegBtn
         active={mode === "local"}
         ready={localReady}
+        tone="brand"
         onClick={() => onModeChange("local")}
         icon={<Cpu className="size-4" />}
         label={t("mode.local")}
@@ -1251,6 +2067,7 @@ function ModeToggle({
       <SegBtn
         active={mode === "cloud"}
         ready={cloudReady}
+        tone="cloud"
         onClick={() => onModeChange("cloud")}
         icon={<Cloud className="size-4" />}
         label={t("mode.cloud")}
@@ -1262,33 +2079,49 @@ function ModeToggle({
 function SegBtn({
   active,
   ready,
+  tone,
   onClick,
   icon,
   label,
 }: {
   active: boolean;
   ready: boolean;
+  tone: "brand" | "cloud";
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
 }) {
+  const { t } = useTranslation();
+  // Concentric radii: rounded-2xl track − p-1 gap = rounded-xl thumb.
   return (
     <button
       type="button"
       onClick={onClick}
+      // Readiness is shown on BOTH tabs (so you can see the other mode is ready
+      // before switching) but always labelled via the title; the active mode is
+      // carried by the accent + surface, not the dot.
+      title={`${label} · ${ready ? t("mode.ready") : t("mode.notReady")}`}
       className={cn(
-        "relative inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 font-medium transition-all",
+        "relative inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 font-medium transition-[color,background-color,box-shadow] duration-200",
         active
           ? "bg-background text-foreground shadow-sm"
           : "text-muted-foreground hover:text-foreground"
       )}
     >
-      {icon}
-      {label}
       <span
         className={cn(
-          "size-1.5 rounded-full",
-          ready ? "bg-emerald-500" : "bg-muted-foreground/30"
+          active && (tone === "brand" ? "text-[var(--brand-from)]" : "text-[var(--cloud-from)]")
+        )}
+      >
+        {icon}
+      </span>
+      {label}
+      <span
+        aria-hidden
+        className={cn(
+          "size-1.5 rounded-full transition-colors",
+          ready ? "bg-emerald-500" : "bg-muted-foreground/30",
+          !active && "opacity-60"
         )}
       />
     </button>
@@ -1296,30 +2129,88 @@ function SegBtn({
 }
 
 // ---------------------------------------------------------------------------
-// Gallery — this session's jobs + the saved-image history, in an aspect-aware
-// masonry (any format). Adjustable columns, infinite scroll over the saved
-// history, click-to-fullscreen, and delete.
+// Gallery — this session's finished generations + the saved-image history, in
+// an aspect-aware masonry (any format). Adjustable columns, infinite scroll
+// over the saved history, click-to-fullscreen, and delete. In-flight jobs live
+// in the Activity panel, not here.
 // ---------------------------------------------------------------------------
 
 const GALLERY_PAGE = 24;
 
-const EMPTY_FILTER: GalleryFilter = { engine: "", modelCode: "", source: "" };
+const EMPTY_FILTER: GalleryFilter = { engine: "", modelCode: "", source: "", text: "" };
 
 type LightboxItem = { src: string; meta?: GenerationMeta | null };
 
-function Gallery({ jobs }: { jobs: Job[] }) {
+// One image in the gallery's viewable sequence — the unit the lightbox steps
+// through and every action targets. `name` (a filename) keys delete/reveal; it's
+// null for a session job not yet written to disk.
+type ViewerItem = {
+  name: string | null;
+  savedPath?: string;
+  meta?: GenerationMeta | null;
+  getSrc: () => Promise<string>;
+};
+
+// What a tile hands to the context menu. Adds the tile's position in the viewer
+// sequence so "Open" can jump straight there.
+type TileTarget = ViewerItem & { index: number };
+
+// Shared gallery behaviors handed to every tile (open, context menu, selection,
+// drag). `index` is the tile's position in the viewer sequence.
+type GalleryShared = {
+  openAt: (index: number) => void;
+  openMenu: (e: React.MouseEvent, target: TileTarget) => void;
+  selectionActive: boolean;
+  isSelected: (name: string) => boolean;
+  tileClick: (e: React.MouseEvent, name: string | null, index: number) => void;
+  toggle: (name: string | null, index: number) => void;
+  startImageDrag: (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null) => void;
+};
+
+// Basename of a saved path, for matching a session job to its file on disk.
+const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
+
+function Gallery({
+  jobs,
+  onUseAsSource,
+  onImageDragStart,
+  onReuseSettings,
+  onHideJob,
+}: {
+  jobs: Job[];
+  onUseAsSource: (getSrc: () => Promise<string>) => void;
+  onImageDragStart: (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null) => void;
+  onReuseSettings: (meta: GenerationMeta) => void;
+  onHideJob: (id: string) => void;
+}) {
   const { t } = useTranslation();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [saved, setSaved] = useState<SavedImage[]>([]);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cols, setCols] = useState(3);
   const [filter, setFilter] = useState<GalleryFilter>(EMPTY_FILTER);
   const [facets, setFacets] = useState<GalleryFacets | null>(null);
-  const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
+  // Multi-selection (keyed by filename), the context menu, and the fullscreen
+  // viewer (an index into the viewable sequence, or null when closed).
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [menu, setMenu] = useState<{ x: number; y: number; target: TileTarget } | null>(null);
+  const [viewIndex, setViewIndex] = useState<number | null>(null);
+  const anchorRef = useRef<number | null>(null); // last-toggled index, for Shift-range
+  const viewItemsRef = useRef<ViewerItem[]>([]); // the viewable sequence, in display order
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false); // guards against overlapping page loads
   const savedRef = useRef<SavedImage[]>([]);
   savedRef.current = saved;
+  const jobsRef = useRef<Job[]>(jobs);
+  jobsRef.current = jobs;
+  // Disk-pagination offset, tracked separately from `saved.length` because we
+  // also PREPEND freshly-generated images (below) — using saved.length as the
+  // offset would then skip disk rows.
+  const diskCountRef = useRef(0);
+  // Session jobs already folded into `saved`, so we don't merge them twice.
+  const mergedRef = useRef<Set<string>>(new Set());
 
   const refreshFacets = useCallback(() => {
     void api.galleryFacets().then(setFacets).catch(() => {});
@@ -1331,8 +2222,9 @@ function Gallery({ jobs }: { jobs: Job[] }) {
     loadingRef.current = true;
     setLoading(true);
     api
-      .listSavedImages(savedRef.current.length, GALLERY_PAGE, filter)
+      .listSavedImages(diskCountRef.current, GALLERY_PAGE, filter)
       .then((page) => {
+        diskCountRef.current += page.length;
         setSaved((cur) => {
           const seen = new Set(cur.map((x) => x.name));
           return [...cur, ...page.filter((p) => !seen.has(p.name))];
@@ -1349,12 +2241,45 @@ function Gallery({ jobs }: { jobs: Job[] }) {
   // Initial load + reset-and-reload whenever the filter changes.
   useEffect(() => {
     savedRef.current = [];
+    diskCountRef.current = 0;
     setSaved([]);
     setDone(false);
     loadingRef.current = false;
     loadMore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  // Fold freshly-finished session generations into the gallery as real saved
+  // images (the Activity panel already covers live progress, so the gallery no
+  // longer shows transient session tiles). Prepended newest-first with their
+  // in-memory bytes so they appear instantly; a later disk page dedupes them.
+  useEffect(() => {
+    const fresh: SavedImage[] = [];
+    for (const j of jobs) {
+      if (mergedRef.current.has(j.id)) continue;
+      const img = j.image;
+      if (!img?.savedPath) continue; // save failed → only visible in Activity
+      mergedRef.current.add(j.id);
+      const m = img.meta;
+      fresh.push({
+        name: baseName(img.savedPath),
+        source: img.source,
+        seed: img.seed ?? m?.seed ?? 0,
+        savedPath: img.savedPath,
+        width: m?.width ?? 0,
+        height: m?.height ?? 0,
+        meta: m,
+        src: img.imageBase64,
+      });
+    }
+    if (fresh.length) {
+      setSaved((cur) => {
+        const seen = new Set(cur.map((s) => s.name));
+        const add = fresh.filter((s) => !seen.has(s.name)).reverse();
+        return add.length ? [...add, ...cur] : cur;
+      });
+    }
+  }, [jobs]);
 
   // Infinite scroll: load the next page as the sentinel nears the viewport.
   useEffect(() => {
@@ -1370,36 +2295,193 @@ function Gallery({ jobs }: { jobs: Job[] }) {
     return () => io.disconnect();
   }, [loadMore, done]);
 
-  const onDelete = useCallback(
-    (img: SavedImage) => {
-      if (!window.confirm(t("gallery.deleteConfirm", { name: img.name }))) return;
-      void api
-        .deleteSavedImage(img.name)
-        .then(() => {
-          setSaved((s) => s.filter((x) => x.name !== img.name));
-          refreshFacets();
-        })
-        .catch(() => {});
+  // Hide session job-tiles whose on-disk file was just deleted (so the deleted
+  // image doesn't linger as a fresh tile).
+  const hideJobsFor = useCallback(
+    (names: Set<string>) => {
+      for (const j of jobsRef.current) {
+        const n = j.image?.savedPath ? baseName(j.image.savedPath) : null;
+        if (n && names.has(n)) onHideJob(j.id);
+      }
     },
-    [refreshFacets, t]
+    [onHideJob]
   );
 
-  const filtered = filter.engine !== "" || filter.modelCode !== "" || filter.source !== "";
+  const deleteNames = useCallback(
+    (names: string[]) => {
+      if (names.length === 0) return;
+      void Promise.allSettled(names.map((n) => api.deleteSavedImage(n))).then(() => {
+        const set = new Set(names);
+        setSaved((s) => s.filter((x) => !set.has(x.name)));
+        setSelected((cur) => {
+          const next = new Set(cur);
+          names.forEach((n) => next.delete(n));
+          return next;
+        });
+        hideJobsFor(set);
+        refreshFacets();
+        toast.toast(t("toast.deleted", { count: names.length }));
+      });
+    },
+    [hideJobsFor, refreshFacets, toast, t]
+  );
 
-  // Build the tile list (session jobs first, then saved), then spread it across
-  // `cols` columns round-robin so the reading order is LEFT-TO-RIGHT (item 0 →
-  // col 0, item 1 → col 1, …). CSS `columns` would fill top-to-bottom instead.
-  // Each column stacks its tiles at natural height → true masonry.
+  const deleteOne = useCallback(
+    async (name: string) => {
+      const ok = await confirm({
+        title: t("gallery.deleteTitle", { count: 1 }),
+        description: t("gallery.deleteConfirm", { name }),
+        confirmLabel: t("gallery.deleteAction"),
+        cancelLabel: t("common.cancel"),
+      });
+      if (ok) deleteNames([name]);
+    },
+    [deleteNames, confirm, t]
+  );
+
+  const deleteSelected = useCallback(async () => {
+    const names = [...selected];
+    if (names.length === 0) return;
+    const ok = await confirm({
+      title: t("gallery.deleteTitle", { count: names.length }),
+      description: t("gallery.deleteSelectedConfirm", { count: names.length }),
+      confirmLabel: t("gallery.deleteAction"),
+      cancelLabel: t("common.cancel"),
+    });
+    if (ok) deleteNames(names);
+  }, [selected, deleteNames, confirm, t]);
+
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+
+  const openAt = useCallback((index: number) => {
+    if (index >= 0) setViewIndex(index);
+  }, []);
+
+  // Toggle one tile's selection; remember it as the Shift-range anchor.
+  const toggle = useCallback((name: string | null, index: number) => {
+    if (!name) return;
+    anchorRef.current = index;
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  // Click on a tile: modifier-click selects (⌘/Ctrl toggles, Shift extends the
+  // range from the anchor); a plain click opens the fullscreen viewer.
+  const tileClick = useCallback(
+    (e: React.MouseEvent, name: string | null, index: number) => {
+      // A click that immediately followed a pointer image-drag isn't a real
+      // click — swallow it so the lightbox doesn't open on drop.
+      if (suppressTileClick) return;
+      if ((e.metaKey || e.ctrlKey) && name) {
+        toggle(name, index);
+        return;
+      }
+      if (e.shiftKey && name && anchorRef.current != null) {
+        const [lo, hi] = [Math.min(anchorRef.current, index), Math.max(anchorRef.current, index)];
+        const range = viewItemsRef.current
+          .slice(lo, hi + 1)
+          .map((v) => v.name)
+          .filter((n): n is string => !!n);
+        setSelected((cur) => new Set([...cur, ...range]));
+        return;
+      }
+      openAt(index);
+    },
+    [toggle, openAt]
+  );
+
+  const openMenu = useCallback((e: React.MouseEvent, target: TileTarget) => {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY, target });
+  }, []);
+
+  // Latest values for the once-subscribed keyboard listener.
+  const deleteSelectedRef = useRef(deleteSelected);
+  deleteSelectedRef.current = deleteSelected;
+  const viewIndexRef = useRef(viewIndex);
+  viewIndexRef.current = viewIndex;
+  const menuRef = useRef(menu);
+  menuRef.current = menu;
+
+  // Keyboard: ⌘/Ctrl+A selects all, Delete removes the selection, Escape clears
+  // it. Ignored while typing in a field, or when a modal (viewer/menu) is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+      if ((e.metaKey || e.ctrlKey) && (e.key === "a" || e.key === "A")) {
+        const names = viewItemsRef.current.map((v) => v.name).filter((n): n is string => !!n);
+        if (names.length) {
+          e.preventDefault();
+          setSelected(new Set(names));
+        }
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        setSelected((cur) => {
+          if (cur.size > 0) {
+            e.preventDefault();
+            deleteSelectedRef.current();
+          }
+          return cur;
+        });
+      } else if (e.key === "Escape" && viewIndexRef.current == null && !menuRef.current) {
+        setSelected((cur) => (cur.size > 0 ? new Set() : cur));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Keep the open viewer valid when the sequence shrinks (e.g. after a delete):
+  // clamp to the last item, or close if nothing is left.
+  useEffect(() => {
+    const n = viewItemsRef.current.length;
+    setViewIndex((vi) => (vi != null && vi >= n ? (n > 0 ? n - 1 : null) : vi));
+  }, [saved.length, jobs.length]);
+
+  const filtered =
+    filter.engine !== "" || filter.modelCode !== "" || filter.source !== "" || filter.text !== "";
+
+  const shared: GalleryShared = {
+    openAt,
+    openMenu,
+    selectionActive: selected.size > 0,
+    isSelected: (name) => selected.has(name),
+    tileClick,
+    toggle,
+    startImageDrag: onImageDragStart,
+  };
+
+  // Build the tile list + the parallel viewer sequence (same order) whose index
+  // every tile, the menu, and the lightbox share. Tiles are spread across `cols`
+  // columns round-robin so the reading order is LEFT-TO-RIGHT; each column stacks
+  // at natural height → true masonry. Session generations are folded into `saved`
+  // (see the merge effect), so the gallery is a single uniform stream.
   const tiles: { key: string; el: React.ReactElement }[] = [];
-  if (!filtered) {
-    for (const j of jobs) tiles.push({ key: j.id, el: <JobTile job={j} onOpen={setLightbox} /> });
-  }
+  const viewItems: ViewerItem[] = [];
+  const pushView = (v: ViewerItem) => {
+    viewItems.push(v);
+    return viewItems.length - 1;
+  };
   for (const g of saved) {
-    tiles.push({ key: g.name, el: <SavedTile image={g} onOpen={setLightbox} onDelete={onDelete} /> });
+    const index = pushView({
+      name: g.name,
+      savedPath: g.savedPath || undefined,
+      meta: g.meta,
+      getSrc: () => (g.src ? Promise.resolve(g.src) : api.getSavedImage(g.name)),
+    });
+    tiles.push({ key: g.name, el: <SavedTile image={g} index={index} shared={shared} onDelete={deleteOne} /> });
   }
+  viewItemsRef.current = viewItems;
   const columns: { key: string; el: React.ReactElement }[][] = Array.from({ length: cols }, () => []);
   tiles.forEach((t, i) => columns[i % cols].push(t));
   const empty = tiles.length === 0;
+  // First page still loading → show a skeleton grid, not the "no images" empty
+  // state (which used to flash before the first page arrived).
+  const initialLoading = empty && loading;
 
   return (
     <div className="flex flex-col gap-3">
@@ -1408,8 +2490,10 @@ function Gallery({ jobs }: { jobs: Job[] }) {
         <ColumnPicker cols={cols} onChange={setCols} />
       </div>
 
-      {empty ? (
-        <div className="border-border/60 text-muted-foreground/70 relative flex min-h-[60vh] w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-[26px] border border-dashed lg:min-h-[70vh]">
+      {initialLoading ? (
+        <GallerySkeleton cols={cols} />
+      ) : empty ? (
+        <div className="border-border/60 text-muted-foreground/70 relative flex min-h-[60vh] w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border border-dashed lg:min-h-[70vh]">
           <div className="canvas-glow pointer-events-none absolute inset-0" />
           <div className="brand-surface relative flex size-12 items-center justify-center rounded-2xl text-white shadow-[0_8px_24px_-8px_color-mix(in_oklch,var(--brand-to)_60%,transparent)]">
             <ImageIcon className="size-5" strokeWidth={1.75} />
@@ -1417,6 +2501,15 @@ function Gallery({ jobs }: { jobs: Job[] }) {
           <p className="relative text-sm">
             {filtered ? t("gallery.emptyFiltered") : t("gallery.empty")}
           </p>
+          {filtered && (
+            <button
+              type="button"
+              onClick={() => setFilter({ engine: "", modelCode: "", source: "", text: "" })}
+              className="text-foreground hover:bg-muted relative inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+            >
+              <X className="size-3.5" /> {t("gallery.clearFilters")}
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex items-start gap-3">
@@ -1431,14 +2524,56 @@ function Gallery({ jobs }: { jobs: Job[] }) {
       )}
 
       {!done && <div ref={sentinelRef} className="h-4 w-full" />}
-      {loading && (
-        <div className="text-muted-foreground flex justify-center py-2">
-          <Loader2 className="size-4 animate-spin" />
+      {/* Loading the NEXT page (not the first) → append a row of skeleton tiles. */}
+      {loading && !initialLoading && <GallerySkeleton cols={cols} rows={1} />}
+
+      {/* Floating selection bar. */}
+      {selected.size > 0 && (
+        <div className="animate-in fade-in slide-in-from-bottom-2 fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border bg-popover/95 px-2 py-2 pl-4 shadow-2xl backdrop-blur">
+          <span className="text-sm font-medium tabular-nums">
+            {t("gallery.selectedCount", { count: selected.size })}
+          </span>
+          <button
+            type="button"
+            onClick={deleteSelected}
+            className="text-destructive hover:bg-destructive/10 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
+          >
+            <Trash2 className="size-3.5" /> {t("gallery.deleteSelected")}
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
+          >
+            {t("gallery.clearSelection")}
+          </button>
         </div>
       )}
 
-      {lightbox && <Lightbox item={lightbox} onClose={() => setLightbox(null)} />}
-      <style>{`@keyframes shimmer{100%{transform:translateX(100%)}}`}</style>
+      {menu && (
+        <TileContextMenu
+          x={menu.x}
+          y={menu.y}
+          target={menu.target}
+          onClose={() => setMenu(null)}
+          onOpenAt={openAt}
+          onUseAsSource={onUseAsSource}
+          onReuseSettings={onReuseSettings}
+          onDelete={deleteOne}
+        />
+      )}
+
+      {viewIndex != null && viewItems[viewIndex] && (
+        <Lightbox
+          items={viewItems}
+          index={viewIndex}
+          onIndex={setViewIndex}
+          onClose={() => setViewIndex(null)}
+          onUseAsSource={onUseAsSource}
+          onReuseSettings={onReuseSettings}
+          onDelete={deleteOne}
+        />
+      )}
     </div>
   );
 }
@@ -1453,14 +2588,36 @@ function FilterBar({
   onChange: (f: GalleryFilter) => void;
 }) {
   const { t } = useTranslation();
-  const active = filter.engine !== "" || filter.modelCode !== "" || filter.source !== "";
+  const active =
+    filter.engine !== "" || filter.modelCode !== "" || filter.source !== "" || filter.text !== "";
   // Guard against nil slices (Go marshals empty slices as null).
   const models = facets?.models ?? [];
   const engines = facets?.engines ?? [];
   const sources = facets?.sources ?? [];
-  if (models.length === 0 && engines.length === 0 && sources.length === 0) return <div />;
+
+  // Debounce the search box so typing doesn't reload the gallery per keystroke.
+  const [q, setQ] = useState(filter.text);
+  useEffect(() => setQ(filter.text), [filter.text]); // stay in sync on external Clear
+  const commitRef = useRef<(text: string) => void>(() => {});
+  commitRef.current = (text: string) => onChange({ ...filter, text });
+  useEffect(() => {
+    if (q === filter.text) return;
+    const id = setTimeout(() => commitRef.current(q), 250);
+    return () => clearTimeout(id);
+  }, [q, filter.text]);
+
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <div className="relative">
+        <Search className="text-muted-foreground/60 pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={t("gallery.search")}
+          aria-label={t("gallery.search")}
+          className="border-input bg-background h-8 w-44 rounded-md border pl-8 pr-2 text-xs outline-none"
+        />
+      </div>
       {models.length > 0 && (
         <FacetSelect
           label={t("gallery.filterModel")}
@@ -1511,19 +2668,14 @@ function FacetSelect({
 }) {
   const { t } = useTranslation();
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="border-input bg-background h-8 max-w-40 rounded-md border px-2 text-xs"
-      aria-label={label}
-    >
+    <Select size="sm" value={value} onChange={onChange} className="max-w-40" aria-label={label}>
       <option value="">{t("gallery.filterAll", { label })}</option>
       {facets.map((f) => (
         <option key={f.value} value={f.value}>
           {f.label} ({f.count})
         </option>
       ))}
-    </select>
+    </Select>
   );
 }
 
@@ -1551,64 +2703,58 @@ function ColumnPicker({ cols, onChange }: { cols: number; onChange: (n: number) 
   );
 }
 
-function JobTile({ job, onOpen }: { job: Job; onOpen: (item: LightboxItem) => void }) {
-  const { t } = useTranslation();
-  if (job.status === "running") {
-    const pct = job.progress && job.progress.total > 0 ? job.progress.percent : null;
-    const sub =
-      pct !== null
-        ? t("gallery.step", { step: job.progress!.step, total: job.progress!.total })
-        : job.mode === "cloud"
-          ? t("gallery.cloudRunning")
-          : t("gallery.generating");
-    return (
-      <div className="bg-muted/40 relative aspect-square w-full overflow-hidden rounded-2xl border" title={job.prompt}>
-        <div className="via-foreground/[0.04] absolute inset-0 -translate-x-full animate-[shimmer_1.6s_infinite] bg-gradient-to-r from-transparent to-transparent" />
-        <div className="text-muted-foreground absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-4 text-center">
-          <Loader2 className="size-5 animate-spin" />
-          <span className="text-[11px]">{sub}</span>
-          {pct !== null && (
-            <div className="bg-muted mt-0.5 h-1 w-24 max-w-full overflow-hidden rounded-full">
-              <div
-                className="bg-primary h-full transition-[width] duration-300"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (job.status === "error") {
-    return (
-      <div
-        className="border-destructive/30 bg-destructive/5 text-destructive flex aspect-square w-full flex-col items-center justify-center gap-1.5 rounded-2xl border p-4 text-center"
-        title={job.error}
-      >
-        <AlertCircle className="size-5" />
-        <span className="line-clamp-4 text-[11px] leading-snug">{job.error}</span>
-      </div>
-    );
-  }
-
-  const img = job.image!;
+// Masonry-shaped skeleton grid shown while a gallery page loads, so the layout
+// is reserved instead of a bare spinner (no reflow when the images arrive).
+function GallerySkeleton({ cols, rows = 3 }: { cols: number; rows?: number }) {
+  const ratios = [1, 1.3, 0.82, 1.15, 0.95, 1.25];
   return (
-    <figure
-      className="group animate-in fade-in zoom-in-95 ring-border/60 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1 duration-500"
-      onClick={() =>
-        onOpen({
-          src: img.imageBase64,
-          meta: img.meta ?? { prompt: job.prompt, source: img.source, seed: img.seed, createdAt: "" },
-        })
-      }
+    <div className="flex items-start gap-3">
+      {Array.from({ length: cols }).map((_, ci) => (
+        <div key={ci} className="flex min-w-0 flex-1 flex-col gap-3">
+          {Array.from({ length: rows }).map((_, ri) => (
+            <Skeleton
+              key={ri}
+              className="w-full rounded-2xl"
+              style={{ aspectRatio: ratios[(ci + ri * cols) % ratios.length] }}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// A small selection checkbox overlaid on a tile — visible on hover or whenever a
+// selection is in progress.
+function SelectCheckbox({
+  checked,
+  active,
+  onToggle,
+}: {
+  checked: boolean;
+  active: boolean;
+  onToggle: (e: React.MouseEvent) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle(e);
+      }}
+      aria-label={t("gallery.select")}
+      aria-pressed={checked}
+      className={cn(
+        "absolute left-1.5 top-1.5 z-10 flex size-5 items-center justify-center rounded-md border-2 shadow-sm transition",
+        checked
+          ? "border-[var(--brand-to)] bg-[var(--brand-to)] text-white"
+          : "border-white/85 bg-black/35 text-transparent hover:bg-black/50",
+        active || checked ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+      )}
     >
-      <img src={img.imageBase64} alt={job.prompt} title={job.prompt} className="block w-full" />
-      <figcaption className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
-        <span className="rounded-full bg-white/20 px-1.5 py-0.5 font-medium capitalize">{img.source}</span>
-        <span className="tabular-nums">{t("gallery.seed", { seed: img.seed })}</span>
-      </figcaption>
-    </figure>
+      <Check className="size-3.5" strokeWidth={3} />
+    </button>
   );
 }
 
@@ -1617,18 +2763,25 @@ function JobTile({ job, onOpen }: { job: Job; onOpen: (item: LightboxItem) => vo
 // from the known dimensions so the masonry lays out any format without jumps.
 function SavedTile({
   image,
-  onOpen,
+  index,
+  shared,
   onDelete,
 }: {
   image: SavedImage;
-  onOpen: (item: LightboxItem) => void;
-  onDelete: (img: SavedImage) => void;
+  index: number;
+  shared: GalleryShared;
+  onDelete: (name: string) => void;
 }) {
   const { t } = useTranslation();
   const ref = useRef<HTMLElement>(null);
-  const [src, setSrc] = useState<string | null>(null);
+  // Freshly-merged images carry their bytes in memory (image.src) → render at
+  // once, no disk read; folder images fetch lazily on scroll-in.
+  const [src, setSrc] = useState<string | null>(image.src ?? null);
+  const srcRef = useRef<string | null>(src);
+  srcRef.current = src;
 
   useEffect(() => {
+    if (srcRef.current) return; // already have the bytes (fresh image)
     const el = ref.current;
     if (!el) return;
     let fetched = false;
@@ -1647,38 +2800,58 @@ function SavedTile({
   }, [image.name]);
 
   const aspect = image.width > 0 && image.height > 0 ? image.width / image.height : 1;
+  const selected = shared.isSelected(image.name);
 
-  const open = () => {
-    if (src) {
-      onOpen({ src, meta: image.meta });
-      return;
-    }
-    void api.getSavedImage(image.name).then((d) => {
-      setSrc(d);
-      onOpen({ src: d, meta: image.meta });
-    }).catch(() => {});
-  };
+  // Ensure the bytes are available (img2img / drag from an un-scrolled tile).
+  const ensureSrc = () => (srcRef.current ? Promise.resolve(srcRef.current) : api.getSavedImage(image.name).then((d) => { setSrc(d); return d; }));
 
   return (
     <figure
       ref={ref}
-      className="group ring-border/60 bg-muted/40 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1"
+      // Pointer-based drag (not native HTML5) → reliable in WKWebView. A move
+      // past threshold starts the img2img drag; a plain click still opens the tile.
+      onPointerDown={(e) => shared.startImageDrag(e, ensureSrc, srcRef.current)}
+      className={cn(
+        "rise-in group bg-muted/40 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1 transition-shadow duration-200 hover:shadow-lg",
+        selected ? "ring-2 ring-[var(--brand-to)]" : "ring-border/60"
+      )}
       title={image.name}
-      style={{ aspectRatio: aspect }}
-      onClick={open}
+      // Capped, repeating stagger so a page of tiles cascades in without long
+      // delays on later pages (infinite scroll).
+      style={{ aspectRatio: aspect, animationDelay: `${(index % 10) * 30}ms` }}
+      onClick={(e) => shared.tileClick(e, image.name, index)}
+      onContextMenu={(e) =>
+        shared.openMenu(e, {
+          index,
+          name: image.name,
+          savedPath: image.savedPath || undefined,
+          meta: image.meta,
+          getSrc: ensureSrc,
+        })
+      }
     >
       {src ? (
-        <img src={src} alt={image.name} className="h-full w-full object-cover" />
+        // draggable=false: an <img> is natively draggable, which would start a
+        // browser image-drag and cancel our pointer-based img2img drag.
+        <img
+          src={src}
+          alt={image.name}
+          draggable={false}
+          className="animate-in fade-in h-full w-full object-cover duration-300"
+        />
       ) : (
-        <div className="text-muted-foreground/30 flex h-full w-full items-center justify-center">
-          <ImageIcon className="size-5" />
-        </div>
+        <Skeleton className="h-full w-full rounded-none" />
       )}
+      <SelectCheckbox
+        checked={selected}
+        active={shared.selectionActive}
+        onToggle={() => shared.toggle(image.name, index)}
+      />
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          onDelete(image);
+          onDelete(image.name);
         }}
         aria-label={t("gallery.deleteImage")}
         className="absolute right-1.5 top-1.5 hidden rounded-full bg-black/50 p-1.5 text-white hover:bg-red-600/80 group-hover:block"
@@ -1697,8 +2870,27 @@ function SavedTile({
   );
 }
 
-// Fullscreen viewer with a generation-details panel. Backdrop click or Esc closes.
-function Lightbox({ item, onClose }: { item: LightboxItem; onClose: () => void }) {
+// TileContextMenu — a small right-click menu positioned at the cursor. A
+// full-screen backdrop captures the next click (and Escape) to dismiss.
+function TileContextMenu({
+  x,
+  y,
+  target,
+  onClose,
+  onOpenAt,
+  onUseAsSource,
+  onReuseSettings,
+  onDelete,
+}: {
+  x: number;
+  y: number;
+  target: TileTarget;
+  onClose: () => void;
+  onOpenAt: (index: number) => void;
+  onUseAsSource: (getSrc: () => Promise<string>) => void;
+  onReuseSettings: (meta: GenerationMeta) => void;
+  onDelete: (name: string) => void;
+}) {
   const { t } = useTranslation();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1708,33 +2900,319 @@ function Lightbox({ item, onClose }: { item: LightboxItem; onClose: () => void }
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const meta = item.meta;
+  // Clamp so the menu stays on screen (approx sizes; good enough without measuring).
+  const W = 232;
+  const H = 300;
+  const left = Math.min(x, window.innerWidth - W - 8);
+  const top = Math.min(y, window.innerHeight - H - 8);
+  const meta = target.meta;
+  const run = (fn: () => void) => () => {
+    fn();
+    onClose();
+  };
 
   return (
     <div
-      className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50"
       onClick={onClose}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
     >
       <div
-        className="flex max-h-full w-full max-w-6xl flex-col items-center gap-4 md:flex-row md:items-stretch"
+        className="animate-in fade-in zoom-in-95 bg-popover absolute overflow-hidden rounded-xl border p-1 shadow-2xl duration-100"
+        style={{ left, top, width: W }}
+        onClick={(e) => e.stopPropagation()}
+        role="menu"
+      >
+        <MenuItem
+          icon={<Maximize2 />}
+          label={t("gallery.ctxOpen")}
+          onClick={run(() => onOpenAt(target.index))}
+        />
+        <MenuItem
+          icon={<ImageIcon />}
+          label={t("gallery.ctxUseAsSource")}
+          onClick={run(() => onUseAsSource(target.getSrc))}
+        />
+        {meta?.prompt && (
+          <MenuItem
+            icon={<RotateCcw />}
+            label={t("gallery.ctxReuse")}
+            onClick={run(() => onReuseSettings(meta))}
+          />
+        )}
+        {meta?.prompt && (
+          <MenuItem
+            icon={<Copy />}
+            label={t("gallery.ctxCopyPrompt")}
+            onClick={run(() => void navigator.clipboard?.writeText(meta.prompt).catch(() => {}))}
+          />
+        )}
+        {target.savedPath && (
+          <MenuItem
+            icon={<FolderOpen />}
+            label={t("gallery.ctxReveal")}
+            onClick={run(() => void api.revealInFolder(target.savedPath!).catch(() => {}))}
+          />
+        )}
+        {target.name && (
+          <>
+            <div className="bg-border/70 my-1 h-px" />
+            <MenuItem
+              icon={<Trash2 />}
+              label={t("gallery.ctxDelete")}
+              destructive
+              onClick={run(() => onDelete(target.name!))}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MenuItem({
+  icon,
+  label,
+  onClick,
+  destructive,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  destructive?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors [&_svg]:size-4",
+        destructive
+          ? "text-destructive hover:bg-destructive/10"
+          : "text-foreground hover:bg-accent"
+      )}
+    >
+      <span className={cn("shrink-0", destructive ? "" : "text-muted-foreground")}>{icon}</span>
+      {label}
+    </button>
+  );
+}
+
+// Fullscreen viewer over the gallery's viewable sequence: ←/→ (and edge arrows)
+// navigate, and the same actions as the right-click menu act on the current
+// image. Backdrop click or Esc closes.
+function Lightbox({
+  items,
+  index,
+  onIndex,
+  onClose,
+  onUseAsSource,
+  onReuseSettings,
+  onDelete,
+}: {
+  items: ViewerItem[];
+  index: number;
+  onIndex: (i: number) => void;
+  onClose: () => void;
+  onUseAsSource: (getSrc: () => Promise<string>) => void;
+  onReuseSettings: (meta: GenerationMeta) => void;
+  onDelete: (name: string) => void;
+}) {
+  const { t } = useTranslation();
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  // Click-to-zoom: a 2× magnifier whose focus follows the cursor. Reset on nav.
+  const [zoom, setZoom] = useState(false);
+  const [origin, setOrigin] = useState("50% 50%");
+  useEffect(() => setZoom(false), [index]);
+  // Distraction-free view: hide the meta panel, go solid black, fill the window.
+  const [full, setFull] = useState(false);
+
+  const total = items.length;
+  const current = items[index];
+  const lightboxAspect =
+    current?.meta?.width && current?.meta?.height ? current.meta.width / current.meta.height : 1;
+  const hasPrev = index > 0;
+  const hasNext = index < total - 1;
+  const prev = useCallback(() => onIndex(Math.max(0, index - 1)), [index, onIndex]);
+  const next = useCallback(() => onIndex(Math.min(total - 1, index + 1)), [index, total, onIndex]);
+
+  // Fetch the current image's bytes on navigation (and after a delete shifts the
+  // sequence, keyed by length).
+  useEffect(() => {
+    const cur = itemsRef.current[index];
+    if (!cur) return;
+    let alive = true;
+    setLoading(true);
+    setSrc(null);
+    void cur
+      .getSrc()
+      .then((d) => alive && (setSrc(d), setLoading(false)))
+      .catch(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [index, total]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Esc leaves fullscreen first, then closes the viewer.
+      if (e.key === "Escape") setFull((f) => (f ? false : (onClose(), false)));
+      else if (e.key === "ArrowLeft") prev();
+      else if (e.key === "ArrowRight") next();
+      else if (e.key === "f" || e.key === "F") setFull((f) => !f);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, prev, next]);
+
+  if (!current) return null;
+  const meta = current.meta;
+
+  const iconBtn =
+    "rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10";
+
+  // Portal to <body>: the gallery renders inside <main> (relative z-10), whose
+  // stacking context would otherwise trap this overlay below root-level fixed
+  // chrome like the Activity dock.
+  return createPortal(
+    <div
+      className={cn(
+        "animate-in fade-in fixed inset-0 z-50 flex items-center justify-center",
+        full ? "bg-black p-0" : "bg-black/85 p-6 backdrop-blur-sm"
+      )}
+      onClick={onClose}
+    >
+      {/* Top bar: counter + actions + close. */}
+      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 py-3" onClick={(e) => e.stopPropagation()}>
+        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium tabular-nums text-white">
+          {t("gallery.counter", { i: index + 1, n: total })}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button type="button" className={iconBtn} title={t("gallery.ctxUseAsSource")} aria-label={t("gallery.ctxUseAsSource")} onClick={() => onUseAsSource(current.getSrc)}>
+            <ImageIcon className="size-5" />
+          </button>
+          {meta?.prompt && (
+            <button type="button" className={iconBtn} title={t("gallery.ctxReuse")} aria-label={t("gallery.ctxReuse")} onClick={() => onReuseSettings(meta)}>
+              <RotateCcw className="size-5" />
+            </button>
+          )}
+          {meta?.prompt && (
+            <button type="button" className={iconBtn} title={t("gallery.ctxCopyPrompt")} aria-label={t("gallery.ctxCopyPrompt")} onClick={() => void navigator.clipboard?.writeText(meta.prompt).catch(() => {})}>
+              <Copy className="size-5" />
+            </button>
+          )}
+          {current.savedPath && (
+            <button type="button" className={iconBtn} title={t("gallery.ctxReveal")} aria-label={t("gallery.ctxReveal")} onClick={() => void api.revealInFolder(current.savedPath!).catch(() => {})}>
+              <FolderOpen className="size-5" />
+            </button>
+          )}
+          {current.name && (
+            <button type="button" className={cn(iconBtn, "hover:bg-red-600/70")} title={t("gallery.ctxDelete")} aria-label={t("gallery.ctxDelete")} onClick={() => onDelete(current.name!)}>
+              <Trash2 className="size-5" />
+            </button>
+          )}
+          <button
+            type="button"
+            className={iconBtn}
+            title={full ? t("gallery.exitFullscreen") : t("gallery.fullscreen")}
+            aria-label={full ? t("gallery.exitFullscreen") : t("gallery.fullscreen")}
+            onClick={() => setFull((f) => !f)}
+          >
+            {full ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}
+          </button>
+          <button type="button" className={iconBtn} title={t("common.close")} aria-label={t("common.close")} onClick={onClose}>
+            <X className="size-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Prev / next edge arrows. */}
+      {hasPrev && (
+        <button type="button" className={cn(iconBtn, "absolute left-4 top-1/2 z-10 -translate-y-1/2")} aria-label={t("gallery.prev")} onClick={(e) => { e.stopPropagation(); prev(); }}>
+          <ChevronLeft className="size-6" />
+        </button>
+      )}
+      {hasNext && (
+        <button type="button" className={cn(iconBtn, "absolute right-4 top-1/2 z-10 -translate-y-1/2")} aria-label={t("gallery.next")} onClick={(e) => { e.stopPropagation(); next(); }}>
+          <ChevronRight className="size-6" />
+        </button>
+      )}
+
+      <div
+        className={cn(
+          "flex w-full flex-col items-center",
+          full
+            ? "h-full max-w-none gap-0"
+            : "max-h-full max-w-6xl gap-4 md:flex-row md:items-stretch"
+        )}
         onClick={(e) => e.stopPropagation()}
       >
-        <img
-          src={item.src}
-          alt=""
-          className="max-h-[85vh] min-h-0 flex-1 rounded-xl object-contain shadow-2xl"
-        />
-        {meta && <MetaPanel meta={meta} />}
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+          {loading && !src && (
+            // A dimensioned placeholder (from the known aspect) so the frame
+            // doesn't jump when the full image resolves.
+            <div
+              className="skeleton max-h-[85vh] w-full max-w-[80vmin] rounded-xl bg-white/10"
+              style={{ aspectRatio: lightboxAspect }}
+            >
+              <Loader2 className="absolute left-1/2 top-1/2 size-8 -translate-x-1/2 -translate-y-1/2 animate-spin text-white/70" />
+            </div>
+          )}
+          {src && (
+            <img
+              src={src}
+              alt=""
+              draggable={false}
+              onClick={(e) => { e.stopPropagation(); setZoom((z) => !z); }}
+              onMouseMove={(e) => {
+                if (!zoom) return;
+                const r = e.currentTarget.getBoundingClientRect();
+                setOrigin(`${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`);
+              }}
+              onMouseLeave={() => setOrigin("50% 50%")}
+              style={{ transformOrigin: origin, transform: zoom ? "scale(2)" : "scale(1)" }}
+              className={cn(
+                "animate-in fade-in zoom-in-95 min-h-0 object-contain transition-transform duration-150",
+                // Fullscreen: edge-to-edge, no frame. Otherwise: framed with a cap.
+                full ? "max-h-screen max-w-full" : "max-h-[85vh] rounded-xl shadow-2xl",
+                zoom ? "cursor-zoom-out" : "cursor-zoom-in"
+              )}
+            />
+          )}
+        </div>
+        {!full && meta && <MetaPanel meta={meta} />}
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label={t("common.close")}
-        className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
-      >
-        <X className="size-5" />
-      </button>
-    </div>
+
+      {/* Keyboard-hint footer — discoverable navigation + zoom affordance. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center">
+        <div className="flex items-center gap-3 rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/70 backdrop-blur">
+          {total > 1 && (
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-white/15 px-1">←</kbd>
+              <kbd className="rounded bg-white/15 px-1">→</kbd>
+              {t("gallery.lbNav")}
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <kbd className="rounded bg-white/15 px-1">F</kbd>
+            {full ? t("gallery.exitFullscreen") : t("gallery.fullscreen")}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded bg-white/15 px-1">Esc</kbd>
+            {t("common.close")}
+          </span>
+          <span className="hidden sm:inline">{t("gallery.lbZoom")}</span>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 

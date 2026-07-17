@@ -253,6 +253,7 @@ type GalleryFilter struct {
 	Engine    string `json:"engine"`    // e.g. "sdxl" | "flux" | "zimage" | "wan"
 	ModelCode string `json:"modelCode"` // exact catalog code
 	Source    string `json:"source"`    // "local" | "cloud"
+	Text      string `json:"text"`      // free-text, matched against the prompt (case-insensitive)
 }
 
 // Facet is one filterable value with how many saved images carry it.

@@ -4,6 +4,9 @@ bin
 node_modules
 frontend/dist
 *.tsbuildinfo
+
+# Local-only mocked-harness Vite config (UI verification helper)
+frontend/vite.mock.config.ts
 build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 

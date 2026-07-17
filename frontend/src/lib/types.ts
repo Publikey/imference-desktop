@@ -183,6 +183,12 @@ export type SavedImage = {
   height: number;
   /** Generation metadata from the sidecar JSON. Absent for pre-feature images. */
   meta?: GenerationMeta | null;
+  /**
+   * Runtime-only in-memory bytes (data-URL) for an image merged from a just-
+   * finished generation — lets its tile render instantly without a disk read.
+   * Never sent by the backend; absent for images loaded from the folder.
+   */
+  src?: string;
 };
 
 /** How an image was generated — from the "<image>.json" sidecar. */
@@ -206,7 +212,7 @@ export type GenerationMeta = {
   createdAt: string;
 };
 
-export type GalleryFilter = { engine: string; modelCode: string; source: string };
+export type GalleryFilter = { engine: string; modelCode: string; source: string; text: string };
 export type Facet = { value: string; label: string; count: number };
 export type GalleryFacets = { models: Facet[]; engines: Facet[]; sources: Facet[] };
 
@@ -218,6 +224,42 @@ export type GenerationResult = {
   savedPath: string;
   /** Generation metadata (same as the sidecar) so the fresh image shows full details. */
   meta?: GenerationMeta | null;
+};
+
+/** Where a generation runs. */
+export type GenerationMode = "local" | "cloud";
+
+/**
+ * A single generation tracked by the UI, from enqueue to completion.
+ *
+ * Local runs are serialized through a FIFO queue (the sidecar loads one model
+ * and denoises one image at a time): a fresh local job starts as "queued" and
+ * only becomes "running" when it reaches the head of the queue. Cloud runs skip
+ * the queue and start "running" immediately (the cloud API handles concurrency
+ * server-side). Queued/running/failed jobs live in the Activity panel; finished
+ * images join the gallery.
+ */
+export type Job = {
+  id: string;
+  mode: GenerationMode;
+  prompt: string;
+  status: "queued" | "running" | "done" | "error";
+  image?: GenerationResult;
+  error?: string;
+  /** Per-step progress (local only — the cloud API reports nothing mid-run). */
+  progress?: GenerateProgress | null;
+  /**
+   * The request to dispatch, captured at enqueue time so later param tweaks
+   * don't retro-change a job already waiting in the queue. Local jobs only.
+   */
+  request?: GenerationRequest;
+  /** Epoch ms the job was enqueued — orders the queue and drives "queued" UI. */
+  queuedAt: number;
+  /** Epoch ms the job began running — set when it leaves the queue. */
+  startedAt?: number;
+  endedAt?: number;
+  /** Dismissed from the Activity panel (finished images stay in the gallery). */
+  hidden?: boolean;
 };
 
 export type SidecarStatus =
@@ -266,7 +308,8 @@ export type InstallPhase =
   | "extras"
   | "model"
   | "done"
-  | "error";
+  | "error"
+  | "cancelled";
 
 export type InstallProgress = {
   phase: InstallPhase;

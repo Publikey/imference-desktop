@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 
 type Backend = "sdxl" | "sd15" | "zimage" | "flux" | "chroma" | "qwenimage" | "anima";
 
@@ -87,18 +88,13 @@ export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
           <Label htmlFor="custom-backend" className="text-xs">
             {t("customModel.modelType")}
           </Label>
-          <select
-            id="custom-backend"
-            value={backend}
-            onChange={(e) => setBackend(e.target.value as Backend)}
-            className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-          >
+          <Select id="custom-backend" fullWidth value={backend} onChange={(v) => setBackend(v as Backend)}>
             {BACKENDS.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.label}
               </option>
             ))}
-          </select>
+          </Select>
           <p className="text-muted-foreground text-xs">{t(selected.hintKey)}</p>
         </div>
 

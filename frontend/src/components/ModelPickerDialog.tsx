@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Check, FileBox, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { Check, FileBox, PackageOpen, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,8 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
-import type { ModelInfo } from "@/lib/types";
+import { cn, creditsToUSD } from "@/lib/utils";
+import type { ModelInfo, PaymentMode } from "@/lib/types";
 
 // Display label + ordering for each backend "type" the cards group by. Keys are
 // the normalized BackendType (cloud.normalizeEngine); "" is the cloud-only
@@ -68,6 +68,7 @@ export function ModelPickerDialog({
   open,
   onOpenChange,
   mode,
+  paymentMode,
   catalog,
   customModels,
   activeCode,
@@ -79,6 +80,8 @@ export function ModelPickerDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "local" | "cloud";
+  /** Active cloud payment method — decides whether cost shows as credits or USD. */
+  paymentMode: PaymentMode;
   catalog: ModelInfo[];
   customModels: ModelInfo[];
   activeCode: string | null;
@@ -134,8 +137,10 @@ export function ModelPickerDialog({
                   type="button"
                   onClick={() => setTab(tabId)}
                   className={cn(
-                    "rounded-lg px-3 py-1.5 text-xs font-medium transition",
-                    tab === tabId ? "bg-primary text-primary-foreground" : "hover:bg-accent text-muted-foreground"
+                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                    tab === tabId
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "hover:bg-accent border-transparent text-muted-foreground"
                   )}
                 >
                   {tabId === "catalog" ? t("modelPicker.catalogTab") : t("modelPicker.mineTab")}
@@ -195,13 +200,27 @@ export function ModelPickerDialog({
           )}
 
           {total === 0 ? (
-            <p className="text-muted-foreground py-10 text-center text-sm">
-              {showMine
-                ? t("modelPicker.emptyMine")
-                : search || typeFilter !== "all"
-                  ? t("modelPicker.emptyFiltered")
-                  : t("modelPicker.empty")}
-            </p>
+            <div className="text-muted-foreground flex flex-col items-center gap-3 py-12 text-center">
+              <div className="bg-muted flex size-12 items-center justify-center rounded-2xl">
+                <PackageOpen className="size-6 opacity-70" strokeWidth={1.75} />
+              </div>
+              <p className="text-sm">
+                {showMine
+                  ? t("modelPicker.emptyMine")
+                  : search || typeFilter !== "all"
+                    ? t("modelPicker.emptyFiltered")
+                    : t("modelPicker.empty")}
+              </p>
+              {showMine && (
+                <button
+                  type="button"
+                  onClick={onAddCustom}
+                  className="text-primary hover:bg-primary/10 border-primary/30 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+                >
+                  <Plus className="size-3.5" /> {t("modelPicker.addCheckpoint")}
+                </button>
+              )}
+            </div>
           ) : (
             groups.map((g) => (
               <section key={g.type} className="mb-5 last:mb-0">
@@ -216,6 +235,7 @@ export function ModelPickerDialog({
                       key={m.modelCode}
                       m={m}
                       isCloud={isCloud}
+                      paymentMode={paymentMode}
                       active={m.modelCode === activeCode}
                       disabled={busy}
                       onPick={() => onPick(m)}
@@ -260,6 +280,7 @@ function Chip({
 function ModelCard({
   m,
   isCloud,
+  paymentMode,
   active,
   disabled,
   onPick,
@@ -267,6 +288,7 @@ function ModelCard({
 }: {
   m: ModelInfo;
   isCloud: boolean;
+  paymentMode: PaymentMode;
   active: boolean;
   disabled: boolean;
   onPick: () => void;
@@ -276,7 +298,7 @@ function ModelCard({
   return (
     <div
       className={cn(
-        "group bg-card relative flex flex-col overflow-hidden rounded-xl border text-left transition",
+        "group bg-card relative flex flex-col overflow-hidden rounded-xl border text-left transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-md",
         active ? "border-primary ring-primary/20 ring-2" : "hover:border-primary/40"
       )}
     >
@@ -287,7 +309,12 @@ function ModelCard({
         className="flex flex-col text-left disabled:cursor-not-allowed disabled:opacity-60"
       >
         <div className="bg-muted relative aspect-square w-full overflow-hidden">
-          <ModelThumb m={m} isCloud={isCloud} className="size-full" iconClassName="size-8" />
+          <ModelThumb
+            m={m}
+            isCloud={isCloud}
+            className="size-full transition-transform duration-300 group-hover:scale-[1.04]"
+            iconClassName="size-8"
+          />
           {active && (
             <span className="bg-primary text-primary-foreground absolute top-1.5 right-1.5 flex size-5 items-center justify-center rounded-full shadow">
               <Check className="size-3.5" />
@@ -302,7 +329,9 @@ function ModelCard({
           </div>
           {isCloud && m.cost > 0 && (
             <Badge className="bg-background/85 text-foreground absolute right-1.5 bottom-1.5">
-              {t("modelPicker.cost", { cost: m.cost })}
+              {paymentMode === "x402"
+                ? t("modelPicker.costUsd", { usd: creditsToUSD(m.cost) })
+                : t("modelPicker.cost", { cost: m.cost })}
             </Badge>
           )}
         </div>
@@ -367,7 +396,7 @@ export function ModelThumb({
         isCustom
           ? "bg-amber-500/15 text-amber-600 dark:text-amber-300"
           : isCloud
-            ? "bg-gradient-to-br from-sky-400 to-blue-600 text-white"
+            ? "bg-[linear-gradient(135deg,var(--cloud-from),var(--cloud-to))] text-white"
             : "brand-surface text-white",
         className
       )}

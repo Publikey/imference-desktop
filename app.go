@@ -14,8 +14,10 @@ import (
 	"mime"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -62,6 +64,11 @@ type App struct {
 	galleryMu    sync.Mutex
 	galleryCache map[string]*types.GenerationMeta
 	galleryValid bool
+
+	// dlCancel aborts an in-flight local model download (SelectLocalModel). Set
+	// while a download runs, nil otherwise; guarded by dlMu.
+	dlMu     sync.Mutex
+	dlCancel context.CancelFunc
 }
 
 func NewApp() *App {
@@ -501,7 +508,24 @@ func (a *App) SelectLocalModel(modelCode string) error {
 		}
 	}
 
+	// Per-download cancelable context so CancelModelDownload can abort just this
+	// fetch (not the whole app). Registered now, cleared when the goroutine ends.
+	dlCtx, cancelDL := context.WithCancel(a.ctx)
+	a.dlMu.Lock()
+	if a.dlCancel != nil {
+		a.dlCancel() // shouldn't happen (button is disabled), but never leak
+	}
+	a.dlCancel = cancelDL
+	a.dlMu.Unlock()
+
 	go func() {
+		defer func() {
+			cancelDL()
+			a.dlMu.Lock()
+			a.dlCancel = nil
+			a.dlMu.Unlock()
+		}()
+
 		emit(types.InstallProgress{Phase: "model", Message: "Preparing " + chosen.Name})
 		a.bus.Info("app", "SelectLocalModel start", map[string]any{"model": chosen.ModelCode, "url": chosen.ModelURL})
 
@@ -510,7 +534,7 @@ func (a *App) SelectLocalModel(modelCode string) error {
 		// Windows the file can't be deleted while open).
 		a.sidecar.Stop()
 
-		_, derr := modelfetch.New(a.bus).Fetch(a.ctx, chosen.ModelURL, newPath, modelReuseMinBytes,
+		_, derr := modelfetch.New(a.bus).Fetch(dlCtx, chosen.ModelURL, newPath, modelReuseMinBytes,
 			func(p modelfetch.Progress) {
 				emit(types.InstallProgress{
 					Phase:           "model",
@@ -520,6 +544,16 @@ func (a *App) SelectLocalModel(modelCode string) error {
 			},
 		)
 		if derr != nil {
+			// User aborted: no error state — restore the previous engine so local
+			// mode stays usable, then report a clean "cancelled".
+			if errors.Is(derr, context.Canceled) {
+				a.bus.Info("app", "SelectLocalModel cancelled", map[string]any{"model": chosen.ModelCode})
+				if s := a.settings.Get(); s.SDXLPath != "" && s.LocalModel != nil {
+					_ = a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime)
+				}
+				emit(types.InstallProgress{Phase: "cancelled", Message: "Download cancelled", Done: true})
+				return
+			}
 			a.bus.Error("app", "SelectLocalModel download failed", map[string]any{"err": derr.Error()})
 			emit(types.InstallProgress{Phase: "error", Error: derr.Error(), Done: true})
 			return
@@ -550,6 +584,19 @@ func (a *App) SelectLocalModel(modelCode string) error {
 	}()
 
 	return nil
+}
+
+// CancelModelDownload aborts an in-flight local model download (if any). The
+// download goroutine sees context.Canceled, cleans up the partial file, and
+// emits a "cancelled" progress event; a no-op when nothing is downloading.
+func (a *App) CancelModelDownload() {
+	a.dlMu.Lock()
+	cancel := a.dlCancel
+	a.dlMu.Unlock()
+	if cancel != nil {
+		a.bus.Info("app", "CancelModelDownload requested", nil)
+		cancel()
+	}
 }
 
 // deleteManagedModel removes a previously downloaded model file, but ONLY when
@@ -763,7 +810,7 @@ func (a *App) ListSavedImages(offset, limit int, filter types.GalleryFilter) ([]
 	sort.Slice(files, func(i, j int) bool { return files[i].mod.After(files[j].mod) })
 
 	// Filtering needs metadata for the whole set → use the cache.
-	active := filter.Engine != "" || filter.ModelCode != "" || filter.Source != ""
+	active := filter.Engine != "" || filter.ModelCode != "" || filter.Source != "" || filter.Text != ""
 	var cache map[string]*types.GenerationMeta
 	if active {
 		cache = a.galleryMeta(dir)
@@ -818,7 +865,7 @@ func readSidecar(imgPath string) *types.GenerationMeta {
 }
 
 func matchFilter(m *types.GenerationMeta, f types.GalleryFilter) bool {
-	if f.Engine == "" && f.ModelCode == "" && f.Source == "" {
+	if f.Engine == "" && f.ModelCode == "" && f.Source == "" && f.Text == "" {
 		return true
 	}
 	if m == nil {
@@ -831,6 +878,9 @@ func matchFilter(m *types.GenerationMeta, f types.GalleryFilter) bool {
 		return false
 	}
 	if f.Source != "" && m.Source != f.Source {
+		return false
+	}
+	if f.Text != "" && !strings.Contains(strings.ToLower(m.Prompt), strings.ToLower(f.Text)) {
 		return false
 	}
 	return true
@@ -954,6 +1004,47 @@ func (a *App) DeleteSavedImage(name string) error {
 	_ = os.Remove(p + ".json") // best-effort: drop the metadata sidecar too
 	a.invalidateGalleryCache()
 	a.bus.Info("app", "deleted saved image", map[string]any{"name": name})
+	return nil
+}
+
+// RevealInFolder opens the OS file manager with the given file highlighted
+// (Finder / Explorer / the default Linux file manager). The path is confined to
+// the output directory so the renderer can't ask us to reveal arbitrary files.
+func (a *App) RevealInFolder(imgPath string) error {
+	if imgPath == "" {
+		return errors.New("empty path")
+	}
+	abs, err := filepath.Abs(imgPath)
+	if err != nil {
+		return err
+	}
+	// Confinement: only files under the output dir may be revealed.
+	dir, err := filepath.Abs(a.outputDir())
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(dir, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return errors.New("path is outside the output folder")
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", "-R", abs)
+	case "windows":
+		// explorer returns a non-zero exit code even on success; ignore its error.
+		_ = exec.Command("explorer", "/select,"+abs).Start()
+		a.bus.Info("app", "revealed in folder", map[string]any{"path": abs})
+		return nil
+	default: // linux, *bsd — no universal "select" flag; open the parent dir.
+		cmd = exec.Command("xdg-open", filepath.Dir(abs))
+	}
+	if err := cmd.Start(); err != nil {
+		a.bus.Warn("app", "reveal in folder failed", map[string]any{"err": err.Error()})
+		return err
+	}
+	a.bus.Info("app", "revealed in folder", map[string]any{"path": abs})
 	return nil
 }
 

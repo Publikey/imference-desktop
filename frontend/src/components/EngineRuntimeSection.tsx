@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import type {
   EngineRuntimeSettings,
   ImageRuntimeSettings,
@@ -15,7 +17,6 @@ import type {
 
 const EMPTY: EngineRuntimeSettings = { image: {}, wan: {} };
 
-const selectCls = "border-input bg-background h-9 rounded-md border px-2 text-sm";
 
 export function EngineRuntimeSection({
   value,
@@ -76,40 +77,28 @@ export function EngineRuntimeSection({
         <div className="grid grid-cols-2 gap-3">
           <label className="grid gap-1 text-xs">
             {t("runtime.device")}
-            <select
-              className={selectCls}
-              value={wan.device || "auto"}
-              onChange={(e) => setWan({ device: e.target.value })}
-            >
+            <Select fullWidth value={wan.device || "auto"} onChange={(v) => setWan({ device: v })}>
               <option value="auto">{t("runtime.auto")}</option>
               <option value="cuda">{t("runtime.cuda")}</option>
               <option value="cpu">{t("runtime.cpu")}</option>
-            </select>
+            </Select>
           </label>
           <label className="grid gap-1 text-xs">
             {t("runtime.quant")}
-            <select
-              className={selectCls}
-              value={wan.memoryProfile || "auto"}
-              onChange={(e) => setWan({ memoryProfile: e.target.value })}
-            >
+            <Select fullWidth value={wan.memoryProfile || "auto"} onChange={(v) => setWan({ memoryProfile: v })}>
               <option value="auto">{t("runtime.quantAuto")}</option>
               <option value="gguf_q8">{t("runtime.q8")}</option>
               <option value="gguf_q6">{t("runtime.q6")}</option>
               <option value="gguf_q5">{t("runtime.q5")}</option>
               <option value="gguf_q4">{t("runtime.q4")}</option>
-            </select>
+            </Select>
           </label>
           <label className="grid gap-1 text-xs">
             {t("runtime.textEncoderQuant")}
-            <select
-              className={selectCls}
-              value={wan.textEncoderQuant || "int8"}
-              onChange={(e) => setWan({ textEncoderQuant: e.target.value })}
-            >
+            <Select fullWidth value={wan.textEncoderQuant || "int8"} onChange={(v) => setWan({ textEncoderQuant: v })}>
               <option value="int8">{t("runtime.int8")}</option>
               <option value="none">{t("runtime.noneBf16")}</option>
-            </select>
+            </Select>
           </label>
           <label className="grid gap-1 text-xs">
             {t("runtime.maxResident")}
@@ -158,12 +147,12 @@ function DeviceMaxGrid({
     <div className="grid grid-cols-2 gap-3">
       <label className="grid gap-1 text-xs">
         {t("runtime.device")}
-        <select className={selectCls} value={device || "auto"} onChange={(e) => onDevice(e.target.value)}>
+        <Select fullWidth value={device || "auto"} onChange={onDevice}>
           <option value="auto">{t("runtime.auto")}</option>
           <option value="cuda">{t("runtime.cuda")}</option>
           <option value="cpu">{t("runtime.cpu")}</option>
           {mps && <option value="mps">{t("runtime.mps")}</option>}
-        </select>
+        </Select>
       </label>
       <label className="grid gap-1 text-xs">
         {t("runtime.maxGpuModels")}
@@ -193,18 +182,15 @@ function OffloadSelect({
   return (
     <label className="grid gap-1 text-xs">
       {t("runtime.cpuOffload")}
-      <select
-        className={selectCls}
+      <Select
+        fullWidth
         value={current}
-        onChange={(e) => {
-          const v = e.target.value;
-          onChange(v === "auto" ? undefined : v === "on");
-        }}
+        onChange={(v) => onChange(v === "auto" ? undefined : v === "on")}
       >
         <option value="auto">{t("runtime.offloadAuto")}</option>
         <option value="on">{t("runtime.offloadOn")}</option>
         <option value="off">{t("runtime.offloadOff")}</option>
-      </select>
+      </Select>
     </label>
   );
 }
@@ -219,8 +205,8 @@ function Toggle({
   label: string;
 }) {
   return (
-    <label className="flex items-center gap-2 text-xs">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <label className="flex cursor-pointer items-center gap-2 text-xs">
+      <Checkbox checked={checked} onCheckedChange={onChange} />
       {label}
     </label>
   );

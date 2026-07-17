@@ -43,7 +43,41 @@
   },
   "mode": {
     "local": "Local",
-    "cloud": "Cloud"
+    "cloud": "Cloud",
+    "ready": "ready",
+    "notReady": "not ready"
+  },
+  "theme": {
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark",
+    "switchTo": "Switch to {{mode}} theme",
+    "current": "Theme: {{mode}}"
+  },
+  "palette": {
+    "title": "Command palette",
+    "placeholder": "Type a command or search…",
+    "empty": "No matching commands",
+    "navigate": "navigate",
+    "select": "select",
+    "close": "close",
+    "groupGenerate": "Generate",
+    "groupMode": "Mode",
+    "groupModel": "Model",
+    "groupEngine": "Local engine",
+    "groupPanels": "Panels",
+    "groupAppearance": "Appearance",
+    "groupApp": "App",
+    "generate": "Generate image",
+    "switchLocal": "Switch to Local",
+    "switchCloud": "Switch to Cloud",
+    "chooseModel": "Choose a model…",
+    "openActivity": "Open Activity",
+    "clearActivity": "Clear finished activity",
+    "theme": "Theme: {{mode}}",
+    "language": "Language: {{lang}}",
+    "settings": "Open Settings",
+    "logs": "Toggle Logs"
   },
   "composer": {
     "qualityTags": "Quality tags",
@@ -53,7 +87,10 @@
     "negativePlaceholder": "things to avoid…",
     "downloadingBtn": "Downloading…",
     "downloadModelBtn": "Download model",
-    "generateBtn": "Generate"
+    "generateBtn": "Generate",
+    "clear": "Clear prompt",
+    "charCount_one": "{{count}} char",
+    "charCount_other": "{{count}} chars"
   },
   "hint": {
     "configurePayment": "Configure a payment method above",
@@ -66,17 +103,21 @@
     "engineError": "Local engine error — see Logs",
     "startEngine": "Start the local engine to generate",
     "pickModel": "Pick a model above",
-    "preparing": "Preparing {{name}}"
+    "preparing": "Preparing {{name}}",
+    "usdPerRun": "{{name}} · ${{usd}} / run"
   },
   "formats": {
     "square": "Square",
     "portrait": "Portrait",
-    "landscape": "Landscape"
+    "landscape": "Landscape",
+    "custom": "Custom"
   },
   "params": {
     "title": "Parameters",
     "summary": "{{dims}} · {{steps}} steps · cfg {{cfg}}",
     "format": "Format",
+    "width": "Width",
+    "height": "Height",
     "steps": "Steps",
     "cfg": "CFG",
     "seed": "Seed",
@@ -90,10 +131,39 @@
   "img2img": {
     "label": "Image-to-image · strength {{strength}}",
     "add": "Add source image (img2img)",
-    "sourceAlt": "img2img source"
+    "sourceAlt": "img2img source",
+    "dropHere": "Drop to use as image reference"
+  },
+  "panels": {
+    "create": "Create",
+    "queue": "Activity",
+    "gallery": "Gallery",
+    "dragToReorder": "Drag to rearrange panels",
+    "collapse": "Collapse panel",
+    "expand": "Expand panel",
+    "resize": "Drag to resize (double-click to reset)"
+  },
+  "queue": {
+    "empty": "Nothing running",
+    "emptyHint": "Generations you launch appear here, live.",
+    "clearFinished": "Clear",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "step": "step {{step}}/{{total}}",
+    "cloudRunning": "Running in the cloud…",
+    "generating": "Generating…",
+    "queuedNext": "Queued · next up",
+    "queuedPosition": "Queued · #{{position}} in line",
+    "done": "Done in {{time}}",
+    "failed": "Failed"
+  },
+  "activity": {
+    "busy_one": "{{count}} running",
+    "busy_other": "{{count}} running"
   },
   "gallery": {
-    "deleteConfirm": "Delete this image?\n{{name}}",
+    "deleteConfirm": "{{name}} will be permanently removed from disk.",
+    "deleteSelectedConfirm": "{{count}} images will be permanently removed from disk.",
     "emptyFiltered": "No images match this filter",
     "empty": "Your generations will appear here",
     "filterModel": "Model",
@@ -103,11 +173,31 @@
     "columns": "Columns",
     "columns_one": "{{count}} column",
     "columns_other": "{{count}} columns",
-    "step": "step {{step}}/{{total}}",
-    "cloudRunning": "Cloud…",
-    "generating": "Generating…",
     "seed": "seed {{seed}}",
-    "deleteImage": "Delete image"
+    "deleteImage": "Delete image",
+    "search": "Search prompts…",
+    "counter": "{{i}} / {{n}}",
+    "prev": "Previous image",
+    "next": "Next image",
+    "select": "Select",
+    "selectedCount_one": "{{count}} selected",
+    "selectedCount_other": "{{count}} selected",
+    "deleteSelected": "Delete",
+    "clearSelection": "Clear",
+    "ctxOpen": "Open",
+    "ctxUseAsSource": "Use as image reference",
+    "ctxReuse": "Reuse prompt & settings",
+    "ctxCopyPrompt": "Copy prompt",
+    "ctxReveal": "Reveal in folder",
+    "ctxDelete": "Delete",
+    "clearFilters": "Clear filters",
+    "deleteTitle_one": "Delete image?",
+    "deleteTitle_other": "Delete {{count}} images?",
+    "deleteAction": "Delete",
+    "lbNav": "Navigate",
+    "lbZoom": "Click image to zoom",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen"
   },
   "meta": {
     "model": "Model",
@@ -159,7 +249,8 @@
     "removeTitle": "Remove from list (the file is not deleted)",
     "removeAria": "Remove custom model",
     "typeCloudApi": "Cloud API",
-    "typeOther": "Other"
+    "typeOther": "Other",
+    "costUsd": "${{usd}}"
   },
   "customModel": {
     "title": "Add custom model",
@@ -217,7 +308,12 @@
     "outputDir": "Auto-save folder (optional)",
     "outputDirPlaceholder": "Leave empty to use ~/Pictures/Imference",
     "devBuild": "(dev build)",
-    "saved": "Saved"
+    "saved": "Saved",
+    "engineDesc": "Install and manage the local generation engine on this machine.",
+    "runtimeDesc": "Host-machine tuning for the engine — device, memory, and quantization.",
+    "cloudDesc": "How cloud generations are paid for — a credit API key or an on-chain USDC wallet.",
+    "pathsDesc": "Where Python lives and where finished images are saved.",
+    "languageDesc": "The language of the app interface."
   },
   "engineSection": {
     "title": "Local engine",
@@ -279,7 +375,7 @@
     "loading": "Loading wallet…",
     "title": "Wallet (Base mainnet · USDC)",
     "keychainNote": "This wallet's private key lives in your OS keychain on this machine (Windows Credential Manager / macOS login keychain). Treat it as a burner: only fund what you're OK losing. Use \"Export private key\" to back it up before relying on it.",
-    "intro": "x402 needs an EVM wallet on Base mainnet to pay per generation (0.05 USDC per image). Recommended: generate a burner wallet here and fund it with a few dollars from your MetaMask.",
+    "intro": "x402 needs an EVM wallet on Base mainnet to pay per generation (cost varies by model — shown on each cloud model). Recommended: generate a burner wallet here and fund it with a few dollars from your MetaMask.",
     "generate": "Generate new wallet",
     "importExisting": "Import existing private key",
     "address": "Address",
@@ -316,5 +412,45 @@
     "sourceFilter": "source",
     "allSources": "all",
     "empty": "No entries."
+  },
+  "toast": {
+    "engineInstalled": "Local engine installed",
+    "engineFailed": "Engine install failed",
+    "modelReady": "Model ready",
+    "modelFailed": "Model download failed",
+    "downloadCancelled": "Download cancelled",
+    "genFailed": "Generation failed",
+    "deleted_one": "Image deleted",
+    "deleted_other": "{{count}} images deleted"
+  },
+  "onboarding": {
+    "title": "Welcome to Imference",
+    "subtitle": "Generate images locally on your machine, or in the cloud. Pick a path to get started.",
+    "localLabel": "Run locally",
+    "cloudLabel": "Or use the cloud",
+    "cloudTitle": "Generate in the cloud",
+    "cloudHint": "Add an API key or connect a wallet — no install needed.",
+    "skip": "Skip for now"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "desc": "Speed up your workflow.",
+    "general": "General",
+    "gallery": "Gallery",
+    "viewer": "Image viewer",
+    "palette": "Command palette",
+    "help": "This sheet",
+    "generate": "Generate",
+    "click": "click",
+    "rightClick": "Right-click",
+    "multiSelect": "Add to selection",
+    "rangeSelect": "Select range",
+    "selectAll": "Select all",
+    "deleteSel": "Delete selected",
+    "clearSel": "Clear selection",
+    "context": "Context menu",
+    "prevNext": "Previous / next",
+    "zoom": "Zoom",
+    "close": "Close"
   }
 }

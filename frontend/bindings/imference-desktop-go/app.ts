@@ -24,6 +24,15 @@ import * as logbus$0 from "./internal/logbus/models.js";
 import * as types$0 from "./internal/types/models.js";
 
 /**
+ * CancelModelDownload aborts an in-flight local model download (if any). The
+ * download goroutine sees context.Canceled, cleans up the partial file, and
+ * emits a "cancelled" progress event; a no-op when nothing is downloading.
+ */
+export function CancelModelDownload(): $CancellablePromise<void> {
+    return $Call.ByID(1920008848);
+}
+
+/**
  * CheckForUpdate asks GitHub for the latest release and compares it to this
  * build. Local "dev" builds return UpdateAvailable=false without any network
  * call. The frontend treats an error as "no banner" — never blocking startup.
@@ -255,6 +264,15 @@ export function RemoveCustomModel(path: string): $CancellablePromise<types$0.Set
 
 export function RestartSidecar(): $CancellablePromise<void> {
     return $Call.ByID(2718986071);
+}
+
+/**
+ * RevealInFolder opens the OS file manager with the given file highlighted
+ * (Finder / Explorer / the default Linux file manager). The path is confined to
+ * the output directory so the renderer can't ask us to reveal arbitrary files.
+ */
+export function RevealInFolder(imgPath: string): $CancellablePromise<void> {
+    return $Call.ByID(1947324723, imgPath);
 }
 
 /**

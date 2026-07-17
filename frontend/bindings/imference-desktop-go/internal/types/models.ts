@@ -35,17 +35,20 @@ export interface EngineInfo {
     "pythonPath": string;
 
     /**
-     * Installed imference-engine version ("" if unknown / not installed).
+     * EngineVersion is the imference-engine version currently installed in the
+     * venv (via importlib.metadata), "" when unknown / not installed.
      */
     "engineVersion": string;
 
     /**
-     * Version the desktop ships/pins ("" under a dev source override).
+     * PinnedVersion is the version the desktop ships with (parsed from
+     * EngineTarball), "" under a dev source override where no version is enforced.
      */
     "pinnedVersion": string;
 
     /**
-     * installed != pinned (both known) — startup force-reinstalls in that case.
+     * Outdated is true when both versions are known and differ — the startup
+     * check force-reinstalls the pinned engine in that case.
      */
     "outdated": boolean;
 }
@@ -55,7 +58,8 @@ export interface EngineInfo {
  * backends (SDXL, SD 1.5, Z-Image, FLUX, Chroma, Qwen-Image, Anima) share the
  * engine's single IMAGE_* env contract and only one loads per sidecar, so they
  * share ONE Image block rather than a block each. WAN video has its own WAN_*
- * contract.
+ * contract. (Pre-unification builds stored separate `sdxl`/`zimage` blocks;
+ * settings.reload() migrates the old `sdxl` block into `image`.)
  */
 export interface EngineRuntimeSettings {
     "image": ImageRuntimeSettings;
@@ -98,7 +102,7 @@ export interface GalleryFacets {
  */
 export interface GalleryFilter {
     /**
-     * "sdxl" | "zimage" | "wan"
+     * e.g. "sdxl" | "flux" | "zimage" | "wan"
      */
     "engine": string;
 
@@ -111,6 +115,11 @@ export interface GalleryFilter {
      * "local" | "cloud"
      */
     "source": string;
+
+    /**
+     * free-text, matched against the prompt (case-insensitive)
+     */
+    "text": string;
 }
 
 /**
@@ -138,7 +147,7 @@ export interface GenerationMeta {
     "modelName"?: string;
 
     /**
-     * "sdxl" | "zimage" | "wan"
+     * e.g. "sdxl" | "flux" | "zimage" | "wan"
      */
     "engine"?: string;
     "width"?: number;
@@ -231,25 +240,29 @@ export interface GenerationResult {
 }
 
 /**
- * ImageRuntimeSettings tunes the SDXL backend (IMAGE_* env contract).
+ * ImageRuntimeSettings tunes the active image backend (shared IMAGE_* env
+ * contract). UseTinyVAE only affects SDXL / SD 1.5; the engine ignores it for
+ * Z-Image / FLUX / Chroma / Qwen-Image / Anima.
  */
 export interface ImageRuntimeSettings {
     /**
-     * "" / "auto" | cuda | cuda:N | mps | cpu
+     * Device: "" / "auto" | cuda | cuda:N | mps | cpu. "cuda" covers BOTH
+     * NVIDIA and AMD GPUs — torch's ROCm build presents the AMD GPU under the
+     * cuda device string, so there is no separate "rocm" value.
      */
     "device"?: string;
 
     /**
-     * SDXL TAESDxl — ~10× faster VAE decode
+     * SDXL/SD1.5 TAESD — ~10× faster VAE decode
      */
     "useTinyVae"?: boolean;
 
     /**
      * EnableCPUOffload is tri-state: nil = Auto (the desktop enables offload on
-     * CUDA cards below autoOffloadVRAMThresholdGiB — see resolveCPUOffload — so a
-     * small-VRAM GPU doesn't oversubscribe VRAM and crawl via WDDM shared-memory
-     * spill), *true = force on, *false = force off. On a card the full pipe fits
-     * on, Auto leaves it off (full residency is fastest).
+     * NVIDIA/AMD cards below autoOffloadVRAMThresholdGiB — see resolveCPUOffload
+     * — so a small-VRAM GPU doesn't oversubscribe VRAM and crawl via WDDM
+     * shared-memory spill), *true = force on, *false = force off. On a card the
+     * full pipe fits on, Auto leaves it off (full residency is fastest).
      */
     "enableCpuOffload"?: boolean | null;
 
@@ -310,7 +323,8 @@ export interface ModelInfo {
 
     /**
      * BackendType is the internal engine backend, normalized from the catalog's
-     * im_engine field: "sdxl" | "zimage" | "wan". (im_engine "external" and null
+     * im_engine field, one of the image backends (sdxl, sd15, zimage, flux,
+     * chroma, qwenimage, anima) or "wan". (im_engine "external" and null
      * are filtered out upstream in cloud.ListModels — not locally runnable.)
      */
     "backendType"?: string;

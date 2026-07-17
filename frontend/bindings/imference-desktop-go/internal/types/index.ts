@@ -20,6 +20,5 @@ export type {
     SidecarStatus,
     UpdateInfo,
     WalletInfo,
-    WanRuntimeSettings,
-    ZImageRuntimeSettings
+    WanRuntimeSettings
 } from "./models.js";

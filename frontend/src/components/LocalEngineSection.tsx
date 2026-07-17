@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Download, RefreshCw, Loader2, CheckCircle2, XCircle, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ProgressBar } from "@/components/ui/progress";
 import { api } from "@/lib/wails-bridge";
 import type { EngineInfo, InstallPhase, InstallProgress, PythonInfo } from "@/lib/types";
 
@@ -16,6 +17,9 @@ const PHASE_KEY: Record<InstallPhase, string> = {
   model: "engineSection.phaseModel",
   done: "engineSection.phaseDone",
   error: "engineSection.phaseError",
+  // Model-download-only phase; never reached by the engine installer, but the
+  // Record must be exhaustive over InstallPhase.
+  cancelled: "engineSection.phaseError",
 };
 
 const PHASE_ORDER: InstallPhase[] = [
@@ -189,17 +193,7 @@ function ProgressView({ p }: { p: InstallProgress }) {
         </span>
         {p.percentEstimate > 0 && <span className="tabular-nums">{p.percentEstimate}%</span>}
       </div>
-      <div className="bg-muted h-1.5 w-full overflow-hidden rounded">
-        <div
-          className={
-            "h-full transition-all " +
-            (p.percentEstimate > 0
-              ? "bg-primary"
-              : "animate-pulse bg-primary/50 w-full")
-          }
-          style={p.percentEstimate > 0 ? { width: `${p.percentEstimate}%` } : undefined}
-        />
-      </div>
+      <ProgressBar percent={p.percentEstimate > 0 ? p.percentEstimate : null} />
       {p.message && (
         <p className="text-muted-foreground truncate font-mono text-[11px]" title={p.message}>
           {p.message}

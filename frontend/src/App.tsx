@@ -461,6 +461,13 @@ export default function App() {
   // subscription for the whole app lifetime.
   useEffect(() => {
     return api.onModelProgress((p) => {
+      // Cancelled: clear the progress UI entirely, no error styling.
+      if (p.phase === "cancelled") {
+        setDownloading(false);
+        setDlProgress(null);
+        toast.toast(t("toast.downloadCancelled"));
+        return;
+      }
       setDlProgress(p);
       if (p.done || p.phase === "done" || p.phase === "error") {
         setDownloading(false);
@@ -499,6 +506,12 @@ export default function App() {
       });
     });
   }, [pendingLocalModel, downloading, t]);
+
+  // Abort an in-flight download. The backend emits a "cancelled" progress event
+  // that resets the UI (handled in onModelProgress above).
+  const cancelDownload = useCallback(() => {
+    void api.cancelModelDownload().catch(() => {});
+  }, []);
 
   // The selected local model is "downloaded" when it matches the persisted one.
   const localDownloaded =
@@ -1042,6 +1055,7 @@ export default function App() {
                         onSelectLocal={setPendingLocalModel}
                         downloading={downloading}
                         progress={dlProgress}
+                        onCancelDownload={cancelDownload}
                         onAddCustom={addCustomModel}
                         onSelectCustom={selectCustomModel}
                         onRemoveCustom={removeCustomModel}

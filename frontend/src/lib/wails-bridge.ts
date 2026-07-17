@@ -103,6 +103,10 @@ const raw = {
   listLocalModels: ListLocalModels as () => Promise<ModelInfo[]>,
   listCloudModels: ListCloudModels as () => Promise<ModelInfo[]>,
   selectLocalModel: SelectLocalModel as (modelCode: string) => Promise<void>,
+  // Abort an in-flight local model download. Called by name so it needs no
+  // generated binding (Wails regenerates app.ts on build, which would race a
+  // hand-added export). Resolves once the backend acknowledges the cancel.
+  cancelModelDownload: (): Promise<void> => Call.ByName("main.App.CancelModelDownload") as Promise<void>,
   // Cloud model: pick from the full catalog; persists code + full entry.
   selectCloudModel: SelectCloudModel as (modelCode: string) => Promise<void>,
   // Custom user-supplied checkpoints (referenced in place, no download).

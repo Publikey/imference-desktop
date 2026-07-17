@@ -17,6 +17,9 @@ const PHASE_KEY: Record<InstallPhase, string> = {
   model: "engineSection.phaseModel",
   done: "engineSection.phaseDone",
   error: "engineSection.phaseError",
+  // Model-download-only phase; never reached by the engine installer, but the
+  // Record must be exhaustive over InstallPhase.
+  cancelled: "engineSection.phaseError",
 };
 
 const PHASE_ORDER: InstallPhase[] = [

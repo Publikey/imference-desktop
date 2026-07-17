@@ -412,6 +412,7 @@
     "engineFailed": "引擎安装失败",
     "modelReady": "模型已就绪",
     "modelFailed": "模型下载失败",
+    "downloadCancelled": "已取消下载",
     "genFailed": "生成失败",
     "deleted_other": "已删除 {{count}} 张图片"
   },

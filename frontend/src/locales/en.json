@@ -418,6 +418,7 @@
     "engineFailed": "Engine install failed",
     "modelReady": "Model ready",
     "modelFailed": "Model download failed",
+    "downloadCancelled": "Download cancelled",
     "genFailed": "Generation failed",
     "deleted_one": "Image deleted",
     "deleted_other": "{{count}} images deleted"

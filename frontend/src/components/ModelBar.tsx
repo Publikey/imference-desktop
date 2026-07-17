@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Download, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Download, Loader2, RefreshCw, X } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,6 +25,8 @@ type Props = {
   onSelectLocal: (m: ModelInfo) => void;
   downloading: boolean;
   progress: InstallProgress | null;
+  // Abort an in-flight local download.
+  onCancelDownload: () => void;
   // Custom user checkpoints: open the add flow (native picker + backend
   // dialog), activate a registered one, or drop one from the registry.
   onAddCustom: () => void;
@@ -51,6 +53,7 @@ export function ModelBar({
   onSelectLocal,
   downloading,
   progress,
+  onCancelDownload,
   onAddCustom,
   onSelectCustom,
   onRemoveCustom,
@@ -95,7 +98,9 @@ export function ModelBar({
     ? settings?.cloudModel || null
     : pendingLocalModel?.modelCode ?? null;
   const selected = allModels.find((m) => m.modelCode === activeCode) ?? null;
-  const busy = downloading || switching;
+  // A local download must not block the CLOUD picker — switching mode should let
+  // you pick a cloud model even while a local model is still downloading.
+  const busy = switching || (downloading && !isCloud);
 
   const pick = useCallback(
     async (code: string) => {
@@ -182,7 +187,7 @@ export function ModelBar({
       </div>
 
       {downloading && progress ? (
-        <DownloadProgress p={progress} />
+        <DownloadProgress p={progress} onCancel={onCancelDownload} />
       ) : customError && mode === "local" ? (
         <p className="text-destructive mt-2 text-xs">{customError}</p>
       ) : progress?.error && mode === "local" ? (
@@ -212,7 +217,7 @@ export function ModelBar({
   );
 }
 
-function DownloadProgress({ p }: { p: InstallProgress }) {
+function DownloadProgress({ p, onCancel }: { p: InstallProgress; onCancel: () => void }) {
   const { t } = useTranslation();
   return (
     <div className="mt-2.5 space-y-1.5 pl-9">
@@ -223,9 +228,20 @@ function DownloadProgress({ p }: { p: InstallProgress }) {
             {p.message || t("modelBar.working")}
           </span>
         </span>
-        {p.percentEstimate > 0 && (
-          <span className="text-muted-foreground shrink-0 tabular-nums">{p.percentEstimate}%</span>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {p.percentEstimate > 0 && (
+            <span className="text-muted-foreground tabular-nums">{p.percentEstimate}%</span>
+          )}
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-muted-foreground/70 hover:text-destructive inline-flex items-center gap-1 rounded font-medium transition-colors"
+            title={t("common.cancel")}
+          >
+            <X className="size-3" />
+            {t("common.cancel")}
+          </button>
+        </div>
       </div>
       <ProgressBar percent={p.percentEstimate > 0 ? p.percentEstimate : null} />
     </div>

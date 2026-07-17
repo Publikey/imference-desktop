@@ -308,7 +308,8 @@ export type InstallPhase =
   | "extras"
   | "model"
   | "done"
-  | "error";
+  | "error"
+  | "cancelled";
 
 export type InstallProgress = {
   phase: InstallPhase;

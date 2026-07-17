@@ -66,9 +66,13 @@ func main() {
 	})
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "Imference Desktop",
-		Width:            1100,
-		Height:           780,
+		Title: "Imference Desktop",
+		// Open wide enough to clear the 1280px (xl) breakpoint so the panel board
+		// lands in its two-column layout by default instead of the stacked
+		// single column. MinWidth stays permissive: shrinking below the
+		// breakpoint still collapses to one column responsively.
+		Width:            1360,
+		Height:           860,
 		MinWidth:         900,
 		MinHeight:        600,
 		BackgroundColour: application.RGBA{Red: 255, Green: 255, Blue: 255, Alpha: 255},

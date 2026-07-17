@@ -32,6 +32,13 @@ const (
 	pollInterval   = 1 * time.Second
 	overallTimeout = 120 * time.Second
 	catalogTTL     = 5 * time.Minute // the model catalog is effectively static per session
+
+	// Downloading the finished image is separate from the generation budget
+	// above: on a slow/saturated uplink a single attempt can exceed its deadline
+	// even though the blob exists, so the download gets its own retry budget.
+	downloadBudget  = 180 * time.Second // whole download phase, including retries
+	downloadAttempt = 60 * time.Second  // one attempt
+	downloadTries   = 4                 // total attempts before giving up
 )
 
 type Client struct {
@@ -57,7 +64,10 @@ type Client struct {
 func New(bus *logbus.Bus) *Client {
 	return &Client{
 		base: defaultBase,
-		http: &http.Client{Timeout: 60 * time.Second}, // per-request timeouts override
+		// Generous ceiling only: every request sets its own (shorter) context
+		// deadline. Kept above downloadAttempt so it never preempts a single
+		// download attempt, while still capping any request that forgets one.
+		http: &http.Client{Timeout: 90 * time.Second},
 		bus:  bus,
 	}
 }
@@ -483,7 +493,10 @@ func (c *Client) Generate(
 	}
 	c.bus.Info("cloud", "pollStatus ok", map[string]any{"url": imageURL, "seed": seed})
 
-	b64, mime, err := c.downloadAsBase64(overallCtx, imageURL)
+	// Download on the caller's context, not overallCtx: generation is done, and
+	// the download gets its own (retry) budget so a slow link doesn't lose an
+	// image that was successfully generated.
+	b64, mime, err := c.downloadWithRetry(ctx, imageURL)
 	if err != nil {
 		c.bus.Error("cloud", "download failed", map[string]any{"err": err.Error(), "url": imageURL})
 		return types.GenerationResult{}, fmt.Errorf("cloud: download image: %w", err)
@@ -548,7 +561,8 @@ func (c *Client) GenerateX402(
 	}
 	c.bus.Info("cloud", "pollStatusX402 ok", map[string]any{"url": imageURL, "seed": seed})
 
-	b64, mime, err := c.downloadAsBase64(overallCtx, imageURL)
+	// Download on the caller's context, not overallCtx (see Generate).
+	b64, mime, err := c.downloadWithRetry(ctx, imageURL)
 	if err != nil {
 		c.bus.Error("cloud", "download failed", map[string]any{"err": err.Error(), "url": imageURL})
 		return types.GenerationResult{}, fmt.Errorf("cloud: download image: %w", err)
@@ -803,13 +817,76 @@ func (c *Client) fetchStatus(ctx context.Context, statusURL, apiKey string) (str
 // downloadAsBase64 fetches the Azure Blob URL and returns its base64
 // payload + mime type. Keeps the frontend's data: URL pipeline identical
 // between cloud and local modes.
+// httpStatusError carries the blob server's status so the retry layer can tell
+// a transient failure (5xx/429/408 — worth retrying) from a permanent one
+// (404/403 — the blob is missing or forbidden, retrying is pointless).
+type httpStatusError struct {
+	status  int
+	snippet string
+}
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("HTTP %d downloading image: %s", e.status, e.snippet)
+}
+
+// isRetryableDownloadErr reports whether a failed download attempt is worth
+// retrying. Network-level errors (timeouts, resets, short reads) are transient;
+// HTTP errors are retryable only for server-side/throttling statuses.
+func isRetryableDownloadErr(err error) bool {
+	var se *httpStatusError
+	if errors.As(err, &se) {
+		return se.status == http.StatusRequestTimeout ||
+			se.status == http.StatusTooManyRequests ||
+			se.status >= 500
+	}
+	return true
+}
+
+// downloadWithRetry fetches the finished image, retrying transient failures with
+// exponential backoff within a dedicated budget. This is what makes a slow
+// uplink (where a single attempt hits its deadline) still succeed — the blob
+// exists, we just need another try.
+func (c *Client) downloadWithRetry(ctx context.Context, src string) (string, string, error) {
+	budgetCtx, cancel := context.WithTimeout(ctx, downloadBudget)
+	defer cancel()
+
+	var lastErr error
+	backoff := 1 * time.Second
+	for attempt := 1; attempt <= downloadTries; attempt++ {
+		attemptCtx, aCancel := context.WithTimeout(budgetCtx, downloadAttempt)
+		b64, mime, err := c.downloadAsBase64(attemptCtx, src)
+		aCancel()
+		if err == nil {
+			if attempt > 1 {
+				c.bus.Info("cloud", "download ok after retry", map[string]any{"attempt": attempt})
+			}
+			return b64, mime, nil
+		}
+		lastErr = err
+		if !isRetryableDownloadErr(err) {
+			return "", "", err // permanent (e.g. 404/403) — don't burn the budget
+		}
+		if budgetCtx.Err() != nil || attempt == downloadTries {
+			break
+		}
+		c.bus.Warn("cloud", "download retry", map[string]any{
+			"attempt": attempt, "err": err.Error(), "backoff_ms": backoff.Milliseconds(),
+		})
+		select {
+		case <-time.After(backoff):
+		case <-budgetCtx.Done():
+			return "", "", budgetCtx.Err()
+		}
+		backoff *= 2
+	}
+	return "", "", lastErr
+}
+
 func (c *Client) downloadAsBase64(ctx context.Context, src string) (string, string, error) {
 	c.bus.Trace("cloud", "GET "+src, nil)
-	// Bound the download to 30s via context, but reuse the shared client so we
-	// keep connection pooling / keep-alive instead of allocating a fresh one.
-	dlCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	r, _ := http.NewRequestWithContext(dlCtx, http.MethodGet, src, nil)
+	// The per-attempt timeout is set by the caller (downloadWithRetry); reuse the
+	// shared client so we keep connection pooling / keep-alive.
+	r, _ := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
 	r.Header.Set("User-Agent", "imference-desktop-go/0.0.1")
 	resp, err := c.http.Do(r)
 	if err != nil {
@@ -825,7 +902,7 @@ func (c *Client) downloadAsBase64(ctx context.Context, src string) (string, stri
 			"snippet": string(snippet),
 			"url":     src,
 		})
-		return "", "", fmt.Errorf("HTTP %d downloading image: %s", resp.StatusCode, string(snippet))
+		return "", "", &httpStatusError{status: resp.StatusCode, snippet: string(snippet)}
 	}
 	mime := resp.Header.Get("Content-Type")
 	if mime == "" {

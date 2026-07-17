@@ -194,6 +194,16 @@ export function PanelBoard({
   const [resizing, setResizing] = useState(false);
   const registerNode = usePanelFlip(JSON.stringify(columns) + JSON.stringify(collapsed), dragId);
 
+  // Live reorder remounts the dragged panel (its column changes), so the grip's
+  // own `onDragEnd` is often lost — leaving the drop-hint outlines stuck on. A
+  // window-level dragend always clears the drag state (the drop handlers below
+  // also clear it for the common drop-on-a-panel case).
+  useEffect(() => {
+    const clear = () => setDragId(null);
+    window.addEventListener("dragend", clear);
+    return () => window.removeEventListener("dragend", clear);
+  }, []);
+
   // A non-grow column's width: the widest manual override among its panels, else
   // its spec default (rem → px). The gallery column grows and isn't sized here.
   const colWidthPx = useCallback(
@@ -297,8 +307,11 @@ export function PanelBoard({
           grow || rail
             ? undefined
             : ({ "--col-w": `${colWidthPx(col)}px` } as React.CSSProperties);
+        // Key by position, not content: a content key remounts the whole column
+        // on every live reorder, destroying the dragged panel's node (and its
+        // dragend) mid-drag.
         return (
-          <Fragment key={col.join("-") || ci}>
+          <Fragment key={ci}>
             <div className={columnClass} style={style}>
               {col.map((id) => (
                 <Panel
@@ -422,7 +435,7 @@ function Panel({
         ref={(el) => registerNode(id, el)}
         className={cn("shrink-0 transition-opacity", dragging && "panel-dragging", droppable && "panel-drop-hint")}
         onDragOver={onDragOver}
-        onDrop={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); setDragId(null); }}
         aria-label={spec.title}
       >
         <button
@@ -453,7 +466,7 @@ function Panel({
         ref={(el) => registerNode(id, el)}
         className={cn("min-w-0 transition-opacity", dragging && "panel-dragging", droppable && "panel-drop-hint")}
         onDragOver={onDragOver}
-        onDrop={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); setDragId(null); }}
         aria-label={spec.title}
       >
         <div className="flex items-center gap-1.5 px-1">
@@ -482,7 +495,7 @@ function Panel({
       ref={(el) => registerNode(id, el)}
       className={cn("flex min-w-0 flex-col gap-3 transition-opacity", dragging && "panel-dragging", droppable && "panel-drop-hint")}
       onDragOver={onDragOver}
-      onDrop={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); setDragId(null); }}
       aria-label={spec.title}
     >
       <header className="flex h-6 select-none items-center gap-1.5 px-1">

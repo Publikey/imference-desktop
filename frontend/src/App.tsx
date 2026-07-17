@@ -187,19 +187,19 @@ function readFileAsDataURL(file: File): Promise<string> {
 const DRAG_SRC = "application/x-imference-src";
 const DRAG_NAME = "application/x-imference-name";
 
-// Set for the lifetime of a gallery-tile drag (dragstart → dragend). WebKit
-// (WKWebView, the macOS app's engine) hides custom dataTransfer types during
-// `dragover` — "protected drag data" — so a gallery image, whose drag carries
-// only our custom types (no OS "Files"), can't be recognised mid-drag by types
-// alone, and the Create panel never arms its drop zone. This flag lets us detect
-// an in-app image drag regardless of what the webview exposes.
-let imageDragActive = false;
+// The in-app image drag currently in flight (a gallery tile), set at dragstart
+// and cleared at dragend. WebKit (WKWebView, the macOS app's engine) restricts
+// custom dataTransfer types to a whitelist and withholds them during BOTH
+// `dragover` (protected drag data) AND `drop` — so a gallery image, whose drag
+// carries only our custom types (no OS "Files"), can neither be recognised
+// mid-drag nor read on drop through the DataTransfer. Carrying the payload in
+// this module variable sidesteps the DataTransfer entirely for in-app drags.
+let dragImage: { name: string | null; getSrc: () => Promise<string> } | null = null;
 
-// True when a drag carries something we can turn into an img2img source (an OS
-// image file or a gallery tile). During `dragover` only `types` are readable —
-// and WebKit may not expose our custom ones — so we also trust the drag flag.
+// True when a drag can become an img2img source: an in-app gallery tile (module
+// var) or an OS image file (the "Files" type, which every webview exposes).
 function dragHasImage(dt: DataTransfer | null): boolean {
-  if (imageDragActive) return true;
+  if (dragImage) return true;
   if (!dt) return false;
   const types = Array.from(dt.types);
   return types.includes("Files") || types.includes(DRAG_SRC) || types.includes(DRAG_NAME);
@@ -718,12 +718,20 @@ export default function App() {
       if (!dragHasImage(e.dataTransfer)) return;
       e.preventDefault();
       setDropActive(false);
+      // In-app gallery drag → use the module-var payload (works even when the
+      // webview won't hand back custom DataTransfer types on drop).
+      if (dragImage) {
+        const getSrc = dragImage.getSrc;
+        void useAsImg2img(getSrc);
+        return;
+      }
       const dt = e.dataTransfer;
       const file = Array.from(dt.files).find((f) => f.type.startsWith("image/"));
       if (file) {
         void readFileAsDataURL(file).then((src) => void useAsImg2img(async () => src));
         return;
       }
+      // Fallbacks for webviews that DO expose custom types (Chromium/Edge).
       const inline = dt.getData(DRAG_SRC);
       if (inline) {
         void useAsImg2img(async () => inline);
@@ -2347,10 +2355,14 @@ function Gallery({
     }
     if (name) e.dataTransfer.setData(DRAG_NAME, name);
     e.dataTransfer.effectAllowed = "copyMove";
-    // Arm the Create panel's drop zone independently of the webview exposing our
-    // custom types mid-drag (WebKit doesn't). Cleared when the drag ends.
-    imageDragActive = true;
-    window.addEventListener("dragend", () => { imageDragActive = false; }, { once: true });
+    // Carry the payload in a module var so the Create panel can both arm its drop
+    // zone AND read the image on drop, without depending on the webview exposing
+    // our custom DataTransfer types (WebKit doesn't). Cleared when the drag ends.
+    dragImage = {
+      name,
+      getSrc: () => (src ? Promise.resolve(src) : name ? api.getSavedImage(name) : Promise.resolve("")),
+    };
+    window.addEventListener("dragend", () => { dragImage = null; }, { once: true });
   }, []);
 
   const openMenu = useCallback((e: React.MouseEvent, target: TileTarget) => {

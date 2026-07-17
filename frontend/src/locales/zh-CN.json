@@ -71,8 +71,7 @@
     "switchLocal": "切换到本地",
     "switchCloud": "切换到云端",
     "chooseModel": "选择模型…",
-    "expandActivity": "展开任务面板",
-    "collapseActivity": "折叠任务面板",
+    "openActivity": "打开任务面板",
     "clearActivity": "清除已完成任务",
     "theme": "主题：{{mode}}",
     "language": "语言：{{lang}}",
@@ -155,6 +154,10 @@
     "queuedPosition": "排队中 · 第 {{position}} 位",
     "done": "用时 {{time}}",
     "failed": "失败"
+  },
+  "activity": {
+    "busy_one": "{{count}} 运行中",
+    "busy_other": "{{count}} 运行中"
   },
   "gallery": {
     "deleteConfirm": "{{name}} 将从磁盘中永久删除。",

@@ -42,7 +42,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="pointer-events-none fixed bottom-6 right-6 z-[80] flex flex-col items-end gap-2">
+      {/* bottom-24: clears the persistent ActivityDock widget in the corner. */}
+      <div className="pointer-events-none fixed bottom-24 right-6 z-[80] flex flex-col items-end gap-2">
         {toasts.map((t) => (
           <ToastRow key={t.id} toast={t} onDone={() => remove(t.id)} />
         ))}

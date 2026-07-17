@@ -12,13 +12,14 @@ import { beginPointerDrag } from "@/lib/pointer-drag";
 // also collapse to a slim rail.
 // ---------------------------------------------------------------------------
 
-export type PanelId = "create" | "queue" | "gallery";
+export type PanelId = "create" | "gallery";
 export type PanelColumns = PanelId[][];
 
-const ALL_PANELS: PanelId[] = ["create", "queue", "gallery"];
-const DEFAULT_COLUMNS: PanelColumns = [["create"], ["queue"], ["gallery"]];
-const STORAGE_KEY = "imference.panels.v2";
-const LEGACY_KEY = "imference.panels.v1"; // flat order → migrate to one-per-column
+const ALL_PANELS: PanelId[] = ["create", "gallery"];
+const DEFAULT_COLUMNS: PanelColumns = [["create"], ["gallery"]];
+// v3: Activity left the panel system (it's a floating dock now). Older keys are
+// simply not read — their layouts (which listed "queue") reset to the v3 default.
+const STORAGE_KEY = "imference.panels.v3";
 
 // Manual-resize bounds for a sidebar column (px). The gallery column always
 // grows to fill the rest, so it isn't width-controlled.
@@ -52,14 +53,6 @@ function loadLayout(): PersistedLayout {
       const p = JSON.parse(raw) as Partial<PersistedLayout>;
       const columns = validColumns(p.columns) ? (p.columns as PanelColumns) : DEFAULT_COLUMNS;
       return { columns, collapsed: p.collapsed ?? {}, widths: p.widths ?? {} };
-    }
-    // Migrate a v1 flat order (each panel becomes its own column).
-    const legacy = localStorage.getItem(LEGACY_KEY);
-    if (legacy) {
-      const p = JSON.parse(legacy) as { order?: PanelId[]; collapsed?: Record<string, boolean> };
-      if (Array.isArray(p.order) && validColumns(p.order.map((id) => [id]))) {
-        return { columns: p.order.map((id) => [id]), collapsed: p.collapsed ?? {}, widths: {} };
-      }
     }
   } catch {
     // corrupted storage → defaults

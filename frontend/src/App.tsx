@@ -49,7 +49,7 @@ import { PaymentBar } from "@/components/PaymentBar";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
 import { PanelBoard, usePanelLayout } from "@/components/PanelBoard";
-import { QueuePanel } from "@/components/QueuePanel";
+import { ActivityDock } from "@/components/ActivityDock";
 import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { api } from "@/lib/wails-bridge";
@@ -268,6 +268,7 @@ export default function App() {
   // the palette can open the picker, not just ModelBar's own trigger).
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
 
   // Per-step progress is a single global stream (the sidecar runs local jobs
@@ -896,11 +897,12 @@ export default function App() {
     }
 
     cmds.push({
-      id: "toggle-activity",
+      id: "open-activity",
       group: gPanels,
-      label: panelCollapsed.queue ? t("palette.expandActivity") : t("palette.collapseActivity"),
+      label: t("palette.openActivity"),
       icon: <Activity />,
-      run: () => togglePanelCollapsed("queue"),
+      keywords: "queue runs jobs",
+      run: () => setActivityOpen(true),
     });
     if (hasFinished)
       cmds.push({ id: "clear-activity", group: gPanels, label: t("palette.clearActivity"), icon: <Trash2 />, run: clearFinished });
@@ -933,7 +935,7 @@ export default function App() {
     return cmds;
   }, [
     t, canGenerate, run, mode, engineInstalled, sidecar.state, settings?.localModel,
-    installEngine, stopEngine, startEngine, panelCollapsed.queue, togglePanelCollapsed,
+    installEngine, stopEngine, startEngine,
     hasFinished, clearFinished, openSettings,
   ]);
 
@@ -1089,28 +1091,6 @@ export default function App() {
                   </div>
                 ),
               },
-              queue: {
-                title: t("panels.queue"),
-                icon: <Activity />,
-                badge:
-                  activeCount > 0 ? (
-                    <span className="brand-surface flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums text-white">
-                      {activeCount}
-                    </span>
-                  ) : undefined,
-                actions: hasFinished ? (
-                  <button
-                    type="button"
-                    onClick={clearFinished}
-                    className="text-muted-foreground/60 hover:text-foreground text-[11px] font-medium transition-colors"
-                  >
-                    {t("queue.clearFinished")}
-                  </button>
-                ) : undefined,
-                collapsible: true,
-                width: 18,
-                content: <QueuePanel jobs={jobs} onDismiss={dismissJob} onOpenImage={setLightbox} />,
-              },
               gallery: {
                 title: t("panels.gallery"),
                 icon: <Images />,
@@ -1129,6 +1109,17 @@ export default function App() {
           />
         </div>
       </main>
+
+      {/* Activity — a persistent bottom-right dock (widget + overlay) instead of
+          an in-layout panel, so it's always reachable and never pushed off-screen. */}
+      <ActivityDock
+        jobs={jobs}
+        open={activityOpen}
+        onOpenChange={setActivityOpen}
+        onDismiss={dismissJob}
+        onOpenImage={setLightbox}
+        onClear={clearFinished}
+      />
 
       {/* Activity-panel viewer: a single image (no prev/next, no delete) but the
           same action bar — reuses the gallery Lightbox with a one-item sequence. */}

@@ -72,8 +72,7 @@
     "switchLocal": "Switch to Local",
     "switchCloud": "Switch to Cloud",
     "chooseModel": "Choose a model…",
-    "expandActivity": "Expand Activity panel",
-    "collapseActivity": "Collapse Activity panel",
+    "openActivity": "Open Activity",
     "clearActivity": "Clear finished activity",
     "theme": "Theme: {{mode}}",
     "language": "Language: {{lang}}",
@@ -157,6 +156,10 @@
     "queuedPosition": "Queued · #{{position}} in line",
     "done": "Done in {{time}}",
     "failed": "Failed"
+  },
+  "activity": {
+    "busy_one": "{{count}} running",
+    "busy_other": "{{count}} running"
   },
   "gallery": {
     "deleteConfirm": "{{name}} will be permanently removed from disk.",

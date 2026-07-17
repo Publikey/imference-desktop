@@ -195,7 +195,9 @@
     "deleteTitle_other": "Delete {{count}} images?",
     "deleteAction": "Delete",
     "lbNav": "Navigate",
-    "lbZoom": "Click image to zoom"
+    "lbZoom": "Click image to zoom",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen"
   },
   "meta": {
     "model": "Model",

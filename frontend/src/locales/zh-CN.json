@@ -190,7 +190,9 @@
     "deleteTitle_other": "删除 {{count}} 张图片？",
     "deleteAction": "删除",
     "lbNav": "浏览",
-    "lbZoom": "点击图片放大"
+    "lbZoom": "点击图片放大",
+    "fullscreen": "全屏",
+    "exitFullscreen": "退出全屏"
   },
   "meta": {
     "model": "模型",

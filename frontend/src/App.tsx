@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
@@ -32,6 +33,7 @@ import {
   Copy,
   FolderOpen,
   Maximize2,
+  Minimize2,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -3015,6 +3017,8 @@ function Lightbox({
   const [zoom, setZoom] = useState(false);
   const [origin, setOrigin] = useState("50% 50%");
   useEffect(() => setZoom(false), [index]);
+  // Distraction-free view: hide the meta panel, go solid black, fill the window.
+  const [full, setFull] = useState(false);
 
   const total = items.length;
   const current = items[index];
@@ -3044,9 +3048,11 @@ function Lightbox({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      // Esc leaves fullscreen first, then closes the viewer.
+      if (e.key === "Escape") setFull((f) => (f ? false : (onClose(), false)));
       else if (e.key === "ArrowLeft") prev();
       else if (e.key === "ArrowRight") next();
+      else if (e.key === "f" || e.key === "F") setFull((f) => !f);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -3058,9 +3064,15 @@ function Lightbox({
   const iconBtn =
     "rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10";
 
-  return (
+  // Portal to <body>: the gallery renders inside <main> (relative z-10), whose
+  // stacking context would otherwise trap this overlay below root-level fixed
+  // chrome like the Activity dock.
+  return createPortal(
     <div
-      className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-sm"
+      className={cn(
+        "animate-in fade-in fixed inset-0 z-50 flex items-center justify-center",
+        full ? "bg-black p-0" : "bg-black/85 p-6 backdrop-blur-sm"
+      )}
       onClick={onClose}
     >
       {/* Top bar: counter + actions + close. */}
@@ -3092,6 +3104,15 @@ function Lightbox({
               <Trash2 className="size-5" />
             </button>
           )}
+          <button
+            type="button"
+            className={iconBtn}
+            title={full ? t("gallery.exitFullscreen") : t("gallery.fullscreen")}
+            aria-label={full ? t("gallery.exitFullscreen") : t("gallery.fullscreen")}
+            onClick={() => setFull((f) => !f)}
+          >
+            {full ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}
+          </button>
           <button type="button" className={iconBtn} title={t("common.close")} aria-label={t("common.close")} onClick={onClose}>
             <X className="size-5" />
           </button>
@@ -3111,7 +3132,12 @@ function Lightbox({
       )}
 
       <div
-        className="flex max-h-full w-full max-w-6xl flex-col items-center gap-4 md:flex-row md:items-stretch"
+        className={cn(
+          "flex w-full flex-col items-center",
+          full
+            ? "h-full max-w-none gap-0"
+            : "max-h-full max-w-6xl gap-4 md:flex-row md:items-stretch"
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
@@ -3139,13 +3165,15 @@ function Lightbox({
               onMouseLeave={() => setOrigin("50% 50%")}
               style={{ transformOrigin: origin, transform: zoom ? "scale(2)" : "scale(1)" }}
               className={cn(
-                "animate-in fade-in zoom-in-95 max-h-[85vh] min-h-0 rounded-xl object-contain shadow-2xl transition-transform duration-150",
+                "animate-in fade-in zoom-in-95 min-h-0 object-contain transition-transform duration-150",
+                // Fullscreen: edge-to-edge, no frame. Otherwise: framed with a cap.
+                full ? "max-h-screen max-w-full" : "max-h-[85vh] rounded-xl shadow-2xl",
                 zoom ? "cursor-zoom-out" : "cursor-zoom-in"
               )}
             />
           )}
         </div>
-        {meta && <MetaPanel meta={meta} />}
+        {!full && meta && <MetaPanel meta={meta} />}
       </div>
 
       {/* Keyboard-hint footer — discoverable navigation + zoom affordance. */}
@@ -3159,13 +3187,18 @@ function Lightbox({
             </span>
           )}
           <span className="flex items-center gap-1">
+            <kbd className="rounded bg-white/15 px-1">F</kbd>
+            {full ? t("gallery.exitFullscreen") : t("gallery.fullscreen")}
+          </span>
+          <span className="flex items-center gap-1">
             <kbd className="rounded bg-white/15 px-1">Esc</kbd>
             {t("common.close")}
           </span>
           <span className="hidden sm:inline">{t("gallery.lbZoom")}</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

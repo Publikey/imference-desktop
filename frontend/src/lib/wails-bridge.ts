@@ -35,6 +35,7 @@ import {
   SelectCloudModel,
   SelectLocalModel,
   StartSidecar,
+  StopLocalGeneration,
   StopSidecar,
   UseCustomModel,
 } from "../../bindings/imference-desktop-go/app";
@@ -77,6 +78,7 @@ const raw = {
   // control drives it.
   startSidecar: StartSidecar as () => Promise<void>,
   stopSidecar: StopSidecar as () => Promise<void>,
+  stopLocalGeneration: StopLocalGeneration as () => Promise<void>,
   generateCloud: GenerateCloud as (req: GenerationRequest) => Promise<GenerationResult>,
   generateLocal: GenerateLocal as (req: GenerationRequest) => Promise<GenerationResult>,
   // Pass the (possibly unsaved draft) API key; Go falls back to the saved one

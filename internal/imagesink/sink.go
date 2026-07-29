@@ -99,6 +99,12 @@ func extFromMime(mime string) string {
 		return ".webp"
 	case "image/gif":
 		return ".gif"
+	// Video results (WAN cloud) arrive as data:video/... data-URLs and save
+	// through the same sink — the extension drives the gallery's kind.
+	case "video/mp4":
+		return ".mp4"
+	case "video/webm":
+		return ".webm"
 	default:
 		return ".bin"
 	}

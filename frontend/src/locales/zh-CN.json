@@ -87,6 +87,7 @@
     "downloadingBtn": "下载中…",
     "downloadModelBtn": "下载模型",
     "generateBtn": "生成",
+    "addToQueueBtn": "加入队列",
     "clear": "清除提示词",
     "charCount_other": "{{count}} 字符"
   },
@@ -147,6 +148,9 @@
     "clearFinished": "清除",
     "dismiss": "关闭",
     "cancel": "取消",
+    "stop": "停止",
+    "stopTitle": "停止本次生成？",
+    "stopConfirm": "当前图片将被丢弃，引擎会在下次运行前重新加载模型（约 10–20 秒）。",
     "step": "第 {{step}}/{{total}} 步",
     "cloudRunning": "云端生成中…",
     "generating": "生成中…",
@@ -223,7 +227,8 @@
     "catalogUnavailable": "模型目录不可用",
     "selectModel": "选择模型",
     "noModels": "暂无模型",
-    "working": "处理中…"
+    "working": "处理中…",
+    "switchQueued": "将在当前生成完成后切换到 {{name}}"
   },
   "modelPicker": {
     "cloudTitle": "云端模型",
@@ -331,6 +336,8 @@
     "checkingPython": "正在检查 Python…",
     "pythonFoundPrefix": "已找到 Python {{version}}，位于 ",
     "versionUnknown": "版本未知",
+    "devBadge": "开发 · 可编辑",
+    "devSource": "源",
     "updatingTo": " — 正在更新到 v{{version}}…",
     "pipHint": "详细的 pip 输出会实时显示在日志面板中（从顶栏打开）。"
   },
@@ -414,6 +421,8 @@
     "modelFailed": "模型下载失败",
     "downloadCancelled": "已取消下载",
     "genFailed": "生成失败",
+    "genStopped": "已停止生成 — 正在重新加载引擎",
+    "switchQueued": "将在当前生成完成后加载 {{name}}",
     "deleted_other": "已删除 {{count}} 张图片"
   },
   "onboarding": {

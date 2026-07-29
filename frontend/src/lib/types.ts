@@ -175,6 +175,8 @@ export type GenerateProgress = {
 export type SavedImage = {
   /** File name — key for api.getSavedImage(name) / api.deleteSavedImage(name). */
   name: string;
+  /** Media kind by extension: "image" | "video" — drives <img> vs <video>. */
+  kind?: string;
   source: string;
   seed: number;
   savedPath: string;
@@ -295,8 +297,14 @@ export type EngineInfo = {
   engineVersion: string;
   /** Version the desktop pins ("" under a dev source override). */
   pinnedVersion: string;
-  /** installed != pinned (both known) — startup force-reinstalls in that case. */
+  /** installed != pinned (both known) — startup force-reinstalls in that case.
+   *  Always false for an editable dev install (never auto-clobbered). */
   outdated: boolean;
+  /** True when the engine is an editable (`pip install -e`) checkout — a local
+   *  dev source, not an official release. */
+  dev: boolean;
+  /** The editable checkout's source directory when `dev` is true ("" otherwise). */
+  devPath: string;
 };
 
 export type InstallPhase =

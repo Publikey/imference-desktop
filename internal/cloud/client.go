@@ -31,7 +31,12 @@ const (
 	statusTimeout  = 10 * time.Second
 	pollInterval   = 1 * time.Second
 	overallTimeout = 120 * time.Second
-	catalogTTL     = 5 * time.Minute // the model catalog is effectively static per session
+	// Video generations (WAN) run minutes, not seconds — queue wait + ~6-step
+	// denoise + mp4 upload. The unified /generate response reports the media
+	// kind, so polling stretches its budget for video without slowing image
+	// error detection.
+	videoOverallTimeout = 15 * time.Minute
+	catalogTTL          = 5 * time.Minute // the model catalog is effectively static per session
 
 	// Downloading the finished image is separate from the generation budget
 	// above: on a slow/saturated uplink a single attempt can exceed its deadline
@@ -88,13 +93,18 @@ type postBody struct {
 
 type postResponse struct {
 	RequestID string `json:"request_id"`
+	// Kind is "image" | "video", reported by the unified /generate endpoints —
+	// drives the polling budget (videos take minutes).
+	Kind string `json:"kind"`
 }
 
-// statusResponse mirrors GetImageResponse in imference/app/models/image.go.
+// statusResponse mirrors GetMediaResponse in imference/app/models/image.go —
+// the unified /status shape for images AND videos (Kind discriminates).
 // Note the PascalCase JSON keys — the Go server uses default field names.
 type statusResponse struct {
 	Data struct {
 		RequestID string `json:"RequestID"`
+		Kind      string `json:"Kind"`
 		URL       string `json:"URL"`
 		Format    string `json:"Format"`
 		Seed      int    `json:"Seed"`
@@ -468,9 +478,6 @@ func (c *Client) Generate(
 		return types.GenerationResult{}, errors.New("cloud: cloud model not set")
 	}
 
-	overallCtx, cancel := context.WithTimeout(ctx, overallTimeout)
-	defer cancel()
-
 	c.bus.Info("cloud", "Generate start", map[string]any{
 		"model":  model,
 		"prompt": truncate(req.Prompt, 80),
@@ -479,14 +486,17 @@ func (c *Client) Generate(
 		"steps":  req.NumSteps,
 	})
 
-	requestID, err := c.postGenerate(overallCtx, apiKey, model, req)
+	requestID, kind, err := c.postGenerate(ctx, apiKey, model, req)
 	if err != nil {
 		c.bus.Error("cloud", "postGenerate failed", map[string]any{"err": err.Error()})
 		return types.GenerationResult{}, err
 	}
-	c.bus.Info("cloud", "postGenerate ok", map[string]any{"request_id": requestID})
+	c.bus.Info("cloud", "postGenerate ok", map[string]any{"request_id": requestID, "kind": kind})
 
-	imageURL, seed, err := c.pollStatus(overallCtx, apiKey, requestID)
+	// Poll with a kind-sized budget: videos legitimately run for minutes.
+	pollCtx, cancel := context.WithTimeout(ctx, pollBudget(kind))
+	defer cancel()
+	imageURL, seed, err := c.pollStatus(pollCtx, apiKey, requestID)
 	if err != nil {
 		c.bus.Error("cloud", "pollStatus failed", map[string]any{"err": err.Error()})
 		return types.GenerationResult{}, err
@@ -531,9 +541,6 @@ func (c *Client) GenerateX402(
 		return types.GenerationResult{}, errors.New("cloud: cloud model not set")
 	}
 
-	overallCtx, cancel := context.WithTimeout(ctx, overallTimeout)
-	defer cancel()
-
 	c.bus.Info("cloud", "GenerateX402 start", map[string]any{
 		"model":   model,
 		"prompt":  truncate(req.Prompt, 80),
@@ -547,14 +554,17 @@ func (c *Client) GenerateX402(
 	x402Client.HTTP = c.http
 	x402Client.Logger = busAsLogger{bus: c.bus}
 
-	requestID, err := c.postGenerateX402(overallCtx, x402Client, model, req)
+	requestID, kind, err := c.postGenerateX402(ctx, x402Client, model, req)
 	if err != nil {
 		c.bus.Error("cloud", "postGenerateX402 failed", map[string]any{"err": err.Error()})
 		return types.GenerationResult{}, err
 	}
-	c.bus.Info("cloud", "postGenerateX402 ok", map[string]any{"request_id": requestID})
+	c.bus.Info("cloud", "postGenerateX402 ok", map[string]any{"request_id": requestID, "kind": kind})
 
-	imageURL, seed, err := c.pollStatusX402(overallCtx, requestID)
+	// Poll with a kind-sized budget: videos legitimately run for minutes.
+	pollCtx, cancel := context.WithTimeout(ctx, pollBudget(kind))
+	defer cancel()
+	imageURL, seed, err := c.pollStatusX402(pollCtx, requestID)
 	if err != nil {
 		c.bus.Error("cloud", "pollStatusX402 failed", map[string]any{"err": err.Error()})
 		return types.GenerationResult{}, err
@@ -590,12 +600,21 @@ func (b busAsLogger) Error(_, message string, data ...any) {
 	b.bus.Error("x402", message, data...)
 }
 
+// pollBudget sizes the status-polling window from the media kind the server
+// reported at enqueue. Unknown/empty kinds keep the image budget.
+func pollBudget(kind string) time.Duration {
+	if kind == "video" {
+		return videoOverallTimeout
+	}
+	return overallTimeout
+}
+
 func (c *Client) postGenerateX402(
 	ctx context.Context,
 	x402Client *x402.Client,
 	model string,
 	req types.GenerationRequest,
-) (string, error) {
+) (string, string, error) {
 	body := postBody{
 		Model:          model,
 		Prompt:         req.Prompt,
@@ -611,31 +630,31 @@ func (c *Client) postGenerateX402(
 	postCtx, cancel := context.WithTimeout(ctx, postTimeout)
 	defer cancel()
 
-	resp, err := x402Client.DoJSON(postCtx, http.MethodPost, c.base+"/ondemand/image/generate", body, nil)
+	// Unified endpoint: every model (image or video) posts here; the server
+	// derives the media kind — and the x402 price — from the catalog model.
+	resp, err := x402Client.DoJSON(postCtx, http.MethodPost, c.base+"/ondemand/generate", body, nil)
 	if err != nil {
-		return "", fmt.Errorf("cloud: POST /ondemand/image/generate: %w", err)
+		return "", "", fmt.Errorf("cloud: POST /ondemand/generate: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", fmt.Errorf("cloud: /ondemand/image/generate HTTP %d: %s", resp.StatusCode, string(respBody))
+		return "", "", fmt.Errorf("cloud: /ondemand/generate HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
 	var parsed postResponse
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return "", fmt.Errorf("cloud: parse /ondemand/image/generate response: %w", err)
+		return "", "", fmt.Errorf("cloud: parse /ondemand/generate response: %w", err)
 	}
 	if parsed.RequestID == "" {
-		return "", errors.New("cloud: /ondemand/image/generate returned empty request_id")
+		return "", "", errors.New("cloud: /ondemand/generate returned empty request_id")
 	}
-	return parsed.RequestID, nil
+	return parsed.RequestID, parsed.Kind, nil
 }
 
-// pollStatusX402 polls the x402 status endpoint. Same response shape as
-// the credit-based /image/status (data.URL + data.Seed), but the route
-// is different and there's no Bearer header. The handler also wraps
-// the response in {"type":"image"|"video"} but we ignore that field —
-// this POC only does image, and `data.URL` is what we need.
+// pollStatusX402 polls the x402 status endpoint. Same unified response shape
+// as the credit-based /status (data.URL + data.Seed + data.Kind), but the
+// route is different and there's no Bearer header.
 func (c *Client) pollStatusX402(ctx context.Context, requestID string) (string, int, error) {
 	statusURL := c.base + "/ondemand/status?request_id=" + url.QueryEscape(requestID)
 
@@ -651,7 +670,7 @@ func (c *Client) pollStatusX402(ctx context.Context, requestID string) (string, 
 	for {
 		select {
 		case <-ctx.Done():
-			return "", 0, fmt.Errorf("cloud: x402 status polling timed out after %s", overallTimeout)
+			return "", 0, errors.New("cloud: x402 status polling timed out (generation still queued or the worker is down)")
 		case <-ticker.C:
 			got, seed, done, err := c.fetchStatusX402(ctx, statusURL)
 			if err != nil {
@@ -700,7 +719,7 @@ func (c *Client) postGenerate(
 	ctx context.Context,
 	apiKey, model string,
 	req types.GenerationRequest,
-) (string, error) {
+) (string, string, error) {
 	body := postBody{
 		Model:          model,
 		Prompt:         req.Prompt,
@@ -717,13 +736,15 @@ func (c *Client) postGenerate(
 	postCtx, cancel := context.WithTimeout(ctx, postTimeout)
 	defer cancel()
 
-	r, _ := http.NewRequestWithContext(postCtx, http.MethodPost, c.base+"/image/generate", bytes.NewReader(buf))
+	// Unified endpoint: every model (image or video) posts here; the server
+	// derives the media kind from the catalog model.
+	r, _ := http.NewRequestWithContext(postCtx, http.MethodPost, c.base+"/generate", bytes.NewReader(buf))
 	r.Header.Set("Authorization", "Bearer "+apiKey)
 	r.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(r)
 	if err != nil {
-		return "", fmt.Errorf("cloud: POST /image/generate: %w", err)
+		return "", "", fmt.Errorf("cloud: POST /generate: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -731,21 +752,21 @@ func (c *Client) postGenerate(
 		// Surface the raw body when possible — most failures here are
 		// auth-related (401, 402, 403) and the server message is useful.
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", fmt.Errorf("cloud: /image/generate HTTP %d: %s", resp.StatusCode, string(respBody))
+		return "", "", fmt.Errorf("cloud: /generate HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	var parsed postResponse
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return "", fmt.Errorf("cloud: parse /image/generate response: %w", err)
+		return "", "", fmt.Errorf("cloud: parse /generate response: %w", err)
 	}
 	if parsed.RequestID == "" {
-		return "", errors.New("cloud: /image/generate returned empty request_id")
+		return "", "", errors.New("cloud: /generate returned empty request_id")
 	}
-	return parsed.RequestID, nil
+	return parsed.RequestID, parsed.Kind, nil
 }
 
 func (c *Client) pollStatus(ctx context.Context, apiKey, requestID string) (string, int, error) {
-	statusURL := c.base + "/image/status?request_id=" + url.QueryEscape(requestID)
+	statusURL := c.base + "/status?request_id=" + url.QueryEscape(requestID)
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
@@ -762,7 +783,7 @@ func (c *Client) pollStatus(ctx context.Context, apiKey, requestID string) (stri
 	for {
 		select {
 		case <-ctx.Done():
-			return "", 0, fmt.Errorf("cloud: status polling timed out after %s", overallTimeout)
+			return "", 0, errors.New("cloud: status polling timed out (generation still queued or the worker is down)")
 		case <-ticker.C:
 			got, seed, done, err := c.fetchStatus(ctx, statusURL, apiKey)
 			if err != nil {
@@ -787,7 +808,7 @@ func (c *Client) fetchStatus(ctx context.Context, statusURL, apiKey string) (str
 
 	resp, err := c.http.Do(r)
 	if err != nil {
-		return "", 0, false, fmt.Errorf("cloud: GET /image/status: %w", err)
+		return "", 0, false, fmt.Errorf("cloud: GET /status: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -795,7 +816,7 @@ func (c *Client) fetchStatus(ctx context.Context, statusURL, apiKey string) (str
 	case http.StatusOK:
 		var parsed statusResponse
 		if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-			return "", 0, false, fmt.Errorf("cloud: parse /image/status: %w", err)
+			return "", 0, false, fmt.Errorf("cloud: parse /status: %w", err)
 		}
 		return parsed.Data.URL, parsed.Data.Seed, true, nil
 	case http.StatusNotFound:
@@ -810,7 +831,7 @@ func (c *Client) fetchStatus(ctx context.Context, statusURL, apiKey string) (str
 		if msg == "" {
 			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
 		}
-		return "", 0, false, fmt.Errorf("cloud: /image/status: %s", msg)
+		return "", 0, false, fmt.Errorf("cloud: /status: %s", msg)
 	}
 }
 

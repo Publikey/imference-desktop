@@ -85,6 +85,11 @@ func (m *Manager) Generate(ctx context.Context, req types.GenerationRequest) (ty
 	defer cancel()
 	start := time.Now()
 
+	// Mark the engine busy for the whole request so a concurrent model switch
+	// waits (WaitForIdle) instead of tearing the sidecar down mid-denoise.
+	m.beginGen()
+	defer m.endGen()
+
 	raw, err := m.Send(callCtx, payload)
 	if err != nil {
 		m.bus.Error("sidecar", "Generate failed", map[string]any{

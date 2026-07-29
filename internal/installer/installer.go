@@ -724,28 +724,65 @@ func EngineInfoFor(ctx context.Context, venvDir string) types.EngineInfo {
 		return info
 	}
 	info.Installed = true
-	info.EngineVersion = probeEngineVersion(ctx, py)
-	if info.PinnedVersion != "" && info.EngineVersion != "" &&
+	info.EngineVersion, info.Dev, info.DevPath = probeEngineMeta(ctx, py)
+	// A Dev (editable) checkout is intentionally pinned to whatever the working
+	// tree says — never flag it "outdated", or the startup check (ensureEngineUpToDate)
+	// would uninstall it and reinstall the release tarball, clobbering the dev
+	// source (even if the IMFERENCE_ENGINE_SOURCE env var was forgotten this launch).
+	if !info.Dev && info.PinnedVersion != "" && info.EngineVersion != "" &&
 		info.EngineVersion != info.PinnedVersion {
 		info.Outdated = true
 	}
 	return info
 }
 
-// probeEngineVersion reads the installed imference-engine version from the venv
-// via importlib.metadata. Returns "" when the package isn't installed or the
-// probe fails/times out — callers treat "" as "unknown, don't enforce".
-func probeEngineVersion(ctx context.Context, py string) string {
+// probeEngineMeta reads the installed imference-engine version AND whether it's
+// an editable (dev) install, from the venv. The version comes from
+// importlib.metadata. The editable/dev flag is derived from WHERE the package
+// resolves: importlib.util.find_spec locates imference_engine's source without
+// importing it (no heavy torch import), and if that path is OUTSIDE the venv
+// prefix, it's an editable checkout (`pip install -e <local source>`). This is
+// more robust than PEP 610 direct_url.json, which older pip (23.x) editable
+// installs don't reliably expose via importlib.metadata. devPath is the source
+// repo root. Returns ("", false, "") when the package isn't installed or the
+// probe fails/times out — callers treat "" as "unknown".
+func probeEngineMeta(ctx context.Context, py string) (version string, dev bool, devPath string) {
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(probeCtx, py, "-c",
-		"import importlib.metadata as m; print(m.version('imference-engine'))")
+	// Prints up to 3 lines: version, then (only when editable) "1" + repo root.
+	const script = `import importlib.metadata as m, importlib.util, sys, os
+try:
+    print(m.version('imference-engine'))
+except Exception:
+    print('')
+spec = importlib.util.find_spec('imference_engine')
+if spec and spec.origin:
+    o = os.path.realpath(spec.origin)
+    prefix = os.path.realpath(sys.prefix)
+    if not o.startswith(prefix + os.sep):  # source lives outside the venv → editable
+        print('1')
+        print(os.path.dirname(os.path.dirname(o)))  # .../repo/imference_engine/__init__.py -> repo
+`
+	cmd := exec.CommandContext(probeCtx, py, "-c", script)
 	cmd.SysProcAttr = hideWindowAttr()
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		return "", false, ""
 	}
-	return strings.TrimSpace(string(out))
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], "\r")
+	}
+	if len(lines) >= 1 {
+		version = strings.TrimSpace(lines[0])
+	}
+	if len(lines) >= 2 && strings.TrimSpace(lines[1]) == "1" {
+		dev = true
+	}
+	if dev && len(lines) >= 3 {
+		devPath = strings.TrimSpace(lines[2])
+	}
+	return version, dev, devPath
 }
 
 func truncate(s string, n int) string {

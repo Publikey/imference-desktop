@@ -253,6 +253,9 @@ func (a *App) SaveSettings(next types.Settings) (types.Settings, error) {
 	a.bus.Info("app", "SaveSettings ok", map[string]any{"sidecarRestart": restart})
 	if restart {
 		go func() {
+			// Defer the restart to the current generation so an engine-affecting
+			// settings change mid-run doesn't kill the in-flight image.
+			a.sidecar.WaitForIdle()
 			_ = a.sidecar.Restart(a.ctx, saved.PythonPath, saved.SDXLPath, saved.LocalModel, saved.EngineRuntime)
 		}()
 	}
@@ -282,6 +285,27 @@ func (a *App) StartSidecar() error {
 func (a *App) StopSidecar() error {
 	a.bus.Info("app", "StopSidecar requested", nil)
 	return a.sidecar.Stop()
+}
+
+// StopLocalGeneration aborts the in-flight local generation. runqy_python's task
+// loop is single-threaded — while a denoise runs it isn't reading stdin, so the
+// running image can't be cancelled cooperatively. We hard-kill the sidecar
+// (which aborts the current generate) and reload the model so the engine is
+// ready for the next queued job. Returns immediately; the restart runs in the
+// background and the killed request's Generate call fails, which the renderer
+// maps to a "stopped" job. No-op when nothing is generating.
+func (a *App) StopLocalGeneration() error {
+	if !a.sidecar.IsGenerating() {
+		return nil
+	}
+	a.bus.Info("app", "StopLocalGeneration requested", nil)
+	s := a.settings.Get()
+	go func() {
+		if err := a.sidecar.Interrupt(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime); err != nil {
+			a.bus.Warn("app", "StopLocalGeneration restart failed", map[string]any{"err": err.Error()})
+		}
+	}()
+	return nil
 }
 
 // GetCreditBalance reports the cloud account's remaining credits for the
@@ -529,6 +553,15 @@ func (a *App) SelectLocalModel(modelCode string) error {
 		emit(types.InstallProgress{Phase: "model", Message: "Preparing " + chosen.Name})
 		a.bus.Info("app", "SelectLocalModel start", map[string]any{"model": chosen.ModelCode, "url": chosen.ModelURL})
 
+		// Never interrupt an in-flight generation: wait for the current image to
+		// finish before tearing the engine down. The renderer's queue also defers
+		// the switch until its local queue drains, so this is normally instant;
+		// it's the guard for the single request already handed to the sidecar.
+		if a.sidecar.IsGenerating() {
+			emit(types.InstallProgress{Phase: "model", Message: "Waiting for the current generation to finish…"})
+			a.sidecar.WaitForIdle()
+		}
+
 		// Stop the sidecar before downloading/deleting: the old .safetensors is
 		// mmap'd by the running engine, so we must release it first (and on
 		// Windows the file can't be deleted while open).
@@ -700,9 +733,11 @@ func (a *App) UseCustomModel(path, backendType, baseModel string) (types.Setting
 	a.bus.Info("app", "custom model registered", map[string]any{"path": path, "backend": backendType})
 
 	// Reload the engine only if it's currently running; otherwise the model
-	// loads at the next on-demand start (same policy as SaveSettings).
+	// loads at the next on-demand start (same policy as SaveSettings). WaitForIdle
+	// keeps a switch requested mid-generation from killing the running image.
 	if a.sidecar.Status().State == "ready" {
 		go func() {
+			a.sidecar.WaitForIdle()
 			_ = a.sidecar.Restart(a.ctx, saved.PythonPath, saved.SDXLPath, saved.LocalModel, saved.EngineRuntime)
 		}()
 	}
@@ -731,7 +766,12 @@ func (a *App) RemoveCustomModel(path string) (types.Settings, error) {
 		return types.Settings{}, err
 	}
 	if wasActive {
-		a.sidecar.Stop()
+		// Stop off the RPC goroutine and only once idle, so removing the active
+		// model mid-generation doesn't kill the in-flight image (or hang this call).
+		go func() {
+			a.sidecar.WaitForIdle()
+			a.sidecar.Stop()
+		}()
 	}
 	a.bus.Info("app", "custom model removed", map[string]any{"path": path, "wasActive": wasActive})
 	return saved, nil
@@ -777,7 +817,13 @@ func (a *App) outputDir() string {
 	return imagesink.DefaultDir()
 }
 
-var galleryExts = map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".webp": true, ".gif": true}
+// galleryExts maps a listable file extension to its media kind. Videos (WAN
+// cloud results) live in the same output folder and gallery as images; the
+// kind drives <img> vs <video> rendering in the renderer.
+var galleryExts = map[string]string{
+	".png": "image", ".jpg": "image", ".jpeg": "image", ".webp": "image", ".gif": "image",
+	".mp4": "video", ".webm": "video",
+}
 
 // ListSavedImages returns one page of previously-generated images from the
 // output folder, newest first (by file mtime), optionally narrowed by filter.
@@ -797,7 +843,7 @@ func (a *App) ListSavedImages(offset, limit int, filter types.GalleryFilter) ([]
 	}
 	files := make([]fmeta, 0, len(entries))
 	for _, e := range entries {
-		if e.IsDir() || !galleryExts[strings.ToLower(filepath.Ext(e.Name()))] {
+		if e.IsDir() || galleryExts[strings.ToLower(filepath.Ext(e.Name()))] == "" {
 			continue
 		}
 		mt := time.Time{}
@@ -837,6 +883,7 @@ func (a *App) ListSavedImages(offset, limit int, filter types.GalleryFilter) ([]
 	for _, fm := range files[offset:end] {
 		p := filepath.Join(dir, fm.name)
 		source, seed := parseSavedName(fm.name)
+		kind := galleryExts[strings.ToLower(filepath.Ext(fm.name))]
 		w, h := imageDims(p)
 		var mptr *types.GenerationMeta
 		if cache != nil {
@@ -844,8 +891,13 @@ func (a *App) ListSavedImages(offset, limit int, filter types.GalleryFilter) ([]
 		} else {
 			mptr = readSidecar(p)
 		}
+		// Videos have no decodable image header — fall back to the sidecar's
+		// requested dimensions so the masonry still reserves the right aspect box.
+		if w == 0 && mptr != nil && mptr.Width > 0 && mptr.Height > 0 {
+			w, h = mptr.Width, mptr.Height
+		}
 		out = append(out, types.SavedImage{
-			Name: fm.name, Source: source, Seed: seed, SavedPath: p, Width: w, Height: h, Meta: mptr,
+			Name: fm.name, Kind: kind, Source: source, Seed: seed, SavedPath: p, Width: w, Height: h, Meta: mptr,
 		})
 	}
 	return out, nil
@@ -900,7 +952,7 @@ func (a *App) galleryMeta(dir string) map[string]*types.GenerationMeta {
 	cache := map[string]*types.GenerationMeta{}
 	if entries, err := os.ReadDir(dir); err == nil {
 		for _, e := range entries {
-			if e.IsDir() || !galleryExts[strings.ToLower(filepath.Ext(e.Name()))] {
+			if e.IsDir() || galleryExts[strings.ToLower(filepath.Ext(e.Name()))] == "" {
 				continue
 			}
 			if m := readSidecar(filepath.Join(dir, e.Name())); m != nil {
@@ -1073,7 +1125,18 @@ func (a *App) GetSavedImage(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	mimeType := mime.TypeByExtension(filepath.Ext(name))
+	// Deterministic types for the formats we write ourselves — the renderer keys
+	// <img> vs <video> off the data-URL prefix, and mime.TypeByExtension consults
+	// the OS (Windows registry) where video mappings aren't guaranteed.
+	var mimeType string
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".mp4":
+		mimeType = "video/mp4"
+	case ".webm":
+		mimeType = "video/webm"
+	default:
+		mimeType = mime.TypeByExtension(filepath.Ext(name))
+	}
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}

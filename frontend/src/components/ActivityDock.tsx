@@ -25,6 +25,7 @@ export function ActivityDock({
   open,
   onOpenChange,
   onDismiss,
+  onStop,
   onOpenImage,
   onClear,
 }: {
@@ -32,6 +33,7 @@ export function ActivityDock({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDismiss: (id: string) => void;
+  onStop: (job: Job) => void;
   onOpenImage: (item: LightboxItem) => void;
   onClear: () => void;
 }) {
@@ -114,6 +116,7 @@ export function ActivityDock({
               <QueuePanel
                 jobs={jobs}
                 onDismiss={onDismiss}
+                onStop={onStop}
                 onOpenImage={(i) => {
                   onOpenImage(i);
                   setOpen(false);

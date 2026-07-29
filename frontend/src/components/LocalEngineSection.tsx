@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Download, RefreshCw, Loader2, CheckCircle2, XCircle, Circle } from "lucide-react";
+import { Download, RefreshCw, Loader2, CheckCircle2, XCircle, Circle, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress";
 import { api } from "@/lib/wails-bridge";
@@ -126,17 +126,33 @@ export function LocalEngineSection({ onInstallDone }: Props) {
 
       {engineInfo?.installed && !installing && (
         <>
-          <p className="text-muted-foreground mt-2 text-xs">
-            imference-engine{" "}
+          <p className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+            <span>imference-engine</span>
             <span className="font-mono">
               {engineInfo.engineVersion ? `v${engineInfo.engineVersion}` : t("engineSection.versionUnknown")}
             </span>
-            {engineInfo.outdated && engineInfo.pinnedVersion && (
-              <span className="text-yellow-700">
-                {t("engineSection.updatingTo", { version: engineInfo.pinnedVersion })}
+            {engineInfo.dev ? (
+              // Editable dev checkout — make it unmistakable this is NOT a release.
+              <span
+                className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400"
+                title={engineInfo.devPath || undefined}
+              >
+                <FlaskConical className="size-3" />
+                {t("engineSection.devBadge")}
               </span>
+            ) : (
+              engineInfo.outdated && engineInfo.pinnedVersion && (
+                <span className="text-yellow-700">
+                  {t("engineSection.updatingTo", { version: engineInfo.pinnedVersion })}
+                </span>
+              )
             )}
           </p>
+          {engineInfo.dev && engineInfo.devPath && (
+            <p className="text-muted-foreground/80 mt-1 truncate font-mono text-xs" title={engineInfo.devPath}>
+              {t("engineSection.devSource")}: {engineInfo.devPath}
+            </p>
+          )}
           <p className="text-muted-foreground mt-1 truncate font-mono text-xs" title={engineInfo.pythonPath}>
             venv: {engineInfo.pythonPath}
           </p>

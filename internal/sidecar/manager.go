@@ -236,6 +236,16 @@ type Manager struct {
 	pending   map[string]chan stdioResponse
 
 	device atomic.Value // string, parsed from stderr's "ready on cuda:0 device"
+
+	// Generation-inflight tracking. A model switch / restart must NOT tear the
+	// sidecar down mid-denoise: killing the process (or moving the pipe to CPU)
+	// while pipe(...) runs crashes the engine. Restart-triggering callers wait on
+	// WaitForIdle() first. The frontend queue also defers switches until its local
+	// queue drains — this is the belt-and-suspenders guard for the single
+	// in-flight request and for any Go-initiated restart (e.g. Settings save).
+	genMu   sync.Mutex
+	genCond *sync.Cond
+	genN    int
 }
 
 type stdioRequest struct {
@@ -254,7 +264,7 @@ type stdioResponse struct {
 // New builds an idle manager. scriptPath should point to sidecar/main.py.
 // logDir is where sidecar.log gets written.
 func New(scriptPath, logDir string, listener StatusListener, bus *logbus.Bus) *Manager {
-	return &Manager{
+	m := &Manager{
 		scriptPath: scriptPath,
 		logDir:     logDir,
 		listener:   listener,
@@ -262,6 +272,8 @@ func New(scriptPath, logDir string, listener StatusListener, bus *logbus.Bus) *M
 		status:     types.SidecarStatus{State: "idle"},
 		pending:    make(map[string]chan stdioResponse),
 	}
+	m.genCond = sync.NewCond(&m.genMu)
+	return m
 }
 
 // SetProgressListener wires per-step generation progress to the caller. Set once
@@ -452,8 +464,16 @@ func (m *Manager) currentDevice() string {
 
 // Stop kills the running sidecar. Tries graceful shutdown first (close
 // stdin → Python sees EOF and exits cleanly), falls back to the Job
-// Object + SIGKILL after grace period.
+// Object + SIGKILL after the grace period.
 func (m *Manager) Stop() error {
+	return m.stopWithin(stopGraceTimeout)
+}
+
+// stopWithin is Stop with a configurable grace period. grace <= 0 kills the
+// process immediately (no wait) — used to interrupt a stuck denoise, which never
+// honours the stdin-EOF path anyway because runqy_python is blocked inside the
+// generate handler and isn't reading stdin.
+func (m *Manager) stopWithin(grace time.Duration) error {
 	// Mark the stop intentional *before* the process can exit, so watchExit
 	// treats the imminent termination as expected (not a crash → "error").
 	// Reset by the next Start().
@@ -485,17 +505,24 @@ func (m *Manager) Stop() error {
 		close(done)
 	}()
 
-	select {
-	case <-done:
-		// Clean exit, good.
-	case <-time.After(stopGraceTimeout):
-		// Nuclear: close the job (kernel kills child immediately on Windows),
-		// then SIGKILL as backup.
+	kill := func() {
+		// Close the job (kernel kills child immediately on Windows), then
+		// SIGKILL as backup.
 		if job != nil {
 			job.close()
 		}
 		_ = cmd.Process.Kill()
 		<-done
+	}
+	if grace <= 0 {
+		kill() // immediate — the denoise won't exit on its own
+	} else {
+		select {
+		case <-done:
+			// Clean exit, good.
+		case <-time.After(grace):
+			kill()
+		}
 	}
 
 	if cancel != nil {
@@ -523,6 +550,16 @@ func (m *Manager) Stop() error {
 
 func (m *Manager) Restart(ctx context.Context, pythonPath, sdxlPath string, model *types.ModelInfo, rt types.EngineRuntimeSettings) error {
 	_ = m.Stop()
+	return m.Start(ctx, pythonPath, sdxlPath, model, rt)
+}
+
+// Interrupt aborts an in-flight generation NOW by hard-killing the sidecar (no
+// grace wait — a running denoise is stuck in torch and won't exit on stdin EOF),
+// then reloads the model so the engine is ready for the next queued job. Used by
+// the "stop this run" action; the killed request's Generate call returns an
+// error, which the caller maps to a user cancel.
+func (m *Manager) Interrupt(ctx context.Context, pythonPath, sdxlPath string, model *types.ModelInfo, rt types.EngineRuntimeSettings) error {
+	_ = m.stopWithin(0)
 	return m.Start(ctx, pythonPath, sdxlPath, model, rt)
 }
 
@@ -688,6 +725,51 @@ func (m *Manager) failAllPending(err error) {
 		}
 		delete(m.pending, id)
 	}
+}
+
+// ----------------------------------------------------------------------
+// Generation-inflight tracking — lets a model switch wait for the current
+// image instead of killing it mid-denoise. See the genMu field comment.
+// ----------------------------------------------------------------------
+
+// beginGen / endGen bracket one in-flight generation. client.go's Generate is
+// the only caller (via defer), so genN is 0 or 1 in practice; the counter shape
+// tolerates future concurrency without changing the wait logic.
+func (m *Manager) beginGen() {
+	m.genMu.Lock()
+	m.genN++
+	m.genMu.Unlock()
+}
+
+func (m *Manager) endGen() {
+	m.genMu.Lock()
+	if m.genN > 0 {
+		m.genN--
+	}
+	m.genCond.Broadcast() // wake any WaitForIdle
+	m.genMu.Unlock()
+}
+
+// IsGenerating reports whether a generation is currently in flight. Callers use
+// it to log/emit a "waiting" notice before a (blocking) WaitForIdle.
+func (m *Manager) IsGenerating() bool {
+	m.genMu.Lock()
+	defer m.genMu.Unlock()
+	return m.genN > 0
+}
+
+// WaitForIdle blocks until no generation is in flight. Call it from a background
+// goroutine before Stop()/Restart() so a model switch defers to the current
+// image instead of killing it mid-denoise. Returns immediately when already
+// idle. The in-flight generation is bounded by client.go's generateTimeout, so
+// this can't block forever; a dead sidecar also resolves it (Generate returns an
+// error and its deferred endGen fires).
+func (m *Manager) WaitForIdle() {
+	m.genMu.Lock()
+	for m.genN > 0 {
+		m.genCond.Wait()
+	}
+	m.genMu.Unlock()
 }
 
 // ----------------------------------------------------------------------

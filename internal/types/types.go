@@ -212,7 +212,10 @@ type GenerationRequest struct {
 // "<YYYYMMDD-HHMMSS>_<source>_<seed>.<ext>"; Meta comes from the "<name>.json"
 // sidecar when present.
 type SavedImage struct {
-	Name      string `json:"name"`      // file name (key for GetSavedImage / DeleteSavedImage)
+	Name string `json:"name"` // file name (key for GetSavedImage / DeleteSavedImage)
+	// Kind is the media kind by extension: "image" | "video". Drives <img> vs
+	// <video> rendering in the gallery/lightbox.
+	Kind      string `json:"kind"`
 	Source    string `json:"source"`    // "local" | "cloud" | …
 	Seed      int    `json:"seed"`      // 0 when unparseable
 	SavedPath string `json:"savedPath"` // absolute path on disk
@@ -329,8 +332,15 @@ type EngineInfo struct {
 	// EngineTarball), "" under a dev source override where no version is enforced.
 	PinnedVersion string `json:"pinnedVersion"`
 	// Outdated is true when both versions are known and differ — the startup
-	// check force-reinstalls the pinned engine in that case.
+	// check force-reinstalls the pinned engine in that case. Always false for a
+	// Dev (editable) install, which is pinned to its working tree, not a release.
 	Outdated bool `json:"outdated"`
+	// Dev is true when the engine is an editable (`pip install -e`) checkout —
+	// a local dev source, not an official release. Detected from PEP 610
+	// direct_url.json in the venv.
+	Dev bool `json:"dev"`
+	// DevPath is the editable checkout's source directory when Dev is true ("" otherwise).
+	DevPath string `json:"devPath"`
 }
 
 // InstallProgress is emitted on the "install:progress" event channel during

@@ -161,14 +161,22 @@
     transition:
       filter 0.15s ease,
       box-shadow 0.2s ease,
-      transform 0.1s ease;
+      transform 0.14s var(--ease-spring);
   }
+  /* Hover: clearly lifts and brightens with a bigger colored glow, so it reads
+     as interactive well before the click. */
   .btn-brand:hover:not(:disabled) {
-    filter: brightness(1.07) saturate(1.05);
-    box-shadow: 0 12px 30px -8px color-mix(in oklch, var(--brand-to) 75%, transparent);
+    filter: brightness(1.12) saturate(1.08);
+    box-shadow: 0 16px 38px -8px color-mix(in oklch, var(--brand-to) 85%, transparent);
+    transform: translateY(-2px);
   }
+  /* Press: a tactile push-in — dips down, shrinks, dims, and the glow collapses,
+     on a near-instant transition so the click registers immediately (no mush). */
   .btn-brand:active:not(:disabled) {
-    transform: scale(0.985);
+    filter: brightness(0.94) saturate(1.05);
+    box-shadow: 0 2px 8px -6px color-mix(in oklch, var(--brand-to) 70%, transparent);
+    transform: translateY(1px) scale(0.96);
+    transition-duration: 0.04s;
   }
   /* Composer surface: layered shadow at rest, brand focus glow when active. */
   .composer {

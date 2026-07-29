@@ -36,6 +36,7 @@ import {
   Minimize2,
   ChevronLeft,
   ChevronRight,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
@@ -130,15 +131,30 @@ const FALLBACK_FORMATS: FormatOption[] = [
   { formatCode: "landscape", name: "", width: 1216, height: 832, ratio: "3:2", isDefault: false },
 ];
 
+// WAN video generates at 480p video resolutions, NOT 1024² — a 1024² default is
+// both wrong and far too heavy. Used only when the catalog carries no im_format
+// rows for the WAN model; real catalog formats (when present) still win.
+const VIDEO_FALLBACK_FORMATS: FormatOption[] = [
+  { formatCode: "landscape", name: "", width: 832, height: 480, ratio: "16:9", isDefault: true },
+  { formatCode: "portrait", name: "", width: 480, height: 832, ratio: "9:16", isDefault: false },
+];
+
+// The WAN video backend (normalizeEngine maps im_engine "wan22"/"wan" → "wan").
+function isVideoModel(model: ModelInfo | null | undefined): boolean {
+  return model?.backendType === "wan";
+}
+
 // Display name of a format: known codes are translated, otherwise the catalog
 // name (server-provided) then the raw code.
 function formatName(f: FormatOption, t: TFunction): string {
   return t(`formats.${f.formatCode}`, { defaultValue: f.name || f.formatCode });
 }
 
-// A model's supported formats come from im_format; fall back to generic ones.
+// A model's supported formats come from im_format; fall back to generic ones
+// (video-specific for WAN, so a catalog missing its rows still defaults to 480p).
 function formatOptions(model: ModelInfo | null | undefined): FormatOption[] {
-  return model?.formats && model.formats.length > 0 ? model.formats : FALLBACK_FORMATS;
+  if (model?.formats && model.formats.length > 0) return model.formats;
+  return isVideoModel(model) ? VIDEO_FALLBACK_FORMATS : FALLBACK_FORMATS;
 }
 
 function defaultFormatCode(model: ModelInfo): string {
@@ -172,6 +188,13 @@ function resolveDims(
     return { width: snapDim(params.customWidth), height: snapDim(params.customHeight) };
   }
   return dimsForModel(model, params.formatCode);
+}
+
+// True for a video payload — a data:video/... URL (in-memory or fetched bytes).
+// Gallery rows also carry kind === "video" from the Go side; both signals are
+// checked at render sites since fresh in-memory items may predate the kind.
+function isVideoSrc(src: string | null | undefined): boolean {
+  return !!src && src.startsWith("data:video/");
 }
 
 // Read a picked/dropped File into a data-URL (the img2img source shape).
@@ -221,6 +244,7 @@ function defaultParams(model: ModelInfo): GenParams {
 export default function App() {
   const { t } = useTranslation();
   const toast = useToast();
+  const confirm = useConfirm();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [sidecar, setSidecar] = useState<SidecarStatus>({ state: "idle" });
   const [prompt, setPrompt] = useState("");
@@ -228,6 +252,16 @@ export default function App() {
   // All generations, newest first. Running ones show a live placeholder; done
   // ones stay as images in the grid.
   const [jobs, setJobs] = useState<Job[]>([]);
+  // The local engine is single-resident and runs one image at a time, so a model
+  // switch must wait for the local queue to drain — restarting the sidecar mid-
+  // denoise crashes the in-flight generation. "Active" = something local is
+  // running or still queued. A ref mirrors it so the switch handlers (defined
+  // above the jobs-derived value) can read the latest state without re-binding.
+  const localQueueActive = jobs.some(
+    (j) => j.mode === "local" && !j.hidden && (j.status === "running" || j.status === "queued")
+  );
+  const localQueueActiveRef = useRef(localQueueActive);
+  localQueueActiveRef.current = localQueueActive;
   const [settingsOpen, setSettingsOpen] = useState(false);
   // When set, the Settings dialog scrolls to this section on open (deep-links
   // from the payment bar: "apikey" / "x402").
@@ -257,6 +291,10 @@ export default function App() {
   // in the bar sets it pending; the primary button downloads it on demand, and
   // becomes "Generate" once the weights are on disk and the engine is ready.
   const [pendingLocalModel, setPendingLocalModel] = useState<ModelInfo | null>(null);
+  // A model switch requested while the local queue is active is held here and
+  // applied (its `apply` thunk fired) once the queue drains — see the effect
+  // below. `label` names the incoming model for the "switch queued" banner.
+  const [pendingSwitch, setPendingSwitch] = useState<{ label: string; apply: () => void } | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [dlProgress, setDlProgress] = useState<InstallProgress | null>(null);
   // Whether a usable x402 wallet exists (keychain — the real source of truth,
@@ -331,10 +369,24 @@ export default function App() {
 
   const selectCustomModel = useCallback(async (m: ModelInfo) => {
     if (!m.localPath) return;
-    const next = await api.useCustomModel(m.localPath, m.backendType ?? "sdxl", m.baseModel ?? "");
-    setSettings(next);
-    setPendingLocalModel(next.localModel ?? null);
-  }, []);
+    // Switching a custom checkpoint restarts the sidecar (it loads a different
+    // .safetensors / backend), which activates the new engine.
+    const doSwitch = async () => {
+      const next = await api.useCustomModel(m.localPath!, m.backendType ?? "sdxl", m.baseModel ?? "");
+      setSettings(next);
+      setPendingLocalModel(next.localModel ?? null);
+    };
+    // Busy? Hold the switch until the local queue drains. The bar stays on the
+    // loaded model (so params/metadata keep matching what actually runs); the
+    // banner names the incoming one, and doSwitch swaps it over once it fires.
+    if (localQueueActiveRef.current) {
+      setPendingSwitch({ label: m.name, apply: () => void doSwitch().catch(() => {}) });
+      toast.toast(t("toast.switchQueued", { name: m.name }));
+      return;
+    }
+    // Immediate: await so ModelBar's try/catch can surface an activation error.
+    await doSwitch();
+  }, [toast, t]);
 
   const removeCustomModel = useCallback(async (m: ModelInfo) => {
     if (!m.localPath) return;
@@ -488,30 +540,57 @@ export default function App() {
 
   const downloadLocalModel = useCallback(() => {
     if (!pendingLocalModel || downloading) return;
-    setDownloading(true);
-    setDlProgress({
-      phase: "model",
-      message: t("hint.preparing", { name: pendingLocalModel.name }),
-      percentEstimate: 0,
-      done: false,
-    });
-    void api.selectLocalModel(pendingLocalModel.modelCode).catch((e) => {
-      setDownloading(false);
+    const target = pendingLocalModel;
+    // The download ends by restarting the sidecar onto the new weights, so it's
+    // subject to the same "don't interrupt a running generation" rule as a swap.
+    const apply = () => {
+      setDownloading(true);
       setDlProgress({
-        phase: "error",
-        message: "",
+        phase: "model",
+        message: t("hint.preparing", { name: target.name }),
         percentEstimate: 0,
-        done: true,
-        error: e instanceof Error ? e.message : String(e),
+        done: false,
       });
-    });
-  }, [pendingLocalModel, downloading, t]);
+      void api.selectLocalModel(target.modelCode).catch((e) => {
+        setDownloading(false);
+        setDlProgress({
+          phase: "error",
+          message: "",
+          percentEstimate: 0,
+          done: true,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      });
+    };
+    if (localQueueActiveRef.current) {
+      setPendingSwitch({ label: target.name, apply });
+      toast.toast(t("toast.switchQueued", { name: target.name }));
+      return;
+    }
+    apply();
+  }, [pendingLocalModel, downloading, t, toast]);
 
   // Abort an in-flight download. The backend emits a "cancelled" progress event
   // that resets the UI (handled in onModelProgress above).
   const cancelDownload = useCallback(() => {
     void api.cancelModelDownload().catch(() => {});
   }, []);
+
+  // Fire a held model switch the moment the local queue goes idle. Guarded so a
+  // switch requested mid-run applies exactly once, right after the last image.
+  useEffect(() => {
+    if (!pendingSwitch || localQueueActive) return;
+    const { apply } = pendingSwitch;
+    setPendingSwitch(null);
+    apply();
+  }, [localQueueActive, pendingSwitch]);
+
+  // Drop a queued switch and snap the bar's pending pick back to the model that's
+  // actually loaded — so cancelling reads as "never mind, stay on the current one".
+  const cancelPendingSwitch = useCallback(() => {
+    setPendingSwitch(null);
+    setPendingLocalModel(settings?.localModel ?? null);
+  }, [settings?.localModel]);
 
   // The selected local model is "downloaded" when it matches the persisted one.
   const localDownloaded =
@@ -548,16 +627,29 @@ export default function App() {
   // local runs are enqueued, so the user can keep launching either way.
   const canGenerate = (mode === "cloud" ? cloudReady : localReady) && !!prompt.trim();
 
+  // IDs of running local jobs the user asked to stop. Stopping hard-restarts the
+  // sidecar, so the job's generate() rejects — this set lets settleJob treat that
+  // rejection as a silent cancel (hide it) rather than a failure (error + toast).
+  const cancelledIdsRef = useRef<Set<string>>(new Set());
+
   // Settle a job from its generate() promise — shared by the immediate cloud path
   // and the local queue dispatcher.
   const settleJob = useCallback((id: string, call: Promise<GenerationResult>) => {
     call
-      .then((result) =>
+      .then((result) => {
+        cancelledIdsRef.current.delete(id); // finished before the stop landed
         setJobs((js) =>
           js.map((j) => (j.id === id ? { ...j, status: "done", image: result, endedAt: Date.now() } : j))
-        )
-      )
+        );
+      })
       .catch((e) => {
+        // User-stopped run: the sidecar was killed out from under it. Hide the
+        // row silently — it's a cancel, not a failure.
+        if (cancelledIdsRef.current.has(id)) {
+          cancelledIdsRef.current.delete(id);
+          setJobs((js) => js.map((j) => (j.id === id ? { ...j, status: "error", hidden: true } : j)));
+          return;
+        }
         const msg = e instanceof Error ? e.message : String(e);
         setJobs((js) =>
           js.map((j) => (j.id === id ? { ...j, status: "error", error: msg, endedAt: Date.now() } : j))
@@ -625,7 +717,12 @@ export default function App() {
   // this effect re-runs on every jobs change (and under StrictMode double-invoke).
   const dispatchedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (jobs.some((j) => j.mode === "local" && j.status === "running")) return;
+    // Wait for the engine to be ready — after stopping a run the sidecar
+    // hard-restarts (reloads the model), and queued jobs must hold until then.
+    if (sidecar.state !== "ready") return;
+    // A hidden (stopped) job may still be status "running" until its promise
+    // settles; don't let it block the next queued job.
+    if (jobs.some((j) => j.mode === "local" && j.status === "running" && !j.hidden)) return;
     let next: Job | undefined;
     for (let i = jobs.length - 1; i >= 0; i--) {
       const j = jobs[i];
@@ -642,7 +739,7 @@ export default function App() {
       js.map((j) => (j.id === job.id ? { ...j, status: "running", startedAt: Date.now(), progress: null } : j))
     );
     settleJob(job.id, api.generateLocal(request));
-  }, [jobs, settleJob]);
+  }, [jobs, sidecar.state, settleJob]);
 
   // --- Activity panel bookkeeping ------------------------------------------
   // Dismissing hides a finished OR queued row: for a queued local job this also
@@ -652,6 +749,34 @@ export default function App() {
   const dismissJob = useCallback(
     (id: string) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, hidden: true } : j))),
     []
+  );
+  // Stop a running local run, or cancel a queued one — same button in the
+  // Activity list. A queued job just hides (the dispatcher skips it). A running
+  // local job hides immediately and hard-restarts the sidecar via the Go side;
+  // its generate() then rejects and settleJob (cancelledIdsRef) keeps it silent.
+  const stopJob = useCallback(
+    async (job: Job) => {
+      if (job.status === "queued") {
+        dismissJob(job.id);
+        return;
+      }
+      if (job.status === "running" && job.mode === "local") {
+        // Confirm first — stopping hard-restarts the engine (model reload), so an
+        // accidental click is costly.
+        const ok = await confirm({
+          title: t("queue.stopTitle"),
+          description: t("queue.stopConfirm"),
+          confirmLabel: t("queue.stop"),
+          cancelLabel: t("common.cancel"),
+        });
+        if (!ok) return;
+        cancelledIdsRef.current.add(job.id);
+        setJobs((js) => js.map((j) => (j.id === job.id ? { ...j, hidden: true } : j)));
+        void api.stopLocalGeneration().catch(() => {});
+        toast.toast(t("toast.genStopped"));
+      }
+    },
+    [dismissJob, confirm, toast, t]
   );
   const clearFinished = useCallback(
     () =>
@@ -667,7 +792,9 @@ export default function App() {
   const useAsImg2img = useCallback(async (getSrc: () => Promise<string>) => {
     try {
       const src = await getSrc();
-      if (src) {
+      // A video can't seed img2img — ignore the gesture (the lightbox/menu also
+      // hide the action for videos; this guards the drag path).
+      if (src && !isVideoSrc(src)) {
         setSourceImage(src);
         setMode("local");
       }
@@ -782,7 +909,12 @@ export default function App() {
         kind: "download",
       };
     return {
-      label: t("composer.generateBtn"),
+      // Local runs are enqueued one-at-a-time, so when the queue is already busy
+      // the button adds to it rather than starting immediately — say so.
+      label:
+        mode === "local" && localQueueActive
+          ? t("composer.addToQueueBtn")
+          : t("composer.generateBtn"),
       onClick: () => {
         if (canGenerate) run(mode);
       },
@@ -790,7 +922,7 @@ export default function App() {
       busy: false,
       kind: "generate",
     };
-  }, [mode, downloading, localNeedsDownload, pendingLocalModel, downloadLocalModel, canGenerate, run, t]);
+  }, [mode, downloading, localNeedsDownload, pendingLocalModel, downloadLocalModel, canGenerate, localQueueActive, run, t]);
 
   // Global ⌘/Ctrl+Enter → run the primary action from anywhere in the app, not
   // only when the prompt field has focus. Suppressed while a modal that captures
@@ -1064,6 +1196,24 @@ export default function App() {
                       />
                     )}
 
+                    {/* Held model switch: shown while the local queue drains, so
+                        the user knows their pick applies after the current runs. */}
+                    {!firstRun && pendingSwitch && (
+                      <div className="border-primary/30 bg-primary/5 text-foreground/80 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs">
+                        <Clock className="text-primary size-3.5 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">
+                          {t("modelBar.switchQueued", { name: pendingSwitch.label })}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={cancelPendingSwitch}
+                          className="text-muted-foreground/70 hover:text-destructive shrink-0 font-medium transition-colors"
+                        >
+                          {t("common.cancel")}
+                        </button>
+                      </div>
+                    )}
+
                     {firstRun ? (
                       /* First run: a guided setup replaces the (non-functional)
                          composer until the engine is installed or cloud is set up. */
@@ -1140,6 +1290,7 @@ export default function App() {
         open={activityOpen}
         onOpenChange={setActivityOpen}
         onDismiss={dismissJob}
+        onStop={stopJob}
         onOpenImage={setLightbox}
         onClear={clearFinished}
       />
@@ -1148,7 +1299,12 @@ export default function App() {
           same action bar — reuses the gallery Lightbox with a one-item sequence. */}
       {lightbox && (
         <Lightbox
-          items={[{ name: null, meta: lightbox.meta, getSrc: async () => lightbox.src }]}
+          items={[{
+            name: null,
+            meta: lightbox.meta,
+            kind: isVideoSrc(lightbox.src) ? "video" : "image",
+            getSrc: async () => lightbox.src,
+          }]}
           index={0}
           onIndex={() => {}}
           onClose={() => setLightbox(null)}
@@ -2148,6 +2304,8 @@ type ViewerItem = {
   name: string | null;
   savedPath?: string;
   meta?: GenerationMeta | null;
+  /** "video" hides image-only actions (img2img) in the menu/lightbox. */
+  kind?: string;
   getSrc: () => Promise<string>;
 };
 
@@ -2263,6 +2421,7 @@ function Gallery({
       const m = img.meta;
       fresh.push({
         name: baseName(img.savedPath),
+        kind: isVideoSrc(img.imageBase64) ? "video" : "image",
         source: img.source,
         seed: img.seed ?? m?.seed ?? 0,
         savedPath: img.savedPath,
@@ -2471,6 +2630,7 @@ function Gallery({
       name: g.name,
       savedPath: g.savedPath || undefined,
       meta: g.meta,
+      kind: g.kind,
       getSrc: () => (g.src ? Promise.resolve(g.src) : api.getSavedImage(g.name)),
     });
     tiles.push({ key: g.name, el: <SavedTile image={g} index={index} shared={shared} onDelete={deleteOne} /> });
@@ -2809,8 +2969,12 @@ function SavedTile({
     <figure
       ref={ref}
       // Pointer-based drag (not native HTML5) → reliable in WKWebView. A move
-      // past threshold starts the img2img drag; a plain click still opens the tile.
-      onPointerDown={(e) => shared.startImageDrag(e, ensureSrc, srcRef.current)}
+      // past threshold starts the img2img drag; a plain click still opens the
+      // tile. Videos can't seed img2img → no drag affordance for them.
+      onPointerDown={(e) => {
+        if (image.kind === "video" || isVideoSrc(srcRef.current)) return;
+        shared.startImageDrag(e, ensureSrc, srcRef.current);
+      }}
       className={cn(
         "rise-in group bg-muted/40 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1 transition-shadow duration-200 hover:shadow-lg",
         selected ? "ring-2 ring-[var(--brand-to)]" : "ring-border/60"
@@ -2826,21 +2990,41 @@ function SavedTile({
           name: image.name,
           savedPath: image.savedPath || undefined,
           meta: image.meta,
+          kind: image.kind,
           getSrc: ensureSrc,
         })
       }
     >
       {src ? (
-        // draggable=false: an <img> is natively draggable, which would start a
-        // browser image-drag and cancel our pointer-based img2img drag.
-        <img
-          src={src}
-          alt={image.name}
-          draggable={false}
-          className="animate-in fade-in h-full w-full object-cover duration-300"
-        />
+        image.kind === "video" || isVideoSrc(src) ? (
+          // Muted looping inline preview — the tile IS the thumbnail. Controls
+          // live in the lightbox; the tile stays a simple click target.
+          <video
+            src={src}
+            muted
+            loop
+            autoPlay
+            playsInline
+            draggable={false}
+            className="animate-in fade-in h-full w-full object-cover duration-300"
+          />
+        ) : (
+          // draggable=false: an <img> is natively draggable, which would start a
+          // browser image-drag and cancel our pointer-based img2img drag.
+          <img
+            src={src}
+            alt={image.name}
+            draggable={false}
+            className="animate-in fade-in h-full w-full object-cover duration-300"
+          />
+        )
       ) : (
         <Skeleton className="h-full w-full rounded-none" />
+      )}
+      {(image.kind === "video" || isVideoSrc(src)) && (
+        <span className="pointer-events-none absolute left-1.5 top-1.5 rounded-full bg-black/55 p-1 text-white">
+          <Play className="size-3" fill="currentColor" />
+        </span>
       )}
       <SelectCheckbox
         checked={selected}
@@ -2931,11 +3115,13 @@ function TileContextMenu({
           label={t("gallery.ctxOpen")}
           onClick={run(() => onOpenAt(target.index))}
         />
-        <MenuItem
-          icon={<ImageIcon />}
-          label={t("gallery.ctxUseAsSource")}
-          onClick={run(() => onUseAsSource(target.getSrc))}
-        />
+        {target.kind !== "video" && (
+          <MenuItem
+            icon={<ImageIcon />}
+            label={t("gallery.ctxUseAsSource")}
+            onClick={run(() => onUseAsSource(target.getSrc))}
+          />
+        )}
         {meta?.prompt && (
           <MenuItem
             icon={<RotateCcw />}
@@ -3095,9 +3281,12 @@ function Lightbox({
           {t("gallery.counter", { i: index + 1, n: total })}
         </span>
         <div className="flex items-center gap-1.5">
-          <button type="button" className={iconBtn} title={t("gallery.ctxUseAsSource")} aria-label={t("gallery.ctxUseAsSource")} onClick={() => onUseAsSource(current.getSrc)}>
-            <ImageIcon className="size-5" />
-          </button>
+          {/* img2img needs an image source — hidden for videos. */}
+          {!isVideoSrc(src) && (
+            <button type="button" className={iconBtn} title={t("gallery.ctxUseAsSource")} aria-label={t("gallery.ctxUseAsSource")} onClick={() => onUseAsSource(current.getSrc)}>
+              <ImageIcon className="size-5" />
+            </button>
+          )}
           {meta?.prompt && (
             <button type="button" className={iconBtn} title={t("gallery.ctxReuse")} aria-label={t("gallery.ctxReuse")} onClick={() => onReuseSettings(meta)}>
               <RotateCcw className="size-5" />
@@ -3165,27 +3354,44 @@ function Lightbox({
               <Loader2 className="absolute left-1/2 top-1/2 size-8 -translate-x-1/2 -translate-y-1/2 animate-spin text-white/70" />
             </div>
           )}
-          {src && (
-            <img
-              src={src}
-              alt=""
-              draggable={false}
-              onClick={(e) => { e.stopPropagation(); setZoom((z) => !z); }}
-              onMouseMove={(e) => {
-                if (!zoom) return;
-                const r = e.currentTarget.getBoundingClientRect();
-                setOrigin(`${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`);
-              }}
-              onMouseLeave={() => setOrigin("50% 50%")}
-              style={{ transformOrigin: origin, transform: zoom ? "scale(2)" : "scale(1)" }}
-              className={cn(
-                "animate-in fade-in zoom-in-95 min-h-0 object-contain transition-transform duration-150",
-                // Fullscreen: edge-to-edge, no frame. Otherwise: framed with a cap.
-                full ? "max-h-screen max-w-full" : "max-h-[85vh] rounded-xl shadow-2xl",
-                zoom ? "cursor-zoom-out" : "cursor-zoom-in"
-              )}
-            />
-          )}
+          {src &&
+            (isVideoSrc(src) ? (
+              // Video result (WAN): native controls, autoplay+loop, no magnifier
+              // (zoom is an image affordance). Click falls through to the video's
+              // own controls, so stop propagation to keep the overlay open.
+              <video
+                src={src}
+                controls
+                autoPlay
+                loop
+                playsInline
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  "animate-in fade-in zoom-in-95 min-h-0 object-contain",
+                  full ? "max-h-screen max-w-full" : "max-h-[85vh] rounded-xl shadow-2xl"
+                )}
+              />
+            ) : (
+              <img
+                src={src}
+                alt=""
+                draggable={false}
+                onClick={(e) => { e.stopPropagation(); setZoom((z) => !z); }}
+                onMouseMove={(e) => {
+                  if (!zoom) return;
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setOrigin(`${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`);
+                }}
+                onMouseLeave={() => setOrigin("50% 50%")}
+                style={{ transformOrigin: origin, transform: zoom ? "scale(2)" : "scale(1)" }}
+                className={cn(
+                  "animate-in fade-in zoom-in-95 min-h-0 object-contain transition-transform duration-150",
+                  // Fullscreen: edge-to-edge, no frame. Otherwise: framed with a cap.
+                  full ? "max-h-screen max-w-full" : "max-h-[85vh] rounded-xl shadow-2xl",
+                  zoom ? "cursor-zoom-out" : "cursor-zoom-in"
+                )}
+              />
+            ))}
         </div>
         {!full && meta && <MetaPanel meta={meta} />}
       </div>

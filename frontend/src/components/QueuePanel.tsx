@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, Check, Clock, Cloud, Cpu, Loader2, Sparkles, X } from "lucide-react";
+import { AlertCircle, Check, Clock, Cloud, Cpu, Loader2, Sparkles, Square, X } from "lucide-react";
 import { ProgressBar } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type { GenerationMeta, Job } from "@/lib/types";
@@ -35,10 +35,12 @@ function fmtElapsed(ms: number): string {
 export function QueuePanel({
   jobs,
   onDismiss,
+  onStop,
   onOpenImage,
 }: {
   jobs: Job[];
   onDismiss: (id: string) => void;
+  onStop: (job: Job) => void;
   onOpenImage: (item: LightboxItem) => void;
 }) {
   const { t } = useTranslation();
@@ -76,6 +78,7 @@ export function QueuePanel({
           now={now}
           position={queuePos.get(job.id)}
           onDismiss={onDismiss}
+          onStop={onStop}
           onOpenImage={onOpenImage}
         />
       ))}
@@ -88,12 +91,14 @@ function QueueRow({
   now,
   position,
   onDismiss,
+  onStop,
   onOpenImage,
 }: {
   job: Job;
   now: number;
   position?: number;
   onDismiss: (id: string) => void;
+  onStop: (job: Job) => void;
   onOpenImage: (item: LightboxItem) => void;
 }) {
   const { t } = useTranslation();
@@ -136,7 +141,12 @@ function QueueRow({
             onClick={() => onOpenImage({ src: job.image!.imageBase64, meta: job.image!.meta })}
             className="focus-visible:ring-ring/50 shrink-0 overflow-hidden rounded-lg outline-none transition-transform focus-visible:ring-2 active:scale-95"
           >
-            <img src={job.image.imageBase64} alt="" className="size-10 object-cover" />
+            {job.image.imageBase64.startsWith("data:video/") ? (
+              // Video result — a muted looping micro-preview as the thumbnail.
+              <video src={job.image.imageBase64} muted loop autoPlay playsInline className="size-10 object-cover" />
+            ) : (
+              <img src={job.image.imageBase64} alt="" className="size-10 object-cover" />
+            )}
           </button>
         ) : (
           <span
@@ -179,9 +189,24 @@ function QueueRow({
           </p>
         </div>
 
-        {/* Dismiss — cancels a queued job or clears a finished one. A running job
-            can't be cancelled yet (no sidecar cancel API). */}
-        {!running && (
+        {/* Trailing action: STOP a running local run (hard-restarts the engine),
+            CANCEL a queued one, or DISMISS a finished/failed row. A running cloud
+            run has no stop (the request is already in flight server-side). */}
+        {running ? (
+          job.mode === "local" && (
+            <button
+              type="button"
+              onClick={() => onStop(job)}
+              aria-label={t("queue.stop")}
+              title={t("queue.stop")}
+              // Always visible (not hover-gated): a running job must be stoppable
+              // without hunting for the control.
+              className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mr-0.5 -mt-0.5 rounded p-1 transition-colors"
+            >
+              <Square className="size-3.5 fill-current" />
+            </button>
+          )
+        ) : (
           <button
             type="button"
             onClick={() => onDismiss(job.id)}

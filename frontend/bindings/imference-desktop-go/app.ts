@@ -316,6 +316,19 @@ export function StartSidecar(): $CancellablePromise<void> {
 }
 
 /**
+ * StopLocalGeneration aborts the in-flight local generation. runqy_python's task
+ * loop is single-threaded — while a denoise runs it isn't reading stdin, so the
+ * running image can't be cancelled cooperatively. We hard-kill the sidecar
+ * (which aborts the current generate) and reload the model so the engine is
+ * ready for the next queued job. Returns immediately; the restart runs in the
+ * background and the killed request's Generate call fails, which the renderer
+ * maps to a "stopped" job. No-op when nothing is generating.
+ */
+export function StopLocalGeneration(): $CancellablePromise<void> {
+    return $Call.ByID(1928099974);
+}
+
+/**
  * StopSidecar shuts the local engine down to free GPU/RAM.
  */
 export function StopSidecar(): $CancellablePromise<void> {

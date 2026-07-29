@@ -48,9 +48,22 @@ export interface EngineInfo {
 
     /**
      * Outdated is true when both versions are known and differ — the startup
-     * check force-reinstalls the pinned engine in that case.
+     * check force-reinstalls the pinned engine in that case. Always false for a
+     * Dev (editable) install, which is pinned to its working tree, not a release.
      */
     "outdated": boolean;
+
+    /**
+     * Dev is true when the engine is an editable (`pip install -e`) checkout —
+     * a local dev source, not an official release. Detected from PEP 610
+     * direct_url.json in the venv.
+     */
+    "dev": boolean;
+
+    /**
+     * DevPath is the editable checkout's source directory when Dev is true ("" otherwise).
+     */
+    "devPath": string;
 }
 
 /**
@@ -386,6 +399,12 @@ export interface SavedImage {
      * file name (key for GetSavedImage / DeleteSavedImage)
      */
     "name": string;
+
+    /**
+     * Kind is the media kind by extension: "image" | "video". Drives <img> vs
+     * <video> rendering in the gallery/lightbox.
+     */
+    "kind": string;
 
     /**
      * "local" | "cloud" | …

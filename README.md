@@ -4,7 +4,7 @@
 
 # Imference Desktop
 
-**AI image generation on your own GPU — or in the cloud. One app.**
+**Generate AI images and videos — on your own GPU or in the cloud. One app.**
 
 Free · No subscription · Windows & macOS
 
@@ -42,24 +42,29 @@ available; code signing and silent in-app auto-update are on the roadmap.
 
 ## Why Imference Desktop
 
-- 🖥️ **Local generation, $0 per image** — run **SDXL** and **Z-Image** directly
-  on your GPU. Your prompts and images never leave your machine.
-- ☁️ **Cloud when you want it** — no GPU or a weak one? Generate on
-  [imference.com](https://imference.com) from the same interface. Pay with an
-  **API key (credits)** or **x402 (USDC on Base)** — the x402 route needs no
-  account at all.
+- ⚡ **One-click setup** — the app installs an isolated inference engine for
+  you (nothing touches your system Python), detects your GPU, and starts and
+  stops the engine on demand. No terminal, no CUDA wrestling.
+- 🖥️ **Local generation, $0 per image** — run **seven model families** on your
+  own GPU: **SDXL, SD 1.5, Z-Image, FLUX, Chroma, Qwen-Image and Anima**. Your
+  prompts and images never leave your machine.
+- 🧩 **Preconfigured models, zero setup** — pick a model from the curated
+  catalog and hit Generate: the weights **download automatically**, and every
+  model ships pre-tuned (steps, CFG, resolutions, quality tags, negative
+  prompt) so your first image already looks right.
 - 📦 **Bring your own model** — load any local `.safetensors` checkpoint
-  (e.g. downloaded from Civitai), no catalog required. The file is used in
+  (e.g. downloaded from Civitai) and pick its family. The file is used in
   place — nothing is copied or uploaded.
-- ⚡ **One-click local engine** — the app installs an isolated inference engine
-  for you (nothing touches your system Python) and starts/stops it on demand.
-  Models download automatically when first used (~6–7 GB each).
-- 🎛️ **Real controls** — per-model parameters straight from the catalog:
-  format, steps, CFG, seed, quality tags, negative prompt. Plus
-  **image-to-image**.
-- 🗂️ **A gallery that remembers everything** — every generation is saved with
-  its prompt, model and settings. Filter, search, and review in a fullscreen
-  viewer.
+- ☁️ **Cloud when you want it** — no GPU or a weak one? Generate images and
+  **video** on [imference.com](https://imference.com) from the same interface.
+  Pay with an **API key (credits)** or **x402 (USDC on Base)** — the x402
+  route needs no account at all.
+- 🎛️ **Real controls, simple interface** — format, steps, CFG, seed, quality
+  tags, negative prompt, **image-to-image**. Stack generations in a queue,
+  and even switch models mid-run — the app finishes the current image first.
+- 🗂️ **A gallery that remembers everything** — every image and video is saved
+  with its prompt, model and settings. Filter, search, and review in a
+  fullscreen viewer.
 
 <div align="center">
 

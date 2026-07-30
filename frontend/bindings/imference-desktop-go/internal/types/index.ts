@@ -14,6 +14,7 @@ export type {
     GenerationResult,
     ImageRuntimeSettings,
     ModelInfo,
+    PendingCloudJob,
     PythonInfo,
     SavedImage,
     Settings,

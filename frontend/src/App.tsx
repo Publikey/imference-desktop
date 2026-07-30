@@ -64,6 +64,7 @@ import { beginPointerDrag } from "@/lib/pointer-drag";
 import { cn, creditsToUSD } from "@/lib/utils";
 import type {
   AppSettings,
+  CloudResolved,
   GalleryFacets,
   GalleryFilter,
   GenerateProgress,
@@ -656,6 +657,67 @@ export default function App() {
         );
         toast.error(t("toast.genFailed"));
       });
+  }, [toast, t]);
+
+  // Settle a RESUMED cloud job (one that was interrupted by a prior app close
+  // and reclaimed by the Go side). Arrives via the "cloud:resolved" event, not a
+  // promise. Updates the hydrated Activity row, or adds one if the result landed
+  // before its row was hydrated.
+  const applyCloudResolved = useCallback((r: CloudResolved) => {
+    setJobs((js) => {
+      const exists = js.some((j) => j.id === r.jobId);
+      if (r.error) {
+        if (!exists) return js;
+        return js.map((j) =>
+          j.id === r.jobId ? { ...j, status: "error", error: r.error, endedAt: Date.now() } : j
+        );
+      }
+      if (!r.result) return js;
+      if (exists) {
+        return js.map((j) =>
+          j.id === r.jobId ? { ...j, status: "done", image: r.result!, endedAt: Date.now() } : j
+        );
+      }
+      const now = Date.now();
+      return [
+        {
+          id: r.jobId, mode: "cloud" as const, prompt: r.result.meta?.prompt ?? "",
+          status: "done" as const, progress: null, image: r.result,
+          queuedAt: now, startedAt: now, endedAt: now,
+        },
+        ...js,
+      ];
+    });
+  }, []);
+
+  // On launch: rehydrate the Activity list with cloud generations interrupted by
+  // the last close (still running server-side), and subscribe to their
+  // completion. The Go side resumes polling them a couple seconds after startup.
+  useEffect(() => {
+    void api
+      .listPendingCloudJobs()
+      .then((pending) => {
+        if (!pending.length) return;
+        setJobs((js) => {
+          const seen = new Set(js.map((j) => j.id));
+          const rows: Job[] = pending
+            .filter((p) => !seen.has(p.jobId))
+            .map((p) => ({
+              id: p.jobId, mode: "cloud", prompt: p.prompt, status: "running",
+              progress: null, queuedAt: Date.parse(p.createdAt) || Date.now(),
+              startedAt: Date.now(),
+            }));
+          return rows.length ? [...rows, ...js] : js;
+        });
+      })
+      .catch(() => {});
+    return api.onCloudResolved(applyCloudResolved);
+  }, [applyCloudResolved]);
+
+  // Manual "recheck" — re-poll any still-pending cloud generations on demand.
+  const recheckCloud = useCallback(() => {
+    void api.recheckPendingCloud().catch(() => {});
+    toast.toast(t("toast.cloudRechecking"));
   }, [toast, t]);
 
   const run = useCallback(
@@ -1291,6 +1353,7 @@ export default function App() {
         onOpenChange={setActivityOpen}
         onDismiss={dismissJob}
         onStop={stopJob}
+        onRecheck={recheckCloud}
         onOpenImage={setLightbox}
         onClear={clearFinished}
       />

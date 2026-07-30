@@ -26,16 +26,20 @@ import (
 )
 
 const (
-	defaultBase    = "https://imference.com"
-	postTimeout    = 30 * time.Second
-	statusTimeout  = 10 * time.Second
-	pollInterval   = 1 * time.Second
-	overallTimeout = 120 * time.Second
-	// Video generations (WAN) run minutes, not seconds — queue wait + ~6-step
-	// denoise + mp4 upload. The unified /generate response reports the media
-	// kind, so polling stretches its budget for video without slowing image
-	// error detection.
-	videoOverallTimeout = 15 * time.Minute
+	defaultBase   = "https://imference.com"
+	postTimeout   = 30 * time.Second
+	statusTimeout = 10 * time.Second
+	pollInterval  = 1 * time.Second
+	// Image poll budget. Sized for a LOADED cloud queue (a request can wait
+	// minutes for a free worker), not just the denoise. A generous budget is
+	// safe now that /status returns 422 on failure — the client stops polling on
+	// a real failure instead of only bailing on this timeout, so this cap only
+	// ever fires for a genuinely stuck-in-queue job.
+	overallTimeout = 10 * time.Minute
+	// Video generations (WAN) additionally run minutes of denoise + mp4 upload
+	// on top of the queue wait. The unified /generate response reports the media
+	// kind, so polling stretches its budget for video.
+	videoOverallTimeout = 20 * time.Minute
 	catalogTTL          = 5 * time.Minute // the model catalog is effectively static per session
 
 	// Downloading the finished image is separate from the generation budget
@@ -466,10 +470,14 @@ func (c *Client) GetCredits(ctx context.Context, apiKey string) (float64, error)
 
 // Generate runs the full POST → poll → download → base64 dance and returns
 // a unified GenerationResult ready for the frontend.
+// onEnqueued, when non-nil, is called with the server's request_id + media kind
+// the instant the POST succeeds — BEFORE polling. The caller persists it so an
+// interrupted generation can be resumed later (see internal/cloudjobs).
 func (c *Client) Generate(
 	ctx context.Context,
 	apiKey, model string,
 	req types.GenerationRequest,
+	onEnqueued func(requestID, kind string),
 ) (types.GenerationResult, error) {
 	if apiKey == "" {
 		return types.GenerationResult{}, errors.New("cloud: API key not set")
@@ -492,24 +500,42 @@ func (c *Client) Generate(
 		return types.GenerationResult{}, err
 	}
 	c.bus.Info("cloud", "postGenerate ok", map[string]any{"request_id": requestID, "kind": kind})
+	if onEnqueued != nil {
+		onEnqueued(requestID, kind)
+	}
 
-	// Poll with a kind-sized budget: videos legitimately run for minutes.
+	return c.pollAndDownload(ctx, "credits", apiKey, requestID, kind)
+}
+
+// pollAndDownload runs the shared tail of every cloud generation: poll /status
+// (kind-sized budget) then download the finished media. Rail "x402" polls the
+// unauthenticated /ondemand/status; anything else uses the bearer /status.
+// Reused by the live Generate path AND the resume-on-launch path.
+func (c *Client) pollAndDownload(ctx context.Context, rail, apiKey, requestID, kind string) (types.GenerationResult, error) {
 	pollCtx, cancel := context.WithTimeout(ctx, pollBudget(kind))
 	defer cancel()
-	imageURL, seed, err := c.pollStatus(pollCtx, apiKey, requestID)
+
+	var mediaURL string
+	var seed int
+	var err error
+	if rail == "x402" {
+		mediaURL, seed, err = c.pollStatusX402(pollCtx, requestID)
+	} else {
+		mediaURL, seed, err = c.pollStatus(pollCtx, apiKey, requestID)
+	}
 	if err != nil {
-		c.bus.Error("cloud", "pollStatus failed", map[string]any{"err": err.Error()})
+		c.bus.Error("cloud", "pollStatus failed", map[string]any{"err": err.Error(), "request_id": requestID})
 		return types.GenerationResult{}, err
 	}
-	c.bus.Info("cloud", "pollStatus ok", map[string]any{"url": imageURL, "seed": seed})
+	c.bus.Info("cloud", "pollStatus ok", map[string]any{"url": mediaURL, "seed": seed})
 
-	// Download on the caller's context, not overallCtx: generation is done, and
-	// the download gets its own (retry) budget so a slow link doesn't lose an
-	// image that was successfully generated.
-	b64, mime, err := c.downloadWithRetry(ctx, imageURL)
+	// Download on the caller's context (not the poll budget): generation is done,
+	// and the download gets its own retry budget so a slow link doesn't lose an
+	// already-generated result.
+	b64, mime, err := c.downloadWithRetry(ctx, mediaURL)
 	if err != nil {
-		c.bus.Error("cloud", "download failed", map[string]any{"err": err.Error(), "url": imageURL})
-		return types.GenerationResult{}, fmt.Errorf("cloud: download image: %w", err)
+		c.bus.Error("cloud", "download failed", map[string]any{"err": err.Error(), "url": mediaURL})
+		return types.GenerationResult{}, fmt.Errorf("cloud: download media: %w", err)
 	}
 	c.bus.Info("cloud", "download ok", map[string]any{"bytes": len(b64) * 3 / 4, "mime": mime})
 
@@ -518,6 +544,14 @@ func (c *Client) Generate(
 		Seed:        seed,
 		Source:      "cloud",
 	}, nil
+}
+
+// Resume re-polls and downloads a previously-enqueued generation by its
+// request_id — used on launch/recheck to reclaim an interrupted job. apiKey is
+// needed only for the credits rail (x402 status is public).
+func (c *Client) Resume(ctx context.Context, rail, apiKey, requestID, kind string) (types.GenerationResult, error) {
+	c.bus.Info("cloud", "resume", map[string]any{"request_id": requestID, "rail": rail, "kind": kind})
+	return c.pollAndDownload(ctx, rail, apiKey, requestID, kind)
 }
 
 // GenerateX402 is the x402 / pay-per-call USDC variant of Generate.
@@ -533,6 +567,7 @@ func (c *Client) GenerateX402(
 	model string,
 	req types.GenerationRequest,
 	signer *wallet.Wallet,
+	onEnqueued func(requestID, kind string),
 ) (types.GenerationResult, error) {
 	if signer == nil {
 		return types.GenerationResult{}, errors.New("cloud: x402 mode requires a configured wallet")
@@ -560,30 +595,12 @@ func (c *Client) GenerateX402(
 		return types.GenerationResult{}, err
 	}
 	c.bus.Info("cloud", "postGenerateX402 ok", map[string]any{"request_id": requestID, "kind": kind})
-
-	// Poll with a kind-sized budget: videos legitimately run for minutes.
-	pollCtx, cancel := context.WithTimeout(ctx, pollBudget(kind))
-	defer cancel()
-	imageURL, seed, err := c.pollStatusX402(pollCtx, requestID)
-	if err != nil {
-		c.bus.Error("cloud", "pollStatusX402 failed", map[string]any{"err": err.Error()})
-		return types.GenerationResult{}, err
+	if onEnqueued != nil {
+		onEnqueued(requestID, kind)
 	}
-	c.bus.Info("cloud", "pollStatusX402 ok", map[string]any{"url": imageURL, "seed": seed})
 
-	// Download on the caller's context, not overallCtx (see Generate).
-	b64, mime, err := c.downloadWithRetry(ctx, imageURL)
-	if err != nil {
-		c.bus.Error("cloud", "download failed", map[string]any{"err": err.Error(), "url": imageURL})
-		return types.GenerationResult{}, fmt.Errorf("cloud: download image: %w", err)
-	}
-	c.bus.Info("cloud", "download ok", map[string]any{"bytes": len(b64) * 3 / 4, "mime": mime})
-
-	return types.GenerationResult{
-		ImageBase64: "data:" + mime + ";base64," + b64,
-		Seed:        seed,
-		Source:      "cloud",
-	}, nil
+	// Payment is settled; polling the result needs no auth/wallet.
+	return c.pollAndDownload(ctx, "x402", "", requestID, kind)
 }
 
 // busAsLogger adapts *logbus.Bus to the x402.Logger interface so the
@@ -607,6 +624,49 @@ func pollBudget(kind string) time.Duration {
 		return videoOverallTimeout
 	}
 	return overallTimeout
+}
+
+// terminalError marks a generation outcome that will never succeed by retrying
+// (the server reported failure, or an auth error) — as opposed to a timeout or
+// network blip, where the job may still be running server-side. The caller uses
+// IsTerminal to decide whether to drop a persisted pending-job record (terminal)
+// or keep it for a later resume (non-terminal).
+type terminalError struct{ msg string }
+
+func (e *terminalError) Error() string { return e.msg }
+
+// IsTerminal reports whether err is a definitive generation failure (drop the
+// pending record) rather than a recoverable timeout/network error (keep it).
+func IsTerminal(err error) bool {
+	var t *terminalError
+	return errors.As(err, &t)
+}
+
+// transientStatus reports whether a /status HTTP code is a temporary blip worth
+// polling through (gateway/throttle) rather than a terminal failure. The server
+// signals a real, stop-now failure with 422; 4xx auth errors are terminal too.
+func transientStatus(code int) bool {
+	switch code {
+	case http.StatusRequestTimeout, // 408
+		http.StatusTooManyRequests,     // 429
+		http.StatusInternalServerError, // 500
+		http.StatusBadGateway,          // 502
+		http.StatusServiceUnavailable,  // 503
+		http.StatusGatewayTimeout:      // 504
+		return true
+	}
+	return false
+}
+
+// pollTimedOut converts a fetch error into the friendly poll-timeout message
+// when the cause is the exhausted poll budget (parent ctx), else returns the
+// raw error. Used so an in-flight fetch cut short by the budget reports "timed
+// out", not a cryptic "context deadline exceeded".
+func pollTimedOut(ctx context.Context, fetchErr error, what string) error {
+	if ctx.Err() != nil {
+		return fmt.Errorf("cloud: %s status polling timed out — the queue may be busy; try again", what)
+	}
+	return fetchErr
 }
 
 func (c *Client) postGenerateX402(
@@ -662,7 +722,7 @@ func (c *Client) pollStatusX402(ctx context.Context, requestID string) (string, 
 	defer ticker.Stop()
 
 	if got, seed, done, err := c.fetchStatusX402(ctx, statusURL); err != nil {
-		return "", 0, err
+		return "", 0, pollTimedOut(ctx, err, "x402")
 	} else if done {
 		return got, seed, nil
 	}
@@ -670,11 +730,11 @@ func (c *Client) pollStatusX402(ctx context.Context, requestID string) (string, 
 	for {
 		select {
 		case <-ctx.Done():
-			return "", 0, errors.New("cloud: x402 status polling timed out (generation still queued or the worker is down)")
+			return "", 0, errors.New("cloud: x402 status polling timed out — the queue may be busy; try again")
 		case <-ticker.C:
 			got, seed, done, err := c.fetchStatusX402(ctx, statusURL)
 			if err != nil {
-				return "", 0, err
+				return "", 0, pollTimedOut(ctx, err, "x402")
 			}
 			if done {
 				return got, seed, nil
@@ -690,7 +750,10 @@ func (c *Client) fetchStatusX402(ctx context.Context, statusURL string) (string,
 	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, statusURL, nil)
 	resp, err := c.http.Do(r)
 	if err != nil {
-		return "", 0, false, fmt.Errorf("cloud: GET /ondemand/status: %w", err)
+		if ctx.Err() != nil {
+			return "", 0, false, ctx.Err()
+		}
+		return "", 0, false, nil // transient blip — keep polling
 	}
 	defer resp.Body.Close()
 
@@ -705,13 +768,17 @@ func (c *Client) fetchStatusX402(ctx context.Context, statusURL string) (string,
 		_, _ = io.Copy(io.Discard, resp.Body)
 		return "", 0, false, nil
 	default:
+		if transientStatus(resp.StatusCode) {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			return "", 0, false, nil // gateway/throttle blip — keep polling
+		}
 		var errBody statusErrorBody
 		_ = json.NewDecoder(resp.Body).Decode(&errBody)
 		msg := errBody.Error
 		if msg == "" {
 			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
 		}
-		return "", 0, false, fmt.Errorf("cloud: /ondemand/status: %s", msg)
+		return "", 0, false, &terminalError{"cloud: /ondemand/status: " + msg}
 	}
 }
 
@@ -775,7 +842,7 @@ func (c *Client) pollStatus(ctx context.Context, apiKey, requestID string) (stri
 	// "image was already cached server-side" path return in <1s instead of
 	// waiting for the first tick.
 	if got, seed, done, err := c.fetchStatus(ctx, statusURL, apiKey); err != nil {
-		return "", 0, err
+		return "", 0, pollTimedOut(ctx, err, "")
 	} else if done {
 		return got, seed, nil
 	}
@@ -783,11 +850,11 @@ func (c *Client) pollStatus(ctx context.Context, apiKey, requestID string) (stri
 	for {
 		select {
 		case <-ctx.Done():
-			return "", 0, errors.New("cloud: status polling timed out (generation still queued or the worker is down)")
+			return "", 0, errors.New("cloud: status polling timed out — the queue may be busy; try again")
 		case <-ticker.C:
 			got, seed, done, err := c.fetchStatus(ctx, statusURL, apiKey)
 			if err != nil {
-				return "", 0, err
+				return "", 0, pollTimedOut(ctx, err, "")
 			}
 			if done {
 				return got, seed, nil
@@ -808,7 +875,12 @@ func (c *Client) fetchStatus(ctx context.Context, statusURL, apiKey string) (str
 
 	resp, err := c.http.Do(r)
 	if err != nil {
-		return "", 0, false, fmt.Errorf("cloud: GET /status: %w", err)
+		// Parent budget exhausted mid-fetch → let the loop's ctx.Done win.
+		if ctx.Err() != nil {
+			return "", 0, false, ctx.Err()
+		}
+		// A single network blip / slow fetch shouldn't kill a long run — keep polling.
+		return "", 0, false, nil
 	}
 	defer resp.Body.Close()
 
@@ -825,13 +897,19 @@ func (c *Client) fetchStatus(ctx context.Context, statusURL, apiKey string) (str
 		_, _ = io.Copy(io.Discard, resp.Body)
 		return "", 0, false, nil
 	default:
+		if transientStatus(resp.StatusCode) {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			return "", 0, false, nil // gateway/throttle blip — keep polling
+		}
 		var errBody statusErrorBody
 		_ = json.NewDecoder(resp.Body).Decode(&errBody)
 		msg := errBody.Error
 		if msg == "" {
 			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
 		}
-		return "", 0, false, fmt.Errorf("cloud: /status: %s", msg)
+		// 422 (failed) / 4xx (auth) — a definitive outcome, don't keep polling
+		// or keep the pending record.
+		return "", 0, false, &terminalError{"cloud: /status: " + msg}
 	}
 }
 

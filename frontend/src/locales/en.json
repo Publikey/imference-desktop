@@ -148,6 +148,7 @@
     "empty": "Nothing running",
     "emptyHint": "Generations you launch appear here, live.",
     "clearFinished": "Clear",
+    "recheck": "Recheck",
     "dismiss": "Dismiss",
     "cancel": "Cancel",
     "stop": "Stop",
@@ -428,6 +429,7 @@
     "downloadCancelled": "Download cancelled",
     "genFailed": "Generation failed",
     "genStopped": "Generation stopped — reloading the engine",
+    "cloudRechecking": "Rechecking cloud generations…",
     "switchQueued": "{{name}} will load after the current generation",
     "deleted_one": "Image deleted",
     "deleted_other": "{{count}} images deleted"

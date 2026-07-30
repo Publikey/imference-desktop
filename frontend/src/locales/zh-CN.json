@@ -146,6 +146,7 @@
     "empty": "暂无任务",
     "emptyHint": "启动的生成任务会实时显示在这里。",
     "clearFinished": "清除",
+    "recheck": "重新检查",
     "dismiss": "关闭",
     "cancel": "取消",
     "stop": "停止",
@@ -422,6 +423,7 @@
     "downloadCancelled": "已取消下载",
     "genFailed": "生成失败",
     "genStopped": "已停止生成 — 正在重新加载引擎",
+    "cloudRechecking": "正在重新检查云端生成…",
     "switchQueued": "将在当前生成完成后加载 {{name}}",
     "deleted_other": "已删除 {{count}} 张图片"
   },

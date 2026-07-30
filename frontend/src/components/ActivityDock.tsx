@@ -1,6 +1,6 @@
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Activity, Cloud, Cpu, Loader2, X } from "lucide-react";
+import { Activity, Cloud, Cpu, Loader2, RefreshCw, X } from "lucide-react";
 import { QueuePanel } from "@/components/QueuePanel";
 import { cn } from "@/lib/utils";
 import type { GenerationMeta, Job } from "@/lib/types";
@@ -26,6 +26,7 @@ export function ActivityDock({
   onOpenChange,
   onDismiss,
   onStop,
+  onRecheck,
   onOpenImage,
   onClear,
 }: {
@@ -34,6 +35,7 @@ export function ActivityDock({
   onOpenChange: (open: boolean) => void;
   onDismiss: (id: string) => void;
   onStop: (job: Job) => void;
+  onRecheck: () => void;
   onOpenImage: (item: LightboxItem) => void;
   onClear: () => void;
 }) {
@@ -93,6 +95,17 @@ export function ActivityDock({
                 </span>
               )}
               <div className="ml-auto flex items-center gap-2">
+                {cloudActive > 0 && (
+                  <button
+                    type="button"
+                    onClick={onRecheck}
+                    title={t("queue.recheck")}
+                    className="text-muted-foreground/60 hover:text-foreground inline-flex items-center gap-1 text-[11px] font-medium transition-colors"
+                  >
+                    <RefreshCw className="size-3" />
+                    {t("queue.recheck")}
+                  </button>
+                )}
                 {hasFinished && (
                   <button
                     type="button"

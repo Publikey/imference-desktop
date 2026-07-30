@@ -135,11 +135,6 @@ export interface GalleryFilter {
     "text": string;
 }
 
-/**
- * GenerationMeta captures how an image was produced. Written verbatim to a
- * "<image>.json" sidecar at save time, and read back to drive the gallery's
- * detail view and filters. Format-agnostic — reused as-is for future video.
- */
 export interface GenerationMeta {
     "prompt": string;
     "negativePrompt"?: string;
@@ -376,6 +371,30 @@ export interface ModelInfo {
     "familyCode"?: string;
     "familyName"?: string;
     "groupCode"?: string;
+}
+
+/**
+ * GenerationMeta captures how an image was produced. Written verbatim to a
+ * "<image>.json" sidecar at save time, and read back to drive the gallery's
+ * detail view and filters. Format-agnostic — reused as-is for future video.
+ * PendingCloudJob is one in-flight cloud generation persisted to disk so it
+ * survives an app close / crash / poll timeout. Recorded at enqueue (once the
+ * server returns a request_id), removed on completion. On next launch the app
+ * resumes polling each one — the request_id + result live server-side forever,
+ * so a paid-for generation is never lost. Rail is "credits" | "x402".
+ */
+export interface PendingCloudJob {
+    "jobId": string;
+    "requestId": string;
+
+    /**
+     * image | video
+     */
+    "kind": string;
+    "rail": string;
+    "prompt": string;
+    "meta"?: GenerationMeta | null;
+    "createdAt": string;
 }
 
 /**

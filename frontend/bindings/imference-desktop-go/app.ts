@@ -219,6 +219,15 @@ export function ListLocalModels(): $CancellablePromise<types$0.ModelInfo[] | nul
 }
 
 /**
+ * ListPendingCloudJobs returns the cloud generations persisted as in-flight, so
+ * the renderer can rehydrate the Activity list on launch. Excludes any currently
+ * owned by a live call/resume (those settle through their own path).
+ */
+export function ListPendingCloudJobs(): $CancellablePromise<types$0.PendingCloudJob[] | null> {
+    return $Call.ByID(3538303025);
+}
+
+/**
  * ListSavedImages returns one page of previously-generated images from the
  * output folder, newest first (by file mtime), optionally narrowed by filter.
  * Paginated for infinite scroll: pass the running offset and a page size.
@@ -242,6 +251,15 @@ export function LogFromFrontend(level: string, source: string, message: string, 
  */
 export function PickModelFile(): $CancellablePromise<string> {
     return $Call.ByID(3611692075);
+}
+
+/**
+ * RecheckPendingCloud re-polls every persisted pending job that isn't already
+ * being handled. Fired by the Activity "Recheck" action; also runs once at
+ * startup. Each resumed job settles via the "cloud:resolved" event.
+ */
+export function RecheckPendingCloud(): $CancellablePromise<void> {
+    return $Call.ByID(2444376496);
 }
 
 /**

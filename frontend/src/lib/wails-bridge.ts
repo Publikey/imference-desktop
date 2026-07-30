@@ -25,9 +25,11 @@ import {
   InstallEngine,
   ListCloudModels,
   ListLocalModels,
+  ListPendingCloudJobs,
   ListSavedImages,
   LogFromFrontend,
   PickModelFile,
+  RecheckPendingCloud,
   RefreshWalletBalance,
   RemoveCustomModel,
   RestartSidecar,
@@ -57,6 +59,8 @@ import type {
   SavedImage,
   SidecarStatus,
   UpdateInfo,
+  PendingCloudJob,
+  CloudResolved,
   WalletInfo,
 } from "./types";
 
@@ -111,6 +115,10 @@ const raw = {
   cancelModelDownload: (): Promise<void> => Call.ByName("main.App.CancelModelDownload") as Promise<void>,
   // Cloud model: pick from the full catalog; persists code + full entry.
   selectCloudModel: SelectCloudModel as (modelCode: string) => Promise<void>,
+  // Cloud generation resume: pending jobs interrupted by an app close, and a
+  // manual re-check that re-polls them (results arrive via onCloudResolved).
+  listPendingCloudJobs: ListPendingCloudJobs as () => Promise<PendingCloudJob[]>,
+  recheckPendingCloud: RecheckPendingCloud as () => Promise<void>,
   // Custom user-supplied checkpoints (referenced in place, no download).
   // pickModelFile returns "" when the user cancels the native dialog.
   pickModelFile: PickModelFile as () => Promise<string>,
@@ -160,6 +168,8 @@ const raw = {
     Events.On("model:progress", (e) => cb(e.data as InstallProgress)),
   onGenerateProgress: (cb: (p: GenerateProgress) => void): (() => void) =>
     Events.On("generate:progress", (e) => cb(e.data as GenerateProgress)),
+  onCloudResolved: (cb: (r: CloudResolved) => void): (() => void) =>
+    Events.On("cloud:resolved", (e) => cb(e.data as CloudResolved)),
 };
 
 const NO_WRAP = new Set([
@@ -169,6 +179,7 @@ const NO_WRAP = new Set([
   "onInstallProgress",
   "onModelProgress",
   "onGenerateProgress",
+  "onCloudResolved",
 ]);
 
 function wrap<K extends keyof typeof raw>(key: K, fn: (typeof raw)[K]): (typeof raw)[K] {

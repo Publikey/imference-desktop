@@ -214,6 +214,25 @@ export type GenerationMeta = {
   createdAt: string;
 };
 
+/** A cloud generation persisted as in-flight (survives app close). Returned by
+ *  api.listPendingCloudJobs() to rehydrate the Activity list on launch. */
+export type PendingCloudJob = {
+  jobId: string;
+  requestId: string;
+  kind: string; // "image" | "video"
+  rail: string; // "credits" | "x402"
+  prompt: string;
+  meta?: GenerationMeta | null;
+  createdAt: string;
+};
+
+/** Payload of the "cloud:resolved" event — a resumed cloud job finished. */
+export type CloudResolved = {
+  jobId: string;
+  result?: GenerationResult | null;
+  error?: string;
+};
+
 export type GalleryFilter = { engine: string; modelCode: string; source: string; text: string };
 export type Facet = { value: string; label: string; count: number };
 export type GalleryFacets = { models: Facet[]; engines: Facet[]; sources: Facet[] };

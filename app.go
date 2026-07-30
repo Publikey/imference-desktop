@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,6 +29,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"imference-desktop-go/internal/cloud"
+	"imference-desktop-go/internal/cloudjobs"
 	"imference-desktop-go/internal/imagesink"
 	"imference-desktop-go/internal/installer"
 	"imference-desktop-go/internal/logbus"
@@ -57,6 +60,14 @@ type App struct {
 	sidecar   *sidecar.Manager
 	cloud     *cloud.Client
 	installer *installer.Installer
+
+	// cloudJobs persists in-flight cloud generations so an app close / timeout
+	// doesn't orphan a paid-for result — resumed on launch. cloudBusy tracks
+	// job ids currently owned by a live call OR an active resume, so Recheck
+	// never double-polls the same request. Both nil-safe / mutex-guarded.
+	cloudJobs *cloudjobs.Store
+	cloudMu   sync.Mutex
+	cloudBusy map[string]bool
 
 	// gallery metadata cache (name → sidecar meta) for cheap filtering/facets.
 	// The sidecars remain the source of truth; this is a derived, invalidated
@@ -97,11 +108,20 @@ func NewApp() *App {
 		scriptPath = ""
 	}
 
+	// Pending-cloud store is best-effort: a failure here (rare — same UserConfigDir
+	// as settings) just disables resume, it must not stop the app booting.
+	cloudStore, cjErr := cloudjobs.New()
+	if cjErr != nil {
+		bus.Warn("app", "pending-cloud store unavailable — interrupted cloud jobs won't resume", map[string]any{"err": cjErr.Error()})
+	}
+
 	a := &App{
 		bus:       bus,
 		settings:  store,
 		cloud:     cloud.New(bus),
 		installer: installer.New(bus),
+		cloudJobs: cloudStore,
+		cloudBusy: map[string]bool{},
 	}
 	a.sidecar = sidecar.New(scriptPath, logDir, a.broadcastSidecarStatus, bus)
 	a.sidecar.SetProgressListener(a.broadcastGenerateProgress)
@@ -136,6 +156,17 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 		// older install whose diffusers doesn't actually offload). No-op when
 		// the versions match, the venv is absent, or a dev source override is set.
 		a.ensureEngineUpToDate()
+	}()
+
+	// Resume any cloud generations interrupted by the last close. A short delay
+	// lets the renderer mount + subscribe to "cloud:resolved" first, so a job
+	// that finishes instantly still updates the Activity list.
+	go func() {
+		time.Sleep(2 * time.Second)
+		if n := len(a.ListPendingCloudJobs()); n > 0 {
+			a.bus.Info("app", "resuming interrupted cloud generations", map[string]any{"count": n})
+		}
+		a.resumePendingCloud()
 	}()
 	return nil
 }
@@ -343,9 +374,28 @@ func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult
 		return types.GenerationResult{}, errors.New("Cloud model not set")
 	}
 
+	meta := cloudMeta(req, s.CloudModelInfo)
+	rail := cloudRail(s.PaymentMode)
+	jobID := newCloudJobID()
+
+	// Persist the job the moment the server accepts it, so an app close / crash /
+	// timeout mid-flight can resume it (the result lives server-side forever).
+	// Mark it busy so a concurrent Recheck doesn't double-poll the same request.
+	onEnqueued := func(requestID, kind string) {
+		a.setCloudBusy(jobID, true)
+		if a.cloudJobs != nil {
+			m := meta
+			if err := a.cloudJobs.Add(types.PendingCloudJob{
+				JobID: jobID, RequestID: requestID, Kind: kind, Rail: rail,
+				Prompt: req.Prompt, Meta: &m, CreatedAt: time.Now().Format(time.RFC3339),
+			}); err != nil {
+				a.bus.Warn("app", "persist pending cloud job failed", map[string]any{"err": err.Error()})
+			}
+		}
+	}
+
 	var result types.GenerationResult
 	var err error
-
 	switch s.PaymentMode {
 	case "x402":
 		w, lerr := wallet.LoadFromKeychain()
@@ -353,20 +403,154 @@ func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult
 			a.bus.Warn("app", "GenerateCloud: x402 mode but no wallet configured", nil)
 			return types.GenerationResult{}, errors.New("x402 mode selected but no wallet configured — open Settings to generate/import one")
 		}
-		result, err = a.cloud.GenerateX402(a.ctx, s.CloudModel, req, w)
+		result, err = a.cloud.GenerateX402(a.ctx, s.CloudModel, req, w, onEnqueued)
 	default:
 		if s.APIKey == "" {
 			a.bus.Warn("app", "GenerateCloud: API key not set", nil)
 			return types.GenerationResult{}, errors.New("Cloud API key not set")
 		}
-		result, err = a.cloud.Generate(a.ctx, s.APIKey, s.CloudModel, req)
+		result, err = a.cloud.Generate(a.ctx, s.APIKey, s.CloudModel, req, onEnqueued)
+	}
+
+	// Clear the record only on a DEFINITIVE outcome: success, or a terminal
+	// failure (server said 422 / auth). A timeout / network error leaves the
+	// record in place so the next launch (or Recheck) reclaims the result.
+	a.setCloudBusy(jobID, false)
+	if err == nil || cloud.IsTerminal(err) {
+		a.dropPendingCloud(jobID)
+	} else {
+		a.bus.Info("app", "cloud job left pending for resume", map[string]any{"job": jobID, "err": err.Error()})
 	}
 
 	if err != nil {
 		return result, err
 	}
-	a.autoSave(&result, cloudMeta(req, s.CloudModelInfo))
+	a.autoSave(&result, meta)
 	return result, nil
+}
+
+// cloudRail maps the settings payment mode to a pending-record rail tag.
+func cloudRail(paymentMode string) string {
+	if paymentMode == "x402" {
+		return "x402"
+	}
+	return "credits"
+}
+
+// newCloudJobID returns a short random id correlating a persisted cloud job with
+// its resumed Activity row + completion event.
+func newCloudJobID() string {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return "cloud_" + hex.EncodeToString(b[:])
+}
+
+func (a *App) setCloudBusy(jobID string, busy bool) {
+	a.cloudMu.Lock()
+	defer a.cloudMu.Unlock()
+	if busy {
+		a.cloudBusy[jobID] = true
+	} else {
+		delete(a.cloudBusy, jobID)
+	}
+}
+
+func (a *App) isCloudBusy(jobID string) bool {
+	a.cloudMu.Lock()
+	defer a.cloudMu.Unlock()
+	return a.cloudBusy[jobID]
+}
+
+func (a *App) dropPendingCloud(jobID string) {
+	if a.cloudJobs == nil {
+		return
+	}
+	if err := a.cloudJobs.Remove(jobID); err != nil {
+		a.bus.Warn("app", "remove pending cloud job failed", map[string]any{"err": err.Error()})
+	}
+}
+
+// ListPendingCloudJobs returns the cloud generations persisted as in-flight, so
+// the renderer can rehydrate the Activity list on launch. Excludes any currently
+// owned by a live call/resume (those settle through their own path).
+func (a *App) ListPendingCloudJobs() []types.PendingCloudJob {
+	if a.cloudJobs == nil {
+		return []types.PendingCloudJob{}
+	}
+	out := []types.PendingCloudJob{}
+	for _, j := range a.cloudJobs.List() {
+		if !a.isCloudBusy(j.JobID) {
+			out = append(out, j)
+		}
+	}
+	return out
+}
+
+// RecheckPendingCloud re-polls every persisted pending job that isn't already
+// being handled. Fired by the Activity "Recheck" action; also runs once at
+// startup. Each resumed job settles via the "cloud:resolved" event.
+func (a *App) RecheckPendingCloud() {
+	a.resumePendingCloud()
+}
+
+// resumePendingCloud spawns a background resume for each pending record not
+// already in flight. On completion it emits "cloud:resolved" ({jobId, result}
+// or {jobId, error}) and drops the record.
+func (a *App) resumePendingCloud() {
+	if a.cloudJobs == nil {
+		return
+	}
+	for _, job := range a.cloudJobs.List() {
+		if a.isCloudBusy(job.JobID) {
+			continue // a live call or another resume already owns it
+		}
+		a.setCloudBusy(job.JobID, true)
+		go a.resumeOne(job)
+	}
+}
+
+// resumeOne re-polls + downloads one persisted job and reports the outcome to
+// the renderer. Keeps the record on a recoverable error (try again next time);
+// drops it on success or terminal failure.
+func (a *App) resumeOne(job types.PendingCloudJob) {
+	defer a.setCloudBusy(job.JobID, false)
+
+	apiKey := ""
+	if job.Rail != "x402" {
+		apiKey = a.settings.Get().APIKey
+	}
+	result, err := a.cloud.Resume(a.ctx, job.Rail, apiKey, job.RequestID, job.Kind)
+	if err != nil {
+		if cloud.IsTerminal(err) {
+			a.dropPendingCloud(job.JobID)
+			a.emitCloudResolved(job.JobID, nil, err.Error())
+		}
+		// Non-terminal (timeout/network): keep the record, stay silent — the next
+		// launch or Recheck retries it.
+		return
+	}
+
+	meta := types.GenerationMeta{}
+	if job.Meta != nil {
+		meta = *job.Meta
+	}
+	a.autoSave(&result, meta)
+	a.dropPendingCloud(job.JobID)
+	a.emitCloudResolved(job.JobID, &result, "")
+	a.bus.Info("app", "resumed cloud job", map[string]any{"job": job.JobID, "request_id": job.RequestID})
+}
+
+// emitCloudResolved notifies the renderer that a resumed job finished (or
+// failed). The frontend settles the matching Activity row.
+func (a *App) emitCloudResolved(jobID string, result *types.GenerationResult, errMsg string) {
+	if a.app == nil {
+		return
+	}
+	a.app.Event.Emit("cloud:resolved", map[string]any{
+		"jobId":  jobID,
+		"result": result,
+		"error":  errMsg,
+	})
 }
 
 // GenerateLocal dispatches to the running Python sidecar. The sidecar

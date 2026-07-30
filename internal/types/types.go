@@ -231,6 +231,21 @@ type SavedImage struct {
 // GenerationMeta captures how an image was produced. Written verbatim to a
 // "<image>.json" sidecar at save time, and read back to drive the gallery's
 // detail view and filters. Format-agnostic — reused as-is for future video.
+// PendingCloudJob is one in-flight cloud generation persisted to disk so it
+// survives an app close / crash / poll timeout. Recorded at enqueue (once the
+// server returns a request_id), removed on completion. On next launch the app
+// resumes polling each one — the request_id + result live server-side forever,
+// so a paid-for generation is never lost. Rail is "credits" | "x402".
+type PendingCloudJob struct {
+	JobID     string          `json:"jobId"`
+	RequestID string          `json:"requestId"`
+	Kind      string          `json:"kind"` // image | video
+	Rail      string          `json:"rail"`
+	Prompt    string          `json:"prompt"`
+	Meta      *GenerationMeta `json:"meta,omitempty"`
+	CreatedAt string          `json:"createdAt"`
+}
+
 type GenerationMeta struct {
 	Prompt         string  `json:"prompt"`
 	NegativePrompt string  `json:"negativePrompt,omitempty"`

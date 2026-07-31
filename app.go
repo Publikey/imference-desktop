@@ -36,6 +36,7 @@ import (
 	"imference-desktop-go/internal/modelfetch"
 	"imference-desktop-go/internal/settings"
 	"imference-desktop-go/internal/sidecar"
+	"imference-desktop-go/internal/telemetry"
 	"imference-desktop-go/internal/types"
 	"imference-desktop-go/internal/update"
 	"imference-desktop-go/internal/version"
@@ -60,6 +61,7 @@ type App struct {
 	sidecar   *sidecar.Manager
 	cloud     *cloud.Client
 	installer *installer.Installer
+	telemetry *telemetry.Recorder
 
 	// cloudJobs persists in-flight cloud generations so an app close / timeout
 	// doesn't orphan a paid-for result — resumed on launch. cloudBusy tracks
@@ -120,6 +122,7 @@ func NewApp() *App {
 		settings:  store,
 		cloud:     cloud.New(bus),
 		installer: installer.New(bus),
+		telemetry: telemetry.New(store.Get, bus),
 		cloudJobs: cloudStore,
 		cloudBusy: map[string]bool{},
 	}
@@ -168,6 +171,10 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 		}
 		a.resumePendingCloud()
 	}()
+
+	// Anonymous usage stats (opt-out in Settings; payload documented in the
+	// README). Local counters only — cloud usage is already measured server-side.
+	a.telemetry.Start(ctx)
 	return nil
 }
 
@@ -282,6 +289,9 @@ func (a *App) SaveSettings(next types.Settings) (types.Settings, error) {
 	}
 	restart := settings.SidecarConfigChanged(prev, saved) && a.sidecar.Status().State == "ready"
 	a.bus.Info("app", "SaveSettings ok", map[string]any{"sidecarRestart": restart})
+	// Opting out of anonymous stats wipes the local telemetry state (install id
+	// included) — see telemetry.OnSettingsSaved.
+	a.telemetry.OnSettingsSaved(prev, saved)
 	if restart {
 		go func() {
 			// Defer the restart to the current generation so an engine-affecting
@@ -558,12 +568,25 @@ func (a *App) emitCloudResolved(jobID string, result *types.GenerationResult, er
 // queue up server-side; that's intentional for the POC.
 func (a *App) GenerateLocal(req types.GenerationRequest) (types.GenerationResult, error) {
 	a.applyLocalModelConfig(&req)
+	model := a.settings.Get().LocalModel
+	modelCode, engine := "", ""
+	if model != nil {
+		modelCode, engine = model.ModelCode, model.BackendType
+	}
 	result, err := a.sidecar.Generate(a.ctx, req)
 	if err != nil {
+		a.telemetry.RecordLocalGeneration(modelCode, engine, 0, true)
 		return result, err
 	}
-	a.autoSave(&result, genMeta(req, a.settings.Get().LocalModel))
+	a.telemetry.RecordLocalGeneration(modelCode, engine, time.Duration(result.DurationMS)*time.Millisecond, false)
+	a.autoSave(&result, genMeta(req, model))
 	return result, nil
+}
+
+// SetUILanguage lets the renderer report its active UI language (persisted in
+// localStorage, not settings.json) so the anonymous stats can include it.
+func (a *App) SetUILanguage(code string) {
+	a.telemetry.SetUILanguage(code)
 }
 
 // genMeta / cloudMeta build the generation metadata from a request + the model

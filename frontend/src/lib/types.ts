@@ -23,6 +23,9 @@ export type AppSettings = {
   cloudModelInfo?: ModelInfo | null;
   /** User-supplied checkpoints (localPath set), referenced in place. */
   customModels?: ModelInfo[];
+  /** Anonymous usage stats. Tri-state: undefined/null = on AND the first-run
+   *  notice hasn't been shown yet; false = opted out (local state wiped). */
+  sendAnonymousStats?: boolean | null;
 };
 
 /** Result of api.checkForUpdate(): this build vs the latest GitHub release. */

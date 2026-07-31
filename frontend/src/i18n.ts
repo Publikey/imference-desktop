@@ -66,8 +66,18 @@ void i18n.use(initReactI18next).init({
 
 // Keep <html lang> in sync (fonts, hyphenation, a11y).
 document.documentElement.lang = i18n.language;
+// Report the active language to Go for the anonymous usage stats (it can't
+// read localStorage itself). Dynamic import: this module initializes before
+// the Wails bridge, and a failed report must never affect the UI.
+function reportLanguage(lng: string): void {
+  void import("./lib/wails-bridge")
+    .then(({ api }) => api.setUILanguage(lng))
+    .catch(() => {});
+}
+reportLanguage(i18n.language);
 i18n.on("languageChanged", (lng) => {
   document.documentElement.lang = lng;
+  reportLanguage(lng);
 });
 
 export default i18n;

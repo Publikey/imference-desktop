@@ -42,6 +42,12 @@ type Settings struct {
 	// files themselves are referenced in place — never copied, never deleted.
 	// UI-only: not a sidecar-affecting field (the active model is LocalModel).
 	CustomModels []ModelInfo `json:"customModels,omitempty"`
+	// SendAnonymousStats gates the anonymous usage telemetry
+	// (internal/telemetry). Tri-state: nil = enabled AND the first-run notice
+	// hasn't been shown yet (the renderer shows it once, then persists true);
+	// *false = user opted out — nothing is accumulated and the install id is
+	// wiped. The full payload is documented in the README.
+	SendAnonymousStats *bool `json:"sendAnonymousStats,omitempty"`
 }
 
 // UpdateInfo is the result of App.CheckForUpdate: the app's own version vs the
@@ -303,6 +309,10 @@ type GenerationResult struct {
 	// Meta is the generation metadata (same as the sidecar), so the freshly
 	// generated image shows the same details in the UI as gallery images.
 	Meta *GenerationMeta `json:"meta,omitempty"`
+	// DurationMS is the wall-clock time of the generation call, measured in the
+	// sidecar client. 0 = unmeasured (e.g. cloud results). Feeds the anonymous
+	// per-model average in internal/telemetry.
+	DurationMS int64 `json:"durationMs,omitempty"`
 }
 
 // GenerateProgress is broadcast on the "generate:progress" event channel during

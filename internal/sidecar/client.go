@@ -123,5 +123,6 @@ func (m *Manager) Generate(ctx context.Context, req types.GenerationRequest) (ty
 		ImageBase64: "data:image/png;base64," + res.Images[0],
 		Seed:        res.Seeds[0],
 		Source:      "local",
+		DurationMS:  time.Since(start).Milliseconds(),
 	}, nil
 }

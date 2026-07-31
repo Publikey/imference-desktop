@@ -37,6 +37,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
@@ -417,6 +418,23 @@ export default function App() {
     void api.getEngineInfo().then((i) => setEngineInstalled(i.installed)).catch(() => {});
     return api.onSidecarStatus(setSidecar);
   }, []);
+
+  // First-run telemetry notice: sendAnonymousStats === null/undefined means the
+  // user has never been told. A persistent banner (not a toast — too easy to
+  // miss) stays up until they acknowledge or open Settings → Privacy; either
+  // action persists true so it never re-shows. Turning stats off later wipes
+  // all local telemetry state Go-side.
+  const showTelemetryNotice = !!settings && settings.sendAnonymousStats == null;
+  const acknowledgeTelemetry = useCallback(
+    (goToSettings: boolean) => {
+      if (!settings) return;
+      const next = { ...settings, sendAnonymousStats: true };
+      setSettings(next); // optimistic — hides the banner immediately
+      void api.saveSettings(next).then(setSettings).catch(() => {});
+      if (goToSettings) openSettings("privacy");
+    },
+    [settings, openSettings]
+  );
 
   // One-shot update check at startup. "dev" builds report no update without a
   // network call; any failure is silent (no banner) — never blocks the app.
@@ -1174,6 +1192,12 @@ export default function App() {
       {updateInfo?.updateAvailable && updateInfo.latestVersion && (
         <div className="relative z-10 mx-auto w-full max-w-[110rem] px-6 pt-4">
           <UpdateBanner info={updateInfo} onDismiss={dismissUpdate} />
+        </div>
+      )}
+
+      {showTelemetryNotice && (
+        <div className="relative z-10 mx-auto w-full max-w-[110rem] px-6 pt-4">
+          <TelemetryBanner onAcknowledge={acknowledgeTelemetry} />
         </div>
       )}
 
@@ -3563,6 +3587,36 @@ function UpdateBanner({ info, onDismiss }: { info: UpdateInfo; onDismiss: () => 
       >
         <X className="size-4" />
       </button>
+    </div>
+  );
+}
+
+// TelemetryBanner is the one-time anonymous-stats notice (opt-out model). No X
+// and no auto-dismiss on purpose: it stays until the user picks an action, and
+// both actions persist the acknowledgement (the tri-state nil → true).
+function TelemetryBanner({ onAcknowledge }: { onAcknowledge: (goToSettings: boolean) => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="animate-in fade-in slide-in-from-top-1 flex flex-wrap items-center gap-2.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-sm text-sky-700 dark:text-sky-300">
+      <ShieldCheck className="size-4 shrink-0" />
+      <p className="min-w-[16rem] flex-1 leading-relaxed">{t("telemetry.notice")}</p>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 rounded-lg border-sky-500/40 bg-transparent px-3 text-xs font-medium text-sky-700 hover:bg-sky-500/10 dark:text-sky-300"
+          onClick={() => onAcknowledge(true)}
+        >
+          {t("telemetry.openSettings")}
+        </Button>
+        <Button
+          size="sm"
+          className="h-7 rounded-lg bg-sky-500 px-3 text-xs font-semibold text-white hover:bg-sky-400"
+          onClick={() => onAcknowledge(false)}
+        >
+          {t("telemetry.ok")}
+        </Button>
+      </div>
     </div>
   );
 }

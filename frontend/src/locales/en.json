@@ -319,7 +319,14 @@
     "runtimeDesc": "Host-machine tuning for the engine — device, memory, and quantization.",
     "cloudDesc": "How cloud generations are paid for — a credit API key or an on-chain USDC wallet.",
     "pathsDesc": "Where Python lives and where finished images are saved.",
-    "languageDesc": "The language of the app interface."
+    "languageDesc": "The language of the app interface.",
+    "navPrivacy": "Privacy",
+    "privacyDesc": "Anonymous usage statistics.",
+    "sendStats": "Send anonymous usage stats",
+    "sendStatsHint": "Helps decide which models and hardware to support next.",
+    "sendStatsSent": "What is sent: a random install ID, app version, OS and GPU, UI language, and daily per-model local generation counts.",
+    "sendStatsNever": "Never sent: prompts, images, file paths, wallet or API key. Your IP address is never stored.",
+    "sendStatsOff": "Turning this off also deletes the local counters and the install ID — turning it back on starts from a fresh identity."
   },
   "engineSection": {
     "title": "Local engine",
@@ -433,6 +440,11 @@
     "switchQueued": "{{name}} will load after the current generation",
     "deleted_one": "Image deleted",
     "deleted_other": "{{count}} images deleted"
+  },
+  "telemetry": {
+    "notice": "Imference sends anonymous usage stats (version, OS, GPU, per-model generation counts) — never prompts, images, or personal data. You can opt out anytime.",
+    "openSettings": "Privacy settings",
+    "ok": "OK"
   },
   "onboarding": {
     "title": "Welcome to Imference",

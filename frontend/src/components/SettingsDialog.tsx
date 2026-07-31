@@ -6,6 +6,7 @@ import {
   FolderOpen,
   Languages,
   Server,
+  ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
 import {
@@ -17,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select } from "@/components/ui/select";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { WalletSection } from "@/components/WalletSection";
@@ -36,7 +38,7 @@ type Props = {
   initialSection?: string;
 };
 
-type PaneId = "engine" | "runtime" | "cloud" | "paths" | "language";
+type PaneId = "engine" | "runtime" | "cloud" | "paths" | "privacy" | "language";
 
 // Top-level categories. Each is a full pane (icon + title + one-line purpose);
 // only the selected pane renders, so the dialog never becomes one long scroll.
@@ -50,6 +52,7 @@ const PANES: {
   { id: "runtime", labelKey: "settings.navRuntime", descKey: "settings.runtimeDesc", icon: SlidersHorizontal },
   { id: "cloud", labelKey: "settings.navPayment", descKey: "settings.cloudDesc", icon: Cloud },
   { id: "paths", labelKey: "settings.navPaths", descKey: "settings.pathsDesc", icon: FolderOpen },
+  { id: "privacy", labelKey: "settings.navPrivacy", descKey: "settings.privacyDesc", icon: ShieldCheck },
   { id: "language", labelKey: "settings.navLanguage", descKey: "settings.languageDesc", icon: Languages },
 ];
 
@@ -72,6 +75,8 @@ function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
       return { pane: "runtime" };
     case "paths":
       return { pane: "paths" };
+    case "privacy":
+      return { pane: "privacy" };
     case "language":
       return { pane: "language" };
     default:
@@ -324,6 +329,29 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                     onChange={(e) => setDraft({ ...draft, outputDir: e.target.value })}
                     placeholder={t("settings.outputDirPlaceholder")}
                   />
+                </div>
+              </div>
+            )}
+
+            {pane === "privacy" && (
+              <div className="bg-card grid gap-3 rounded-2xl border p-4 shadow-sm">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <Checkbox
+                    className="mt-0.5"
+                    checked={draft.sendAnonymousStats !== false}
+                    onCheckedChange={(on) => setDraft({ ...draft, sendAnonymousStats: on })}
+                  />
+                  <span className="grid gap-1">
+                    <span className="text-sm font-medium">{t("settings.sendStats")}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {t("settings.sendStatsHint")}
+                    </span>
+                  </span>
+                </label>
+                <div className="text-muted-foreground grid gap-1.5 border-t pt-3 text-xs">
+                  <p>{t("settings.sendStatsSent")}</p>
+                  <p>{t("settings.sendStatsNever")}</p>
+                  <p>{t("settings.sendStatsOff")}</p>
                 </div>
               </div>
             )}

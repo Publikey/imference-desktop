@@ -245,13 +245,6 @@ export interface GenerationResult {
      * generated image shows the same details in the UI as gallery images.
      */
     "meta"?: GenerationMeta | null;
-
-    /**
-     * DurationMS is the wall-clock time of the generation call, measured in the
-     * sidecar client. 0 = unmeasured (e.g. cloud results). Feeds the anonymous
-     * per-model average in internal/telemetry.
-     */
-    "durationMs"?: number;
 }
 
 /**
@@ -522,15 +515,6 @@ export interface Settings {
      * UI-only: not a sidecar-affecting field (the active model is LocalModel).
      */
     "customModels"?: ModelInfo[] | null;
-
-    /**
-     * SendAnonymousStats gates the anonymous usage telemetry
-     * (internal/telemetry). Tri-state: nil = enabled AND the first-run notice
-     * hasn't been shown yet (the renderer shows it once, then persists true);
-     * *false = user opted out — nothing is accumulated and the install id is
-     * wiped. The full payload is documented in the README.
-     */
-    "sendAnonymousStats"?: boolean | null;
 }
 
 /**

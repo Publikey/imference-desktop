@@ -325,14 +325,6 @@ export function SelectLocalModel(modelCode: string): $CancellablePromise<void> {
 }
 
 /**
- * SetUILanguage lets the renderer report its active UI language (persisted in
- * localStorage, not settings.json) so the anonymous stats can include it.
- */
-export function SetUILanguage(code: string): $CancellablePromise<void> {
-    return $Call.ByID(2569311855, code);
-}
-
-/**
  * StartSidecar boots the local engine on demand (home-screen engine control),
  * loading the currently-selected model. No-op if already starting/ready; errors
  * if the engine isn't installed or no model has been downloaded yet.

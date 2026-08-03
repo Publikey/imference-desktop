@@ -148,13 +148,6 @@ const raw = {
     path: string
   ) => Promise<void>,
 
-  // Report the renderer's active UI language for the anonymous stats (it lives
-  // in localStorage, so Go can't read it itself). By-name call: needs no
-  // generated binding, and a backend predating the method rejects harmlessly.
-  setUILanguage: ((code: string) => Call.ByName("main.App.SetUILanguage", code)) as (
-    code: string
-  ) => Promise<void>,
-
   // Wallet (x402 mode)
   getWalletInfo: GetWalletInfo as () => Promise<WalletInfo>,
   refreshWalletBalance: RefreshWalletBalance as () => Promise<string>,

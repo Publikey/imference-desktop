@@ -85,45 +85,6 @@ available; code signing and silent in-app auto-update are on the roadmap.
 Learn more about the app on the
 [imference.com/desktop](https://imference.com/desktop) page.
 
-## Anonymous usage stats
-
-The app sends anonymous usage statistics to imference.com — a toggle in
-**Settings → Privacy** turns this off at any time. The full payload is exactly
-this, nothing more:
-
-```json
-{
-  "install_id": "f3a91c…",              // random UUID, NOT derived from your machine
-  "app_version": "0.4.2",
-  "os": "windows", "os_version": "10.0.26100", "arch": "amd64",
-  "ui_language": "en",
-  "gpu": { "vendor": "nvidia", "name": "RTX 4090", "vram_gib": 24 },
-  "days": [
-    { "date": "2026-07-30", "models": [
-      { "model_code": "sdxl-base", "engine": "image",
-        "count": 12, "errors": 1, "avg_duration_ms": 8400 }
-    ] }
-  ]
-}
-```
-
-What this means in practice:
-
-- **Never sent:** prompts, images, seeds, generation parameters, file paths,
-  hostname, wallet address, API key.
-- The install ID is random (`crypto/rand`), never derived from hardware, and is
-  **not** sent on any authenticated cloud call — so it cannot be joined to a
-  cloud account. The request itself carries no auth, and the server stores
-  neither the IP address nor anything derived from it.
-- Counters are per-day, per-model aggregates of **local** generations only
-  (cloud usage is already visible server-side).
-- Generations with a user-supplied checkpoint report `model_code: "custom"` —
-  your checkpoint's filename never leaves the machine; only the engine family
-  (e.g. `anima`) is kept.
-- Turning the toggle off stops all collection and deletes the local state,
-  install ID included; turning it back on starts from a fresh identity.
-- Dev builds (`version = "dev"`) never send anything.
-
 ## Feedback
 
 This is an early public release — rough edges are expected.

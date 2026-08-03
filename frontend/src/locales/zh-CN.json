@@ -314,14 +314,7 @@
     "runtimeDesc": "引擎的本机调优 — 设备、显存与量化。",
     "cloudDesc": "云端生成的付费方式 — 积分 API 密钥或链上 USDC 钱包。",
     "pathsDesc": "Python 所在位置以及生成图像的保存位置。",
-    "languageDesc": "应用界面的语言。",
-    "navPrivacy": "隐私",
-    "privacyDesc": "匿名使用统计。",
-    "sendStats": "发送匿名使用统计",
-    "sendStatsHint": "帮助我们决定下一步优先支持哪些模型和硬件。",
-    "sendStatsSent": "会发送：随机安装 ID、应用版本、操作系统与 GPU、界面语言，以及每日各模型的本地生成次数。",
-    "sendStatsNever": "绝不发送：提示词、图片、文件路径、钱包或 API 密钥。你的 IP 地址不会被存储。",
-    "sendStatsOff": "关闭后还会删除本地计数和安装 ID — 重新开启将使用全新的身份。"
+    "languageDesc": "应用界面的语言。"
   },
   "engineSection": {
     "title": "本地引擎",
@@ -433,11 +426,6 @@
     "cloudRechecking": "正在重新检查云端生成…",
     "switchQueued": "将在当前生成完成后加载 {{name}}",
     "deleted_other": "已删除 {{count}} 张图片"
-  },
-  "telemetry": {
-    "notice": "Imference 会发送匿名使用统计（版本、操作系统、GPU、各模型生成次数）— 绝不包含提示词、图片或个人数据。可随时关闭。",
-    "openSettings": "隐私设置",
-    "ok": "好的"
   },
   "onboarding": {
     "title": "欢迎使用 Imference",

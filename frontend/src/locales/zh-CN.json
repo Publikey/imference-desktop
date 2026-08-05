@@ -94,7 +94,7 @@
   "hint": {
     "configurePayment": "请先在上方配置支付方式",
     "pickCloudModel": "请在上方选择云端模型",
-    "creditsPerRun": "{{name}} · 每次 {{cost}} 积分",
+    "creditsPerRun": "{{name}} · 每次生成 {{cost}} 积分",
     "engineNotInstalled": "本地引擎未安装 — 请点击“安装引擎”",
     "downloadingModel": "正在下载模型…",
     "clickDownload": "{{name}} — 请点击“下载模型”",
@@ -109,6 +109,18 @@
     "square": "方形",
     "portrait": "竖版",
     "landscape": "横版",
+    "portrait-large": "大竖版",
+    "landscape-large": "大横版",
+    "portrait-wide": "宽竖版",
+    "landscape-wide": "宽横版",
+    "portrait-ultra-wide": "超宽竖版",
+    "landscape-ultra-wide": "超宽横版",
+    "landscape-utra-wide": "超宽横版",
+    "portrait-gpt": "竖版",
+    "landscape-gpt": "横版",
+    "wan-square": "方形",
+    "wan-portrait": "竖版",
+    "wan-landscape": "横版",
     "custom": "自定义"
   },
   "params": {
@@ -311,7 +323,7 @@
     "devBuild": "（开发版）",
     "saved": "已保存",
     "engineDesc": "在本机安装和管理本地生成引擎。",
-    "runtimeDesc": "引擎的本机调优 — 设备、显存与量化。",
+    "runtimeDesc": "引擎的本机调优 — 设备、内存与量化。",
     "cloudDesc": "云端生成的付费方式 — 积分 API 密钥或链上 USDC 钱包。",
     "pathsDesc": "Python 所在位置以及生成图像的保存位置。",
     "languageDesc": "应用界面的语言。"

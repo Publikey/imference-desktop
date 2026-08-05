@@ -111,6 +111,18 @@
     "square": "Square",
     "portrait": "Portrait",
     "landscape": "Landscape",
+    "portrait-large": "Portrait Large",
+    "landscape-large": "Landscape Large",
+    "portrait-wide": "Portrait Wide",
+    "landscape-wide": "Landscape Wide",
+    "portrait-ultra-wide": "Portrait Ultra-Wide",
+    "landscape-ultra-wide": "Landscape Ultra-Wide",
+    "landscape-utra-wide": "Landscape Ultra-Wide",
+    "portrait-gpt": "Portrait",
+    "landscape-gpt": "Landscape",
+    "wan-square": "Square",
+    "wan-portrait": "Portrait",
+    "wan-landscape": "Landscape",
     "custom": "Custom"
   },
   "params": {

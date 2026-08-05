@@ -151,6 +151,17 @@ function formatName(f: FormatOption, t: TFunction): string {
   return t(`formats.${f.formatCode}`, { defaultValue: f.name || f.formatCode });
 }
 
+// The catalog (im_format) ships some ratio strings the wrong way round — a
+// 896×1152 portrait is tagged "9:7". Trust the dimensions and flip the string
+// when its orientation disagrees; a fixed catalog row is then a no-op.
+function formatRatio(f: FormatOption): string {
+  const m = /^(\d+)\s*:\s*(\d+)$/.exec(f.ratio ?? "");
+  if (!m || !f.width || !f.height) return f.ratio ?? "";
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  const flipped = a > b !== f.width > f.height;
+  return flipped ? `${b}:${a}` : `${a}:${b}`;
+}
+
 // A model's supported formats come from im_format; fall back to generic ones
 // (video-specific for WAN, so a catalog missing its rows still defaults to 480p).
 function formatOptions(model: ModelInfo | null | undefined): FormatOption[] {
@@ -1957,12 +1968,14 @@ function FormatSelector({
           items={[
             ...formats.map((f) => ({
               value: f.formatCode,
-              title: `${f.width}×${f.height}${f.ratio ? ` · ${f.ratio}` : ""}`,
+              title: `${f.width}×${f.height}${f.ratio ? ` · ${formatRatio(f)}` : ""}`,
               label: (
                 <span className="capitalize">
                   {formatName(f, t)}
                   {f.ratio && (
-                    <span className="text-muted-foreground/70 ml-1 text-[10px] normal-case">{f.ratio}</span>
+                    <span className="text-muted-foreground/70 ml-1 text-[10px] normal-case">
+                      {formatRatio(f)}
+                    </span>
                   )}
                 </span>
               ),

@@ -1,0 +1,99 @@
+name: 🐛 Bug report
+description: Something doesn't work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report.
+
+        ⚠️ **Never paste your API key, wallet private key, or a full
+        `settings.json`.** Redact them before pasting logs.
+
+        Found a security vulnerability? Don't file it here — see
+        [SECURITY.md](https://github.com/Publikey/imference-desktop/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        I clicked Generate with SDXL in local mode.
+        Expected: an image. Got: "engine error — see Logs".
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the app
+        2. Pick model …
+        3. Click …
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Settings → the version line at the bottom of the dialog (e.g. v0.3.5).
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - Local (my own GPU)
+        - Cloud — API key (credits)
+        - Cloud — x402 (USDC)
+        - Both / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU
+      description: Vendor and model, plus driver version if you know it. Write "N/A" for cloud-only issues.
+      placeholder: NVIDIA RTX 4070 (driver 566.36) / AMD RX 7900 XTX (Adrenalin 25.1) / Apple M3 Pro
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: Which model was selected, if the bug involves generation.
+      placeholder: sdxl-base / flux-schnell / a custom .safetensors
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        From the in-app Logs panel, around the failure. Redact any key first.
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, when it started, whether it's reproducible or intermittent.

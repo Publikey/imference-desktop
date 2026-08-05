@@ -1,0 +1,18 @@
+# Blank issues stay off: the two templates cover bugs and requests, and a
+# question ("does it work on my GPU?") belongs in Discussions, not the tracker.
+# A structured report also saves a round-trip on the hardware details we always
+# need to reproduce anything.
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Question or setup help
+    url: https://github.com/Publikey/imference-desktop/discussions/categories/q-a
+    about: Install problems, GPU support, how-to — ask here rather than opening an issue.
+  - name: 🖼️ Show and tell
+    url: https://github.com/Publikey/imference-desktop/discussions/categories/show-and-tell
+    about: Share what you generated, your settings, or a model that works well.
+  - name: 🔐 Security vulnerability
+    url: https://github.com/Publikey/imference-desktop/security/advisories/new
+    about: Report privately — never in a public issue. See SECURITY.md.
+  - name: 📖 About the app
+    url: https://imference.com/desktop
+    about: Features, requirements and download page.

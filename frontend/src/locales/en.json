@@ -166,6 +166,8 @@
     "stop": "Stop",
     "stopTitle": "Stop this generation?",
     "stopConfirm": "The current image is discarded and the engine reloads the model (~10–20s) before the next run.",
+    "dropCloudTitle": "Stop waiting for this cloud run?",
+    "dropCloudConfirm": "The row is removed and the app stops re-checking it. This does not cancel the run server-side — if it ever finishes, the result stays retrievable from your account.",
     "step": "step {{step}}/{{total}}",
     "cloudRunning": "Running in the cloud…",
     "generating": "Generating…",

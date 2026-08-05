@@ -493,6 +493,16 @@ func (a *App) RecheckPendingCloud() {
 	a.resumePendingCloud()
 }
 
+// DropPendingCloudJob forgets a persisted cloud job on the user's request — the
+// manual escape hatch for a row wedged on "Running in the cloud…" (a request_id
+// the server will never resolve). It does NOT cancel anything server-side; the
+// result, if one ever lands, stays retrievable by request_id. Any resume already
+// in flight is left to finish harmlessly: it will simply find no record to drop.
+func (a *App) DropPendingCloudJob(jobID string) {
+	a.bus.Info("app", "pending cloud job dismissed by user", map[string]any{"job": jobID})
+	a.dropPendingCloud(jobID)
+}
+
 // resumePendingCloud spawns a background resume for each pending record not
 // already in flight. On completion it emits "cloud:resolved" ({jobId, result}
 // or {jobId, error}) and drops the record.
@@ -509,11 +519,43 @@ func (a *App) resumePendingCloud() {
 	}
 }
 
+// pendingCloudMaxAge bounds how long a pending record may survive unresolved.
+// Each resume attempt is capped (10 min image / 20 min video), but nothing
+// capped the job's TOTAL life: a request_id the server answers 404 for forever
+// (a run dropped from the queue) reads as "not ready yet", so the record was
+// retried on every launch and its Activity row stayed "Running in the cloud…"
+// indefinitely. 6 h is far beyond any real queue wait, and short enough that a
+// dead run doesn't outlive the session that started it by more than an evening.
+const pendingCloudMaxAge = 6 * time.Hour
+
+// pendingCloudExpired reports whether a record is past pendingCloudMaxAge. An
+// unparseable/empty CreatedAt counts as expired: without a timestamp the job's
+// age can never be bounded, which is exactly the state we're trying to end.
+func pendingCloudExpired(job types.PendingCloudJob, now time.Time) bool {
+	created, err := time.Parse(time.RFC3339, job.CreatedAt)
+	if err != nil {
+		return true
+	}
+	return now.Sub(created) > pendingCloudMaxAge
+}
+
 // resumeOne re-polls + downloads one persisted job and reports the outcome to
 // the renderer. Keeps the record on a recoverable error (try again next time);
-// drops it on success or terminal failure.
+// drops it on success, terminal failure, or old age.
 func (a *App) resumeOne(job types.PendingCloudJob) {
 	defer a.setCloudBusy(job.JobID, false)
+
+	// Give up before spending another poll budget on a job that has outlived
+	// any plausible queue wait. Reported as an error so the row settles into
+	// something the user can see and dismiss, instead of vanishing silently.
+	if pendingCloudExpired(job, time.Now()) {
+		a.bus.Warn("app", "abandoning stale cloud job", map[string]any{
+			"job": job.JobID, "request_id": job.RequestID, "created": job.CreatedAt,
+		})
+		a.dropPendingCloud(job.JobID)
+		a.emitCloudResolved(job.JobID, nil, "cloud: generation abandoned — still not ready after 6h; the run never completed server-side")
+		return
+	}
 
 	apiKey := ""
 	if job.Rail != "x402" {

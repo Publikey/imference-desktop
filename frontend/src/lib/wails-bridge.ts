@@ -119,6 +119,10 @@ const raw = {
   // manual re-check that re-polls them (results arrive via onCloudResolved).
   listPendingCloudJobs: ListPendingCloudJobs as () => Promise<PendingCloudJob[]>,
   recheckPendingCloud: RecheckPendingCloud as () => Promise<void>,
+  // Forget a pending cloud job the server will never resolve. Called by name for
+  // the same reason as cancelModelDownload (no generated binding to race).
+  dropPendingCloudJob: ((jobID: string) =>
+    Call.ByName("main.App.DropPendingCloudJob", jobID)) as (jobID: string) => Promise<void>,
   // Custom user-supplied checkpoints (referenced in place, no download).
   // pickModelFile returns "" when the user cancels the native dialog.
   pickModelFile: PickModelFile as () => Promise<string>,

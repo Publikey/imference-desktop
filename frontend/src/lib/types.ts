@@ -281,6 +281,12 @@ export type Job = {
   endedAt?: number;
   /** Dismissed from the Activity panel (finished images stay in the gallery). */
   hidden?: boolean;
+  /**
+   * Rehydrated on launch from a persisted pending cloud record (its id is the
+   * Go-side job id). Only these can be given up on: a live cloud run owns no
+   * record yet and settles on its own within the poll budget.
+   */
+  resumed?: boolean;
 };
 
 export type SidecarStatus =

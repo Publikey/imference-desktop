@@ -716,7 +716,10 @@ export default function App() {
             .map((p) => ({
               id: p.jobId, mode: "cloud", prompt: p.prompt, status: "running",
               progress: null, queuedAt: Date.parse(p.createdAt) || Date.now(),
-              startedAt: Date.now(),
+              // Elapsed counts from the original enqueue, not from this launch —
+              // a job stuck for hours must LOOK stuck, not freshly started.
+              startedAt: Date.parse(p.createdAt) || Date.now(),
+              resumed: true,
             }));
           return rows.length ? [...rows, ...js] : js;
         });
@@ -823,14 +826,31 @@ export default function App() {
     (id: string) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, hidden: true } : j))),
     []
   );
-  // Stop a running local run, or cancel a queued one — same button in the
-  // Activity list. A queued job just hides (the dispatcher skips it). A running
-  // local job hides immediately and hard-restarts the sidecar via the Go side;
-  // its generate() then rejects and settleJob (cancelledIdsRef) keeps it silent.
+  // Stop a running local run, cancel a queued one, or give up on a wedged cloud
+  // one — same button in the Activity list. A queued job just hides (the
+  // dispatcher skips it). A running local job hides immediately and
+  // hard-restarts the sidecar via the Go side; its generate() then rejects and
+  // settleJob (cancelledIdsRef) keeps it silent.
   const stopJob = useCallback(
     async (job: Job) => {
       if (job.status === "queued") {
         dismissJob(job.id);
+        return;
+      }
+      // A cloud run can't be cancelled server-side, but its pending record can be
+      // forgotten — the escape hatch when a request_id never resolves and the row
+      // would otherwise say "Running in the cloud…" forever. Resumed rows only:
+      // a live run has no record yet, and gives up on its own at the poll budget.
+      if (job.status === "running" && job.mode === "cloud" && job.resumed) {
+        const ok = await confirm({
+          title: t("queue.dropCloudTitle"),
+          description: t("queue.dropCloudConfirm"),
+          confirmLabel: t("queue.dismiss"),
+          cancelLabel: t("common.cancel"),
+        });
+        if (!ok) return;
+        dismissJob(job.id);
+        void api.dropPendingCloudJob(job.id).catch(() => {});
         return;
       }
       if (job.status === "running" && job.mode === "local") {

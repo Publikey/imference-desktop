@@ -164,6 +164,8 @@
     "stop": "停止",
     "stopTitle": "停止本次生成？",
     "stopConfirm": "当前图片将被丢弃，引擎会在下次运行前重新加载模型（约 10–20 秒）。",
+    "dropCloudTitle": "不再等待这次云端生成？",
+    "dropCloudConfirm": "该条目将被移除，应用也不再重新检查它。这不会取消服务器上的任务 — 如果它最终完成，仍可从你的账户中获取结果。",
     "step": "第 {{step}}/{{total}} 步",
     "cloudRunning": "云端生成中…",
     "generating": "生成中…",

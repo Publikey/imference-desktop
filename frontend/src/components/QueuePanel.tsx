@@ -191,9 +191,10 @@ function QueueRow({
 
         {/* Trailing action: STOP a running local run (hard-restarts the engine),
             CANCEL a queued one, or DISMISS a finished/failed row. A running cloud
-            run has no stop (the request is already in flight server-side). */}
+            run can't be stopped (the request is already in flight server-side);
+            a RESUMED one gets an X that only forgets its stuck pending record. */}
         {running ? (
-          job.mode === "local" && (
+          job.mode === "local" ? (
             <button
               type="button"
               onClick={() => onStop(job)}
@@ -205,7 +206,19 @@ function QueueRow({
             >
               <Square className="size-3.5 fill-current" />
             </button>
-          )
+          ) : job.resumed ? (
+            <button
+              type="button"
+              onClick={() => onStop(job)}
+              aria-label={t("queue.dismiss")}
+              title={t("queue.dismiss")}
+              // Hover-gated like the other dismiss: this is a rescue for a stuck
+              // row, not a control you should reach for on a healthy run.
+              className="text-muted-foreground/40 hover:text-foreground -mr-0.5 -mt-0.5 rounded p-1 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : null
         ) : (
           <button
             type="button"

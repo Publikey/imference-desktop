@@ -221,6 +221,35 @@
     background-color: color-mix(in oklch, var(--cloud-from) 7%, transparent);
     border-color: color-mix(in oklch, var(--cloud-from) 16%, transparent);
   }
+  /* The run capsule — the Create panel's terminal action, floating over the
+     cards it scrolls above. It should read as a layer ON TOP of the panel
+     rather than one more card in it, without shouting: the loud element is the
+     gradient button it carries.
+     Two quiet cues, no new colour and no cast shadow: a surface pulled slightly
+     toward the active mode's accent (more than the panel's own tint, so it
+     separates from the cards behind it), and a hairline of that accent instead
+     of the neutral card border. The inset top highlight catches light on the
+     upper edge, which is what sells "floating" at a glance. */
+  .run-capsule {
+    background-color: color-mix(in oklch, var(--card) 93%, var(--brand-from) 7%);
+    border-color: color-mix(in oklch, var(--brand-from) 26%, transparent);
+    /* Highlight only, no drop shadow: the tint and the accent hairline carry the
+       separation on their own, and a cast shadow made the capsule sit heavier
+       than everything it floats over. */
+    box-shadow: inset 0 1px 0 0 color-mix(in oklch, white 10%, transparent);
+    transition:
+      background-color 0.35s var(--ease-out-expo),
+      border-color 0.35s var(--ease-out-expo);
+  }
+  .run-capsule[data-mode="cloud"] {
+    background-color: color-mix(in oklch, var(--card) 93%, var(--cloud-from) 7%);
+    border-color: color-mix(in oklch, var(--cloud-from) 30%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .run-capsule {
+      transition: none;
+    }
+  }
   /* An image is being dragged over the panel (drop → img2img). */
   .create-drop-active {
     border-color: color-mix(in oklch, var(--brand-from) 55%, transparent) !important;

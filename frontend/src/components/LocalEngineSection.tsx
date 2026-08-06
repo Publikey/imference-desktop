@@ -200,6 +200,12 @@ function PythonLine({ probe, err }: { probe: PythonInfo | null; err: string | nu
 function ProgressView({ p }: { p: InstallProgress }) {
   const { t } = useTranslation();
   const currentIdx = PHASE_ORDER.indexOf(p.phase);
+  // Prose the installer authors ships an i18n key plus pre-formatted values
+  // (paths, versions, byte sizes). Raw pip output has no key and stays verbatim
+  // — it's tool output, like the log lines it mirrors.
+  const detail = p.messageKey
+    ? t(p.messageKey, { ...p.messageArgs, defaultValue: p.message })
+    : p.message;
   return (
     <div className="mt-3 space-y-2">
       <div className="flex items-center justify-between gap-2 text-xs">
@@ -210,9 +216,9 @@ function ProgressView({ p }: { p: InstallProgress }) {
         {p.percentEstimate > 0 && <span className="tabular-nums">{p.percentEstimate}%</span>}
       </div>
       <ProgressBar percent={p.percentEstimate > 0 ? p.percentEstimate : null} />
-      {p.message && (
-        <p className="text-muted-foreground truncate font-mono text-[11px]" title={p.message}>
-          {p.message}
+      {detail && (
+        <p className="text-muted-foreground truncate font-mono text-[11px]" title={detail}>
+          {detail}
         </p>
       )}
       <p className="text-muted-foreground/70 text-[11px]">

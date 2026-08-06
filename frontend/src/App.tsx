@@ -61,6 +61,7 @@ import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/t
 import logoUrl from "./assets/logo.svg";
 import { installLogCapture } from "@/lib/log-capture";
 import { beginPointerDrag } from "@/lib/pointer-drag";
+import { prepareRefImage } from "@/lib/image";
 import { cn, creditsToUSD } from "@/lib/utils";
 import type {
   AppSettings,
@@ -267,23 +268,44 @@ export default function App() {
   // The local engine is single-resident and runs one image at a time, so a model
   // switch must wait for the local queue to drain — restarting the sidecar mid-
   // denoise crashes the in-flight generation. "Active" = something local is
-  // running or still queued. A ref mirrors it so the switch handlers (defined
-  // above the jobs-derived value) can read the latest state without re-binding.
+  // running or still queued (drives the "Add to queue" label).
   const localQueueActive = jobs.some(
     (j) => j.mode === "local" && !j.hidden && (j.status === "running" || j.status === "queued")
   );
-  const localQueueActiveRef = useRef(localQueueActive);
-  localQueueActiveRef.current = localQueueActive;
+  // The model the engine actually has loaded — the queue is per-model, since a
+  // job may be enqueued for a cached model that isn't loaded yet.
+  const loadedLocalCode = settings?.localModel?.modelCode ?? null;
+  // Only jobs bound to the LOADED model block a switch: jobs queued for the
+  // incoming model are exactly what the switch unblocks, so counting them would
+  // deadlock (switch waits for the queue, queue waits for the switch). A ref
+  // mirrors it so the switch handlers (defined above the jobs-derived value) can
+  // read the latest state without re-binding.
+  const localQueueBlocking = jobs.some(
+    (j) =>
+      j.mode === "local" &&
+      !j.hidden &&
+      (j.status === "running" || j.status === "queued") &&
+      (!j.modelCode || j.modelCode === loadedLocalCode)
+  );
+  const localQueueActiveRef = useRef(localQueueBlocking);
+  localQueueActiveRef.current = localQueueBlocking;
   const [settingsOpen, setSettingsOpen] = useState(false);
   // When set, the Settings dialog scrolls to this section on open (deep-links
   // from the payment bar: "apikey" / "x402").
   const [settingsSection, setSettingsSection] = useState<string | undefined>(undefined);
   const [logsOpen, setLogsOpen] = useState(false);
   const [errorLogCount, setErrorLogCount] = useState(0);
-  // img2img: optional source image (data-URL) + denoising strength. Local-only —
-  // the cloud path ignores them. null source → plain text2img.
-  const [sourceImage, setSourceImage] = useState<string | null>(null);
+  // Reference images (data-URLs) by slot, and their denoising strength. Always
+  // OPTIONAL: empty → plain text2img. Slot 0 is the img2img source (or a video's
+  // first frame), slot 1 a video's last frame. How many slots the form offers
+  // comes from the selected model's refImages.
+  const [refImages, setRefImages] = useState<(string | null)[]>([]);
   const [strength, setStrength] = useState(0.6);
+  const sourceImage = refImages[0] ?? null;
+  const setSourceImage = useCallback(
+    (v: string | null) => setRefImages((prev) => [v, ...prev.slice(1)]),
+    []
+  );
   // Clean "not installed" state instead of a scary "Local error". Assume true
   // initially to avoid a flash before the first probe resolves.
   const [engineInstalled, setEngineInstalled] = useState(true);
@@ -308,7 +330,18 @@ export default function App() {
   // below. `label` names the incoming model for the "switch queued" banner.
   const [pendingSwitch, setPendingSwitch] = useState<{ label: string; apply: () => void } | null>(null);
   const [downloading, setDownloading] = useState(false);
+  // Whether the activation in flight is a cache hit (load only) rather than a
+  // real download — same backend call, very different wait, so the button and
+  // the hint say which one it is.
+  const [activationIsLoad, setActivationIsLoad] = useState(false);
   const [dlProgress, setDlProgress] = useState<InstallProgress | null>(null);
+  // Mirrors localCached (derived far below) so the activation handler, defined
+  // before it, can tell a load from a download at click time.
+  const localCachedRef = useRef(false);
+  // Model codes whose weights are already on disk. Downloaded models are kept
+  // (under a size quota), so this is what separates "needs a download" from
+  // "just needs loading" — settings.localModel only knows the ACTIVE one.
+  const [cachedCodes, setCachedCodes] = useState<Set<string>>(() => new Set());
   // Whether a usable x402 wallet exists (keychain — the real source of truth,
   // not settings.walletAddress). Drives cloud gating in x402 mode.
   const [walletConfigured, setWalletConfigured] = useState(false);
@@ -550,37 +583,71 @@ export default function App() {
     });
   }, [toast, t]);
 
-  const downloadLocalModel = useCallback(() => {
-    if (!pendingLocalModel || downloading) return;
-    const target = pendingLocalModel;
-    // The download ends by restarting the sidecar onto the new weights, so it's
-    // subject to the same "don't interrupt a running generation" rule as a swap.
-    const apply = () => {
-      setDownloading(true);
-      setDlProgress({
-        phase: "model",
-        message: t("hint.preparing", { name: target.name }),
-        percentEstimate: 0,
-        done: false,
-      });
-      void api.selectLocalModel(target.modelCode).catch((e) => {
-        setDownloading(false);
+  // Re-read which models are on disk. Also called on demand, not just from the
+  // "model:cache" subscription below, when an activation discovers the index was
+  // out of date.
+  const refreshCachedModels = useCallback(() => {
+    void api
+      .listCachedModels()
+      .then((list) => setCachedCodes(new Set(list.map((m) => m.modelCode).filter(Boolean) as string[])))
+      .catch(() => {});
+  }, []);
+
+  // Make the pending pick the model the engine is running. `cachedOnly` is the
+  // generate path: it must never start a download, so the Go side refuses (and
+  // reports false) if the weights turn out not to be on disk after all — evicted
+  // meanwhile, deleted by hand, or re-pointed by the catalog at new weights.
+  const activateLocalModel = useCallback(
+    (cachedOnly: boolean) => {
+      if (!pendingLocalModel || downloading) return;
+      const target = pendingLocalModel;
+      const loadOnly = cachedOnly || localCachedRef.current;
+      // Activation ends by restarting the sidecar onto the new weights, so it's
+      // subject to the same "don't interrupt a running generation" rule as a swap.
+      const apply = () => {
+        setActivationIsLoad(loadOnly);
+        setDownloading(true);
         setDlProgress({
-          phase: "error",
-          message: "",
+          phase: "model",
+          message: t("hint.preparing", { name: target.name }),
           percentEstimate: 0,
-          done: true,
-          error: e instanceof Error ? e.message : String(e),
+          done: false,
         });
-      });
-    };
-    if (localQueueActiveRef.current) {
-      setPendingSwitch({ label: target.name, apply });
-      toast.toast(t("toast.switchQueued", { name: target.name }));
-      return;
-    }
-    apply();
-  }, [pendingLocalModel, downloading, t, toast]);
+        const call = cachedOnly
+          ? api.ensureLocalModel(target.modelCode)
+          : api.selectLocalModel(target.modelCode).then(() => true);
+        void call
+          .then((started) => {
+            if (started) return;
+            // Not cached after all: drop back to the explicit download. Refreshing
+            // the cached set flips the button to "Download model" on its own.
+            setDownloading(false);
+            setDlProgress(null);
+            refreshCachedModels();
+            toast.error(t("toast.modelNotCached", { name: target.name }));
+          })
+          .catch((e) => {
+            setDownloading(false);
+            setDlProgress({
+              phase: "error",
+              message: "",
+              percentEstimate: 0,
+              done: true,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          });
+      };
+      if (localQueueActiveRef.current) {
+        setPendingSwitch({ label: target.name, apply });
+        toast.toast(t("toast.switchQueued", { name: target.name }));
+        return;
+      }
+      apply();
+    },
+    [pendingLocalModel, downloading, refreshCachedModels, t, toast]
+  );
+  // The dedicated Download button: weights aren't on disk, fetch them.
+  const downloadLocalModel = useCallback(() => activateLocalModel(false), [activateLocalModel]);
 
   // Abort an in-flight download. The backend emits a "cancelled" progress event
   // that resets the UI (handled in onModelProgress above).
@@ -588,14 +655,15 @@ export default function App() {
     void api.cancelModelDownload().catch(() => {});
   }, []);
 
-  // Fire a held model switch the moment the local queue goes idle. Guarded so a
-  // switch requested mid-run applies exactly once, right after the last image.
+  // Fire a held model switch the moment the loaded model's queue goes idle.
+  // Guarded so a switch requested mid-run applies exactly once, right after the
+  // last image.
   useEffect(() => {
-    if (!pendingSwitch || localQueueActive) return;
+    if (!pendingSwitch || localQueueBlocking) return;
     const { apply } = pendingSwitch;
     setPendingSwitch(null);
     apply();
-  }, [localQueueActive, pendingSwitch]);
+  }, [localQueueBlocking, pendingSwitch]);
 
   // Drop a queued switch and snap the bar's pending pick back to the model that's
   // actually loaded — so cancelling reads as "never mind, stay on the current one".
@@ -604,16 +672,57 @@ export default function App() {
     setPendingLocalModel(settings?.localModel ?? null);
   }, [settings?.localModel]);
 
-  // The selected local model is "downloaded" when it matches the persisted one.
+  // "On disk" and "loaded in the engine" are different things now that several
+  // models are kept cached: a model can be downloaded yet not active, in which
+  // case selecting it is a restart, not a multi-GB download. Custom checkpoints
+  // are always on disk — they're referenced in place and have no download URL,
+  // so they never appear in the cache index.
   const localDownloaded =
     !!pendingLocalModel && settings?.localModel?.modelCode === pendingLocalModel.modelCode;
+  const localCached =
+    !!pendingLocalModel &&
+    (!!pendingLocalModel.localPath ||
+      cachedCodes.has(pendingLocalModel.modelCode) ||
+      // The persisted selection is only ever set once weights landed (and is
+      // cleared at startup when the file is gone), so the model the app is on
+      // never has to wait for the cache index to be readable.
+      localDownloaded);
+  localCachedRef.current = localCached;
   const localReady = sidecar.state === "ready" && localDownloaded;
-  const localNeedsDownload = !!pendingLocalModel && !localDownloaded;
+  const localNeedsDownload = !!pendingLocalModel && !localCached;
+  // On disk but not resident in the engine — a different model is loaded, or
+  // ours is but the engine is down. NOT something the user should have to click
+  // through: the primary button stays "Generate" and activates the model (engine
+  // restart + load) on the way to the run. "starting" is excluded: an activation
+  // is already under way, so the job only has to wait for it.
+  const localNeedsActivation =
+    !!pendingLocalModel && localCached && !localReady && sidecar.state !== "starting";
 
   // The model whose params drive the current mode's generation (pending local
   // pick even before its weights are downloaded, so params preview correctly).
   const activeModel =
     (mode === "cloud" ? settings?.cloudModelInfo : pendingLocalModel) ?? null;
+
+  // How many OPTIONAL reference-image slots the active model offers (0 hides
+  // the card entirely). One rule for both kinds of model: the Go side resolves
+  // it from the catalog for curated models and from the loading backend for user
+  // checkpoints, so an Anima pick — which has no image input at all — reports 0
+  // either way.
+  const refSlots = activeModel?.refImages ?? 0;
+  // Mirrored for the gallery drop path, which fires from a callback that must
+  // not re-bind on every model change.
+  const refSlotsRef = useRef(refSlots);
+  refSlotsRef.current = refSlots;
+  // The model's working resolution, used to scale incoming reference images:
+  // pixels beyond it are discarded by the engine, so sending them only inflates
+  // the request. A ref mirrors it for callbacks that must not re-subscribe on
+  // every params tweak (the gallery drop path).
+  const refDims = useMemo(
+    () => (params ? resolveDims(activeModel, params) : { width: 1024, height: 1024 }),
+    [activeModel, params]
+  );
+  const refDimsRef = useRef(refDims);
+  refDimsRef.current = refDims;
 
   // Reset the tweakable params to the model's defaults whenever the active model
   // (or mode) changes. Re-selecting the same model keeps the user's tweaks.
@@ -636,8 +745,11 @@ export default function App() {
   }, [settings]);
 
   // The composer never gates on in-flight work: cloud runs fire concurrently and
-  // local runs are enqueued, so the user can keep launching either way.
-  const canGenerate = (mode === "cloud" ? cloudReady : localReady) && !!prompt.trim();
+  // local runs are enqueued, so the user can keep launching either way. Locally
+  // it's the WEIGHTS being on disk that decides — not whether they're loaded:
+  // the engine restart is queued behind the click, not in front of it.
+  const localCanRun = engineInstalled && localCached && sidecar.state !== "error";
+  const canGenerate = (mode === "cloud" ? cloudReady : localCanRun) && !!prompt.trim();
 
   // IDs of running local jobs the user asked to stop. Stopping hard-restarts the
   // sidecar, so the job's generate() rejects — this set lets settleJob treat that
@@ -728,6 +840,30 @@ export default function App() {
     return api.onCloudResolved(applyCloudResolved);
   }, [applyCloudResolved]);
 
+  // Track which models are on disk. The Go side fires "model:cache" after every
+  // change (startup reconcile, download, eviction, manual delete, purge), so the
+  // picker badges and the primary button never go stale.
+  useEffect(() => {
+    refreshCachedModels();
+    return api.onModelCacheChanged(refreshCachedModels);
+  }, [refreshCachedModels]);
+
+  // Settings rewritten by the Go side on its own — the stored model snapshots
+  // re-resolved against the catalog, which lands a second or two after mount
+  // (it needs the network). Adopt them, and follow the pending local pick along
+  // if it's the same model, so the composer picks up a changed capability
+  // (reference-image slots, formats, defaults) without a re-pick or a restart.
+  useEffect(
+    () =>
+      api.onSettingsChanged((next) => {
+        setSettings(next);
+        setPendingLocalModel((cur) =>
+          cur && next.localModel && cur.modelCode === next.localModel.modelCode ? next.localModel : cur
+        );
+      }),
+    []
+  );
+
   // Manual "recheck" — re-poll any still-pending cloud generations on demand.
   const recheckCloud = useCallback(() => {
     void api.recheckPendingCloud().catch(() => {});
@@ -738,7 +874,11 @@ export default function App() {
     (which: Mode) => {
       const p = prompt.trim();
       if (!p) return;
-      const model = which === "cloud" ? settings?.cloudModelInfo : settings?.localModel;
+      // Local: the PENDING pick, not the loaded model — a job can be enqueued
+      // for a cached model that's still being swapped in, and it must carry that
+      // model's formats/defaults (the same ones the params panel is showing).
+      const model =
+        which === "cloud" ? settings?.cloudModelInfo : (pendingLocalModel ?? settings?.localModel);
       const pr = params ?? (model ? defaultParams(model) : null);
       // Compose the pre-prompt (quality tags) client-side — the server prepends
       // nothing, and it matters a lot for SDXL quality. The catalog's prompt_pre
@@ -758,10 +898,15 @@ export default function App() {
         // API uses the model's server-side defaults).
         if (pr?.clipSkip != null) req.clipSkip = pr.clipSkip;
         if (pr?.scheduler) req.scheduler = pr.scheduler;
-        if (sourceImage) {
-          req.sourceImage = sourceImage;
-          req.strength = strength;
-        }
+      }
+      // Reference images ride along in both modes now that a model declares how
+      // many it takes; the Go side mirrors slot 0 onto sourceImage for the
+      // existing engine contract, and drops them for a cloud model that
+      // doesn't declare any.
+      const refs = refImages.slice(0, refSlots).filter(Boolean) as string[];
+      if (refs.length > 0) {
+        req.refImages = refs;
+        req.strength = strength;
       }
 
       const id = nextJobId();
@@ -777,14 +922,18 @@ export default function App() {
         // Local is enqueued: the sidecar denoises one image at a time, so the
         // dispatcher starts it (and each queued job after it) one by one. The
         // request is frozen now so later param tweaks never leak into a job
-        // already waiting in line.
+        // already waiting in line, and modelCode pins it to the model it was
+        // written for — the dispatcher won't hand it to another one.
         setJobs((js) => [
-          { id, mode: "local", prompt: full, status: "queued", progress: null, queuedAt: now, request: req },
+          {
+            id, mode: "local", prompt: full, status: "queued", progress: null,
+            queuedAt: now, request: req, modelCode: model?.modelCode,
+          },
           ...js,
         ]);
       }
     },
-    [prompt, settings?.localModel, settings?.cloudModelInfo, params, sourceImage, strength, settleJob]
+    [prompt, pendingLocalModel, settings?.localModel, settings?.cloudModelInfo, params, refImages, refSlots, strength, settleJob]
   );
 
   // Local FIFO dispatcher — the sidecar runs one local job at a time. Whenever
@@ -802,10 +951,13 @@ export default function App() {
     let next: Job | undefined;
     for (let i = jobs.length - 1; i >= 0; i--) {
       const j = jobs[i];
-      if (j.mode === "local" && j.status === "queued" && !j.hidden) {
-        next = j;
-        break;
-      }
+      if (j.mode !== "local" || j.status !== "queued" || j.hidden) continue;
+      // Enqueued for a model the engine doesn't have resident: it waits for the
+      // swap (already under way — the primary button fires it) rather than
+      // running under whatever is loaded right now.
+      if (j.modelCode && loadedLocalCode && j.modelCode !== loadedLocalCode) continue;
+      next = j;
+      break;
     }
     if (!next || !next.request || dispatchedRef.current.has(next.id)) return;
     const job = next;
@@ -815,7 +967,7 @@ export default function App() {
       js.map((j) => (j.id === job.id ? { ...j, status: "running", startedAt: Date.now(), progress: null } : j))
     );
     settleJob(job.id, api.generateLocal(request));
-  }, [jobs, sidecar.state, settleJob]);
+  }, [jobs, sidecar.state, loadedLocalCode, settleJob]);
 
   // --- Activity panel bookkeeping ------------------------------------------
   // Dismissing hides a finished OR queued row: for a queued local job this also
@@ -887,14 +1039,20 @@ export default function App() {
       const src = await getSrc();
       // A video can't seed img2img — ignore the gesture (the lightbox/menu also
       // hide the action for videos; this guards the drag path).
-      if (src && !isVideoSrc(src)) {
-        setSourceImage(src);
-        setMode("local");
+      if (!src || isVideoSrc(src)) return;
+      // The selected model takes no reference image (an Anima pick, say): the
+      // card isn't even mounted, so accepting the drop would swallow it in
+      // silence. Say why instead.
+      if (refSlotsRef.current < 1) {
+        toast.toast(t("toast.modelTakesNoRefImage"));
+        return;
       }
+      setSourceImage(await prepareRefImage(src, refDimsRef.current.width, refDimsRef.current.height));
+      setMode("local");
     } catch {
       /* fetch/read failure — ignore */
     }
-  }, []);
+  }, [toast, t]);
 
   // Load a past image's metadata back into the composer (prompt + parameters) to
   // re-run or remix it. Doesn't switch model or mode; the original img2img source
@@ -987,12 +1145,20 @@ export default function App() {
     [useAsImg2img]
   );
 
-  // Primary button: in local mode, download the pending model first (dedicated
-  // action — no auto-download on select); otherwise generate. Cmd/Ctrl+Enter
-  // triggers whichever is current.
+  // Primary button: in local mode it only asks for a click of its own when the
+  // weights aren't on disk (a multi-GB download is never implicit). Weights
+  // already cached → it stays Generate / Add to queue, and swapping them into
+  // the engine rides along with the run. Cmd/Ctrl+Enter triggers whichever is
+  // current.
   const primary: ComposerAction = useMemo(() => {
     if (mode === "local" && downloading)
-      return { label: t("composer.downloadingBtn"), onClick: () => {}, disabled: true, busy: true, kind: "download" };
+      return {
+        label: activationIsLoad ? t("composer.loadingModelBtn") : t("composer.downloadingBtn"),
+        onClick: () => {},
+        disabled: true,
+        busy: true,
+        kind: "download",
+      };
     if (mode === "local" && localNeedsDownload)
       return {
         label: t("composer.downloadModelBtn"),
@@ -1009,13 +1175,26 @@ export default function App() {
           ? t("composer.addToQueueBtn")
           : t("composer.generateBtn"),
       onClick: () => {
-        if (canGenerate) run(mode);
+        if (!canGenerate) return;
+        run(mode);
+        // Weights on disk but not resident (another model loaded, or the engine
+        // down): swap them in BEHIND the job just queued — no download, straight
+        // to the restart — and the dispatcher holds the job until the engine is
+        // up with THIS model. A switch already held for a busy queue applies on
+        // its own when the queue drains.
+        if (mode !== "local" || !localNeedsActivation || pendingSwitch) return;
+        if (pendingLocalModel?.localPath) {
+          // User checkpoint: no cache index, its own activation path.
+          void selectCustomModel(pendingLocalModel).catch(() => {});
+        } else {
+          activateLocalModel(true);
+        }
       },
       disabled: !canGenerate,
       busy: false,
       kind: "generate",
     };
-  }, [mode, downloading, localNeedsDownload, pendingLocalModel, downloadLocalModel, canGenerate, localQueueActive, run, t]);
+  }, [mode, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, pendingSwitch, pendingLocalModel, downloadLocalModel, activateLocalModel, selectCustomModel, canGenerate, localQueueActive, run, t]);
 
   // Global ⌘/Ctrl+Enter → run the primary action from anywhere in the app, not
   // only when the prompt field has focus. Suppressed while a modal that captures
@@ -1065,13 +1244,16 @@ export default function App() {
         : t("hint.creditsPerRun", { name: c.name, cost: c.cost });
     }
     if (!engineInstalled) return t("hint.engineNotInstalled");
-    if (downloading) return t("hint.downloadingModel");
+    if (downloading) return activationIsLoad ? t("hint.loadingModel") : t("hint.downloadingModel");
     if (localNeedsDownload) return t("hint.clickDownload", { name: pendingLocalModel?.name });
-    if (sidecar.state === "starting") return t("hint.engineStarting");
     if (sidecar.state === "error") return t("hint.engineError");
+    // Cached but not resident: generating loads it first, so say that rather
+    // than sending the user off to the engine control.
+    if (localNeedsActivation) return t("hint.willLoad", { name: pendingLocalModel?.name });
+    if (sidecar.state === "starting") return t("hint.engineStarting");
     if (sidecar.state !== "ready") return t("hint.startEngine");
     return settings?.localModel?.name ?? t("hint.pickModel");
-  }, [mode, cloudConfigured, downloading, localNeedsDownload, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, engineInstalled, t]);
+  }, [mode, cloudConfigured, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, engineInstalled, t]);
 
   // Activity-panel derivations: in-flight count (running + queued) for the badge,
   // finished rows for the Clear action, and the done subset the gallery shows as
@@ -1108,7 +1290,9 @@ export default function App() {
         label: t("palette.generate"),
         icon: <Sparkles />,
         shortcut: [modLabel, "↵"],
-        run: () => run(mode),
+        // The primary button's own handler — so the palette also swaps in a
+        // cached-but-unloaded model instead of queueing a job nothing runs.
+        run: () => primary.onClick(),
       });
 
     cmds.push(
@@ -1174,7 +1358,7 @@ export default function App() {
 
     return cmds;
   }, [
-    t, canGenerate, run, mode, engineInstalled, sidecar.state, settings?.localModel,
+    t, canGenerate, primary, mode, engineInstalled, sidecar.state, settings?.localModel,
     installEngine, stopEngine, startEngine,
     hasFinished, clearFinished, openSettings,
   ]);
@@ -1250,7 +1434,7 @@ export default function App() {
                     {dropActive && (
                       <div className="bg-background/70 border-primary/50 pointer-events-none absolute inset-1 z-20 flex flex-col items-center justify-center gap-2 rounded-[1.35rem] border-2 border-dashed backdrop-blur-sm">
                         <ImageIcon className="text-primary size-6" />
-                        <span className="text-foreground text-sm font-semibold">{t("img2img.dropHere")}</span>
+                        <span className="text-foreground text-sm font-semibold">{t("refImage.dropHere")}</span>
                       </div>
                     )}
                     {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
@@ -1278,7 +1462,9 @@ export default function App() {
                         onModelSwitched={handleSettingsSaved}
                         pendingLocalModel={pendingLocalModel}
                         onSelectLocal={setPendingLocalModel}
+                        cachedCodes={cachedCodes}
                         downloading={downloading}
+                        loadingCached={activationIsLoad}
                         progress={dlProgress}
                         onCancelDownload={cancelDownload}
                         onAddCustom={addCustomModel}
@@ -1321,19 +1507,27 @@ export default function App() {
                         <Composer
                           prompt={prompt}
                           onPromptChange={setPrompt}
-                          mode={mode}
-                          action={primary}
-                          contextHint={contextHint}
-                          sourceImage={sourceImage}
-                          onSourceImageChange={setSourceImage}
-                          strength={strength}
-                          onStrengthChange={setStrength}
                           showModelFields={!!params}
                           prePrompt={params?.prePrompt ?? ""}
                           onPrePromptChange={(v) => setParams((pp) => (pp ? { ...pp, prePrompt: v } : pp))}
                           negativePrompt={params?.negativePrompt ?? ""}
                           onNegativePromptChange={(v) => setParams((pp) => (pp ? { ...pp, negativePrompt: v } : pp))}
                         />
+
+                        {/* 3b. Reference images — its own card. Optional, and a
+                            different kind of input from the text above, so it
+                            reads as a separate step rather than a field. */}
+                        {refSlots > 0 && (
+                          <RefImageCard
+                            slots={refSlots}
+                            images={refImages}
+                            onImagesChange={setRefImages}
+                            targetW={refDims.width}
+                            targetH={refDims.height}
+                            strength={strength}
+                            onStrengthChange={setStrength}
+                          />
+                        )}
 
                         {/* 4. Format — a primary creative choice, right under the
                             prompt; local mode also allows free custom dimensions. */}
@@ -1352,6 +1546,10 @@ export default function App() {
                         {activeModel && params && (
                           <ParamsPanel model={activeModel} mode={mode} params={params} onChange={setParams} />
                         )}
+
+                        {/* 6. The run button — last in the panel, but pinned to
+                            the bottom of the viewport so it never scrolls away. */}
+                        <PrimaryAction action={primary} contextHint={contextHint} mode={mode} />
                       </>
                     )}
                   </div>
@@ -1799,16 +1997,13 @@ function useAutoGrow(value: string) {
   return ref;
 }
 
+// Composer — prompting only: quality tags, the prompt itself, and the negative
+// prompt. Reference images (RefImageCard) and the run button (PrimaryAction) are
+// siblings in the Create panel, not tenants of this card: mixing an image
+// dropzone into a stack of text fields made both harder to read.
 function Composer({
   prompt,
   onPromptChange,
-  mode,
-  action,
-  contextHint,
-  sourceImage,
-  onSourceImageChange,
-  strength,
-  onStrengthChange,
   showModelFields,
   prePrompt,
   onPrePromptChange,
@@ -1817,13 +2012,6 @@ function Composer({
 }: {
   prompt: string;
   onPromptChange: (v: string) => void;
-  mode: Mode;
-  action: ComposerAction;
-  contextHint: string;
-  sourceImage: string | null;
-  onSourceImageChange: (v: string | null) => void;
-  strength: number;
-  onStrengthChange: (v: number) => void;
   showModelFields: boolean;
   prePrompt: string;
   onPrePromptChange: (v: string) => void;
@@ -1889,9 +2077,10 @@ function Composer({
         )}
       </div>
 
-      {/* Negative prompt — secondary, mirrors the pre-prompt styling. */}
+      {/* Negative prompt — secondary, mirrors the pre-prompt styling, and now
+          the card's last child (hence the rounded bottom). */}
       {showModelFields && (
-        <label className="hover:bg-muted/30 focus-within:bg-muted/30 block px-5 pb-2.5 pt-2 transition-colors">
+        <label className="hover:bg-muted/30 focus-within:bg-muted/30 block rounded-b-2xl px-5 pb-3 pt-2 transition-colors">
           <span className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wide">
             {t("composer.negativePrompt")}
           </span>
@@ -1906,16 +2095,45 @@ function Composer({
         </label>
       )}
 
-      {mode === "local" && (
-        <Img2ImgBar
-          sourceImage={sourceImage}
-          onSourceImageChange={onSourceImageChange}
-          strength={strength}
-          onStrengthChange={onStrengthChange}
-        />
-      )}
-      <div className="flex items-end justify-between gap-3 px-5 pt-2 pb-4">
-        <span className="text-muted-foreground/80 min-w-0 truncate text-[11px]" title={contextHint}>
+    </div>
+  );
+}
+
+// PrimaryAction — the run button plus its one-line context hint, as a bar that
+// STICKS to the bottom of whatever is scrolling it. It used to sit inside the
+// composer, which pushed it out of reach as soon as the panel grew (reference
+// images, parameters, a long negative prompt): the whole point of the panel is
+// to end in a click, so the click follows the user.
+//
+// Two scrollports, one rule. On xl the Create surface scrolls internally, so the
+// bar pins to the bottom of the panel; below xl the page scrolls, so it pins to
+// the bottom of the window. Either way it's the last child, so it never covers
+// anything. z-30 keeps it under the Activity dock (z-40), and the reserved lane
+// below xl keeps the button out of that dock's corner on stacked layouts.
+//
+// It also carries its own surface (.run-capsule, mode-tinted like the panel it
+// floats over) so it doesn't read as one more card in the stack — see index.css.
+function PrimaryAction({
+  action,
+  contextHint,
+  mode,
+}: {
+  action: ComposerAction;
+  contextHint: string;
+  mode: Mode;
+}) {
+  return (
+    <div className="sticky bottom-1 z-30 flex justify-end max-xl:pr-36">
+      {/* Content-sized and right-aligned, so it reads as one floating capsule
+          rather than a docked toolbar spanning the panel. */}
+      <div
+        data-mode={mode}
+        className="run-capsule flex max-w-full items-center gap-3 rounded-full border py-1.5 pl-4 pr-1.5 backdrop-blur"
+      >
+        <span
+          className="text-muted-foreground/80 hidden min-w-0 max-w-[15rem] truncate text-[11px] sm:block"
+          title={contextHint}
+        >
           {contextHint}
         </span>
         <Button
@@ -2218,76 +2436,188 @@ function RangeRow({
   );
 }
 
-// img2img attachment row inside the composer (local mode only). Collapsed to a
-// single "add source image" affordance until an image is picked; then shows a
-// thumbnail + denoising-strength slider + remove.
-function Img2ImgBar({
-  sourceImage,
-  onSourceImageChange,
+// Reference-image card inside the composer. One slot per image the model
+// accepts (ModelInfo.refImages): one for img2img, two for a video model taking
+// a first and last frame. Reference images are ALWAYS optional — the card says
+// so, because an empty slot reads as something missing otherwise.
+//
+// Rendering slots from a count (rather than special-casing "the" source image)
+// is what lets a two-image model land with no layout change.
+function RefImageCard({
+  slots,
+  images,
+  onImagesChange,
+  targetW,
+  targetH,
   strength,
   onStrengthChange,
 }: {
-  sourceImage: string | null;
-  onSourceImageChange: (v: string | null) => void;
+  /** How many slots to render (1 or 2). The card isn't mounted at 0. */
+  slots: number;
+  /** Current images by slot; holes are empty slots. */
+  images: (string | null)[];
+  onImagesChange: (next: (string | null)[]) => void;
+  /** The model's working resolution — incoming images are scaled to fit it. */
+  targetW: number;
+  targetH: number;
   strength: number;
   onStrengthChange: (v: number) => void;
 }) {
   const { t } = useTranslation();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const pair = slots >= 2;
+  const filled = images.slice(0, slots).some(Boolean);
 
-  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () =>
-      onSourceImageChange(typeof reader.result === "string" ? reader.result : null);
-    reader.readAsDataURL(file);
-    e.target.value = ""; // let the user re-pick the same file later
+  // Every image entering a slot is scaled to the model's working resolution
+  // first: a raw phone photo is several MB of base64, and the extra pixels are
+  // discarded by the engine anyway.
+  const setSlot = async (i: number, value: string | null) => {
+    const prepared = value ? await prepareRefImage(value, targetW, targetH) : null;
+    const next = Array.from({ length: slots }, (_, k) => images[k] ?? null);
+    next[i] = prepared;
+    onImagesChange(next);
   };
 
   return (
-    <div className="border-border/60 mx-5 mt-1 border-t pt-2">
-      <input ref={inputRef} type="file" accept="image/*" onChange={onPick} className="hidden" />
-      {sourceImage ? (
-        <div className="flex items-center gap-3">
-          <img
-            src={sourceImage}
-            alt={t("img2img.sourceAlt")}
-            className="size-11 shrink-0 rounded-lg border object-cover"
-          />
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground text-[11px]">
-                {t("img2img.label", { strength: strength.toFixed(2) })}
-              </span>
-              <button
-                type="button"
-                onClick={() => onSourceImageChange(null)}
-                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[11px]"
-              >
-                <X className="size-3" /> {t("common.remove")}
-              </button>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={strength}
-              onChange={(e) => onStrengthChange(Number(e.target.value))}
-              className="range w-full"
+    <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+          {pair ? t("refImage.titlePair") : t("refImage.title")}
+          <span className="text-muted-foreground/50 ml-1.5 normal-case">
+            · {t("refImage.optional")}
+          </span>
+        </span>
+        {filled && (
+          <button
+            type="button"
+            onClick={() => onImagesChange([])}
+            className="text-muted-foreground/70 hover:text-foreground text-[11px]"
+          >
+            {t("common.clear")}
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-start gap-3">
+        <div className="flex gap-2">
+          {Array.from({ length: slots }, (_, i) => (
+            <RefImageSlot
+              key={i}
+              image={images[i] ?? null}
+              onChange={(v) => void setSlot(i, v)}
+              label={pair ? (i === 0 ? t("refImage.firstFrame") : t("refImage.lastFrame")) : ""}
             />
-          </div>
+          ))}
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-[11px]"
-        >
-          <ImageIcon className="size-3.5" /> {t("img2img.add")}
-        </button>
-      )}
+
+        <div className="min-w-0 flex-1 pt-0.5">
+          {filled ? (
+            // Strength only means something once there's an image to denoise
+            // from; showing the slider on an empty card would imply otherwise.
+            <label className="block">
+              <span className="text-muted-foreground text-[11px]">
+                {t("refImage.strength", { strength: strength.toFixed(2) })}
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={strength}
+                onChange={(e) => onStrengthChange(Number(e.target.value))}
+                className="range mt-1 w-full"
+              />
+              <span className="text-muted-foreground/60 text-[10px]">
+                {t("refImage.strengthHint")}
+              </span>
+            </label>
+          ) : (
+            <p className="text-muted-foreground/70 text-[11px] leading-snug">
+              {pair ? t("refImage.hintPair") : t("refImage.hint")}
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// One square slot: click or drop to fill, hover to remove. Kept dumb (no
+// knowledge of roles or counts) so the card owns all the layout decisions.
+function RefImageSlot({
+  image,
+  onChange,
+  label,
+}: {
+  image: string | null;
+  onChange: (v: string | null) => void;
+  label: string;
+}) {
+  const { t } = useTranslation();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+
+  const read = (file: File | undefined) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => onChange(typeof reader.result === "string" ? reader.result : null);
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          read(e.target.files?.[0]);
+          e.target.value = ""; // let the same file be re-picked later
+        }}
+      />
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation(); // don't also trigger the panel-wide drop target
+          setOver(false);
+          read(e.dataTransfer.files?.[0]);
+        }}
+        className={cn(
+          "group/slot relative size-16 shrink-0 overflow-hidden rounded-lg border transition-colors",
+          image ? "border-border" : "border-border/70 border-dashed",
+          over && "border-primary bg-primary/5"
+        )}
+      >
+        {image ? (
+          <>
+            <img src={image} alt={t("refImage.sourceAlt")} className="size-full object-cover" />
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              aria-label={t("common.remove")}
+              title={t("common.remove")}
+              className="bg-background/80 text-muted-foreground hover:text-destructive absolute right-1 top-1 rounded p-0.5 opacity-0 transition group-hover/slot:opacity-100 focus-visible:opacity-100"
+            >
+              <X className="size-3" />
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 flex size-full flex-col items-center justify-center gap-1 transition-colors"
+          >
+            <ImageIcon className="size-4" />
+            <span className="text-[10px] leading-none">{t("refImage.add")}</span>
+          </button>
+        )}
+      </div>
+      {label && <span className="text-muted-foreground/70 text-[10px]">{label}</span>}
     </div>
   );
 }

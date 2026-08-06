@@ -61,6 +61,9 @@ import type {
   UpdateInfo,
   PendingCloudJob,
   CloudResolved,
+  CachedModel,
+  StorageInfo,
+  FolderSizes,
   WalletInfo,
 } from "./types";
 
@@ -109,12 +112,33 @@ const raw = {
   listLocalModels: ListLocalModels as () => Promise<ModelInfo[]>,
   listCloudModels: ListCloudModels as () => Promise<ModelInfo[]>,
   selectLocalModel: SelectLocalModel as (modelCode: string) => Promise<void>,
+  // Activate a model WITHOUT downloading: resolves false (having done nothing)
+  // when its weights aren't on disk, so the generate path can load a cached
+  // model transparently while a real download stays an explicit click. Called
+  // by name for the same reason as cancelModelDownload.
+  ensureLocalModel: ((modelCode: string) =>
+    Call.ByName("main.App.EnsureLocalModel", modelCode)) as (modelCode: string) => Promise<boolean>,
   // Abort an in-flight local model download. Called by name so it needs no
   // generated binding (Wails regenerates app.ts on build, which would race a
   // hand-added export). Resolves once the backend acknowledges the cancel.
   cancelModelDownload: (): Promise<void> => Call.ByName("main.App.CancelModelDownload") as Promise<void>,
   // Cloud model: pick from the full catalog; persists code + full entry.
   selectCloudModel: SelectCloudModel as (modelCode: string) => Promise<void>,
+  // Weights cache: downloaded models are kept (under a size quota) so switching
+  // back is instant. Called by name for the same reason as cancelModelDownload
+  // (no generated binding to race). listCachedModels/getStorageInfo are cheap
+  // (index + one syscall); getFolderSizes walks three trees and is SLOW.
+  listCachedModels: (() => Call.ByName("main.App.ListCachedModels")) as () => Promise<CachedModel[]>,
+  getStorageInfo: (() => Call.ByName("main.App.GetStorageInfo")) as () => Promise<StorageInfo>,
+  getFolderSizes: (() => Call.ByName("main.App.GetFolderSizes")) as () => Promise<FolderSizes>,
+  deleteCachedModel: ((key: string) =>
+    Call.ByName("main.App.DeleteCachedModel", key)) as (key: string) => Promise<void>,
+  purgeBaseComponentsCache: (() =>
+    Call.ByName("main.App.PurgeBaseComponentsCache")) as () => Promise<void>,
+  // kind is an allow-list on the Go side ("models" | "base" | "engine").
+  openCacheFolder: ((kind: string) =>
+    Call.ByName("main.App.OpenCacheFolder", kind)) as (kind: string) => Promise<void>,
+
   // Cloud generation resume: pending jobs interrupted by an app close, and a
   // manual re-check that re-polls them (results arrive via onCloudResolved).
   listPendingCloudJobs: ListPendingCloudJobs as () => Promise<PendingCloudJob[]>,
@@ -174,6 +198,13 @@ const raw = {
     Events.On("generate:progress", (e) => cb(e.data as GenerateProgress)),
   onCloudResolved: (cb: (r: CloudResolved) => void): (() => void) =>
     Events.On("cloud:resolved", (e) => cb(e.data as CloudResolved)),
+  // Fired whenever the cached set changes (reconcile, download, eviction,
+  // manual delete, purge) so badges and the storage screen stay truthful.
+  onModelCacheChanged: (cb: () => void): (() => void) => Events.On("model:cache", () => cb()),
+  // Fired when the Go side rewrites settings on its own — today, re-resolving
+  // the stored model snapshots against the catalog shortly after launch.
+  onSettingsChanged: (cb: (s: AppSettings) => void): (() => void) =>
+    Events.On("settings:changed", (e) => cb(e.data as AppSettings)),
 };
 
 const NO_WRAP = new Set([
@@ -184,6 +215,8 @@ const NO_WRAP = new Set([
   "onModelProgress",
   "onGenerateProgress",
   "onCloudResolved",
+  "onModelCacheChanged",
+  "onSettingsChanged",
 ]);
 
 function wrap<K extends keyof typeof raw>(key: K, fn: (typeof raw)[K]): (typeof raw)[K] {

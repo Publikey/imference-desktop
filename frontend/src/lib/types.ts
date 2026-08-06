@@ -23,6 +23,44 @@ export type AppSettings = {
   cloudModelInfo?: ModelInfo | null;
   /** User-supplied checkpoints (localPath set), referenced in place. */
   customModels?: ModelInfo[];
+  /** Cap on the total size of downloaded weights. 0 → Go default (100 GB).
+   *  Past it, least-recently-used models are evicted; the active one never is. */
+  modelCacheQuotaBytes?: number;
+  /** Free-space cushion to preserve on the cache volume. 0 → Go default (10 GB).
+   *  A hard wall, unlike the quota: a download that would eat into it fails. */
+  modelCacheMinFreeBytes?: number;
+};
+
+/** One downloaded checkpoint, as listed in Settings → Storage. */
+export type CachedModel = {
+  /** Filename in the managed models dir — the handle for deletion. */
+  key: string;
+  modelCode?: string;
+  modelName?: string;
+  bytes: number;
+  lastUsedAt: string;
+  /** Loaded in the engine: can't be deleted, never evicted. */
+  active: boolean;
+  /** Unknown provenance (older build, or catalog offline when indexed). Evicted first. */
+  orphan: boolean;
+};
+
+/** Cheap storage readout — index totals plus one syscall. */
+export type StorageInfo = {
+  quotaBytes: number;
+  minFreeBytes: number;
+  usedBytes: number;
+  freeBytes: number;
+  modelsDir: string;
+  baseCacheDir: string;
+  engineDir: string;
+};
+
+/** Expensive storage readout — one directory walk per folder. */
+export type FolderSizes = {
+  modelsBytes: number;
+  baseCacheBytes: number;
+  engineBytes: number;
 };
 
 /** Result of api.checkForUpdate(): this build vs the latest GitHub release. */
@@ -112,6 +150,13 @@ export type ModelInfo = {
   /** Where the model may run — drives which catalog (local/cloud) lists it. */
   canLocal: boolean;
   canCloud: boolean;
+  /** How many OPTIONAL reference images the model takes, resolved by Go from the
+   *  catalog's accepts_image_input + image_input_max: 0 = none, 1 = img2img
+   *  source, 2 = first + last frame. Go applies the "catalog silent → 1 for
+   *  local models" fallback, so this value is final. */
+  refImages?: number;
+  /** Video model whose output carries an audio track (catalog has_audio). */
+  hasAudio?: boolean;
   /** Supported resolutions/ratios (im_format). Empty → generic fallback. */
   formats?: FormatOption[];
   /** Catalog organization (im_model family/group) for sorting/grouping. */
@@ -158,9 +203,13 @@ export type GenerationRequest = {
   /** Usually injected server-side from the selected model; optional override. */
   scheduler?: string;
   clipSkip?: number;
-  /** img2img: base64 (data-URL ok) source image to denoise from. Empty/undefined = text2img. */
+  /** Optional reference images by slot: 0 = img2img source (or a video's first
+   *  frame), 1 = a video's last frame. Go mirrors slot 0 onto sourceImage. */
+  refImages?: string[];
+  /** img2img: base64 (data-URL ok) source image to denoise from. Empty/undefined = text2img.
+   *  Kept as the wire field for slot 0 — the engine contract speaks source_image. */
   sourceImage?: string;
-  /** img2img denoising strength 0–1 (0 keeps source, 1 ignores it). Only with sourceImage. */
+  /** Denoising strength 0–1 (0 keeps the reference, 1 ignores it). Only with a reference image. */
   strength?: number;
 };
 
@@ -274,6 +323,13 @@ export type Job = {
    * don't retro-change a job already waiting in the queue. Local jobs only.
    */
   request?: GenerationRequest;
+  /**
+   * The local model this job was enqueued for. A job can be queued for a model
+   * that's cached but not loaded yet (the primary button activates it in the
+   * background), so the dispatcher must not hand it to whatever the engine
+   * happens to have resident. Local jobs only.
+   */
+  modelCode?: string;
   /** Epoch ms the job was enqueued — orders the queue and drives "queued" UI. */
   queuedAt: number;
   /** Epoch ms the job began running — set when it leaves the queue. */
@@ -346,7 +402,12 @@ export type InstallPhase =
 
 export type InstallProgress = {
   phase: InstallPhase;
+  /** English, always set. The log line, and the fallback when messageKey is absent. */
   message: string;
+  /** i18n key for the user-facing text. Go can't translate (the language lives
+   *  in the renderer), so it sends a key plus pre-formatted values instead. */
+  messageKey?: string;
+  messageArgs?: Record<string, string>;
   percentEstimate: number;
   done: boolean;
   error?: string;

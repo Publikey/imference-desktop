@@ -72,6 +72,7 @@ export function ModelPickerDialog({
   catalog,
   customModels,
   activeCode,
+  cachedCodes,
   busy,
   onPick,
   onAddCustom,
@@ -85,6 +86,8 @@ export function ModelPickerDialog({
   catalog: ModelInfo[];
   customModels: ModelInfo[];
   activeCode: string | null;
+  /** Local model codes whose weights are already downloaded. */
+  cachedCodes: Set<string>;
   busy: boolean;
   onPick: (m: ModelInfo) => void;
   onAddCustom: () => void;
@@ -237,6 +240,7 @@ export function ModelPickerDialog({
                       isCloud={isCloud}
                       paymentMode={paymentMode}
                       active={m.modelCode === activeCode}
+                      cached={!isCloud && cachedCodes.has(m.modelCode)}
                       disabled={busy}
                       onPick={() => onPick(m)}
                       onRemove={m.localPath ? () => onRemoveCustom(m) : undefined}
@@ -282,6 +286,7 @@ function ModelCard({
   isCloud,
   paymentMode,
   active,
+  cached,
   disabled,
   onPick,
   onRemove,
@@ -290,6 +295,8 @@ function ModelCard({
   isCloud: boolean;
   paymentMode: PaymentMode;
   active: boolean;
+  /** Weights already on disk — selecting it reloads instead of downloading. */
+  cached: boolean;
   disabled: boolean;
   onPick: () => void;
   onRemove?: () => void;
@@ -325,6 +332,11 @@ function ModelCard({
               <Badge className="bg-amber-500/90 text-white">{t("modelPicker.badgeCustom")}</Badge>
             ) : !m.modelUrl && !isCloud ? (
               <Badge className="bg-black/60 text-white">{t("modelPicker.badgeCloudOnly")}</Badge>
+            ) : cached ? (
+              // Weights already downloaded: picking this is a reload, not a
+              // multi-GB pull. Hidden on the active card — the check mark
+              // already says more than "on disk" does.
+              !active && <Badge className="bg-emerald-600/90 text-white">{t("modelPicker.badgeCached")}</Badge>
             ) : null}
           </div>
           {isCloud && m.cost > 0 && (

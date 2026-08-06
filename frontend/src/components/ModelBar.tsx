@@ -23,7 +23,13 @@ type Props = {
   // and the download state/progress are passed in.
   pendingLocalModel: ModelInfo | null;
   onSelectLocal: (m: ModelInfo) => void;
+  // Local model codes whose weights are already on disk, so the picker can say
+  // which ones load instantly vs. which still need downloading.
+  cachedCodes: Set<string>;
   downloading: boolean;
+  // True when the activation in flight is loading cached weights rather than
+  // downloading them — there's nothing to abort.
+  loadingCached: boolean;
   progress: InstallProgress | null;
   // Abort an in-flight local download.
   onCancelDownload: () => void;
@@ -51,7 +57,9 @@ export function ModelBar({
   onModelSwitched,
   pendingLocalModel,
   onSelectLocal,
+  cachedCodes,
   downloading,
+  loadingCached,
   progress,
   onCancelDownload,
   onAddCustom,
@@ -187,11 +195,17 @@ export function ModelBar({
       </div>
 
       {downloading && progress ? (
-        <DownloadProgress p={progress} onCancel={onCancelDownload} />
+        <DownloadProgress p={progress} onCancel={onCancelDownload} cancellable={!loadingCached} />
       ) : customError && mode === "local" ? (
         <p className="text-destructive mt-2 text-xs">{customError}</p>
       ) : progress?.error && mode === "local" ? (
-        <p className="text-destructive mt-2 text-xs">{progress.error}</p>
+        // Prose we author (e.g. out of disk) ships a key; raw Go/network errors
+        // don't and stay in English, as everywhere else in the app.
+        <p className="text-destructive mt-2 text-xs">
+          {progress.messageKey
+            ? t(progress.messageKey, { ...progress.messageArgs, defaultValue: progress.error })
+            : progress.error}
+        </p>
       ) : null}
 
       <ModelPickerDialog
@@ -202,6 +216,7 @@ export function ModelBar({
         catalog={isCloud ? cloudModels : localModels}
         customModels={customModels}
         activeCode={activeCode}
+        cachedCodes={cachedCodes}
         busy={busy}
         onPick={(m) => {
           onPickerOpenChange(false);
@@ -217,21 +232,38 @@ export function ModelBar({
   );
 }
 
-function DownloadProgress({ p, onCancel }: { p: InstallProgress; onCancel: () => void }) {
+function DownloadProgress({
+  p,
+  onCancel,
+  cancellable,
+}: {
+  p: InstallProgress;
+  onCancel: () => void;
+  cancellable: boolean;
+}) {
   const { t } = useTranslation();
+  // The Go side sends an i18n key plus already-formatted values (byte sizes read
+  // the same in every locale); p.message is the English fallback for a key this
+  // build doesn't know yet.
+  const text = p.messageKey
+    ? t(p.messageKey, { ...p.messageArgs, defaultValue: p.message })
+    : p.message;
   return (
     <div className="mt-2.5 space-y-1.5 pl-9">
       <div className="flex items-center justify-between gap-2 text-[11px]">
         <span className="text-muted-foreground inline-flex min-w-0 items-center gap-1.5">
           <Download className="text-primary size-3 shrink-0 animate-pulse" />
-          <span className="truncate" title={p.message}>
-            {p.message || t("modelBar.working")}
+          <span className="truncate" title={text}>
+            {text || t("modelBar.working")}
           </span>
         </span>
         <div className="flex shrink-0 items-center gap-2">
           {p.percentEstimate > 0 && (
             <span className="text-muted-foreground tabular-nums">{p.percentEstimate}%</span>
           )}
+          {/* Loading cached weights has no fetch to abort — the engine restart
+              runs to completion either way, so don't offer a dead Cancel. */}
+          {cancellable && (
           <button
             type="button"
             onClick={onCancel}
@@ -241,6 +273,7 @@ function DownloadProgress({ p, onCancel }: { p: InstallProgress; onCancel: () =>
             <X className="size-3" />
             {t("common.cancel")}
           </button>
+          )}
         </div>
       </div>
       <ProgressBar percent={p.percentEstimate > 0 ? p.percentEstimate : null} />

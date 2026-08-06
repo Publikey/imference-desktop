@@ -42,6 +42,54 @@ type Settings struct {
 	// files themselves are referenced in place — never copied, never deleted.
 	// UI-only: not a sidecar-affecting field (the active model is LocalModel).
 	CustomModels []ModelInfo `json:"customModels,omitempty"`
+	// ModelCacheQuotaBytes caps the total size of downloaded weights. Downloaded
+	// models are kept so switching back is instant; past the quota the least
+	// recently used are evicted. 0 means the default (modelcache.DefaultQuotaBytes).
+	// The ACTIVE model is never evicted, so the total can exceed this transiently.
+	// Excludes the shared base-component cache (model-cache/), which is purged
+	// manually — those files are shared across every checkpoint of a family.
+	ModelCacheQuotaBytes int64 `json:"modelCacheQuotaBytes,omitempty"`
+	// ModelCacheMinFreeBytes is the free-space cushion to preserve on the cache
+	// volume. Unlike the quota (a housekeeping target), this is a hard wall: a
+	// download that would eat into it fails before any network call. 0 = default.
+	ModelCacheMinFreeBytes int64 `json:"modelCacheMinFreeBytes,omitempty"`
+}
+
+// CachedModel is one downloaded checkpoint, as shown in Settings → Storage.
+// Key is its filename in the managed models dir — the handle for deletion.
+type CachedModel struct {
+	Key        string `json:"key"`
+	ModelCode  string `json:"modelCode,omitempty"`
+	ModelName  string `json:"modelName,omitempty"`
+	Bytes      int64  `json:"bytes"`
+	LastUsedAt string `json:"lastUsedAt"`
+	// Active marks the model the engine currently has loaded — it can't be
+	// deleted (the file is mmap'd) and is never evicted.
+	Active bool `json:"active"`
+	// Orphan marks a file whose provenance is unknown (a leftover from an older
+	// build, or indexed while the catalog was unreachable). Evicted first.
+	Orphan bool `json:"orphan"`
+}
+
+// StorageInfo is the cheap storage readout: everything here comes from the
+// cache index plus one syscall, so it's safe to fetch on dialog open.
+type StorageInfo struct {
+	QuotaBytes   int64  `json:"quotaBytes"`
+	MinFreeBytes int64  `json:"minFreeBytes"`
+	UsedBytes    int64  `json:"usedBytes"`
+	FreeBytes    int64  `json:"freeBytes"`
+	ModelsDir    string `json:"modelsDir"`
+	BaseCacheDir string `json:"baseCacheDir"`
+	EngineDir    string `json:"engineDir"`
+}
+
+// FolderSizes is the expensive part of the storage readout — each figure is a
+// full directory walk (the engine venv holds tens of thousands of files), so
+// it's a separate call the UI resolves after painting.
+type FolderSizes struct {
+	ModelsBytes    int64 `json:"modelsBytes"`
+	BaseCacheBytes int64 `json:"baseCacheBytes"`
+	EngineBytes    int64 `json:"engineBytes"`
 }
 
 // UpdateInfo is the result of App.CheckForUpdate: the app's own version vs the
@@ -140,6 +188,20 @@ type ModelInfo struct {
 	Cost     int  `json:"cost"`
 	CanLocal bool `json:"canLocal"`
 	CanCloud bool `json:"canCloud"`
+	// RefImages is how many reference images the model takes, resolved from the
+	// catalog's accepts_image_input + image_input_max: 0 = none, 1 = a single
+	// source image (img2img), 2 = first + last frame (video interpolation).
+	// Reference images are always OPTIONAL — a model that accepts them still
+	// runs from the prompt alone.
+	//
+	// Resolved in cloud.refImageSlots: a catalog row that omits the capability
+	// falls back to 1 for locally-runnable models, preserving the img2img
+	// affordance every local model had before the columns existed.
+	RefImages int `json:"refImages"`
+	// HasAudio marks a video model whose output carries an audio track
+	// (catalog has_audio). Carried through for the UI to surface; nothing in the
+	// generation path depends on it.
+	HasAudio bool `json:"hasAudio,omitempty"`
 	// Formats are the model's supported resolutions/ratios (im_format). Empty
 	// when the catalog has none — the UI then falls back to generic formats.
 	Formats []FormatOption `json:"formats,omitempty"`
@@ -196,6 +258,15 @@ type GenerationRequest struct {
 	// but the fields exist so a caller can override. Empty/nil → engine default.
 	Scheduler string `json:"scheduler,omitempty"`
 	ClipSkip  *int   `json:"clipSkip,omitempty"`
+	// RefImages are the model's reference images, in slot order — slot 0 is the
+	// img2img source (or a video's first frame), slot 1 a video's last frame.
+	// Always optional: a model that accepts them still runs prompt-only. How
+	// many slots a model offers comes from ModelInfo.RefImages.
+	//
+	// SourceImage below stays the wire field for slot 0 so the engine contract
+	// (and every shipped sidecar) is untouched; normalizeRefImages keeps the two
+	// in sync, whichever one the caller filled.
+	RefImages []string `json:"refImages,omitempty"`
 	// SourceImage enables img2img: a base64 source the engine denoises from
 	// instead of pure noise. May be a data-URL ("data:image/png;base64,…") or
 	// raw base64 — the sidecar client strips any data-URL prefix. Empty = text2img.
@@ -366,7 +437,16 @@ type InstallProgress struct {
 	// Message is a short human-readable string for the UI ("Downloading torch
 	// (~3 GB)…"). For verbose pip lines, callers should publish to logbus
 	// directly — those flow into the LogPanel and don't bloat this event.
+	//
+	// English only. Anything the user reads must ALSO set MessageKey; Message
+	// then serves as the log line and the fallback when a key is missing.
 	Message string `json:"message"`
+	// MessageKey is the i18n key the renderer translates, with MessageArgs as
+	// interpolation values. Go can't translate (the chosen language lives in the
+	// renderer's localStorage), so user-facing progress text is emitted as a key
+	// plus already-formatted values — byte sizes stay "6.5 GB" in every locale.
+	MessageKey  string            `json:"messageKey,omitempty"`
+	MessageArgs map[string]string `json:"messageArgs,omitempty"`
 	// PercentEstimate is 0–100, monotone within each long-running phase. Zero
 	// during indeterminate phases (detect, venv create) so the UI shows a
 	// barber-pole instead of a fake percent.

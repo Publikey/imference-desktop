@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"imference-desktop-go/internal/logbus"
 )
@@ -39,6 +40,47 @@ type Fetcher struct {
 // purely by the caller's context.
 func New(bus *logbus.Bus) *Fetcher {
 	return &Fetcher{bus: bus, http: &http.Client{}}
+}
+
+// probeTimeout bounds the HEAD pre-flight. It only reads headers, so a slow
+// answer means a sick server, not a big file.
+const probeTimeout = 15 * time.Second
+
+// Probe asks the server how big url is, without downloading it. Returns -1 when
+// the size can't be established (no Content-Length, HEAD refused, network
+// hiccup) — the caller falls back to an estimate.
+//
+// A failed probe is NEVER fatal: it only feeds the cache's "will this fit"
+// arithmetic, and getting that slightly wrong is corrected right after the
+// download by a sweep against the real size.
+func (f *Fetcher) Probe(ctx context.Context, url string) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	if err != nil {
+		return -1, fmt.Errorf("modelfetch: build HEAD request: %w", err)
+	}
+	req.Header.Set("User-Agent", "imference-desktop-go/0.0.1")
+
+	resp, err := f.http.Do(req)
+	if err != nil {
+		return -1, fmt.Errorf("modelfetch: HEAD %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return -1, fmt.Errorf("modelfetch: HEAD %s: HTTP %d", url, resp.StatusCode)
+	}
+	// Same guard as Fetch: a text/* answer is a login or error page, not a
+	// model. Catching it here fails in milliseconds instead of after a transfer.
+	if ct := resp.Header.Get("Content-Type"); strings.HasPrefix(ct, "text/") {
+		return -1, fmt.Errorf("modelfetch: expected a model file but server returned Content-Type %q", ct)
+	}
+	if resp.ContentLength <= 0 {
+		return -1, nil // reachable, but the size is unknown
+	}
+	return resp.ContentLength, nil
 }
 
 // Fetch downloads url to destPath. If destPath already exists with a size

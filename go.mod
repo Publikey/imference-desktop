@@ -5,8 +5,8 @@ go 1.25.0
 require (
 	github.com/danieljoos/wincred v1.2.3
 	github.com/ethereum/go-ethereum v1.17.3
-	github.com/wailsapp/wails/v3 v3.0.0-alpha2.116
-	golang.org/x/sys v0.43.0
+	github.com/wailsapp/wails/v3 v3.0.0-beta.4
+	golang.org/x/sys v0.45.0
 )
 
 require (

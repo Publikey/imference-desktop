@@ -13,12 +13,12 @@ import (
 	_ "image/gif"  // register decoders for image.DecodeConfig (dimensions)
 	_ "image/jpeg" //
 	_ "image/png"  //
+	"io/fs"
 	"mime"
-	"net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
@@ -30,9 +30,11 @@ import (
 
 	"imference-desktop-go/internal/cloud"
 	"imference-desktop-go/internal/cloudjobs"
+	"imference-desktop-go/internal/diskspace"
 	"imference-desktop-go/internal/imagesink"
 	"imference-desktop-go/internal/installer"
 	"imference-desktop-go/internal/logbus"
+	"imference-desktop-go/internal/modelcache"
 	"imference-desktop-go/internal/modelfetch"
 	"imference-desktop-go/internal/settings"
 	"imference-desktop-go/internal/sidecar"
@@ -68,6 +70,13 @@ type App struct {
 	cloudJobs *cloudjobs.Store
 	cloudMu   sync.Mutex
 	cloudBusy map[string]bool
+
+	// modelCache indexes the downloaded weights so several models can live on
+	// disk at once (switching back is then instant) under a size quota. nil when
+	// the index couldn't be opened — every use must be nil-safe. cacheMu
+	// serialises plan-then-delete against a manual deletion from the UI.
+	modelCache *modelcache.Store
+	cacheMu    sync.Mutex
 
 	// gallery metadata cache (name → sidecar meta) for cheap filtering/facets.
 	// The sidecars remain the source of truth; this is a derived, invalidated
@@ -115,13 +124,26 @@ func NewApp() *App {
 		bus.Warn("app", "pending-cloud store unavailable — interrupted cloud jobs won't resume", map[string]any{"err": cjErr.Error()})
 	}
 
+	// Weights-cache index, same best-effort policy: without it the app still
+	// downloads and runs models, it just can't enforce a quota or list what's
+	// cached. Never a reason to fail startup.
+	var cacheStore *modelcache.Store
+	if dir, mdErr := modelsDir(); mdErr == nil {
+		if mc, mcErr := modelcache.New(dir); mcErr == nil {
+			cacheStore = mc
+		} else {
+			bus.Warn("app", "model cache index unavailable — quota disabled", map[string]any{"err": mcErr.Error()})
+		}
+	}
+
 	a := &App{
-		bus:       bus,
-		settings:  store,
-		cloud:     cloud.New(bus),
-		installer: installer.New(bus),
-		cloudJobs: cloudStore,
-		cloudBusy: map[string]bool{},
+		bus:        bus,
+		settings:   store,
+		cloud:      cloud.New(bus),
+		installer:  installer.New(bus),
+		cloudJobs:  cloudStore,
+		cloudBusy:  map[string]bool{},
+		modelCache: cacheStore,
 	}
 	a.sidecar = sidecar.New(scriptPath, logDir, a.broadcastSidecarStatus, bus)
 	a.sidecar.SetProgressListener(a.broadcastGenerateProgress)
@@ -151,6 +173,20 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 		// — it's spawned on demand from the home-screen engine control. Cloud-only
 		// users no longer pay for a local engine (GPU/RAM) they won't use.
 		_ = a.clearStaleLocalModel()
+		// Custom checkpoints answer their own capability questions from the
+		// backend that loads them — no catalog, no network, so do it up front.
+		a.backfillCustomRefImages()
+		// Align the weights index with the disk BEFORE anything can act on it:
+		// picks up files left by older builds, drops ones deleted by hand, and
+		// sweeps stray .part files. Cheap (ReadDir + stat), so it stays inline.
+		a.reconcileModelCache()
+		// Attaching catalog identity needs the network, so it runs on its own and
+		// simply retries next launch when offline. Re-resolving the persisted
+		// model snapshots needs the same (now warm) catalog, so it rides along.
+		go func() {
+			a.relabelModelCache()
+			a.refreshCatalogSnapshots()
+		}()
 		a.bus.Info("app", "sidecar left stopped at startup — start it from the engine control", nil)
 		// Force the venv engine to the pinned version if it drifted (e.g. an
 		// older install whose diffusers doesn't actually offload). No-op when
@@ -280,6 +316,12 @@ func (a *App) SaveSettings(next types.Settings) (types.Settings, error) {
 		a.bus.Error("app", "SaveSettings failed", map[string]any{"err": err.Error()})
 		return types.Settings{}, err
 	}
+	// Lowering the quota must have a visible effect right away, but the settings
+	// dialog auto-saves — so sweep in the background and let the call return.
+	if saved.ModelCacheQuotaBytes != prev.ModelCacheQuotaBytes && a.cacheQuota() < a.modelCacheTotal() {
+		go a.sweepQuota("")
+	}
+
 	restart := settings.SidecarConfigChanged(prev, saved) && a.sidecar.Status().State == "ready"
 	a.bus.Info("app", "SaveSettings ok", map[string]any{"sidecarRestart": restart})
 	if restart {
@@ -374,6 +416,7 @@ func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult
 		return types.GenerationResult{}, errors.New("Cloud model not set")
 	}
 
+	normalizeRefImages(&req)
 	meta := cloudMeta(req, s.CloudModelInfo)
 	rail := cloudRail(s.PaymentMode)
 	jobID := newCloudJobID()
@@ -599,6 +642,7 @@ func (a *App) emitCloudResolved(jobID string, result *types.GenerationResult, er
 // itself is single-threaded (the Engine is stateful) so concurrent calls
 // queue up server-side; that's intentional for the POC.
 func (a *App) GenerateLocal(req types.GenerationRequest) (types.GenerationResult, error) {
+	normalizeRefImages(&req)
 	a.applyLocalModelConfig(&req)
 	result, err := a.sidecar.Generate(a.ctx, req)
 	if err != nil {
@@ -639,6 +683,30 @@ func cloudMeta(req types.GenerationRequest, model *types.ModelInfo) types.Genera
 	m.Img2Img = false
 	m.Strength = 0
 	return m
+}
+
+// normalizeRefImages keeps RefImages[0] and SourceImage in sync, so callers may
+// fill either one and everything downstream sees both.
+//
+// Slot 0 IS the img2img source: the sidecar and the engine have always spoken
+// "source_image", and reference images are additive on top of that contract
+// rather than a replacement for it. Empty slots are trimmed so a request never
+// carries "" placeholders.
+func normalizeRefImages(req *types.GenerationRequest) {
+	kept := req.RefImages[:0]
+	for _, s := range req.RefImages {
+		if strings.TrimSpace(s) != "" {
+			kept = append(kept, s)
+		}
+	}
+	req.RefImages = kept
+
+	switch {
+	case len(req.RefImages) > 0 && req.SourceImage == "":
+		req.SourceImage = req.RefImages[0]
+	case len(req.RefImages) == 0 && req.SourceImage != "":
+		req.RefImages = []string{req.SourceImage}
+	}
 }
 
 // applyLocalModelConfig fills the selected model's default negative prompt /
@@ -726,31 +794,26 @@ func (a *App) SelectCloudModel(modelCode string) error {
 	return nil
 }
 
-// SelectLocalModel downloads the chosen model's weights, deletes the previously
-// downloaded model (only after the new one lands), persists the selection, and
-// restarts the sidecar so the new weights load. Returns immediately; progress
-// streams on the "model:progress" event ({phase:"done"|"error"} terminates).
+// SelectLocalModel makes the chosen model active, downloading its weights only
+// when they aren't already cached, then restarts the sidecar so they load.
+// Returns immediately; progress streams on the "model:progress" event
+// ({phase:"done"|"error"} terminates).
+//
+// Previously downloaded models are KEPT (up to the cache quota), so coming back
+// to one is a restart rather than a multi-GB re-download. Making room, when
+// needed, evicts least-recently-used models — never the active one.
 func (a *App) SelectLocalModel(modelCode string) error {
-	models, err := a.cloud.ListModels(a.ctx, true)
+	chosen, err := a.localCatalogModel(modelCode)
 	if err != nil {
 		return err
-	}
-	var chosen *types.ModelInfo
-	for i := range models {
-		if models[i].ModelCode == modelCode {
-			chosen = &models[i]
-			break
-		}
-	}
-	if chosen == nil {
-		return fmt.Errorf("model %q not found in catalog (or it's cloud-only)", modelCode)
 	}
 
-	newPath, err := sdxlModelPath(chosen.ModelURL)
+	dir, err := modelsDir()
 	if err != nil {
 		return err
 	}
-	oldPath := a.settings.Get().SDXLPath
+	cacheKey := modelcache.FileName(chosen.ModelCode, chosen.ModelURL)
+	newPath := filepath.Join(dir, cacheKey)
 
 	emit := func(p types.InstallProgress) {
 		if a.app != nil {
@@ -776,7 +839,10 @@ func (a *App) SelectLocalModel(modelCode string) error {
 			a.dlMu.Unlock()
 		}()
 
-		emit(types.InstallProgress{Phase: "model", Message: "Preparing " + chosen.Name})
+		emit(types.InstallProgress{
+			Phase: "model", Message: "Preparing " + chosen.Name,
+			MessageKey: "progress.preparing", MessageArgs: map[string]string{"name": chosen.Name},
+		})
 		a.bus.Info("app", "SelectLocalModel start", map[string]any{"model": chosen.ModelCode, "url": chosen.ModelURL})
 
 		// Never interrupt an in-flight generation: wait for the current image to
@@ -784,44 +850,73 @@ func (a *App) SelectLocalModel(modelCode string) error {
 		// the switch until its local queue drains, so this is normally instant;
 		// it's the guard for the single request already handed to the sidecar.
 		if a.sidecar.IsGenerating() {
-			emit(types.InstallProgress{Phase: "model", Message: "Waiting for the current generation to finish…"})
+			emit(types.InstallProgress{
+				Phase: "model", Message: "Waiting for the current generation to finish…",
+				MessageKey: "progress.waitingGeneration",
+			})
 			a.sidecar.WaitForIdle()
 		}
 
-		// Stop the sidecar before downloading/deleting: the old .safetensors is
+		// Stop the sidecar before downloading/evicting: the active .safetensors is
 		// mmap'd by the running engine, so we must release it first (and on
-		// Windows the file can't be deleted while open).
+		// Windows an open file can't be deleted at all).
 		a.sidecar.Stop()
 
-		_, derr := modelfetch.New(a.bus).Fetch(dlCtx, chosen.ModelURL, newPath, modelReuseMinBytes,
-			func(p modelfetch.Progress) {
-				emit(types.InstallProgress{
-					Phase:           "model",
-					Message:         fmt.Sprintf("Downloading %s — %s / %s", chosen.Name, humanBytes(p.Downloaded), humanBytes(p.Total)),
-					PercentEstimate: p.Percent,
-				})
-			},
-		)
-		if derr != nil {
-			// User aborted: no error state — restore the previous engine so local
-			// mode stays usable, then report a clean "cancelled".
-			if errors.Is(derr, context.Canceled) {
-				a.bus.Info("app", "SelectLocalModel cancelled", map[string]any{"model": chosen.ModelCode})
-				if s := a.settings.Get(); s.SDXLPath != "" && s.LocalModel != nil {
-					_ = a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime)
+		// Migrate a file downloaded by an older build to the canonical name, so
+		// upgrading never re-downloads weights already on disk. relabelModelCache
+		// does the same thing earlier when the catalog is reachable; both are
+		// idempotent and either one is enough.
+		a.migrateLegacyWeights(chosen, newPath, cacheKey)
+
+		// Cache hit: the weights are already here. No probe, no eviction, no
+		// download — just load them.
+		reuseFloor := a.reuseFloor(cacheKey)
+		if fi, serr := os.Stat(newPath); serr == nil && fi.Size() >= reuseFloor {
+			a.bus.Info("app", "using cached weights", map[string]any{"model": chosen.ModelCode, "bytes": fi.Size()})
+			emit(types.InstallProgress{
+				Phase: "model", Message: "Using cached " + chosen.Name,
+				MessageKey: "progress.usingCached", MessageArgs: map[string]string{"name": chosen.Name},
+			})
+		} else {
+			if !a.prepareCacheSpace(dlCtx, chosen, cacheKey, emit) {
+				return // reported already (out of disk, or cancelled)
+			}
+			_, derr := modelfetch.New(a.bus).Fetch(dlCtx, chosen.ModelURL, newPath, reuseFloor,
+				func(p modelfetch.Progress) {
+					emit(types.InstallProgress{
+						Phase:      "model",
+						Message:    fmt.Sprintf("Downloading %s — %s / %s", chosen.Name, humanBytes(p.Downloaded), humanBytes(p.Total)),
+						MessageKey: "progress.downloading",
+						MessageArgs: map[string]string{
+							"name": chosen.Name, "done": humanBytes(p.Downloaded), "total": humanBytes(p.Total),
+						},
+						PercentEstimate: p.Percent,
+					})
+				},
+			)
+			if derr != nil {
+				// User aborted: no error state — restore the previous engine so local
+				// mode stays usable, then report a clean "cancelled".
+				if errors.Is(derr, context.Canceled) {
+					a.bus.Info("app", "SelectLocalModel cancelled", map[string]any{"model": chosen.ModelCode})
+					if s := a.settings.Get(); s.SDXLPath != "" && s.LocalModel != nil {
+						_ = a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime)
+					}
+					emit(types.InstallProgress{
+						Phase: "cancelled", Message: "Download cancelled",
+						MessageKey: "progress.downloadCancelled", Done: true,
+					})
+					return
 				}
-				emit(types.InstallProgress{Phase: "cancelled", Message: "Download cancelled", Done: true})
+				a.bus.Error("app", "SelectLocalModel download failed", map[string]any{"err": derr.Error()})
+				emit(types.InstallProgress{Phase: "error", Error: derr.Error(), Done: true})
 				return
 			}
-			a.bus.Error("app", "SelectLocalModel download failed", map[string]any{"err": derr.Error()})
-			emit(types.InstallProgress{Phase: "error", Error: derr.Error(), Done: true})
-			return
 		}
 
-		// New weights are safely on disk — now reclaim the old model's space.
-		if oldPath != "" && oldPath != newPath {
-			a.deleteManagedModel(oldPath)
-		}
+		// Index the weights and reclaim anything the new arrival superseded. The
+		// old model is NOT deleted here — that's the whole point of the cache.
+		a.indexCachedModel(chosen, cacheKey, newPath)
 
 		s := a.settings.Get()
 		s.SDXLPath = newPath
@@ -832,17 +927,174 @@ func (a *App) SelectLocalModel(modelCode string) error {
 			return
 		}
 
-		emit(types.InstallProgress{Phase: "model", Message: "Loading " + chosen.Name + " into the engine…", PercentEstimate: 100})
+		emit(types.InstallProgress{
+			Phase: "model", Message: "Loading " + chosen.Name + " into the engine…",
+			MessageKey: "progress.loadingEngine", MessageArgs: map[string]string{"name": chosen.Name},
+			PercentEstimate: 100,
+		})
 		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime); rerr != nil {
 			a.bus.Warn("app", "SelectLocalModel sidecar restart failed", map[string]any{"err": rerr.Error()})
 			emit(types.InstallProgress{Phase: "error", Error: rerr.Error(), Done: true})
 			return
 		}
 		a.bus.Info("app", "SelectLocalModel done", map[string]any{"model": chosen.ModelCode})
-		emit(types.InstallProgress{Phase: "done", Message: chosen.Name + " ready", PercentEstimate: 100, Done: true})
+		emit(types.InstallProgress{
+			Phase: "done", Message: chosen.Name + " ready",
+			MessageKey: "progress.modelReady", MessageArgs: map[string]string{"name": chosen.Name},
+			PercentEstimate: 100, Done: true,
+		})
 	}()
 
 	return nil
+}
+
+// refreshCatalogSnapshots re-resolves the persisted model selections against the
+// live catalog. settings.json stores whole ModelInfo snapshots so the UI has
+// costs, formats and defaults before (or without) a network round-trip — which
+// means they go stale the moment the catalog changes, and nobody re-picks a
+// model they are already using just to refresh it. A model gaining a
+// reference-image slot, a corrected step default or a new format would
+// otherwise only reach the user on their next deliberate pick.
+//
+// Best-effort and quiet: no catalog, no change. Custom checkpoints are skipped
+// entirely — they have no catalog row, and their snapshot IS the source of
+// truth.
+func (a *App) refreshCatalogSnapshots() {
+	s := a.settings.Get()
+	dirty := false
+
+	if s.LocalModel != nil && s.LocalModel.LocalPath == "" {
+		if m, err := a.localCatalogModel(s.LocalModel.ModelCode); err == nil && !reflect.DeepEqual(*m, *s.LocalModel) {
+			s.LocalModel = m
+			dirty = true
+		}
+	}
+	if s.CloudModelInfo != nil {
+		if m, err := a.cloudCatalogModel(s.CloudModelInfo.ModelCode); err == nil && !reflect.DeepEqual(*m, *s.CloudModelInfo) {
+			s.CloudModelInfo = m
+			dirty = true
+		}
+	}
+	if !dirty {
+		return
+	}
+	if _, err := a.settings.Save(s); err != nil {
+		a.bus.Warn("app", "refreshing model snapshots failed", map[string]any{"err": err.Error()})
+		return
+	}
+	a.bus.Info("app", "model snapshots refreshed from the catalog", nil)
+	// The renderer read settings at mount, before this could finish — tell it.
+	if a.app != nil {
+		a.app.Event.Emit("settings:changed", s)
+	}
+}
+
+// cloudCatalogModel resolves a model code against the cloud-runnable catalog.
+func (a *App) cloudCatalogModel(modelCode string) (*types.ModelInfo, error) {
+	models, err := a.cloud.ListModels(a.ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	for i := range models {
+		if models[i].ModelCode == modelCode {
+			return &models[i], nil
+		}
+	}
+	return nil, fmt.Errorf("model %q not found in the cloud catalog", modelCode)
+}
+
+// customRefImages is how many reference-image slots a user checkpoint offers:
+// one for the backends whose local pipeline does img2img, none for the ones with
+// no image input (Anima). Custom checkpoints never carry more — the multi-slot
+// case (first + last frame) belongs to catalog video models.
+func customRefImages(backendType string) int {
+	if cloud.SupportsRefImages(backendType) {
+		return 1
+	}
+	return 0
+}
+
+// backfillCustomRefImages fills RefImages on checkpoints registered before the
+// field existed (it defaults to 0, which would wrongly hide the reference-image
+// box on an SDXL checkpoint). Local, cheap, and idempotent — unlike the catalog
+// snapshots, this needs no network, so it runs on the startup path.
+func (a *App) backfillCustomRefImages() {
+	s := a.settings.Get()
+	dirty := false
+	fix := func(m *types.ModelInfo) {
+		if m == nil || m.LocalPath == "" {
+			return
+		}
+		if want := customRefImages(m.BackendType); m.RefImages != want {
+			m.RefImages = want
+			dirty = true
+		}
+	}
+	for i := range s.CustomModels {
+		fix(&s.CustomModels[i])
+	}
+	fix(s.LocalModel)
+	if !dirty {
+		return
+	}
+	if _, err := a.settings.Save(s); err != nil {
+		a.bus.Warn("app", "backfilling custom model capabilities failed", map[string]any{"err": err.Error()})
+		return
+	}
+	a.bus.Info("app", "custom model capabilities backfilled", nil)
+	if a.app != nil {
+		a.app.Event.Emit("settings:changed", s)
+	}
+}
+
+// localCatalogModel resolves a model code against the local-runnable catalog.
+func (a *App) localCatalogModel(modelCode string) (*types.ModelInfo, error) {
+	models, err := a.cloud.ListModels(a.ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	for i := range models {
+		if models[i].ModelCode == modelCode {
+			return &models[i], nil
+		}
+	}
+	return nil, fmt.Errorf("model %q not found in catalog (or it's cloud-only)", modelCode)
+}
+
+// EnsureLocalModel activates a model whose weights are ALREADY on disk, and
+// reports false without touching anything when they aren't.
+//
+// This is what the generate path calls: picking a cached model and hitting
+// Generate should just work (the engine restart is the app's problem, not the
+// user's), while starting a multi-GB download stays a deliberate, explicitly
+// clicked act. A miss here means the file was evicted, deleted by hand, or the
+// catalog re-pointed the model at new weights — all cases where the caller must
+// fall back to SelectLocalModel, which downloads.
+func (a *App) EnsureLocalModel(modelCode string) (bool, error) {
+	chosen, err := a.localCatalogModel(modelCode)
+	if err != nil {
+		return false, err
+	}
+	dir, err := modelsDir()
+	if err != nil {
+		return false, err
+	}
+	cacheKey := modelcache.FileName(chosen.ModelCode, chosen.ModelURL)
+	if !isCompleteWeightsFile(filepath.Join(dir, cacheKey), a.reuseFloor(cacheKey)) &&
+		// A file left under the pre-cache naming scheme counts too: SelectLocalModel
+		// renames it into place instead of downloading.
+		!isCompleteWeightsFile(filepath.Join(dir, modelcache.LegacyFileName(chosen.ModelURL)), modelReuseMinBytes) {
+		a.bus.Info("app", "EnsureLocalModel: weights not on disk", map[string]any{"model": modelCode})
+		return false, nil
+	}
+	return true, a.SelectLocalModel(modelCode)
+}
+
+// isCompleteWeightsFile reports whether path holds a whole checkpoint (not a
+// truncated leftover): present and at least floor bytes.
+func isCompleteWeightsFile(path string, floor int64) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.Size() >= floor
 }
 
 // CancelModelDownload aborts an in-flight local model download (if any). The
@@ -858,24 +1110,548 @@ func (a *App) CancelModelDownload() {
 	}
 }
 
-// deleteManagedModel removes a previously downloaded model file, but ONLY when
-// it lives inside our managed models directory — a guard so a user-supplied
-// SDXLPath pointing at their own checkpoint elsewhere is never deleted.
-func (a *App) deleteManagedModel(p string) {
+// deleteManagedModel removes a downloaded model file, but ONLY when it lives
+// inside our managed models directory — a guard so a user-supplied SDXLPath
+// pointing at their own checkpoint elsewhere is never deleted.
+//
+// Reports whether the file is actually gone. Callers MUST check it before
+// dropping the matching index entry: on Windows, deleting a file the engine has
+// mmap'd fails with a sharing violation, and an index that forgot it would
+// understate the cache and hand out space that was never freed. An
+// already-missing file counts as success.
+func (a *App) deleteManagedModel(p string) error {
 	dir, err := modelsDir()
 	if err != nil {
-		return
+		return err
 	}
 	rel, err := filepath.Rel(dir, p)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || strings.Contains(rel, string(filepath.Separator)+"..") {
 		a.bus.Warn("app", "refusing to delete model outside managed dir", map[string]any{"path": p})
-		return
+		return errors.New("path outside the managed models directory")
 	}
 	if err := os.Remove(p); err != nil {
-		a.bus.Warn("app", "delete old model failed", map[string]any{"path": p, "err": err.Error()})
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		a.bus.Warn("app", "delete model failed", map[string]any{"path": p, "err": err.Error()})
+		return err
+	}
+	a.bus.Info("app", "deleted cached model", map[string]any{"path": p})
+	return nil
+}
+
+// --- Weights cache -------------------------------------------------------
+
+// protectedModelPaths lists the absolute paths the cache must never index or
+// evict: every user-supplied checkpoint. They're referenced in place and could
+// legitimately sit inside the managed dir (the user can point the file picker
+// anywhere), so keeping them OUT of the index is stronger than flagging them —
+// the eviction planner can't choose what it can't see.
+func (a *App) protectedModelPaths() map[string]bool {
+	out := map[string]bool{}
+	s := a.settings.Get()
+	add := func(p string) {
+		if p == "" {
+			return
+		}
+		if abs, err := filepath.Abs(p); err == nil {
+			out[abs] = true
+		}
+	}
+	for _, m := range s.CustomModels {
+		add(m.LocalPath)
+	}
+	if s.LocalModel != nil && s.LocalModel.LocalPath != "" {
+		add(s.LocalModel.LocalPath)
+	}
+	return out
+}
+
+// activeCacheKey is the cache key of the currently selected model, or "" when
+// none is selected or it lives outside the managed dir (a custom checkpoint).
+func (a *App) activeCacheKey() string {
+	p := a.settings.Get().SDXLPath
+	if p == "" || a.modelCache == nil {
+		return ""
+	}
+	rel, err := filepath.Rel(a.modelCache.Dir(), p)
+	if err != nil || rel != filepath.Base(p) {
+		return "" // not directly inside the managed dir
+	}
+	return rel
+}
+
+// reconcileModelCache rebuilds the index from what's on disk. Runs at startup,
+// before anything can consult the index.
+func (a *App) reconcileModelCache() {
+	if a.modelCache == nil {
 		return
 	}
-	a.bus.Info("app", "deleted old local model", map[string]any{"path": p})
+	rep, err := a.modelCache.Reconcile(a.protectedModelPaths())
+	if err != nil {
+		a.bus.Warn("app", "model cache reconcile failed", map[string]any{"err": err.Error()})
+		return
+	}
+	a.bus.Info("app", "model cache reconciled", map[string]any{
+		"indexed": rep.Indexed, "dropped": rep.Dropped, "parts": rep.PartsRemoved,
+		"orphans": rep.Orphans, "bytes": rep.TotalBytes,
+	})
+	a.emitCacheChanged()
+}
+
+// relabelModelCache attaches catalog identity to indexed files and migrates
+// legacy filenames to the canonical scheme. Best-effort: needs the catalog.
+func (a *App) relabelModelCache() {
+	if a.modelCache == nil {
+		return
+	}
+	models, err := a.cloud.ListModels(a.ctx, true)
+	if err != nil {
+		a.bus.Info("app", "model cache relabel skipped — catalog unavailable", map[string]any{"err": err.Error()})
+		return
+	}
+	refs := make([]modelcache.CatalogRef, 0, len(models))
+	for _, m := range models {
+		refs = append(refs, modelcache.CatalogRef{ModelCode: m.ModelCode, ModelName: m.Name, ModelURL: m.ModelURL})
+	}
+	renamed, rerr := a.modelCache.Relabel(refs)
+	if rerr != nil {
+		a.bus.Warn("app", "model cache relabel failed", map[string]any{"err": rerr.Error()})
+		return
+	}
+	// Rename first, THEN persist the new path. Crashing in between leaves a
+	// selection pointing at a gone file, which clearStaleLocalModel clears on the
+	// next launch — annoying, never destructive. The reverse order would point
+	// settings at a file that doesn't exist yet.
+	if len(renamed) > 0 {
+		if s := a.settings.Get(); s.SDXLPath != "" {
+			if to, ok := renamed[filepath.Base(s.SDXLPath)]; ok {
+				s.SDXLPath = a.modelCache.Path(to)
+				if _, serr := a.settings.Save(s); serr != nil {
+					a.bus.Warn("app", "re-pointing SDXLPath after rename failed", map[string]any{"err": serr.Error()})
+				}
+			}
+		}
+		a.bus.Info("app", "model cache relabeled", map[string]any{"renamed": len(renamed)})
+	}
+	a.sweepQuota("")
+	a.emitCacheChanged()
+}
+
+// cacheQuota / cacheMinFree resolve the effective limits (0 = default).
+func (a *App) cacheQuota() int64 {
+	if q := a.settings.Get().ModelCacheQuotaBytes; q > 0 {
+		return q
+	}
+	return modelcache.DefaultQuotaBytes
+}
+
+// modelCacheTotal is the indexed cache size, 0 when there's no index.
+func (a *App) modelCacheTotal() int64 {
+	if a.modelCache == nil {
+		return 0
+	}
+	return a.modelCache.TotalBytes()
+}
+
+func (a *App) cacheMinFree() int64 {
+	if m := a.settings.Get().ModelCacheMinFreeBytes; m > 0 {
+		return m
+	}
+	return defaultMinFreeBytes
+}
+
+// evictPlan builds the eviction plan for an incoming download of incomingBytes
+// (0 when nothing is coming in — a plain sweep). Never plans the active model
+// or targetKey.
+func (a *App) evictPlan(targetKey string, incomingBytes int64) modelcache.Plan {
+	if a.modelCache == nil {
+		return modelcache.Plan{}
+	}
+	cands := modelcache.BuildCandidates(a.modelCache.List(), a.activeCacheKey(), targetKey)
+	return modelcache.PlanEviction(cands, a.modelCache.TotalBytes(), incomingBytes, a.cacheQuota())
+}
+
+// applyEviction deletes the planned files and forgets only the ones that really
+// went away. Returns the bytes actually reclaimed.
+func (a *App) applyEviction(plan modelcache.Plan) int64 {
+	if a.modelCache == nil || len(plan.Evict) == 0 {
+		return 0
+	}
+	a.cacheMu.Lock()
+	defer a.cacheMu.Unlock()
+
+	// Re-check protection at delete time, not just at plan time. Reconcile keeps
+	// user checkpoints out of the index, but a file indexed as an orphan first
+	// and registered as a custom model afterwards would still be in there.
+	protected := a.protectedModelPaths()
+
+	var freed int64
+	for _, key := range plan.Evict {
+		e, ok := a.modelCache.Get(key)
+		if !ok {
+			continue
+		}
+		if abs, aerr := filepath.Abs(a.modelCache.Path(key)); aerr == nil && protected[abs] {
+			a.bus.Info("app", "skipping eviction of a registered custom model", map[string]any{"key": key})
+			_ = a.modelCache.Delete(key) // stop tracking it: it's the user's file now
+			continue
+		}
+		if err := a.deleteManagedModel(a.modelCache.Path(key)); err != nil {
+			continue // file still there: keep the entry, the space isn't back
+		}
+		if derr := a.modelCache.Delete(key); derr != nil {
+			a.bus.Warn("app", "cache index update failed after eviction", map[string]any{"err": derr.Error()})
+		}
+		freed += e.Bytes
+	}
+	if freed > 0 {
+		a.bus.Info("app", "evicted cached models", map[string]any{"count": len(plan.Evict), "freed": freed})
+		a.emitCacheChanged()
+	}
+	return freed
+}
+
+// sweepQuota brings the cache back under quota with nothing new coming in.
+// A no-op when already under. protectKey is spared on top of the active model.
+func (a *App) sweepQuota(protectKey string) {
+	a.applyEviction(a.evictPlan(protectKey, 0))
+}
+
+// emitCacheChanged tells the renderer the cache contents moved, so the picker
+// badges and the storage screen refresh.
+func (a *App) emitCacheChanged() {
+	if a.app != nil {
+		a.app.Event.Emit("model:cache", nil)
+	}
+}
+
+// reuseFloor is the size at which an existing file counts as a complete
+// download. When the index knows the exact size we demand exactly that, which
+// catches a file truncated by a hard kill; otherwise we fall back to the loose
+// "plausibly a multi-GB checkpoint" bound.
+func (a *App) reuseFloor(key string) int64 {
+	if a.modelCache != nil {
+		if e, ok := a.modelCache.Get(key); ok && e.Bytes > 0 {
+			return e.Bytes
+		}
+	}
+	return modelReuseMinBytes
+}
+
+// migrateLegacyWeights renames a file downloaded under the old URL-basename
+// scheme to its canonical cache name, so an upgrading user never re-downloads
+// what they already have. Silent no-op when there's nothing to migrate.
+func (a *App) migrateLegacyWeights(chosen *types.ModelInfo, newPath, cacheKey string) {
+	if a.modelCache == nil || chosen.ModelURL == "" {
+		return
+	}
+	if _, err := os.Stat(newPath); err == nil || !errors.Is(err, fs.ErrNotExist) {
+		return // already canonical (or an unreadable path — let Fetch report it)
+	}
+	legacyKey := modelcache.LegacyFileName(chosen.ModelURL)
+	if legacyKey == cacheKey {
+		return
+	}
+	legacyPath := a.modelCache.Path(legacyKey)
+	fi, serr := os.Stat(legacyPath)
+	if serr != nil || fi.Size() < modelReuseMinBytes {
+		return
+	}
+	if rerr := os.Rename(legacyPath, newPath); rerr != nil {
+		// Not fatal: the download below simply proceeds under the canonical name.
+		a.bus.Warn("app", "legacy weights rename failed", map[string]any{"from": legacyPath, "err": rerr.Error()})
+		return
+	}
+	if e, ok := a.modelCache.Get(legacyKey); ok {
+		_ = a.modelCache.Delete(legacyKey)
+		e.Key = cacheKey
+		_ = a.modelCache.Put(e)
+	}
+	a.bus.Info("app", "migrated legacy weights filename", map[string]any{"from": legacyKey, "to": cacheKey})
+}
+
+// prepareCacheSpace makes room for an incoming download and enforces the
+// free-space wall. Reports false when the caller must abort (already emitted).
+//
+// Order matters: the plan is computed and checked against free space BEFORE any
+// file is deleted, so we never evict models and then fail anyway — the worst of
+// both worlds.
+func (a *App) prepareCacheSpace(ctx context.Context, chosen *types.ModelInfo, cacheKey string, emit func(types.InstallProgress)) bool {
+	if a.modelCache == nil {
+		return true // no index: no quota to enforce, download as before
+	}
+
+	incoming, perr := modelfetch.New(a.bus).Probe(ctx, chosen.ModelURL)
+	if errors.Is(perr, context.Canceled) {
+		emit(types.InstallProgress{
+			Phase: "cancelled", Message: "Download cancelled",
+			MessageKey: "progress.downloadCancelled", Done: true,
+		})
+		return false
+	}
+	if incoming <= 0 {
+		incoming = defaultModelSizeEstimate
+		a.bus.Info("app", "model size unknown — using estimate", map[string]any{"model": chosen.ModelCode})
+	}
+
+	plan := a.evictPlan(cacheKey, incoming)
+	if plan.Shortfall > 0 {
+		// The quota is a housekeeping target, not a wall: refusing here would
+		// wedge the app whenever the active model alone eats the budget.
+		a.bus.Warn("app", "cache quota can't fit this model — proceeding anyway", map[string]any{
+			"model": chosen.ModelCode, "shortfall": plan.Shortfall,
+		})
+	}
+
+	if free, ferr := diskspace.FreeBytes(a.modelCache.Dir()); ferr == nil {
+		minFree := a.cacheMinFree()
+		if free+plan.Freed < incoming+minFree {
+			msg := fmt.Sprintf(
+				"Not enough disk space for %s: needs %s plus a %s reserve, only %s free (%s would be reclaimed from cached models).",
+				chosen.Name, humanBytes(incoming), humanBytes(minFree), humanBytes(free), humanBytes(plan.Freed),
+			)
+			a.bus.Error("app", "insufficient disk space for model download", map[string]any{
+				"model": chosen.ModelCode, "need": incoming, "free": free, "reclaimable": plan.Freed,
+			})
+			emit(types.InstallProgress{
+				Phase: "error", Error: msg, Done: true,
+				MessageKey: "progress.noDiskSpace",
+				MessageArgs: map[string]string{
+					"name": chosen.Name, "need": humanBytes(incoming), "reserve": humanBytes(minFree),
+					"free": humanBytes(free), "reclaimable": humanBytes(plan.Freed),
+				},
+			})
+			return false // nothing downloaded, nothing deleted
+		}
+	}
+
+	if len(plan.Evict) > 0 {
+		emit(types.InstallProgress{
+			Phase: "model", Message: "Freeing space — " + humanBytes(plan.Freed) + "…",
+			MessageKey: "progress.freeingSpace", MessageArgs: map[string]string{"size": humanBytes(plan.Freed)},
+		})
+		a.applyEviction(plan)
+	}
+	return true
+}
+
+// indexCachedModel records freshly landed weights, drops any earlier file for
+// the same model (the catalog re-pointed it, so the old one is dead weight),
+// and re-checks the quota against the real size.
+func (a *App) indexCachedModel(chosen *types.ModelInfo, cacheKey, path string) {
+	if a.modelCache == nil {
+		return
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		a.bus.Warn("app", "cannot stat downloaded weights", map[string]any{"path": path, "err": err.Error()})
+		return
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	if perr := a.modelCache.Put(modelcache.Entry{
+		Key:        cacheKey,
+		ModelCode:  chosen.ModelCode,
+		ModelName:  chosen.Name,
+		URLHash:    modelcache.URLHash(chosen.ModelURL),
+		Bytes:      fi.Size(),
+		AddedAt:    now,
+		LastUsedAt: now,
+	}); perr != nil {
+		a.bus.Warn("app", "cache index update failed", map[string]any{"err": perr.Error()})
+	}
+
+	// Supersession: same model, different file → the old one can never be
+	// selected again, so reclaim it now instead of waiting for the LRU.
+	for _, e := range a.modelCache.List() {
+		if e.ModelCode != chosen.ModelCode || e.Key == cacheKey {
+			continue
+		}
+		if a.deleteManagedModel(a.modelCache.Path(e.Key)) == nil {
+			_ = a.modelCache.Delete(e.Key)
+			a.bus.Info("app", "dropped superseded weights", map[string]any{"key": e.Key, "model": e.ModelCode})
+		}
+	}
+
+	// The probe was an estimate; correct against reality.
+	a.sweepQuota(cacheKey)
+	a.emitCacheChanged()
+}
+
+// ListCachedModels returns the downloaded checkpoints, most recently used
+// first. Served straight from the index — no disk walk, safe to call on every
+// picker open.
+func (a *App) ListCachedModels() []types.CachedModel {
+	out := []types.CachedModel{}
+	if a.modelCache == nil {
+		return out
+	}
+	active := a.activeCacheKey()
+	for _, e := range a.modelCache.List() {
+		out = append(out, types.CachedModel{
+			Key: e.Key, ModelCode: e.ModelCode, ModelName: e.ModelName,
+			Bytes: e.Bytes, LastUsedAt: e.LastUsedAt,
+			Active: e.Key == active, Orphan: e.ModelCode == "",
+		})
+	}
+	return out
+}
+
+// GetStorageInfo is the cheap storage readout: index totals plus one syscall.
+func (a *App) GetStorageInfo() types.StorageInfo {
+	info := types.StorageInfo{QuotaBytes: a.cacheQuota(), MinFreeBytes: a.cacheMinFree()}
+	if dir, err := modelsDir(); err == nil {
+		info.ModelsDir = dir
+		if free, ferr := diskspace.FreeBytes(dir); ferr == nil {
+			info.FreeBytes = free
+		}
+	}
+	if dir, err := sidecar.ModelCacheDir(); err == nil {
+		info.BaseCacheDir = dir
+	}
+	if dir, err := engineVenvDir(); err == nil {
+		info.EngineDir = dir
+	}
+	if a.modelCache != nil {
+		info.UsedBytes = a.modelCache.TotalBytes()
+	}
+	return info
+}
+
+// GetFolderSizes walks the three cache trees. SLOW — the engine venv alone is
+// tens of thousands of files — so it's deliberately separate from
+// GetStorageInfo and the UI resolves it after painting.
+func (a *App) GetFolderSizes() types.FolderSizes {
+	var out types.FolderSizes
+	if dir, err := modelsDir(); err == nil {
+		out.ModelsBytes, _ = diskspace.DirSize(dir)
+	}
+	if dir, err := sidecar.ModelCacheDir(); err == nil {
+		out.BaseCacheBytes, _ = diskspace.DirSize(dir)
+	}
+	if dir, err := engineVenvDir(); err == nil {
+		out.EngineBytes, _ = diskspace.DirSize(dir)
+	}
+	return out
+}
+
+// DeleteCachedModel removes one downloaded checkpoint on the user's request.
+// Refuses the active model — the engine has it mmap'd, so the delete would fail
+// on Windows anyway, and a clear message beats a sharing violation.
+//
+// key is the only untrusted input reaching the filesystem here: it's validated,
+// then joined, then confined by deleteManagedModel's guard.
+func (a *App) DeleteCachedModel(key string) error {
+	if a.modelCache == nil {
+		return errors.New("model cache index unavailable")
+	}
+	if !modelcache.IsSafeKey(key) {
+		a.bus.Warn("app", "rejected unsafe cache key", map[string]any{"key": key})
+		return errors.New("invalid cache key")
+	}
+	if key == a.activeCacheKey() {
+		return errors.New("this model is loaded in the engine — switch to another model first")
+	}
+	if _, ok := a.modelCache.Get(key); !ok {
+		return errors.New("not a cached model")
+	}
+
+	a.cacheMu.Lock()
+	defer a.cacheMu.Unlock()
+	if err := a.deleteManagedModel(a.modelCache.Path(key)); err != nil {
+		return err
+	}
+	if err := a.modelCache.Delete(key); err != nil {
+		return err
+	}
+	a.emitCacheChanged()
+	return nil
+}
+
+// PurgeBaseComponentsCache empties model-cache/, the shared text-encoder/VAE
+// tree the Python engine fills from the CDN. Outside the LRU quota on purpose:
+// those files are shared by every checkpoint of a family, so evicting them
+// automatically would re-download 8–10 GB the next time any of them loads.
+//
+// The engine is stopped first: on Windows RemoveAll over open files fails
+// halfway and leaves a half-destroyed tree, which is worse than refusing.
+func (a *App) PurgeBaseComponentsCache() error {
+	dir, err := sidecar.ModelCacheDir()
+	if err != nil {
+		return err
+	}
+	// Confinement: the path is computed, never supplied — assert it anyway
+	// before handing it to RemoveAll.
+	if filepath.Base(dir) != "model-cache" || !strings.Contains(filepath.ToSlash(dir), "imference-desktop-go") {
+		return errors.New("refusing to purge an unexpected directory")
+	}
+
+	if a.sidecar.IsGenerating() {
+		a.sidecar.WaitForIdle()
+	}
+	a.sidecar.Stop()
+
+	if rerr := os.RemoveAll(dir); rerr != nil {
+		a.bus.Error("app", "purge base components failed", map[string]any{"err": rerr.Error()})
+		return rerr
+	}
+	if merr := os.MkdirAll(dir, 0o755); merr != nil {
+		return merr
+	}
+	a.bus.Info("app", "purged base component cache", map[string]any{"dir": dir})
+	a.emitCacheChanged()
+	return nil
+}
+
+// OpenCacheFolder reveals one of the three known cache directories in the OS
+// file manager. kind is an allow-list, never a path — the frontend can't ask
+// for an arbitrary location.
+func (a *App) OpenCacheFolder(kind string) error {
+	var (
+		dir string
+		err error
+	)
+	switch kind {
+	case "models":
+		dir, err = modelsDir()
+	case "base":
+		dir, err = sidecar.ModelCacheDir()
+	case "engine":
+		dir, err = engineVenvDir()
+	default:
+		return fmt.Errorf("unknown folder %q", kind)
+	}
+	if err != nil {
+		return err
+	}
+	if mkErr := os.MkdirAll(dir, 0o755); mkErr != nil {
+		return mkErr
+	}
+	return a.openFolder(dir)
+}
+
+// openFolder opens a directory in the OS file manager. Unlike RevealInFolder
+// (which highlights one file under the output dir), callers here pass a path we
+// computed ourselves, so there's nothing to confine.
+func (a *App) openFolder(dir string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", dir)
+	case "windows":
+		// explorer exits non-zero even on success; don't treat that as failure.
+		_ = exec.Command("explorer", dir).Start()
+		a.bus.Info("app", "opened folder", map[string]any{"dir": dir})
+		return nil
+	default:
+		cmd = exec.Command("xdg-open", dir)
+	}
+	if err := cmd.Start(); err != nil {
+		a.bus.Warn("app", "open folder failed", map[string]any{"dir": dir, "err": err.Error()})
+		return err
+	}
+	a.bus.Info("app", "opened folder", map[string]any{"dir": dir})
+	return nil
 }
 
 // PickModelFile opens the native file picker filtered to .safetensors and
@@ -938,6 +1714,10 @@ func (a *App) UseCustomModel(path, backendType, baseModel string) (types.Setting
 		BaseModel:   strings.TrimSpace(baseModel),
 		LocalPath:   path,
 		CanLocal:    true,
+		// No catalog row to ask, so the backend decides: whether a checkpoint can
+		// start from a reference image is a property of the pipeline that loads
+		// it, not of the file.
+		RefImages: customRefImages(backendType),
 	}
 
 	s := a.settings.Get()
@@ -1751,6 +2531,20 @@ func engineVenvDir() (string, error) {
 // bound; true completeness of a fresh download is enforced by modelfetch.
 const modelReuseMinBytes = 1_000_000_000
 
+const (
+	// defaultMinFreeBytes is the free-space cushion kept on the cache volume.
+	// Unlike the quota, this is a hard wall: a download that would eat into it
+	// fails before any network call rather than filling the user's disk.
+	defaultMinFreeBytes int64 = 10 << 30 // 10 GiB
+	// minAllowedQuotaBytes floors what the settings UI may set — below this
+	// nothing useful fits and every switch would thrash the cache.
+	minAllowedQuotaBytes int64 = 8 << 30 // 8 GiB
+	// defaultModelSizeEstimate stands in when a HEAD gives no Content-Length.
+	// Deliberately above the largest catalog checkpoint (~7.1 GB) so the
+	// "will it fit" arithmetic errs toward freeing space rather than overfilling.
+	defaultModelSizeEstimate int64 = 8 << 30 // 8 GiB
+)
+
 // modelsDir is where the app caches downloaded model weights. Under
 // UserCacheDir (alongside the engine venv) because they're large, regenerable
 // assets — re-downloadable, not roamable user config.
@@ -1760,25 +2554,6 @@ func modelsDir() (string, error) {
 		return "", fmt.Errorf("locate UserCacheDir: %w", err)
 	}
 	return filepath.Join(cache, "imference-desktop-go", "models"), nil
-}
-
-// sdxlModelPath is the local cache path for a model given its download URL.
-// The filename is derived from the URL's basename so that each distinct model
-// gets its own cache file. This matters: the reuse check is by path+size, so a
-// fixed filename would make swapping models silently re-serve a previously
-// downloaded model that happens to sit at the same path.
-func sdxlModelPath(modelURL string) (string, error) {
-	dir, err := modelsDir()
-	if err != nil {
-		return "", err
-	}
-	name := "model.safetensors" // fallback when the URL has no usable basename
-	if u, perr := url.Parse(modelURL); perr == nil {
-		if base := path.Base(u.Path); base != "" && base != "." && base != "/" && strings.HasSuffix(base, ".safetensors") {
-			name = base
-		}
-	}
-	return filepath.Join(dir, name), nil
 }
 
 // humanBytes renders a byte count as a short string ("6.9 GB"); "?" for a

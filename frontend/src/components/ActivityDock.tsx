@@ -149,17 +149,19 @@ export function ActivityDock({
         title={busy ? t("activity.busy", { count: active.length }) : t("panels.queue")}
         className="fixed bottom-6 right-6 z-40 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        {/* One-shot halo behind the pill, keyed so it replays on every event. */}
+        {/* One-shot halo behind the pill, keyed so it replays on every event.
+            The halo and the pill are siblings, so their keys are namespaced —
+            the bare pulse id on both made every pulse a duplicate-key warning. */}
         {pulse && (
           <span
-            key={pulse.id}
+            key={`halo-${pulse.id}`}
             aria-hidden
             className="dock-ring pointer-events-none absolute inset-0 rounded-2xl"
             style={{ "--dock-ring": RING_COLOR[pulse.kind] } as CSSProperties}
           />
         )}
         <span
-          key={pulse?.id ?? 0}
+          key={`pill-${pulse?.id ?? 0}`}
           className={cn(
             "relative flex items-center gap-2.5 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-xl backdrop-blur transition-colors",
             busy

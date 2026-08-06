@@ -37,9 +37,16 @@ import (
 // tag — not refs/heads/main — so the desktop never silently picks up a drifting
 // main that could break the sidecar.
 //
+// The extras list is deliberately the seven image backends and nothing else.
+// 0.3.4 added a [minimax-h3] extra that needs an unreleased diffusers (PR
+// #14355) and so CANNOT share a venv with the repo-wide diffusers==0.39.0 pin
+// the image backends require — adding it here would break every local model.
+// H3 stays server-side: normalizeEngine doesn't recognise it, so those catalog
+// rows are cloud-only.
+//
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.3.2.tar.gz"
+const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.3.4.tar.gz"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute
@@ -146,43 +153,59 @@ const TorchSpec = "torch>=2.6"
 // only imports it under is_torchvision_available() — without torchvision the
 // forward raises "name 'transforms' is not defined". Pinning it to the same
 // source as torch avoids pip pulling a mismatched CPU wheel from PyPI.
-func torchInstallArgs(g gpu.Info) (args []string, message string) {
+//
+// The returned message carries its i18n key alongside the English text: the
+// renderer owns the display language, so anything the user reads must travel as
+// a key (see prog below).
+func torchInstallArgs(g gpu.Info) (args []string, message types.InstallProgress) {
 	switch {
 	case runtime.GOOS == "darwin":
 		return []string{"install", "--upgrade", TorchSpec, "torchvision"},
-			"Downloading torch + torchvision (Apple Silicon / MPS) from PyPI"
+			prog("torch", "Downloading torch + torchvision (Apple Silicon / MPS) from PyPI", "install.torchMps", nil)
 	case g.Vendor == gpu.VendorAMD && runtime.GOOS == "windows":
 		return []string{"install", "--upgrade", "--no-cache-dir", rocmWinTorchWheel, rocmWinTorchvisionWheel},
-			"Downloading torch + torchvision (AMD ROCm 7.2.1 Windows preview, ~4 GB) — this is the long one"
+			prog("torch", "Downloading torch + torchvision (AMD ROCm 7.2.1 Windows preview, ~4 GB) — this is the long one", "install.torchRocmWin", nil)
 	case g.Vendor == gpu.VendorAMD:
 		return []string{"install", "--upgrade", TorchSpec, "torchvision", "--index-url", TorchIndexURLROCm},
-			"Downloading torch + torchvision (AMD ROCm 6.4, ~4 GB) — this is the long one"
+			prog("torch", "Downloading torch + torchvision (AMD ROCm 6.4, ~4 GB) — this is the long one", "install.torchRocm", nil)
 	default:
 		return []string{"install", "--upgrade", TorchSpec, "torchvision", "--index-url", TorchIndexURL},
-			"Downloading torch + torchvision (CUDA 12.4, ~3 GB) — this is the long one"
+			prog("torch", "Downloading torch + torchvision (CUDA 12.4, ~3 GB) — this is the long one", "install.torchCuda", nil)
 	}
 }
 
+// prog builds a progress event that the renderer can translate: Message is the
+// English text (kept for the log line and as the fallback when a build doesn't
+// know the key yet), MessageKey + MessageArgs are what the UI actually renders.
+// Values in args are pre-formatted — paths, versions and byte sizes read the
+// same in every locale.
+func prog(phase, text, key string, args map[string]string) types.InstallProgress {
+	return types.InstallProgress{Phase: phase, Message: text, MessageKey: key, MessageArgs: args}
+}
+
 // describeGPU renders the detection result for the install log / progress UI.
-func describeGPU(g gpu.Info) string {
+func describeGPU(g gpu.Info) types.InstallProgress {
 	switch g.Vendor {
 	case gpu.VendorNVIDIA, gpu.VendorAMD:
-		s := "Detected GPU: " + g.Name
+		// The GPU name (and VRAM) is one interpolated value so translators get a
+		// single sentence rather than a suffix to bolt on.
+		name := g.Name
 		if g.VRAMGiB > 0 {
-			s += fmt.Sprintf(" (%.0f GiB VRAM)", g.VRAMGiB)
+			name += fmt.Sprintf(" (%.0f GiB VRAM)", g.VRAMGiB)
 		}
+		args := map[string]string{"gpu": name}
+		s := "Detected GPU: " + name
 		if g.Vendor == gpu.VendorAMD {
 			if runtime.GOOS == "windows" {
-				s += " — using AMD's ROCm-for-Windows preview build (Radeon RX 7000/9000 + select Ryzen AI; needs a recent Adrenalin driver)"
-			} else {
-				s += " — using the ROCm torch build"
+				return prog("detect", s+" — using AMD's ROCm-for-Windows preview build (Radeon RX 7000/9000 + select Ryzen AI; needs a recent Adrenalin driver)", "install.gpuAmdWin", args)
 			}
+			return prog("detect", s+" — using the ROCm torch build", "install.gpuAmd", args)
 		}
-		return s
+		return prog("detect", s, "install.gpuFound", args)
 	case gpu.VendorApple:
-		return "Detected Apple Silicon — using the MPS torch build"
+		return prog("detect", "Detected Apple Silicon — using the MPS torch build", "install.gpuApple", nil)
 	default:
-		return "No NVIDIA/AMD GPU detected — installing the default CUDA build (runs CPU-only without one)"
+		return prog("detect", "No NVIDIA/AMD GPU detected — installing the default CUDA build (runs CPU-only without one)", "install.gpuNone", nil)
 	}
 }
 
@@ -287,25 +310,26 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 	// GPU first: the vendor decides the torch wheel source AND (for AMD on
 	// Windows, whose preview wheels are cp312-only) which interpreter is
 	// acceptable.
-	emit(types.InstallProgress{Phase: "detect", Message: "Detecting GPU…"})
+	emit(prog("detect", "Detecting GPU…", "install.detectingGpu", nil))
 	i.bus.Info("installer", "detect phase start", nil)
 	g := gpu.Detect(ctx)
 	i.bus.Info("installer", "gpu detected", map[string]any{
 		"vendor": string(g.Vendor), "name": g.Name, "vramGiB": g.VRAMGiB,
 	})
-	emit(types.InstallProgress{Phase: "detect", Message: describeGPU(g)})
+	emit(describeGPU(g))
 
 	amdWindows := g.Vendor == gpu.VendorAMD && runtime.GOOS == "windows"
 	pySeries := "" // "" = any Python >= 3.10
 	if amdWindows {
 		pySeries = rocmWindowsPythonSeries
 	}
-	pyMsg := "Looking for Python 3.10+ on PATH…"
+	pyMsg := prog("detect", "Looking for Python 3.10+ on PATH…", "install.lookingPython", nil)
 	if amdWindows {
-		pyMsg = "Looking for Python " + rocmWindowsPythonSeries +
-			" on PATH (required by AMD's ROCm-for-Windows torch wheels)…"
+		pyMsg = prog("detect",
+			"Looking for Python "+rocmWindowsPythonSeries+" on PATH (required by AMD's ROCm-for-Windows torch wheels)…",
+			"install.lookingPythonAmd", map[string]string{"series": rocmWindowsPythonSeries})
 	}
-	emit(types.InstallProgress{Phase: "detect", Message: pyMsg})
+	emit(pyMsg)
 	py, err := detectPythonSeries(ctx, pySeries)
 	if err != nil {
 		i.bus.Error("installer", "detect failed", map[string]any{"err": err.Error()})
@@ -313,13 +337,11 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 		return err
 	}
 	i.bus.Info("installer", "detect ok", map[string]any{"path": py.Path, "version": py.Version})
-	emit(types.InstallProgress{
-		Phase:   "detect",
-		Message: fmt.Sprintf("Found Python %s at %s", py.Version, py.Path),
-	})
+	emit(prog("detect", fmt.Sprintf("Found Python %s at %s", py.Version, py.Path),
+		"install.foundPython", map[string]string{"version": py.Version, "path": py.Path}))
 
 	// ----- Phase 2: ensure venv (create if missing, reuse if healthy) -----
-	emit(types.InstallProgress{Phase: "venv", Message: "Checking venv at " + opts.VenvDir})
+	emit(prog("venv", "Checking venv at "+opts.VenvDir, "install.checkingVenv", map[string]string{"dir": opts.VenvDir}))
 	i.bus.Info("installer", "venv phase start", map[string]any{"dir": opts.VenvDir})
 	reused, err := i.ensureVenv(ctx, py.Path, opts.VenvDir, pySeries)
 	if err != nil {
@@ -328,16 +350,16 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 		return err
 	}
 	venvPython := venvPythonPath(opts.VenvDir)
-	venvMsg := "Venv created"
+	venvMsg := prog("venv", "Venv created", "install.venvCreated", nil)
 	if reused {
-		venvMsg = "Venv already present, reusing"
+		venvMsg = prog("venv", "Venv already present, reusing", "install.venvReused", nil)
 	}
 	i.bus.Info("installer", "venv ok", map[string]any{"python": venvPython, "reused": reused})
-	emit(types.InstallProgress{Phase: "venv", Message: venvMsg})
+	emit(venvMsg)
 
 	// ----- Phase 3: pip install torch (CUDA/ROCm on Win/Linux, MPS on macOS) -----
 	torchArgs, torchMsg := torchInstallArgs(g)
-	emit(types.InstallProgress{Phase: "torch", Message: torchMsg})
+	emit(torchMsg)
 	i.bus.Info("installer", "torch phase start", map[string]any{
 		"os": runtime.GOOS, "gpu": string(g.Vendor), "args": torchArgs,
 	})
@@ -345,10 +367,10 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
 		return err
 	}
-	emit(types.InstallProgress{Phase: "torch", Message: "torch installed", PercentEstimate: 100})
+	emit(done100(prog("torch", "torch installed", "install.torchInstalled", nil)))
 
 	// ----- Phase 4: pip install sidecar deps (runqy-python) -----
-	emit(types.InstallProgress{Phase: "sidecar-deps", Message: "Installing runqy-python (stdio protocol)"})
+	emit(prog("sidecar-deps", "Installing runqy-python (stdio protocol)", "install.sidecarDeps", nil))
 	i.bus.Info("installer", "sidecar-deps phase start", map[string]any{"reqs": opts.SidecarRequirementsPath})
 	if err := i.runPip(ctx, venvPython, "sidecar-deps", emit,
 		"install", "-r", opts.SidecarRequirementsPath,
@@ -356,15 +378,15 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
 		return err
 	}
-	emit(types.InstallProgress{Phase: "sidecar-deps", Message: "Sidecar deps installed", PercentEstimate: 100})
+	emit(done100(prog("sidecar-deps", "Sidecar deps installed", "install.sidecarDepsDone", nil)))
 
 	// ----- Phase 5: pip install imference-engine -----
 	engineSpec, editable := resolveEngineSource()
-	engineMsg := "Downloading imference-engine from GitHub"
+	engineMsg := prog("engine", "Downloading imference-engine from GitHub", "install.engineDownload", nil)
 	if editable {
-		engineMsg = "Installing imference-engine from local source (editable)"
+		engineMsg = prog("engine", "Installing imference-engine from local source (editable)", "install.engineEditable", nil)
 	}
-	emit(types.InstallProgress{Phase: "engine", Message: engineMsg})
+	emit(engineMsg)
 	i.bus.Info("installer", "engine phase start", map[string]any{
 		"spec":     engineSpec,
 		"editable": editable,
@@ -378,7 +400,7 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
 		return err
 	}
-	emit(types.InstallProgress{Phase: "engine", Message: "imference-engine installed", PercentEstimate: 100})
+	emit(done100(prog("engine", "imference-engine installed", "install.engineInstalled", nil)))
 
 	// ----- Phase 6: pip install sd-embed (weighted prompts + BREAK keyword) -----
 	// Separate phase BECAUSE sd_embed's setup.py declares unconstrained torch +
@@ -387,8 +409,9 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 	// we just pull the sd_embed module bytes into site-packages and rely on
 	// the engine's existing torch/transformers/ftfy install.
 	emit(types.InstallProgress{
-		Phase:   "extras",
-		Message: "Installing sd-embed (weighted prompts) with --no-deps",
+		Phase:      "extras",
+		Message:    "Installing sd-embed (weighted prompts) with --no-deps",
+		MessageKey: "install.sdEmbed",
 	})
 	i.bus.Info("installer", "extras phase start", map[string]any{"tarball": SDEmbedTarball})
 	if err := i.runPip(ctx, venvPython, "extras", emit,
@@ -399,9 +422,9 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 		i.bus.Warn("installer", "sd-embed install failed; engine will use raw prompts", map[string]any{
 			"err": err.Error(),
 		})
-		emit(types.InstallProgress{Phase: "extras", Message: "sd-embed install failed (non-fatal)"})
+		emit(prog("extras", "sd-embed install failed (non-fatal)", "install.sdEmbedFailed", nil))
 	} else {
-		emit(types.InstallProgress{Phase: "extras", Message: "sd-embed installed", PercentEstimate: 100})
+		emit(done100(prog("extras", "sd-embed installed", "install.sdEmbedDone", nil)))
 	}
 
 	// ----- Phase 7: download SDXL weights (optional) -----
@@ -413,15 +436,14 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 		if modelURL == "" {
 			modelURL = SDXLModelURL
 		}
-		emit(types.InstallProgress{Phase: "model", Message: "Downloading SDXL weights (~6.9 GB)"})
+		emit(prog("model", "Downloading SDXL weights (~6.9 GB)", "install.sdxlWeights", nil))
 		i.bus.Info("installer", "model phase start", map[string]any{"url": modelURL, "dest": opts.ModelPath})
 		reused, derr := modelfetch.New(i.bus).Fetch(ctx, modelURL, opts.ModelPath, sdxlModelMinBytes,
 			func(p modelfetch.Progress) {
-				emit(types.InstallProgress{
-					Phase:           "model",
-					Message:         fmt.Sprintf("Downloading SDXL weights — %s / %s", humanBytes(p.Downloaded), humanBytes(p.Total)),
-					PercentEstimate: p.Percent,
-				})
+				ev := prog("model", fmt.Sprintf("Downloading SDXL weights — %s / %s", humanBytes(p.Downloaded), humanBytes(p.Total)),
+					"install.sdxlWeightsProgress", map[string]string{"done": humanBytes(p.Downloaded), "total": humanBytes(p.Total)})
+				ev.PercentEstimate = p.Percent
+				emit(ev)
 			},
 		)
 		if derr != nil {
@@ -429,12 +451,12 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 			emit(types.InstallProgress{Phase: "error", Error: derr.Error(), Done: true})
 			return derr
 		}
-		msg := "SDXL weights downloaded"
+		msg := prog("model", "SDXL weights downloaded", "install.sdxlWeightsDone", nil)
 		if reused {
-			msg = "SDXL weights already present, reusing"
+			msg = prog("model", "SDXL weights already present, reusing", "install.sdxlWeightsReused", nil)
 		}
 		i.bus.Info("installer", "model ok", map[string]any{"reused": reused, "path": opts.ModelPath})
-		emit(types.InstallProgress{Phase: "model", Message: msg, PercentEstimate: 100})
+		emit(done100(msg))
 	}
 
 	// ----- Done -----
@@ -442,6 +464,8 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 	emit(types.InstallProgress{
 		Phase:           "done",
 		Message:         "Engine ready at " + venvPython,
+		MessageKey:      "install.engineReady",
+		MessageArgs:     map[string]string{"path": venvPython},
 		PercentEstimate: 100,
 		Done:            true,
 	})
@@ -466,12 +490,12 @@ func (i *Installer) reinstallEngineOnly(
 	}
 
 	// Force-uninstall first (best-effort: a missing package is not an error).
-	emit(types.InstallProgress{Phase: "engine", Message: "Removing outdated imference-engine"})
+	emit(prog("engine", "Removing outdated imference-engine", "install.engineRemoving", nil))
 	i.bus.Info("installer", "engine-only: uninstall", nil)
 	_ = i.runPip(ctx, venvPython, "engine", emit, "uninstall", "-y", "imference-engine")
 
 	engineSpec, editable := resolveEngineSource()
-	emit(types.InstallProgress{Phase: "engine", Message: "Installing pinned imference-engine"})
+	emit(prog("engine", "Installing pinned imference-engine", "install.enginePinned", nil))
 	i.bus.Info("installer", "engine-only: install", map[string]any{"spec": engineSpec, "editable": editable})
 	pipArgs := []string{"install"}
 	if editable {
@@ -482,19 +506,23 @@ func (i *Installer) reinstallEngineOnly(
 		emit(types.InstallProgress{Phase: "error", Error: err.Error(), Done: true})
 		return err
 	}
-	emit(types.InstallProgress{Phase: "engine", Message: "imference-engine installed", PercentEstimate: 100})
+	emit(done100(prog("engine", "imference-engine installed", "install.engineInstalled", nil)))
 
 	// sd-embed (weighted prompts) — same best-effort --no-deps as the full install.
-	emit(types.InstallProgress{Phase: "extras", Message: "Installing sd-embed (weighted prompts) with --no-deps"})
+	emit(prog("extras", "Installing sd-embed (weighted prompts) with --no-deps", "install.sdEmbed", nil))
 	if err := i.runPip(ctx, venvPython, "extras", emit, "install", "--no-deps", SDEmbedTarball); err != nil {
 		i.bus.Warn("installer", "sd-embed install failed; engine will use raw prompts", map[string]any{"err": err.Error()})
-		emit(types.InstallProgress{Phase: "extras", Message: "sd-embed install failed (non-fatal)"})
+		emit(prog("extras", "sd-embed install failed (non-fatal)", "install.sdEmbedFailed", nil))
 	} else {
-		emit(types.InstallProgress{Phase: "extras", Message: "sd-embed installed", PercentEstimate: 100})
+		emit(done100(prog("extras", "sd-embed installed", "install.sdEmbedDone", nil)))
 	}
 
 	i.bus.Info("installer", "engine-only reinstall complete", map[string]any{"python": venvPython})
-	emit(types.InstallProgress{Phase: "done", Message: "Engine updated at " + venvPython, PercentEstimate: 100, Done: true})
+	emit(types.InstallProgress{
+		Phase: "done", Message: "Engine updated at " + venvPython,
+		MessageKey: "install.engineUpdated", MessageArgs: map[string]string{"path": venvPython},
+		PercentEstimate: 100, Done: true,
+	})
 	return nil
 }
 
@@ -642,6 +670,8 @@ func (i *Installer) consumePipLines(r io.Reader, phase string, emit func(types.I
 		}
 		i.bus.Trace("installer", line, nil)
 		if pct, ok := parsePipPercent(line); ok {
+			// Raw pip output — deliberately NOT translated (no MessageKey): it's
+			// tool output like the log lines below it, not prose we authored.
 			emit(types.InstallProgress{
 				Phase:           phase,
 				Message:         truncate(line, 120),
@@ -809,4 +839,11 @@ func humanBytes(n int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// done100 marks a phase-complete event (100%), keeping the prog() call sites
+// free of struct-literal noise.
+func done100(p types.InstallProgress) types.InstallProgress {
+	p.PercentEstimate = 100
+	return p
 }

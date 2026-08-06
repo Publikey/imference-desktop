@@ -152,11 +152,92 @@ type apiModel struct {
 	ImCost  int  `json:"im_cost"`
 	ImLocal bool `json:"im_local"`
 	ImCloud bool `json:"im_cloud"`
+	// Source-image capability + audio track. AcceptsImageInput says the model
+	// takes OPTIONAL reference images at all; ImageInputMax is how many (1 = an
+	// img2img source, 2 = first + last frame for video interpolation).
+	// HasAudio marks a video model whose output carries an audio track.
+	//
+	// All three are pointers: an absent field means "this server predates the
+	// column", which refImageSlots must tell apart from an explicit false/0.
+	AcceptsImageInput *bool `json:"accepts_image_input"`
+	ImageInputMax     *int  `json:"image_input_max"`
+	HasAudio          *bool `json:"has_audio"`
 	// Catalog organization — order + family/group for sorting/grouping the list.
 	ModelOrder      int    `json:"model_order"`
 	ModelFamilyCode string `json:"model_family_code"`
 	FamilyName      string `json:"family_name"`
 	ModelGroupCode  string `json:"model_group_code"`
+}
+
+// maxRefImageSlots caps what the catalog can ask the UI to render. Two is the
+// most any model needs today (first + last frame); the clamp is here so a bad
+// catalog value can't produce an absurd form.
+const maxRefImageSlots = 2
+
+// localBackend returns the backend the sidecar would load for this entry, or ""
+// when it isn't being prepared for local use — the same "locally runnable" test
+// ListModels applies: the im_local flag plus downloadable weights and a known
+// engine.
+func localBackend(m apiModel, backend string, forLocal bool) string {
+	if forLocal && m.ImLocal && m.ModelURL != "" && backend != "" {
+		return backend
+	}
+	return ""
+}
+
+// refImageSlots resolves how many reference-image slots a model offers, from
+// the catalog's accepts_image_input (does it take any?) and image_input_max
+// (how many?) — read against WHERE the model will run.
+//
+// localBackend is the normalized backend the sidecar would load, or "" when
+// this entry is being prepared for the cloud. That distinction is the whole
+// point: the catalog flag describes what the HOSTED endpoint is wired to
+// accept, which is not the same question as what the local engine can do.
+//
+//   - Cloud: honour the flag exactly. Offering a slot the API drops would let
+//     someone spend credits on a run that quietly ignored their image. An
+//     absent column (a server predating it) means no.
+//   - Local image backends that do img2img: it's the sidecar's own capability,
+//     available with any checkpoint it can load, so the slot is offered whatever
+//     the catalog says about the hosted endpoint. The flag can only ADD slots.
+//     A backend with no image input at all (Anima) gets none, catalog or not.
+//   - Local video backends: only the catalog separates text-to-video from
+//     image-to-video, so it is authoritative — a t2v model has nothing to do
+//     with a source image. An absent column keeps the historical fallback of
+//     one slot.
+func refImageSlots(m apiModel, localBackend string) int {
+	// What the catalog declares: -1 = the column is absent (server predates it).
+	declared := -1
+	if m.AcceptsImageInput != nil {
+		declared = 0
+		if *m.AcceptsImageInput {
+			declared = 1
+			if m.ImageInputMax != nil && *m.ImageInputMax > 1 {
+				declared = min(*m.ImageInputMax, maxRefImageSlots)
+			}
+		}
+	}
+	if localBackend == "" {
+		if declared < 0 {
+			return 0
+		}
+		return declared
+	}
+	if declared < 0 {
+		declared = 1 // pre-column server: every local model took an img2img source
+	}
+	if IsImageBackend(localBackend) {
+		// An image backend that can't take a reference image has none, whatever
+		// the catalog says about the hosted endpoint (which may well run a
+		// different pipeline than the sidecar does).
+		if !SupportsRefImages(localBackend) {
+			return 0
+		}
+		if declared < 1 {
+			return 1
+		}
+	}
+	return declared
 }
 
 // apiFormat mirrors one im_format row (GET /api/formats).
@@ -213,6 +294,23 @@ func IsImageBackend(name string) bool {
 	return imageBackends[name]
 }
 
+// refImageBackends is the subset of image backends whose LOCAL pipeline can
+// actually start from a reference image. It's the img2img question, not the
+// "can this backend run" question: Anima is a Modular Diffusers text-to-image
+// pipeline with no image input at all, so offering the box on an Anima model
+// (catalog or user checkpoint) promises something the engine cannot do.
+var refImageBackends = map[string]bool{
+	"sdxl": true, "sd15": true, "zimage": true,
+	"flux": true, "chroma": true, "qwenimage": true,
+}
+
+// SupportsRefImages reports whether a normalized local backend accepts a
+// reference image. Video backends answer "" here and are decided by the catalog
+// instead (text-to-video vs image-to-video) — see refImageSlots.
+func SupportsRefImages(backend string) bool {
+	return refImageBackends[backend]
+}
+
 // singleFileBackends is the subset of image backends that load from a single
 // .safetensors checkpoint (with a base repo for the transformer-only ones). This
 // is what the "add custom model" flow supports. Anima is excluded: it's a
@@ -258,7 +356,11 @@ func DefaultBaseModel(backend string) string {
 
 // toModelInfo maps a wire entry to the app's camelCase ModelInfo, normalizing
 // im_engine to the internal backend name and defaulting the Z-Image base repo.
-func toModelInfo(m apiModel) types.ModelInfo {
+//
+// forLocal says which list this entry is being built for. Only reference-image
+// slots differ between the two (see refImageSlots) — the same catalog row can
+// legitimately offer an img2img source locally and none in the cloud.
+func toModelInfo(m apiModel, forLocal bool) types.ModelInfo {
 	backend := normalizeEngine(m.ImEngine)
 	baseModel := m.BaseModel
 	if baseModel == "" {
@@ -288,10 +390,14 @@ func toModelInfo(m apiModel) types.ModelInfo {
 		Cost:              m.ImCost,
 		CanLocal:          m.ImLocal,
 		CanCloud:          m.ImCloud,
-		Order:             m.ModelOrder,
-		FamilyCode:        m.ModelFamilyCode,
-		FamilyName:        m.FamilyName,
-		GroupCode:         m.ModelGroupCode,
+		// Locally runnable = the same test ListModels applies for the local
+		// catalog: the flag plus downloadable weights and a known backend.
+		RefImages:  refImageSlots(m, localBackend(m, backend, forLocal)),
+		HasAudio:   m.HasAudio != nil && *m.HasAudio,
+		Order:      m.ModelOrder,
+		FamilyCode: m.ModelFamilyCode,
+		FamilyName: m.FamilyName,
+		GroupCode:  m.ModelGroupCode,
 	}
 }
 
@@ -332,7 +438,7 @@ func (c *Client) ListModels(ctx context.Context, localOnly bool) ([]types.ModelI
 		} else if !m.ImCloud {
 			continue // not cloud-runnable
 		}
-		mi := toModelInfo(m)
+		mi := toModelInfo(m, localOnly)
 		mi.Formats = formatsByModel[m.ModelCode]
 		out = append(out, mi)
 	}

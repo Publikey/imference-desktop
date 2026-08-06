@@ -55,11 +55,15 @@ const (
 // launch to point elsewhere — or set it empty to fall back to HuggingFace.
 const imageModelCDN = "https://gen-models.ml-cnd-gen.cc/image"
 
-// modelCacheDir is the persistent, symlink-free offline model tree the engine
+// ModelCacheDir is the persistent, symlink-free offline model tree the engine
 // fills from the CDN (IMAGE_MODEL_CACHE / RuntimeConfig.model_cache_dir). Under
 // UserCacheDir alongside the venv + downloaded weights — large, regenerable
 // assets, not roamable user config.
-func modelCacheDir() (string, error) {
+//
+// Exported because the app's storage screen reports its size and offers to
+// purge it: these base components are shared across every checkpoint of a
+// family, so they're kept out of the weights LRU and cleared by hand instead.
+func ModelCacheDir() (string, error) {
 	cache, err := os.UserCacheDir()
 	if err != nil {
 		return "", fmt.Errorf("locate UserCacheDir: %w", err)
@@ -191,7 +195,7 @@ func (m *Manager) engineEnv(env []string) []string {
 		env = append(env, "IMAGE_MODEL_CDN="+imageModelCDN)
 	}
 	if _, ok := os.LookupEnv("IMAGE_MODEL_CACHE"); !ok {
-		if dir, err := modelCacheDir(); err != nil {
+		if dir, err := ModelCacheDir(); err != nil {
 			m.bus.Warn("sidecar", "model cache dir unavailable; engine may re-fetch base-components each boot", map[string]any{"err": err.Error()})
 		} else {
 			env = append(env, "IMAGE_MODEL_CACHE="+dir)

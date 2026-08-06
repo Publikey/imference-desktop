@@ -46,6 +46,18 @@ export function ClearLogs(): $CancellablePromise<void> {
 }
 
 /**
+ * DeleteCachedModel removes one downloaded checkpoint on the user's request.
+ * Refuses the active model — the engine has it mmap'd, so the delete would fail
+ * on Windows anyway, and a clear message beats a sharing violation.
+ * 
+ * key is the only untrusted input reaching the filesystem here: it's validated,
+ * then joined, then confined by deleteManagedModel's guard.
+ */
+export function DeleteCachedModel(key: string): $CancellablePromise<void> {
+    return $Call.ByID(3530267161, key);
+}
+
+/**
  * DeleteSavedImage removes one file from the output folder. Destructive — the
  * renderer confirms first.
  */
@@ -60,6 +72,32 @@ export function DeleteSavedImage(name: string): $CancellablePromise<void> {
  */
 export function DetectPython(): $CancellablePromise<types$0.PythonInfo> {
     return $Call.ByID(425866076);
+}
+
+/**
+ * DropPendingCloudJob forgets a persisted cloud job on the user's request — the
+ * manual escape hatch for a row wedged on "Running in the cloud…" (a request_id
+ * the server will never resolve). It does NOT cancel anything server-side; the
+ * result, if one ever lands, stays retrievable by request_id. Any resume already
+ * in flight is left to finish harmlessly: it will simply find no record to drop.
+ */
+export function DropPendingCloudJob(jobID: string): $CancellablePromise<void> {
+    return $Call.ByID(2597586911, jobID);
+}
+
+/**
+ * EnsureLocalModel activates a model whose weights are ALREADY on disk, and
+ * reports false without touching anything when they aren't.
+ * 
+ * This is what the generate path calls: picking a cached model and hitting
+ * Generate should just work (the engine restart is the app's problem, not the
+ * user's), while starting a multi-GB download stays a deliberate, explicitly
+ * clicked act. A miss here means the file was evicted, deleted by hand, or the
+ * catalog re-pointed the model at new weights — all cases where the caller must
+ * fall back to SelectLocalModel, which downloads.
+ */
+export function EnsureLocalModel(modelCode: string): $CancellablePromise<boolean> {
+    return $Call.ByID(2950114299, modelCode);
 }
 
 /**
@@ -136,6 +174,15 @@ export function GetEngineInfo(): $CancellablePromise<types$0.EngineInfo> {
 }
 
 /**
+ * GetFolderSizes walks the three cache trees. SLOW — the engine venv alone is
+ * tens of thousands of files — so it's deliberately separate from
+ * GetStorageInfo and the UI resolves it after painting.
+ */
+export function GetFolderSizes(): $CancellablePromise<types$0.FolderSizes> {
+    return $Call.ByID(55724427);
+}
+
+/**
  * GetLogs returns the current ring buffer snapshot so the renderer can
  * seed its panel on mount. Subsequent entries arrive via the "log:entry"
  * event.
@@ -160,6 +207,13 @@ export function GetSettings(): $CancellablePromise<types$0.Settings> {
 
 export function GetSidecarStatus(): $CancellablePromise<types$0.SidecarStatus> {
     return $Call.ByID(314904788);
+}
+
+/**
+ * GetStorageInfo is the cheap storage readout: index totals plus one syscall.
+ */
+export function GetStorageInfo(): $CancellablePromise<types$0.StorageInfo> {
+    return $Call.ByID(3330596760);
 }
 
 /**
@@ -198,6 +252,15 @@ export function ImportWallet(privateKeyHex: string): $CancellablePromise<string>
  */
 export function InstallEngine(): $CancellablePromise<void> {
     return $Call.ByID(1246353242);
+}
+
+/**
+ * ListCachedModels returns the downloaded checkpoints, most recently used
+ * first. Served straight from the index — no disk walk, safe to call on every
+ * picker open.
+ */
+export function ListCachedModels(): $CancellablePromise<types$0.CachedModel[] | null> {
+    return $Call.ByID(200825589);
 }
 
 /**
@@ -246,11 +309,33 @@ export function LogFromFrontend(level: string, source: string, message: string, 
 }
 
 /**
+ * OpenCacheFolder reveals one of the three known cache directories in the OS
+ * file manager. kind is an allow-list, never a path — the frontend can't ask
+ * for an arbitrary location.
+ */
+export function OpenCacheFolder(kind: string): $CancellablePromise<void> {
+    return $Call.ByID(1027032673, kind);
+}
+
+/**
  * PickModelFile opens the native file picker filtered to .safetensors and
  * returns the chosen absolute path, or "" when the user cancels.
  */
 export function PickModelFile(): $CancellablePromise<string> {
     return $Call.ByID(3611692075);
+}
+
+/**
+ * PurgeBaseComponentsCache empties model-cache/, the shared text-encoder/VAE
+ * tree the Python engine fills from the CDN. Outside the LRU quota on purpose:
+ * those files are shared by every checkpoint of a family, so evicting them
+ * automatically would re-download 8–10 GB the next time any of them loads.
+ * 
+ * The engine is stopped first: on Windows RemoveAll over open files fails
+ * halfway and leaves a half-destroyed tree, which is worse than refusing.
+ */
+export function PurgeBaseComponentsCache(): $CancellablePromise<void> {
+    return $Call.ByID(3351197237);
 }
 
 /**
@@ -315,10 +400,14 @@ export function SelectCloudModel(modelCode: string): $CancellablePromise<void> {
 }
 
 /**
- * SelectLocalModel downloads the chosen model's weights, deletes the previously
- * downloaded model (only after the new one lands), persists the selection, and
- * restarts the sidecar so the new weights load. Returns immediately; progress
- * streams on the "model:progress" event ({phase:"done"|"error"} terminates).
+ * SelectLocalModel makes the chosen model active, downloading its weights only
+ * when they aren't already cached, then restarts the sidecar so they load.
+ * Returns immediately; progress streams on the "model:progress" event
+ * ({phase:"done"|"error"} terminates).
+ * 
+ * Previously downloaded models are KEPT (up to the cache quota), so coming back
+ * to one is a restart rather than a multi-GB re-download. Making room, when
+ * needed, evicts least-recently-used models — never the active one.
  */
 export function SelectLocalModel(modelCode: string): $CancellablePromise<void> {
     return $Call.ByID(441193013, modelCode);

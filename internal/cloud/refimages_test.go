@@ -5,11 +5,11 @@ import "testing"
 func boolp(b bool) *bool { return &b }
 func intp(n int) *int    { return &n }
 
-// Reference-image slots are read against WHERE the model runs. The catalog's
-// accepts_image_input describes the HOSTED endpoint's wiring, so it is
-// authoritative for cloud runs and for telling local t2v from i2v — but it must
-// not retire local img2img, which is the sidecar's own capability with any
-// checkpoint it can load.
+// Reference-image slots are read against WHERE the model runs. Cloud runs get
+// none at all for now (local-only feature), and locally the catalog's
+// accepts_image_input — which describes the HOSTED endpoint's wiring — decides
+// t2v from i2v but must not retire local img2img, the sidecar's own capability
+// with any checkpoint it can load.
 func TestRefImageSlots(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -19,14 +19,18 @@ func TestRefImageSlots(t *testing.T) {
 		want         int
 	}{
 		{"columns absent, local model keeps img2img", nil, nil, "sdxl", 1},
-		{"columns absent, cloud model offers none", nil, nil, "", 0},
+		// Cloud is gated off entirely for now — the catalog's answer, whatever it
+		// is, must not put a slot in front of a paying user.
+		{"cloud offers none, columns absent", nil, nil, "", 0},
+		{"cloud offers none, catalog says false", boolp(false), nil, "", 0},
+		{"cloud offers none, catalog says true", boolp(true), nil, "", 0},
+		{"cloud offers none, catalog declares two", boolp(true), intp(2), "", 0},
 		// The regression this guards: the catalog marks most models
 		// accepts_image_input=false because the hosted endpoint takes no init
 		// image, which said nothing about running them locally — and silently
 		// removed the img2img box for every local model.
 		{"explicit false still leaves local img2img", boolp(false), nil, "sdxl", 1},
 		{"explicit false with a stale max still leaves one", boolp(false), intp(2), "sdxl", 1},
-		{"explicit false means none in the cloud", boolp(false), nil, "", 0},
 		// Video is the case the flag really decides locally: a text-to-video
 		// model has nothing to do with a source image.
 		{"local text-to-video takes no image", boolp(false), nil, "wan", 0},
@@ -40,7 +44,6 @@ func TestRefImageSlots(t *testing.T) {
 		{"true with no max means one slot", boolp(true), nil, "sdxl", 1},
 		{"true with max 1", boolp(true), intp(1), "sdxl", 1},
 		{"true with max 2 — first + last frame", boolp(true), intp(2), "sdxl", 2},
-		{"a cloud model may declare two", boolp(true), intp(2), "", 2},
 		{"max clamped to what the UI can render", boolp(true), intp(9), "sdxl", maxRefImageSlots},
 		{"nonsense max falls back to one", boolp(true), intp(0), "sdxl", 1},
 		{"negative max falls back to one", boolp(true), intp(-3), "sdxl", 1},
@@ -72,8 +75,8 @@ func TestToModelInfoRefImages(t *testing.T) {
 			true, 1,
 		},
 		{
-			"the same row in the cloud list → the catalog's answer",
-			apiModel{ImLocal: true, ModelURL: "https://cdn/x.safetensors", ImEngine: "sdxl", AcceptsImageInput: boolp(false)},
+			"the same row in the cloud list → none, cloud is gated off",
+			apiModel{ImLocal: true, ModelURL: "https://cdn/x.safetensors", ImEngine: "sdxl", AcceptsImageInput: boolp(true)},
 			false, 0,
 		},
 		{
@@ -92,9 +95,9 @@ func TestToModelInfoRefImages(t *testing.T) {
 			true, 0,
 		},
 		{
-			"an explicit capability always wins",
+			"a cloud-only model gets no slot however it's declared",
 			apiModel{ImLocal: false, AcceptsImageInput: boolp(true), ImageInputMax: intp(2)},
-			false, 2,
+			false, 0,
 		},
 	}
 	for _, c := range cases {

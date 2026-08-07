@@ -96,9 +96,9 @@ type FolderSizes struct {
 // latest GitHub release. URL is the release page to open in the browser —
 // there is no in-app download (the app isn't code-signed yet).
 type UpdateInfo struct {
-	CurrentVersion  string `json:"currentVersion"`            // "dev" or "X.X.X"
-	LatestVersion   string `json:"latestVersion,omitempty"`   // "X.X.X" (tag without v)
-	URL             string `json:"url,omitempty"`             // release page html_url
+	CurrentVersion  string `json:"currentVersion"`          // "dev" or "X.X.X"
+	LatestVersion   string `json:"latestVersion,omitempty"` // "X.X.X" (tag without v)
+	URL             string `json:"url,omitempty"`           // release page html_url
 	UpdateAvailable bool   `json:"updateAvailable"`
 }
 
@@ -150,27 +150,32 @@ type WanRuntimeSettings struct {
 // picker. Only models with a non-empty ModelURL can run locally — the rest are
 // cloud-only / proprietary (Flux, GPT-Image, Veo, Wan video, …).
 type ModelInfo struct {
-	ModelCode         string  `json:"modelCode"`
-	Name              string  `json:"name"`
-	ShortDescription  string  `json:"shortDescription"`
-	MediumDescription string  `json:"mediumDescription"`
-	Image             string  `json:"image"`    // thumbnail URL
-	ModelURL          string  `json:"modelUrl"` // downloadable .safetensors ("" = cloud-only)
+	ModelCode         string `json:"modelCode"`
+	Name              string `json:"name"`
+	ShortDescription  string `json:"shortDescription"`
+	MediumDescription string `json:"mediumDescription"`
+	Image             string `json:"image"`    // thumbnail URL
+	ModelURL          string `json:"modelUrl"` // downloadable .safetensors ("" = cloud-only)
 	// LocalPath is the absolute path of a user-supplied checkpoint (custom
 	// model added via UseCustomModel). Non-empty = custom: no catalog entry,
 	// no download — the sidecar loads this file directly.
-	LocalPath string `json:"localPath,omitempty"`
-	PromptPre         string  `json:"promptPre"`
-	PromptNegative    string  `json:"promptNegative"`
-	StepsDefault      int     `json:"stepsDefault"`
-	StepsMin          int     `json:"stepsMin"`
-	StepsMax          int     `json:"stepsMax"`
-	CfgDefault        float64 `json:"cfgDefault"`
-	CfgMin            float64 `json:"cfgMin"`
-	CfgMax            float64 `json:"cfgMax"`
-	SkipDefault       int     `json:"skipDefault"` // clip-skip
-	SchedulerDefault  string  `json:"schedulerDefault"`
-	FormatCode        string  `json:"formatCode"`
+	LocalPath        string  `json:"localPath,omitempty"`
+	PromptPre        string  `json:"promptPre"`
+	PromptNegative   string  `json:"promptNegative"`
+	// Steps / cfg / clip-skip bounds, straight from the catalog. A nil Default
+	// is the catalog saying the model has no such knob — the form then offers no
+	// control for it, rather than a slider that moves nothing (gpt-image-1
+	// publishes neither steps nor cfg; minimax-h3 no cfg). Same contract as the
+	// Duration trio below.
+	StepsDefault     *int     `json:"stepsDefault,omitempty"`
+	StepsMin         *int     `json:"stepsMin,omitempty"`
+	StepsMax         *int     `json:"stepsMax,omitempty"`
+	CfgDefault       *float64 `json:"cfgDefault,omitempty"`
+	CfgMin           *float64 `json:"cfgMin,omitempty"`
+	CfgMax           *float64 `json:"cfgMax,omitempty"`
+	SkipDefault      *int     `json:"skipDefault,omitempty"` // clip-skip
+	SchedulerDefault string  `json:"schedulerDefault"`
+	FormatCode       string  `json:"formatCode"`
 	// BackendType is the internal engine backend, normalized from the catalog's
 	// im_engine field, one of the image backends (sdxl, sd15, zimage, flux,
 	// chroma, qwenimage, anima) or "wan". (im_engine "external" and null
@@ -202,6 +207,15 @@ type ModelInfo struct {
 	// (catalog has_audio). Carried through for the UI to surface; nothing in the
 	// generation path depends on it.
 	HasAudio bool `json:"hasAudio,omitempty"`
+	// ModelType is what the model produces: "image" or "video". Resolved on the
+	// Go side (catalog model_type, else the engine) so the UI never guesses.
+	ModelType string `json:"modelType,omitempty"`
+	// Duration controls (seconds) for video models that let the caller pick a
+	// clip length. A nil Default means the model has no such control — the
+	// composer then offers nothing, rather than a slider that changes nothing.
+	DurationDefault *float64 `json:"durationDefault,omitempty"`
+	DurationMin     *float64 `json:"durationMin,omitempty"`
+	DurationMax     *float64 `json:"durationMax,omitempty"`
 	// Formats are the model's supported resolutions/ratios (im_format). Empty
 	// when the catalog has none — the UI then falls back to generic formats.
 	Formats []FormatOption `json:"formats,omitempty"`
@@ -209,7 +223,11 @@ type ModelInfo struct {
 	Order      int    `json:"order,omitempty"`
 	FamilyCode string `json:"familyCode,omitempty"`
 	FamilyName string `json:"familyName,omitempty"`
-	GroupCode  string `json:"groupCode,omitempty"`
+	// FamilyOrder is the catalog's display rank for the family. The picker uses
+	// it to order the groups it builds from families — cloud-only models with no
+	// local backend to group by.
+	FamilyOrder int    `json:"familyOrder,omitempty"`
+	GroupCode   string `json:"groupCode,omitempty"`
 }
 
 // FormatOption is one supported resolution/ratio for a model (from im_format).
@@ -220,6 +238,10 @@ type FormatOption struct {
 	Height     int    `json:"height"`
 	Ratio      string `json:"ratio,omitempty"`
 	IsDefault  bool   `json:"isDefault"`
+	// CreditMultiplier scales the model's per-run price for this format (1 = SD,
+	// 2 = HD). nil = no surcharge. The composer shows the resulting price, so it
+	// applies the same formula the server bills with.
+	CreditMultiplier *float64 `json:"creditMultiplier,omitempty"`
 }
 
 // WalletInfo is what the renderer sees when it asks about the wallet
@@ -272,6 +294,12 @@ type GenerationRequest struct {
 	// raw base64 — the sidecar client strips any data-URL prefix. Empty = text2img.
 	SourceImage string `json:"sourceImage,omitempty"`
 	// Strength is the img2img denoising strength (0 = keep source, 1 = ignore it).
+	// FormatCode is the format the user selected; the cloud price depends on it.
+	FormatCode string `json:"formatCode,omitempty"`
+	// DurationS is the requested clip length in seconds — cloud video models
+	// that publish duration bounds. Ignored by the local sidecar, whose
+	// generate() takes no such kwarg.
+	DurationS float64 `json:"durationS,omitempty"`
 	// Only meaningful with SourceImage set. 0/unset → engine default (0.75). In
 	// img2img the output size is derived from the source image (Width/Height ignored).
 	Strength float64 `json:"strength,omitempty"`

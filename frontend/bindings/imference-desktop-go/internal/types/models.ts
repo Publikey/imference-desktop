@@ -133,6 +133,13 @@ export interface FormatOption {
     "height": number;
     "ratio"?: string;
     "isDefault": boolean;
+
+    /**
+     * CreditMultiplier scales the model's per-run price for this format (1 = SD,
+     * 2 = HD). nil = no surcharge. The composer shows the resulting price, so it
+     * applies the same formula the server bills with.
+     */
+    "creditMultiplier"?: number | null;
 }
 
 /**
@@ -260,6 +267,18 @@ export interface GenerationRequest {
 
     /**
      * Strength is the img2img denoising strength (0 = keep source, 1 = ignore it).
+     * FormatCode is the format the user selected; the cloud price depends on it.
+     */
+    "formatCode"?: string;
+
+    /**
+     * DurationS is the requested clip length in seconds — cloud video models
+     * that publish duration bounds. Ignored by the local sidecar, whose
+     * generate() takes no such kwarg.
+     */
+    "durationS"?: number;
+
+    /**
      * Only meaningful with SourceImage set. 0/unset → engine default (0.75). In
      * img2img the output size is derived from the source image (Width/Height ignored).
      */
@@ -362,17 +381,25 @@ export interface ModelInfo {
     "localPath"?: string;
     "promptPre": string;
     "promptNegative": string;
-    "stepsDefault": number;
-    "stepsMin": number;
-    "stepsMax": number;
-    "cfgDefault": number;
-    "cfgMin": number;
-    "cfgMax": number;
+
+    /**
+     * Steps / cfg / clip-skip bounds, straight from the catalog. A nil Default
+     * is the catalog saying the model has no such knob — the form then offers no
+     * control for it, rather than a slider that moves nothing (gpt-image-1
+     * publishes neither steps nor cfg; minimax-h3 no cfg). Same contract as the
+     * Duration trio below.
+     */
+    "stepsDefault"?: number | null;
+    "stepsMin"?: number | null;
+    "stepsMax"?: number | null;
+    "cfgDefault"?: number | null;
+    "cfgMin"?: number | null;
+    "cfgMax"?: number | null;
 
     /**
      * clip-skip
      */
-    "skipDefault": number;
+    "skipDefault"?: number | null;
     "schedulerDefault": string;
     "formatCode": string;
 
@@ -426,6 +453,21 @@ export interface ModelInfo {
     "hasAudio"?: boolean;
 
     /**
+     * ModelType is what the model produces: "image" or "video". Resolved on the
+     * Go side (catalog model_type, else the engine) so the UI never guesses.
+     */
+    "modelType"?: string;
+
+    /**
+     * Duration controls (seconds) for video models that let the caller pick a
+     * clip length. A nil Default means the model has no such control — the
+     * composer then offers nothing, rather than a slider that changes nothing.
+     */
+    "durationDefault"?: number | null;
+    "durationMin"?: number | null;
+    "durationMax"?: number | null;
+
+    /**
      * Formats are the model's supported resolutions/ratios (im_format). Empty
      * when the catalog has none — the UI then falls back to generic formats.
      */
@@ -437,6 +479,13 @@ export interface ModelInfo {
     "order"?: number;
     "familyCode"?: string;
     "familyName"?: string;
+
+    /**
+     * FamilyOrder is the catalog's display rank for the family. The picker uses
+     * it to order the groups it builds from families — cloud-only models with no
+     * local backend to group by.
+     */
+    "familyOrder"?: number;
     "groupCode"?: string;
 }
 

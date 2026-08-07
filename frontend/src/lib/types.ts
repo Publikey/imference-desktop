@@ -130,13 +130,19 @@ export type ModelInfo = {
   localPath?: string;
   promptPre: string;
   promptNegative: string;
-  stepsDefault: number;
-  stepsMin: number;
-  stepsMax: number;
-  cfgDefault: number;
-  cfgMin: number;
-  cfgMax: number;
-  skipDefault: number;
+  /**
+   * Sampling bounds from the catalog. A missing default is the catalog saying
+   * the model has no such knob — gpt-image-1 publishes neither steps nor cfg,
+   * minimax-h3 no cfg — and the form then offers no control rather than a
+   * slider that moves nothing. Same contract as durationDefault below.
+   */
+  stepsDefault?: number;
+  stepsMin?: number;
+  stepsMax?: number;
+  cfgDefault?: number;
+  cfgMin?: number;
+  cfgMax?: number;
+  skipDefault?: number;
   schedulerDefault: string;
   formatCode: string;
   /** Engine backend: "sdxl" (default) or "zimage". Empty treated as "sdxl". */
@@ -157,12 +163,25 @@ export type ModelInfo = {
   refImages?: number;
   /** Video model whose output carries an audio track (catalog has_audio). */
   hasAudio?: boolean;
+  /** What the model produces: "image" | "video". Resolved by the Go side. */
+  modelType?: string;
+  /**
+   * Clip length controls, in seconds. A missing durationDefault is the catalog
+   * saying this model has NO duration knob (an image model, or a video model of
+   * fixed length) — the composer then offers nothing rather than a slider that
+   * changes nothing.
+   */
+  durationDefault?: number;
+  durationMin?: number;
+  durationMax?: number;
   /** Supported resolutions/ratios (im_format). Empty → generic fallback. */
   formats?: FormatOption[];
   /** Catalog organization (im_model family/group) for sorting/grouping. */
   order?: number;
   familyCode?: string;
   familyName?: string;
+  /** Display rank of the family — orders the picker's cloud-family groups. */
+  familyOrder?: number;
   groupCode?: string;
 };
 
@@ -174,6 +193,8 @@ export type FormatOption = {
   height: number;
   ratio?: string;
   isDefault: boolean;
+  /** Scales the model's per-run price for this format (1 = SD, 2 = HD). */
+  creditMultiplier?: number;
 };
 
 export type PaymentMode = "bearer" | "x402";
@@ -211,6 +232,11 @@ export type GenerationRequest = {
   sourceImage?: string;
   /** Denoising strength 0–1 (0 keeps the reference, 1 ignores it). Only with a reference image. */
   strength?: number;
+  /** Clip length in seconds — cloud video models that publish duration bounds.
+   *  The local sidecar takes no such kwarg, so it is never sent there. */
+  durationS?: number;
+  /** The format the user picked. Cloud pricing depends on it (credit_multiplier). */
+  formatCode?: string;
 };
 
 /** Per-step local generation progress, from the "generate:progress" event. */

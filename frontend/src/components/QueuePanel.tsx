@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Check, Clock, Cloud, Cpu, Loader2, Sparkles, Square, X } from "lucide-react";
 import { ProgressBar } from "@/components/ui/progress";
+import { HoverPopover } from "@/components/ui/hover-popover";
 import { cn } from "@/lib/utils";
 import type { GenerationMeta, Job } from "@/lib/types";
 
@@ -130,7 +131,6 @@ function QueueRow({
         job.status === "error" && "border-destructive/30 bg-destructive/5",
         queued && "border-dashed"
       )}
-      title={job.prompt}
     >
       <div className="flex items-start gap-2.5">
         {/* Leading visual: image once done, else a state glyph (ring while
@@ -172,7 +172,13 @@ function QueueRow({
         )}
 
         <div className="min-w-0 flex-1">
-          <p className={cn("truncate text-xs font-medium leading-5", queued && "text-muted-foreground")}>
+          {/* The title moved off the <li> and onto the prompt: it describes the
+              prompt, and leaving it on the row made a second, slower tooltip
+              race the error popover below. */}
+          <p
+            className={cn("truncate text-xs font-medium leading-5", queued && "text-muted-foreground")}
+            title={job.prompt}
+          >
             {job.prompt}
           </p>
           <p
@@ -182,7 +188,11 @@ function QueueRow({
             )}
           >
             <ModeIcon className="size-3 shrink-0" />
-            <span className="truncate">{job.status === "error" ? job.error : statusLine}</span>
+            {/* Engine and cloud errors run long and are the one thing worth
+                reading in full — reveal what the truncation cut off. */}
+            <HoverPopover content={job.status === "error" ? job.error ?? "" : ""} className="truncate">
+              {job.status === "error" ? job.error : statusLine}
+            </HoverPopover>
             {running && elapsed && (
               <span className="text-muted-foreground/60 ml-auto shrink-0">{elapsed}</span>
             )}

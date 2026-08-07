@@ -170,11 +170,13 @@
     "wan-square": "方形",
     "wan-portrait": "竖版",
     "wan-landscape": "横版",
+    "freeDims": "自定义尺寸",
     "custom": "自定义"
   },
   "params": {
     "title": "参数",
-    "summary": "{{dims}} · {{steps}} 步 · cfg {{cfg}}",
+    "summarySteps": "{{steps}} 步",
+    "summaryCfg": "cfg {{cfg}}",
     "format": "画幅",
     "width": "宽度",
     "height": "高度",
@@ -183,8 +185,11 @@
     "seed": "种子",
     "random": "随机",
     "advanced": "高级 · 仅本地",
+    "duration": "视频时长",
+    "seconds_other": "{{count}} 秒",
     "clipSkip": "Clip skip",
     "scheduler": "调度器",
+    "fixedByModel": "该模型固定此值",
     "modelDefault": "模型默认",
     "reset": "重置为模型默认值"
   },
@@ -247,6 +252,8 @@
     "columns": "列数",
     "columns_other": "{{count}} 列",
     "seed": "种子 {{seed}}",
+    "mute": "静音",
+    "unmute": "取消静音 — 会静音其他正在播放的图块",
     "deleteImage": "删除图片",
     "search": "搜索提示词…",
     "counter": "{{i}} / {{n}}",
@@ -320,8 +327,12 @@
     "cost": "{{cost}} 积分",
     "removeTitle": "从列表中移除（不会删除文件）",
     "removeAria": "移除自定义模型",
+    "media": {
+      "all": "全部",
+      "image": "图像",
+      "video": "视频"
+    },
     "typeCloudApi": "云端 API",
-    "typeOther": "其他",
     "costUsd": "${{usd}}",
     "badgeCached": "已下载"
   },
@@ -437,6 +448,7 @@
     "phaseError": "出错",
     "badgeInstalling": "安装中",
     "badgeError": "出错",
+    "badgeIncomplete": "引擎缺失 — 正在修复",
     "badgeInstalled": "已安装",
     "badgeNotInstalled": "未安装",
     "startingMsg": "启动中…",

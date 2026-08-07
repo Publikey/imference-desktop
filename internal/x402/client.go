@@ -120,7 +120,53 @@ func New(signer *wallet.Wallet) *Client {
 	}
 }
 
-// Do executes req. If the server returns 402, it parses the body, signs
+// log returns the configured logger, or a no-op one.
+func (c *Client) log() Logger {
+	if c.Logger == nil {
+		return nopLogger{}
+	}
+	return c.Logger
+}
+
+// InsufficientFundsError says the wallet cannot cover a run, with both numbers
+// the user needs: what it costs and what they hold. Typed so the caller can
+// recognise it — every other x402 failure is a protocol or network problem, and
+// this one is neither.
+type InsufficientFundsError struct {
+	Required  *big.Int // atomic USDC units
+	Available *big.Int
+}
+
+func (e *InsufficientFundsError) Error() string {
+	return fmt.Sprintf(
+		"not enough USDC: this run costs $%s but the wallet holds $%s — top it up to generate",
+		wallet.FormatUSDC(e.Required), wallet.FormatUSDC(e.Available),
+	)
+}
+
+// ensureFunds reports whether the signer can cover `required` atomic units.
+//
+// A balance the chain won't tell us about is NOT treated as insufficient: an RPC
+// blip must not block a payment that would have gone through. The settlement
+// itself remains the authority — this only converts the one failure we can
+// explain into a sentence the user can act on.
+func (c *Client) ensureFunds(ctx context.Context, required *big.Int, force bool) error {
+	if c.Signer == nil || required == nil {
+		return nil
+	}
+	available, err := wallet.USDCBalanceAtomic(ctx, c.Signer.Address(), force)
+	if err != nil {
+		c.log().Warn("x402", "balance check unavailable — letting the payment proceed",
+			map[string]any{"err": err.Error()})
+		return nil
+	}
+	if available.Cmp(required) >= 0 {
+		return nil
+	}
+	return &InsufficientFundsError{Required: new(big.Int).Set(required), Available: new(big.Int).Set(available)}
+}
+
+// Do executes req. If the server returns 402, it parses the body, signs// Do executes req. If the server returns 402, it parses the body, signs
 // an EIP-3009 authorization, attaches the X-PAYMENT header, and reissues
 // the request. The returned response is the FINAL response — either the
 // success after the retry, or a non-402 error from the first call, or a
@@ -185,6 +231,16 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 			value.String(), c.MaxAmount.String())
 	}
 
+	// Can this wallet actually pay? Signing an EIP-3009 authorization is an
+	// OFFLINE operation: it succeeds with an empty wallet, the header goes out
+	// looking perfectly valid, and the failure only surfaces when the
+	// facilitator tries to settle — as an opaque 500 from the generate call,
+	// with nothing pointing at the balance. Ask before signing, so the user is
+	// told what's wrong instead of what broke.
+	if err := c.ensureFunds(req.Context(), value, false); err != nil {
+		return nil, err
+	}
+
 	signed, err := c.Signer.SignEIP3009(wallet.SignEIP3009Params{
 		PayTo:             common.HexToAddress(pick.PayTo),
 		Value:             value,
@@ -236,6 +292,19 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		body, _ := io.ReadAll(io.LimitReader(resp2.Body, 512))
 		resp2.Body.Close()
 		return nil, fmt.Errorf("x402: still 402 after payment: %s", string(body))
+	}
+	// Settlement rejected. The pre-check ran against a cached balance (10 s), so
+	// a withdrawal in between still lands here — re-ask the chain before letting
+	// an opaque status code stand in for "you're out of USDC".
+	if resp2.StatusCode >= 400 {
+		if err := c.ensureFunds(req.Context(), value, true); err != nil {
+			body, _ := io.ReadAll(io.LimitReader(resp2.Body, 512))
+			resp2.Body.Close()
+			logger.Warn("x402", "payment failed and the wallet is short", map[string]any{
+				"status": resp2.StatusCode, "body": string(body),
+			})
+			return nil, err
+		}
 	}
 	logger.Info("x402", "retry succeeded", map[string]any{"status": resp2.StatusCode})
 	return resp2, nil

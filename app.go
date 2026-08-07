@@ -563,8 +563,8 @@ func (a *App) resumePendingCloud() {
 }
 
 // pendingCloudMaxAge bounds how long a pending record may survive unresolved.
-// Each resume attempt is capped (10 min image / 20 min video), but nothing
-// capped the job's TOTAL life: a request_id the server answers 404 for forever
+// Each resume attempt is capped (cloud.pollBudget), but nothing capped the job's
+// TOTAL life: a request_id the server answers 404 for forever
 // (a run dropped from the queue) reads as "not ready yet", so the record was
 // retried on every launch and its Activity row stayed "Running in the cloud…"
 // indefinitely. 6 h is far beyond any real queue wait, and short enough that a
@@ -604,7 +604,7 @@ func (a *App) resumeOne(job types.PendingCloudJob) {
 	if job.Rail != "x402" {
 		apiKey = a.settings.Get().APIKey
 	}
-	result, err := a.cloud.Resume(a.ctx, job.Rail, apiKey, job.RequestID, job.Kind)
+	result, err := a.cloud.Resume(a.ctx, job.Rail, apiKey, job.RequestID)
 	if err != nil {
 		if cloud.IsTerminal(err) {
 			a.dropPendingCloud(job.JobID)
@@ -733,8 +733,8 @@ func (a *App) applyLocalModelConfig(req *types.GenerationRequest) {
 		if req.Scheduler == "" {
 			req.Scheduler = m.SchedulerDefault
 		}
-		if req.ClipSkip == nil && m.SkipDefault > 0 {
-			skip := m.SkipDefault
+		if req.ClipSkip == nil && m.SkipDefault != nil && *m.SkipDefault > 0 {
+			skip := *m.SkipDefault
 			req.ClipSkip = &skip
 		}
 	}
@@ -1014,6 +1014,22 @@ func customRefImages(backendType string) int {
 	return 0
 }
 
+// Generic sampling bounds for user checkpoints. The catalog publishes these per
+// model; a custom file has no row to ask, so we state them here rather than let
+// the form invent them. They must stay set: a nil default now means "this model
+// has no such knob", which would take the sliders away from a checkpoint that
+// very much needs them.
+var (
+	customStepsDefault, customStepsMin, customStepsMax = 28, 1, 50
+	customCfgDefault, customCfgMin, customCfgMax       = 6.0, 1.0, 20.0
+)
+
+// withCustomSamplingDefaults stamps those bounds onto a user checkpoint.
+func withCustomSamplingDefaults(m *types.ModelInfo) {
+	m.StepsDefault, m.StepsMin, m.StepsMax = &customStepsDefault, &customStepsMin, &customStepsMax
+	m.CfgDefault, m.CfgMin, m.CfgMax = &customCfgDefault, &customCfgMin, &customCfgMax
+}
+
 // backfillCustomRefImages fills RefImages on checkpoints registered before the
 // field existed (it defaults to 0, which would wrongly hide the reference-image
 // box on an SDXL checkpoint). Local, cheap, and idempotent — unlike the catalog
@@ -1027,6 +1043,14 @@ func (a *App) backfillCustomRefImages() {
 		}
 		if want := customRefImages(m.BackendType); m.RefImages != want {
 			m.RefImages = want
+			dirty = true
+		}
+		// Entries saved before the sampling bounds became nullable carry a
+		// literal 0, which now reads as "the model publishes a default of zero"
+		// instead of "unset" — and would leave the form showing a dead 0..0
+		// slider. Nothing legitimately defaults to zero steps or zero cfg.
+		if m.StepsDefault == nil || *m.StepsDefault <= 0 || m.CfgDefault == nil || *m.CfgDefault <= 0 {
+			withCustomSamplingDefaults(m)
 			dirty = true
 		}
 	}
@@ -1719,6 +1743,7 @@ func (a *App) UseCustomModel(path, backendType, baseModel string) (types.Setting
 		// it, not of the file.
 		RefImages: customRefImages(backendType),
 	}
+	withCustomSamplingDefaults(&info)
 
 	s := a.settings.Get()
 	s.SDXLPath = path
@@ -2286,30 +2311,50 @@ func (a *App) InstallEngine() error {
 	return nil
 }
 
-// ensureEngineUpToDate compares the engine version installed in the venv against
-// the version the desktop pins (EngineTarball) and, on a mismatch, force-
-// reinstalls the pinned engine (uninstall + install, skipping the torch phase).
-// This keeps the venv in lockstep with the desktop build — e.g. upgrading a
-// stale engine whose diffusers can't actually cut VRAM via CPU offload. Runs in
-// the background and streams the same "install:progress" events as InstallEngine
-// so the UI shows the update; a no-op when versions match, the venv is missing,
-// or a dev source override is active (PinnedEngineVersion == "").
+// ensureEngineUpToDate brings the venv's engine in line with the version the
+// desktop pins (EngineTarball), force-reinstalling it (uninstall + install,
+// skipping the torch phase) in two cases:
+//
+//   - the installed version differs from the pinned one — e.g. upgrading a stale
+//     engine whose diffusers can't actually cut VRAM via CPU offload;
+//   - the venv works but carries NO engine at all. That's the hole a previous
+//     upgrade leaves if it's interrupted between the uninstall and the install
+//     (app closed, network dropped): every local run then dies on "No module
+//     named 'imference_engine'" and nothing repairs it, because a missing
+//     package reports no version to be "outdated" against. Repairing here costs
+//     one pip install (torch and the rest are already in place) and turns a
+//     dead venv into a self-healing one.
+//
+// Runs in the background and streams the same "install:progress" events as
+// InstallEngine so the UI shows the work; a no-op when the versions match, the
+// venv is missing, or a dev source override is active (PinnedEngineVersion ==
+// ""), which also covers an editable checkout reporting no version.
 func (a *App) ensureEngineUpToDate() {
 	venvDir, err := engineVenvDir()
 	if err != nil {
 		return
 	}
 	info := installer.EngineInfoFor(a.ctx, venvDir)
-	if !info.Installed || !info.Outdated {
+	if !info.Installed {
+		return // no venv yet — installing one is the user's call, not ours
+	}
+	missing := info.EngineVersion == "" && !info.Dev && info.PinnedVersion != ""
+	if !info.Outdated && !missing {
 		return
 	}
 	reqs, err := resolveSidecarRequirements()
 	if err != nil {
 		return
 	}
-	a.bus.Warn("app", "engine version mismatch — force-reinstalling pinned engine", map[string]any{
-		"installed": info.EngineVersion, "pinned": info.PinnedVersion,
-	})
+	if missing {
+		a.bus.Warn("app", "engine package missing from the venv — reinstalling the pinned engine", map[string]any{
+			"pinned": info.PinnedVersion, "venv": venvDir,
+		})
+	} else {
+		a.bus.Warn("app", "engine version mismatch — force-reinstalling pinned engine", map[string]any{
+			"installed": info.EngineVersion, "pinned": info.PinnedVersion,
+		})
+	}
 
 	progress := make(chan types.InstallProgress, 16)
 	go func() {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Download, RefreshCw, Loader2, CheckCircle2, XCircle, Circle, FlaskConical } from "lucide-react";
+import { AlertTriangle, Download, RefreshCw, Loader2, CheckCircle2, XCircle, Circle, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress";
 import { api } from "@/lib/wails-bridge";
@@ -244,6 +244,18 @@ function renderStatusPill(
     return (
       <Badge color="red">
         <XCircle className="size-3" /> <BadgeText k="engineSection.badgeError" />
+      </Badge>
+    );
+  }
+  // A venv whose python runs but that carries no engine package: `installed` is
+  // about the venv, so claiming "installed" here would be a green light on
+  // something that can't generate a single image. An interrupted engine upgrade
+  // leaves exactly this state (the app repairs it on the next launch, but say so
+  // meanwhile rather than lying).
+  if (info?.installed && !info.engineVersion && !info.dev) {
+    return (
+      <Badge color="yellow">
+        <AlertTriangle className="size-3" /> <BadgeText k="engineSection.badgeIncomplete" />
       </Badge>
     );
   }

@@ -50,6 +50,17 @@ var globalBalanceCache = &balanceCache{}
 // rather than treating them as zero balance (a network blip shouldn't
 // look like an empty wallet).
 func USDCBalance(ctx context.Context, addr common.Address, force bool) (string, error) {
+	v, err := USDCBalanceAtomic(ctx, addr, force)
+	if err != nil {
+		return "", err
+	}
+	return FormatUSDC(v), nil
+}
+
+// USDCBalanceAtomic is USDCBalance in atomic units (6 decimals), for callers
+// that need to COMPARE the balance against a required amount rather than show
+// it. Parsing the formatted string back would be lossy and silly.
+func USDCBalanceAtomic(ctx context.Context, addr common.Address, force bool) (*big.Int, error) {
 	if !force {
 		globalBalanceCache.mu.Lock()
 		hit := globalBalanceCache.addr == addr && time.Since(globalBalanceCache.fetched) < balanceCacheTTL && globalBalanceCache.value != nil
@@ -59,13 +70,13 @@ func USDCBalance(ctx context.Context, addr common.Address, force bool) (string, 
 		}
 		globalBalanceCache.mu.Unlock()
 		if hit {
-			return formatUSDC(v), nil
+			return v, nil
 		}
 	}
 
 	value, err := rawUSDCBalance(ctx, addr)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	globalBalanceCache.mu.Lock()
@@ -74,7 +85,7 @@ func USDCBalance(ctx context.Context, addr common.Address, force bool) (string, 
 	globalBalanceCache.fetched = time.Now()
 	globalBalanceCache.mu.Unlock()
 
-	return formatUSDC(value), nil
+	return value, nil
 }
 
 func rawUSDCBalance(ctx context.Context, addr common.Address) (*big.Int, error) {
@@ -118,10 +129,10 @@ func addressTo32Bytes(a common.Address) string {
 	return strings.Repeat("0", 64-len(hexAddr)) + hexAddr
 }
 
-// formatUSDC renders an atomic uint256 USDC value (6 decimals) as a
+// FormatUSDC renders an atomic uint256 USDC value (6 decimals) as a
 // human string like "1.234567" with trailing zeros trimmed (and at
 // least one digit after the dot, e.g. "0.0").
-func formatUSDC(atomic *big.Int) string {
+func FormatUSDC(atomic *big.Int) string {
 	if atomic == nil {
 		return "0.0"
 	}

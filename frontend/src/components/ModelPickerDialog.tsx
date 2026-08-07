@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Check, FileBox, PackageOpen, Plus, Search, Sparkles, Trash2 } from "lucide-react";
@@ -12,10 +12,9 @@ import {
 import { cn, creditsToUSD } from "@/lib/utils";
 import type { ModelInfo, PaymentMode } from "@/lib/types";
 
-// Display label + ordering for each backend "type" the cards group by. Keys are
-// the normalized BackendType (cloud.normalizeEngine); "" is the cloud-only
-// external family (GPT-Image, Veo, …) with no local backend. Family names are
-// proper nouns (not translated); only "Cloud API" / "Other" go through i18n.
+// Display label + ordering for the LOCAL backends the cards group by. Keys are
+// the normalized BackendType (cloud.normalizeEngine). Family names are proper
+// nouns (not translated); only "Cloud API" goes through i18n.
 const TYPE_LABEL: Record<string, string> = {
   sdxl: "SDXL",
   sd15: "SD 1.5",
@@ -26,11 +25,50 @@ const TYPE_LABEL: Record<string, string> = {
   anima: "Anima",
   wan: "WAN Video",
 };
-const TYPE_ORDER = ["sdxl", "sd15", "zimage", "flux", "chroma", "qwenimage", "anima", "wan", ""];
+const TYPE_ORDER = ["sdxl", "sd15", "zimage", "flux", "chroma", "qwenimage", "anima", "wan"];
+// Family groups sort after every local backend, and the nameless bucket last.
+const FAMILY_RANK_BASE = TYPE_ORDER.length;
+const UNGROUPED_RANK = FAMILY_RANK_BASE + 10_000;
 
-function typeLabel(type: string, t: TFunction): string {
-  if (type === "") return t("modelPicker.typeCloudApi");
-  return TYPE_LABEL[type] ?? (type ? type.toUpperCase() : t("modelPicker.typeOther"));
+// The media row sits ABOVE the backend/family chips and narrows what they even
+// describe: pick Video and the second row collapses to the backends that make
+// video. Kind comes resolved from the Go side (catalog model_type, else the
+// engine), so this file never guesses what a model produces.
+const MEDIA_FILTERS = ["all", "image", "video"] as const;
+type MediaFilter = (typeof MEDIA_FILTERS)[number];
+
+function matchesMedia(m: ModelInfo, filter: MediaFilter): boolean {
+  if (filter === "all") return true;
+  // An unclassified model reads as an image: that is what the catalog's own
+  // fallback does, and it keeps a row visible under one chip rather than
+  // vanishing from both.
+  return (m.modelType || "image") === filter;
+}
+
+// A model's group. Models the sidecar can run group by their backend — that's
+// the thing that decides what actually loads. A cloud-only model has no backend
+// to group by, so it falls back to the catalog family it belongs to (MiniMax,
+// OpenAI, …): without that, every external model landed in one "Cloud API"
+// bucket, which said nothing about what the model IS. The prefix keeps a family
+// code from colliding with a backend name of the same spelling.
+function groupKey(m: ModelInfo): string {
+  if (m.backendType) return m.backendType;
+  return m.familyCode ? `family:${m.familyCode}` : "";
+}
+
+function groupLabel(m: ModelInfo, t: TFunction): string {
+  if (m.backendType) return TYPE_LABEL[m.backendType] ?? m.backendType.toUpperCase();
+  // The catalog's family_name is the display name — it stays as written there.
+  return m.familyName || t("modelPicker.typeCloudApi");
+}
+
+function groupRank(m: ModelInfo): number {
+  if (m.backendType) {
+    const i = TYPE_ORDER.indexOf(m.backendType);
+    return i === -1 ? FAMILY_RANK_BASE - 1 : i; // unknown backend: just before families
+  }
+  if (m.familyCode) return FAMILY_RANK_BASE + (m.familyOrder || 0);
+  return UNGROUPED_RANK;
 }
 
 function matches(m: ModelInfo, q: string): boolean {
@@ -43,24 +81,26 @@ function matches(m: ModelInfo, q: string): boolean {
     .every((tok) => hay.includes(tok));
 }
 
-// Group models by backend type, ordered by TYPE_ORDER (unknown types last,
-// alphabetical), models within a group by catalog `order` then name.
-function groupByType(models: ModelInfo[], t: TFunction): { type: string; label: string; items: ModelInfo[] }[] {
-  const byType = new Map<string, ModelInfo[]>();
+type Group = { key: string; label: string; rank: number; items: ModelInfo[] };
+
+// Group models (by backend, else by catalog family), groups by rank then label,
+// models within a group by catalog `order` then name.
+function groupModels(models: ModelInfo[], t: TFunction): Group[] {
+  const byKey = new Map<string, Group>();
   for (const m of models) {
-    const t = m.backendType ?? "";
-    (byType.get(t) ?? byType.set(t, []).get(t)!).push(m);
+    const key = groupKey(m);
+    let g = byKey.get(key);
+    if (!g) {
+      g = { key, label: groupLabel(m, t), rank: groupRank(m), items: [] };
+      byKey.set(key, g);
+    }
+    g.items.push(m);
   }
-  const rank = (t: string) => {
-    const i = TYPE_ORDER.indexOf(t);
-    return i === -1 ? TYPE_ORDER.length + 1 : i;
-  };
-  return [...byType.entries()]
-    .sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]))
-    .map(([type, items]) => ({
-      type,
-      label: typeLabel(type, t),
-      items: items.sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name)),
+  return [...byKey.values()]
+    .sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label))
+    .map((g) => ({
+      ...g,
+      items: g.items.sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name)),
     }));
 }
 
@@ -98,26 +138,50 @@ export function ModelPickerDialog({
   const [tab, setTab] = useState<"catalog" | "mine">("catalog");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>("all");
 
   // Which list feeds the grid: cloud is catalog-only; local has a Catalog tab
   // and a "My models" tab (user-loaded checkpoints from the settings registry).
   const source = isCloud ? catalog : tab === "mine" ? customModels : catalog;
 
-  // Type chips reflect only the types present in the current source (post-tab),
-  // pre-search, so the filter row stays relevant.
-  const presentTypes = useMemo(() => {
-    const seen = new Set(source.map((m) => m.backendType ?? ""));
-    return TYPE_ORDER.filter((t) => seen.has(t)).concat(
-      [...seen].filter((t) => !TYPE_ORDER.includes(t))
-    );
-  }, [source]);
+  // Only offer the media row when the list actually holds both kinds — a chip
+  // that can only ever be "all" is noise.
+  const showMedia = useMemo(
+    () => new Set(source.map((m) => m.modelType || "image")).size > 1,
+    [source]
+  );
+
+  // Everything below the media row describes the media selection: the backend
+  // chips and the grid both read from this narrowed list.
+  const mediaSource = useMemo(
+    () => (showMedia ? source.filter((m) => matchesMedia(m, mediaFilter)) : source),
+    [source, mediaFilter, showMedia]
+  );
+
+  // Filter chips reflect only the groups present in the current source
+  // (post-tab, post-media), pre-search, so the filter row stays relevant. Built
+  // from the same grouping as the grid, so chip and section always agree on
+  // label+order.
+  const presentGroups = useMemo(
+    () => groupModels(mediaSource, t).map((g) => ({ key: g.key, label: g.label })),
+    [mediaSource, t]
+  );
+
+  // Switching media can strip the backend the second row was filtering on
+  // (picking Video with SDXL selected). Drop back to "all" rather than render
+  // an empty grid under a chip that no longer exists.
+  useEffect(() => {
+    if (typeFilter !== "all" && !presentGroups.some((g) => g.key === typeFilter)) {
+      setTypeFilter("all");
+    }
+  }, [presentGroups, typeFilter]);
 
   const groups = useMemo(() => {
-    const filtered = source.filter(
-      (m) => (typeFilter === "all" || (m.backendType ?? "") === typeFilter) && matches(m, search)
+    const filtered = mediaSource.filter(
+      (m) => (typeFilter === "all" || groupKey(m) === typeFilter) && matches(m, search)
     );
-    return groupByType(filtered, t);
-  }, [source, typeFilter, search, t]);
+    return groupModels(filtered, t);
+  }, [mediaSource, typeFilter, search, t]);
 
   const total = groups.reduce((n, g) => n + g.items.length, 0);
   const showMine = !isCloud && tab === "mine";
@@ -167,14 +231,23 @@ export function ModelPickerDialog({
                 className="border-input bg-background h-9 w-full rounded-md border pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            {presentTypes.length > 1 && (
+            {showMedia && (
+              <div className="flex flex-wrap gap-1.5">
+                {MEDIA_FILTERS.map((f) => (
+                  <Chip key={f} active={mediaFilter === f} onClick={() => setMediaFilter(f)}>
+                    {t(`modelPicker.media.${f}`)}
+                  </Chip>
+                ))}
+              </div>
+            )}
+            {presentGroups.length > 1 && (
               <div className="flex flex-wrap gap-1.5">
                 <Chip active={typeFilter === "all"} onClick={() => setTypeFilter("all")}>
                   {t("common.all")}
                 </Chip>
-                {presentTypes.map((ty) => (
-                  <Chip key={ty} active={typeFilter === ty} onClick={() => setTypeFilter(ty)}>
-                    {typeLabel(ty, t)}
+                {presentGroups.map((g) => (
+                  <Chip key={g.key} active={typeFilter === g.key} onClick={() => setTypeFilter(g.key)}>
+                    {g.label}
                   </Chip>
                 ))}
               </div>
@@ -226,7 +299,7 @@ export function ModelPickerDialog({
             </div>
           ) : (
             groups.map((g) => (
-              <section key={g.type} className="mb-5 last:mb-0">
+              <section key={g.key} className="mb-5 last:mb-0">
                 <h4 className="text-muted-foreground mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
                   {g.label}
                   <span className="bg-border h-px flex-1" />

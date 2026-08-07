@@ -20,6 +20,8 @@ import {
   SlidersHorizontal,
   Download,
   Play,
+  Volume2,
+  VolumeX,
   Square,
   Languages,
   Wand2,
@@ -39,7 +41,6 @@ import {
   Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Segmented } from "@/components/ui/segmented";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select } from "@/components/ui/select";
@@ -109,13 +110,24 @@ const nextJobId = () => `job-${Date.now()}-${jobSeq++}`;
 type GenParams = {
   prePrompt: string; // quality-tag prefix, prepended to the user prompt (client-side)
   formatCode: string; // a catalog format code, or "custom" (local only) for free dims
-  steps: number;
-  cfg: number;
+  /**
+  * Steps and cfg — null when the catalog publishes no such knob for the model
+  * (gpt-image-1 has neither, minimax-h3 no cfg). Null means "don't offer a
+  * control, and don't send a value": the server then leaves the field out of
+  * the worker payload instead of inventing one the model would ignore.
+  */
+  steps: number | null;
+  cfg: number | null;
   negativePrompt: string;
   seedMode: "random" | "fixed";
   seed: number;
   clipSkip: number | null; // local only
   scheduler: string; // local only
+  /**
+   * Clip length in seconds — only for cloud video models that publish duration
+   * bounds (durationDefault non-null). null everywhere else, and never sent.
+   */
+  durationS: number | null;
   // Free width/height when formatCode === "custom" (local only). Seeded from the
   // active preset, snapped to a multiple of 8 (latent constraint) at use.
   customWidth: number;
@@ -163,7 +175,47 @@ function formatRatio(f: FormatOption): string {
   return flipped ? `${b}:${a}` : `${a}:${b}`;
 }
 
-// A model's supported formats come from im_format; fall back to generic ones
+// orderedFormats sorts by SHAPE — widest first, down to tallest — instead of
+// following the catalog's own `order`.
+//
+// That order alternates portrait and landscape (square, portrait, landscape,
+// portrait-large, landscape-large, …), which laid out in a grid reads as
+// unsorted. Grouping by orientation isn't enough either: an SDXL model's nine
+// formats are all ~1 Mpx, so a size tie-break shuffles them arbitrarily
+// (ultra-wide, then large, then normal, then wide). Ordering by aspect ratio
+// gives one continuous progression — wide → square → tall — so the grid reads
+// as a gradient of shapes, and the tie-break on pixel count keeps a model's
+// quality tiers adjacent (minimax's SD sits next to its HD).
+function orderedFormats(formats: FormatOption[]): FormatOption[] {
+  const ratio = (f: FormatOption) => (f.height > 0 ? f.width / f.height : 1);
+  return [...formats].sort(
+    (a, b) =>
+      ratio(b) - ratio(a) ||
+      a.width * a.height - b.width * b.height ||
+      a.formatCode.localeCompare(b.formatCode)
+  );
+}
+
+// AspectGlyph draws the format's actual proportions in a 14px box. A shape says
+// "portrait, quite tall" faster than "9:13" does, and it costs no width in a
+// cell that also has to hold a name and a pixel count.
+function AspectGlyph({ width, height, active }: { width: number; height: number; active: boolean }) {
+  const w = width > 0 ? width : 1;
+  const h = height > 0 ? height : 1;
+  const scale = 14 / Math.max(w, h);
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "inline-block shrink-0 rounded-[2px] border",
+        active ? "border-[var(--brand-to)] bg-[var(--brand-to)]/30" : "border-muted-foreground/50"
+      )}
+      style={{ width: Math.max(4, Math.round(w * scale)), height: Math.max(4, Math.round(h * scale)) }}
+    />
+  );
+}
+
+// A model's supported formats come from im_format; fall back to generic ones// A model's supported formats come from im_format; fall back to generic ones
 // (video-specific for WAN, so a catalog missing its rows still defaults to 480p).
 function formatOptions(model: ModelInfo | null | undefined): FormatOption[] {
   if (model?.formats && model.formats.length > 0) return model.formats;
@@ -176,6 +228,42 @@ function defaultFormatCode(model: ModelInfo): string {
 }
 
 // Resolve a format code to its real per-model dimensions (im_format).
+// runCost is what ONE generation costs, in credits. It mirrors creditCost in
+// imference/app/api/pricing.go line for line — the price shown next to the
+// Generate button has to be the price the server charges, and the server is the
+// authority. Two catalog modifiers scale the model's base price:
+//
+//   • the selected FORMAT's credit_multiplier (1 in SD, 2 in HD);
+//   • for models with a duration control, the requested length over the
+//     model's default (5 s → ×1, 10 s → ×2, 15 s → ×3 on a 5 s-default model).
+//
+// The ceiling lands ONCE, on the whole product: rounding factor by factor would
+// price the same clip differently depending on the order they were applied.
+function runCost(
+  model: ModelInfo | null | undefined,
+  formatCode: string,
+  durationS: number | null
+): number {
+  if (!model || !(model.cost > 0)) return 0; // free / promotional stays free
+  const fmt =
+    (model.formats ?? []).find((f) => f.formatCode === formatCode) ??
+    (model.formats ?? []).find((f) => f.isDefault);
+  const m = fmt?.creditMultiplier;
+  const formatMult = m != null && m > 0 ? m : 1;
+
+  let durationMult = 1;
+  const def = model.durationDefault;
+  if (def != null && def > 0) {
+    // Same clamp the request uses: an out-of-range ask is priced at the bound,
+    // never above the maximum the model accepts.
+    let d = durationS != null && durationS > 0 ? durationS : def;
+    if (model.durationMin != null) d = Math.max(d, model.durationMin);
+    if (model.durationMax != null) d = Math.min(d, model.durationMax);
+    durationMult = d / def;
+  }
+  return Math.max(1, Math.ceil(model.cost * formatMult * durationMult));
+}
+
 function dimsForModel(
   model: ModelInfo | null | undefined,
   formatCode: string
@@ -236,19 +324,50 @@ function dragHasImage(dt: DataTransfer | null): boolean {
   return Array.from(dt.types).includes("Files");
 }
 
+// knob reads a catalog bound. Undefined means the model publishes no such
+// control; so does a literal 0, which is what settings snapshots written before
+// these fields became nullable still carry — and nothing legitimately defaults
+// to zero steps, zero cfg or zero clip-skip.
+function knob(v: number | undefined): number | null {
+  return v != null && v > 0 ? v : null;
+}
+
+// clampToCatalog holds a value inside the bounds the catalog published, leaving
+// it alone when a bound is absent (unknown, not unlimited) or the value is 0
+// (unspecified — the server fills in the model default).
+function clampToCatalog(v: number, min: number | undefined, max: number | undefined): number {
+  if (!(v > 0)) return v;
+  const lo = knob(min);
+  const hi = knob(max);
+  if (lo != null && v < lo) return lo;
+  if (hi != null && v > hi) return hi;
+  return v;
+}
+
+// isPinned reports that the catalog fixed a parameter: it published both bounds
+// and left no room between them. Such a knob is a fact about the model, not a
+// choice offered to the user — the UI shows it rather than pretending it moves.
+function isPinned(min: number | undefined, max: number | undefined): boolean {
+  const lo = knob(min);
+  const hi = knob(max);
+  return lo != null && hi != null && hi <= lo;
+}
+
 // defaultParams seeds the tweakable params from a model's catalog config.
 function defaultParams(model: ModelInfo): GenParams {
   const d = dimsForModel(model, defaultFormatCode(model));
   return {
     prePrompt: model.promptPre || "",
     formatCode: defaultFormatCode(model),
-    steps: model.stepsDefault || 28,
-    cfg: model.cfgDefault || 6,
+    steps: knob(model.stepsDefault),
+    cfg: knob(model.cfgDefault),
     negativePrompt: model.promptNegative || "",
     seedMode: "random",
     seed: 0,
-    clipSkip: model.skipDefault > 0 ? model.skipDefault : null,
+    clipSkip: knob(model.skipDefault),
     scheduler: model.schedulerDefault || "",
+    // null = this model has no duration control (the catalog's own signal).
+    durationS: model.durationDefault ?? null,
     customWidth: d.width,
     customHeight: d.height,
   };
@@ -888,11 +1007,28 @@ export default function App() {
       const req: GenerationRequest = {
         prompt: full,
         ...(pr ? resolveDims(model, pr) : dimsForModel(model, "")),
-        numSteps: pr?.steps ?? model?.stepsDefault ?? 28,
-        guidanceScale: pr?.cfg ?? model?.cfgDefault ?? 6,
+        // 0 = unspecified. Both are omitempty all the way to the worker, so a
+        // model with no such knob simply never receives the field. Clamped to
+        // the catalog's bounds on the way out: the controls respect them, but a
+        // value can also come from a param set carried over from another model,
+        // and the worker is the one that pays for an out-of-range step count.
+        numSteps: clampToCatalog(pr?.steps ?? 0, model?.stepsMin, model?.stepsMax),
+        guidanceScale: clampToCatalog(pr?.cfg ?? 0, model?.cfgMin, model?.cfgMax),
       };
       if (pr?.negativePrompt) req.negativePrompt = pr.negativePrompt;
       if (pr && pr.seedMode === "fixed") req.seed = pr.seed;
+      // Clip length: cloud video models that publish bounds. The server clamps
+      // it and drops it for models that take none, but don't send what the
+      // model never offered in the first place.
+      if (which === "cloud" && model?.durationDefault != null && pr?.durationS != null) {
+        req.durationS = pr.durationS;
+      }
+      // The chosen format drives the cloud price (credit_multiplier); without it
+      // the server has to infer it from width×height. Custom dims have no
+      // catalog format, so nothing is claimed for them.
+      if (which === "cloud" && pr && pr.formatCode && pr.formatCode !== CUSTOM_FORMAT) {
+        req.formatCode = pr.formatCode;
+      }
       if (which === "local") {
         // clip-skip / scheduler are only honored by the local sidecar (the cloud
         // API uses the model's server-side defaults).
@@ -1238,10 +1374,13 @@ export default function App() {
       const c = settings?.cloudModelInfo;
       if (!c) return t("hint.pickCloudModel");
       if (!(c.cost > 0)) return c.name;
+      // Not the model's base price: the format and the clip length scale it,
+      // and this must match what the server bills to the credit (runCost).
+      const cost = runCost(c, params?.formatCode ?? "", params?.durationS ?? null);
       // x402 pays in on-chain USDC; bearer pays in credits — show the matching unit.
       return settings?.paymentMode === "x402"
-        ? t("hint.usdPerRun", { name: c.name, usd: creditsToUSD(c.cost) })
-        : t("hint.creditsPerRun", { name: c.name, cost: c.cost });
+        ? t("hint.usdPerRun", { name: c.name, usd: creditsToUSD(cost) })
+        : t("hint.creditsPerRun", { name: c.name, cost });
     }
     if (!engineInstalled) return t("hint.engineNotInstalled");
     if (downloading) return activationIsLoad ? t("hint.loadingModel") : t("hint.downloadingModel");
@@ -1253,7 +1392,7 @@ export default function App() {
     if (sidecar.state === "starting") return t("hint.engineStarting");
     if (sidecar.state !== "ready") return t("hint.startEngine");
     return settings?.localModel?.name ?? t("hint.pickModel");
-  }, [mode, cloudConfigured, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, engineInstalled, t]);
+  }, [mode, cloudConfigured, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, params?.formatCode, params?.durationS, engineInstalled, t]);
 
   // Activity-panel derivations: in-flight count (running + queued) for the badge,
   // finished rows for the Clear action, and the done subset the gallery shows as
@@ -2192,35 +2331,68 @@ function FormatSelector({
 
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
-      {/* Label on its own line + a wrapping segmented control, so 4 options (with
-          ratio hints) never overflow the narrow panel — they flow to a 2nd row. */}
       <div className="flex flex-col gap-1.5">
         <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
           {t("params.format")}
         </span>
-        <Segmented
-          wrap
-          size="sm"
-          value={isCustom ? CUSTOM_FORMAT : params.formatCode}
-          onChange={(code) => (code === CUSTOM_FORMAT ? enterCustom() : onChange({ formatCode: code }))}
-          items={[
-            ...formats.map((f) => ({
-              value: f.formatCode,
-              title: `${f.width}×${f.height}${f.ratio ? ` · ${formatRatio(f)}` : ""}`,
-              label: (
-                <span className="capitalize">
-                  {formatName(f, t)}
-                  {f.ratio && (
-                    <span className="text-muted-foreground/70 ml-1 text-[10px] normal-case">
-                      {formatRatio(f)}
-                    </span>
-                  )}
+        {/* A fixed 3-column grid of equal cells, not a wrapping segmented
+            control: with nine formats of uneven label lengths, wrapping put a
+            different number of pills on each line and the whole box read as
+            scattered. Equal cells on a grid line up, and nine of them still fit
+            in three rows — same height, ordered. */}
+        <div className="grid grid-cols-3 gap-1.5">
+          {orderedFormats(formats).map((f) => {
+            const active = !isCustom && params.formatCode === f.formatCode;
+            return (
+              <button
+                key={f.formatCode}
+                type="button"
+                onClick={() => onChange({ formatCode: f.formatCode })}
+                title={`${formatName(f, t)} · ${f.width}×${f.height}${f.ratio ? ` · ${formatRatio(f)}` : ""}`}
+                aria-pressed={active}
+                className={cn(
+                  "flex min-w-0 flex-col gap-0.5 rounded-lg border px-2 py-1.5 text-left transition",
+                  active
+                    ? "border-[var(--brand-to)] bg-[var(--brand-to)]/10"
+                    : "border-border/70 hover:border-primary/30 hover:bg-muted/50"
+                )}
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <AspectGlyph width={f.width} height={f.height} active={active} />
+                  <span className="truncate text-[11px] font-medium capitalize">
+                    {formatName(f, t)}
+                  </span>
                 </span>
-              ),
-            })),
-            ...(allowCustom ? [{ value: CUSTOM_FORMAT, label: t("formats.custom") }] : []),
-          ]}
-        />
+                {/* The pixels the model actually renders — the thing you're
+                    choosing. The ratio it implies is drawn by the glyph. */}
+                <span className="text-muted-foreground/80 text-[10px] tabular-nums">
+                  {f.width}×{f.height}
+                </span>
+              </button>
+            );
+          })}
+          {allowCustom && (
+            <button
+              type="button"
+              onClick={enterCustom}
+              aria-pressed={isCustom}
+              className={cn(
+                "flex min-w-0 flex-col gap-0.5 rounded-lg border px-2 py-1.5 text-left transition",
+                isCustom
+                  ? "border-[var(--brand-to)] bg-[var(--brand-to)]/10"
+                  : "border-border/70 border-dashed hover:border-primary/30 hover:bg-muted/50"
+              )}
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <AspectGlyph width={params.customWidth} height={params.customHeight} active={isCustom} />
+                <span className="truncate text-[11px] font-medium">{t("formats.custom")}</span>
+              </span>
+              <span className="text-muted-foreground/80 text-[10px] tabular-nums">
+                {isCustom ? `${params.customWidth}×${params.customHeight}` : t("formats.freeDims")}
+              </span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Free width × height (local, custom only). Snap to a multiple of 8 on
@@ -2299,17 +2471,41 @@ function ParamsPanel({
   const [open, setOpen] = useState(false);
   const set = (patch: Partial<GenParams>) => onChange({ ...params, ...patch });
 
-  const stepsMin = model.stepsMin || 1;
-  const stepsMax = Math.max(model.stepsMax || 50, stepsMin + 1);
-  const cfgMin = model.cfgMin || 1;
-  const cfgMax = Math.max(model.cfgMax || 20, cfgMin + 0.5);
-  const showClip = model.skipDefault > 0; // model uses clip-skip
+  // A knob the catalog is silent about gets no control at all — showing one
+  // that the model ignores is what made cfg look adjustable on minimax-h3.
+  const stepsDefault = knob(model.stepsDefault);
+  const showSteps = stepsDefault != null;
+  const stepsMin = knob(model.stepsMin) ?? 1;
+  const stepsMax = Math.max(knob(model.stepsMax) ?? 50, stepsMin + 1);
+  // min == max is the catalog stating a REQUIREMENT, not offering a range —
+  // wan22-t2v ships steps 6/6/6 and cfg 1/1/1. The floors above (min + 1,
+  // min + 0.5) exist to keep a slider from being degenerate, and in doing so
+  // they invented values the model doesn't accept: a 6–7 steps slider on a
+  // model that only runs 6. When a knob is pinned, show the value instead.
+  const stepsPinned = isPinned(model.stepsMin, model.stepsMax);
+  const cfgDefault = knob(model.cfgDefault);
+  const showCfg = cfgDefault != null;
+  const cfgMin = knob(model.cfgMin) ?? 1;
+  const cfgMax = Math.max(knob(model.cfgMax) ?? 20, cfgMin + 0.5);
+  const cfgPinned = isPinned(model.cfgMin, model.cfgMax);
+  const showClip = knob(model.skipDefault) != null; // model uses clip-skip
+  // The catalog decides whether a clip length is offered at all; the cloud
+  // restriction is ours (see the control below).
+  const durationDefault = model.durationDefault ?? 0;
+  const showDuration = mode === "cloud" && model.durationDefault != null;
+  const durationMin = model.durationMin ?? 1;
+  const durationMax = Math.max(model.durationMax ?? durationDefault, durationMin + 1);
+  const durationPinned = isPinned(model.durationMin, model.durationMax);
   const dims = resolveDims(model, params);
-  const summary = t("params.summary", {
-    dims: `${dims.width}×${dims.height}`,
-    steps: params.steps,
-    cfg: params.cfg,
-  });
+  // Built from the parts the model actually has, so the collapsed line doesn't
+  // announce a "cfg 0" for a model that has no cfg.
+  const summary = [
+    `${dims.width}×${dims.height}`,
+    showSteps ? t("params.summarySteps", { steps: params.steps ?? stepsDefault }) : null,
+    showCfg ? t("params.summaryCfg", { cfg: params.cfg ?? cfgDefault }) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <section className="bg-card rounded-2xl border shadow-sm">
@@ -2338,8 +2534,18 @@ function ParamsPanel({
       >
         <div className="overflow-hidden">
           <div className="grid gap-4 border-t px-4 py-4">
-            <RangeRow label={t("params.steps")} value={params.steps} min={stepsMin} max={stepsMax} step={1} onChange={(v) => set({ steps: v })} />
-            <RangeRow label={t("params.cfg")} value={params.cfg} min={cfgMin} max={cfgMax} step={0.5} onChange={(v) => set({ cfg: v })} />
+            {showSteps &&
+              (stepsPinned ? (
+                <FixedRow label={t("params.steps")} value={String(stepsDefault)} />
+              ) : (
+                <RangeRow label={t("params.steps")} value={params.steps ?? stepsDefault} min={stepsMin} max={stepsMax} step={1} onChange={(v) => set({ steps: v })} />
+              ))}
+            {showCfg &&
+              (cfgPinned ? (
+                <FixedRow label={t("params.cfg")} value={String(cfgDefault)} />
+              ) : (
+                <RangeRow label={t("params.cfg")} value={params.cfg ?? cfgDefault} min={cfgMin} max={cfgMax} step={0.5} onChange={(v) => set({ cfg: v })} />
+              ))}
 
             <div className="grid gap-1.5">
               <div className="flex items-center justify-between">
@@ -2362,6 +2568,27 @@ function ParamsPanel({
               )}
             </div>
 
+            {/* Clip length — only when the catalog says the model takes one, and
+                only in cloud mode: the local sidecar's generate() has no such
+                kwarg, so a slider there would move nothing. */}
+            {showDuration && durationPinned && (
+              <FixedRow
+                label={t("params.duration")}
+                value={t("params.seconds", { count: durationDefault })}
+              />
+            )}
+            {showDuration && !durationPinned && (
+              <RangeRow
+                label={t("params.duration")}
+                value={params.durationS ?? durationDefault}
+                min={durationMin}
+                max={durationMax}
+                step={1}
+                format={(v) => t("params.seconds", { count: v })}
+                onChange={(v) => set({ durationS: v })}
+              />
+            )}
+
             {mode === "local" && (
               <div className="grid gap-3 border-t pt-3">
                 <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
@@ -2370,7 +2597,7 @@ function ParamsPanel({
                 {showClip && (
                   <RangeRow
                     label={t("params.clipSkip")}
-                    value={params.clipSkip ?? model.skipDefault}
+                    value={params.clipSkip ?? knob(model.skipDefault) ?? 0}
                     min={0}
                     max={4}
                     step={1}
@@ -2402,6 +2629,24 @@ function ParamsPanel({
   );
 }
 
+// FixedRow shows a parameter the model pins: the same label as a slider, with a
+// value chip instead of a track — the pattern the scheduler row already uses, so
+// it reads as information rather than a disabled control.
+function FixedRow({ label, value }: { label: string; value: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs font-medium">{label}</span>
+      <span
+        className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-[11px] font-medium tabular-nums"
+        title={t("params.fixedByModel")}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function RangeRow({
   label,
   value,
@@ -2409,6 +2654,7 @@ function RangeRow({
   max,
   step,
   onChange,
+  format,
 }: {
   label: string;
   value: number;
@@ -2416,12 +2662,16 @@ function RangeRow({
   max: number;
   step: number;
   onChange: (v: number) => void;
+  /** Renders the value chip — for units the bare number doesn't carry (seconds). */
+  format?: (v: number) => string;
 }) {
   return (
     <div className="grid gap-1.5">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium">{label}</span>
-        <span className="text-muted-foreground text-xs tabular-nums">{value}</span>
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {format ? format(value) : value}
+        </span>
       </div>
       <input
         type="range"
@@ -2749,6 +2999,13 @@ type GalleryShared = {
   tileClick: (e: React.MouseEvent, name: string | null, index: number) => void;
   toggle: (name: string | null, index: number) => void;
   startImageDrag: (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null) => void;
+  /**
+   * The one tile allowed to play sound, by file name (null = the whole grid is
+   * muted). Video tiles autoplay muted and looping, so without a single owner an
+   * unmuted grid would be pure cacophony.
+   */
+  audibleName: string | null;
+  toggleAudible: (name: string) => void;
 };
 
 // Basename of a saved path, for matching a session job to its file on disk.
@@ -2781,6 +3038,8 @@ function Gallery({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<{ x: number; y: number; target: TileTarget } | null>(null);
   const [viewIndex, setViewIndex] = useState<number | null>(null);
+  // At most one tile plays sound at a time — unmuting one mutes whichever had it.
+  const [audibleName, setAudibleName] = useState<string | null>(null);
   const anchorRef = useRef<number | null>(null); // last-toggled index, for Shift-range
   const viewItemsRef = useRef<ViewerItem[]>([]); // the viewable sequence, in display order
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -2939,8 +3198,18 @@ function Gallery({
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
   const openAt = useCallback((index: number) => {
+    // The viewer plays its own audio: hand it a silent grid rather than two
+    // soundtracks at once.
+    setAudibleName(null);
     if (index >= 0) setViewIndex(index);
   }, []);
+
+  // Unmute this tile (and mute the previous owner), or mute it if it's the one
+  // already playing.
+  const toggleAudible = useCallback(
+    (name: string) => setAudibleName((cur) => (cur === name ? null : name)),
+    []
+  );
 
   // Toggle one tile's selection; remember it as the Shift-range anchor.
   const toggle = useCallback((name: string | null, index: number) => {
@@ -3038,6 +3307,8 @@ function Gallery({
     tileClick,
     toggle,
     startImageDrag: onImageDragStart,
+    audibleName,
+    toggleAudible,
   };
 
   // Build the tile list + the parallel viewer sequence (same order) whose index
@@ -3365,28 +3636,75 @@ function SavedTile({
   const [src, setSrc] = useState<string | null>(image.src ?? null);
   const srcRef = useRef<string | null>(src);
   srcRef.current = src;
+  // Mirrors `audible` (computed below) for the release observer, which must not
+  // unload the tile the user is listening to.
+  const audibleRef = useRef(false);
 
+  // Whether the tile is actually on screen — drives playback, not loading.
+  const [onScreen, setOnScreen] = useState(false);
+
+  // Three bands, because loading, keeping and playing are three questions.
+  //
+  // Bytes arrive over the bridge as a base64 data URL, so a loaded tile costs
+  // its file size (+⅓ for base64) in the JS heap for as long as it stays
+  // loaded — and the gallery mounts every tile it has ever paged in. Worse for
+  // video: `autoPlay loop` decodes forever, on screen or not, so a long scroll
+  // used to leave dozens of clips looping behind the viewport.
+  //
+  // Load at 400px (ready before it's seen), release past 1200px (hysteresis, so
+  // a tile parked near the edge doesn't thrash), play only when visible.
   useEffect(() => {
-    if (srcRef.current) return; // already have the bytes (fresh image)
     const el = ref.current;
     if (!el) return;
-    let fetched = false;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting && !fetched) {
-          fetched = true;
-          io.disconnect();
+
+    const load = new IntersectionObserver(
+      ([e]) => {
+        if (e?.isIntersecting && !srcRef.current) {
           void api.getSavedImage(image.name).then(setSrc).catch(() => {});
         }
       },
       { rootMargin: "400px" }
     );
-    io.observe(el);
-    return () => io.disconnect();
+    const release = new IntersectionObserver(
+      ([e]) => {
+        // Never drop the tile currently playing sound: the user picked it, and
+        // it keeps playing off screen on purpose.
+        if (!e?.isIntersecting && srcRef.current && !audibleRef.current) setSrc(null);
+      },
+      { rootMargin: "1200px" }
+    );
+    const visible = new IntersectionObserver(([e]) => setOnScreen(!!e?.isIntersecting));
+
+    load.observe(el);
+    release.observe(el);
+    visible.observe(el);
+    return () => {
+      load.disconnect();
+      release.disconnect();
+      visible.disconnect();
+    };
   }, [image.name]);
 
   const aspect = image.width > 0 && image.height > 0 ? image.width / image.height : 1;
   const selected = shared.isSelected(image.name);
+  const isVideo = image.kind === "video" || isVideoSrc(src);
+  const audible = isVideo && shared.audibleName === image.name;
+  // `muted` is a DOM property, not just an attribute: set it on the element
+  // itself rather than trusting the JSX prop to re-apply on every toggle. The
+  // play() nudge covers a browser that pauses a clip when it gains sound (the
+  // click that got us here is the gesture that permits it).
+  const videoRef = useRef<HTMLVideoElement>(null);
+  audibleRef.current = audible;
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !audible;
+    // Decode only what's being watched. A muted clip behind the viewport is
+    // pure GPU/CPU burn — the one exception is the tile the user unmuted, which
+    // keeps playing so its sound doesn't cut out mid-scroll.
+    if (onScreen || audible) void v.play().catch(() => {});
+    else v.pause();
+  }, [audible, onScreen, src]);
 
   // Ensure the bytes are available (img2img / drag from an un-scrolled tile).
   const ensureSrc = () => (srcRef.current ? Promise.resolve(srcRef.current) : api.getSavedImage(image.name).then((d) => { setSrc(d); return d; }));
@@ -3422,12 +3740,15 @@ function SavedTile({
       }
     >
       {src ? (
-        image.kind === "video" || isVideoSrc(src) ? (
-          // Muted looping inline preview — the tile IS the thumbnail. Controls
-          // live in the lightbox; the tile stays a simple click target.
+        isVideo ? (
+          // Looping inline preview — the tile IS the thumbnail. It starts muted
+          // (autoplay demands it) and the speaker button below can hand it the
+          // grid's single audio slot. Playback controls live in the lightbox;
+          // the tile stays a simple click target.
           <video
+            ref={videoRef}
             src={src}
-            muted
+            muted={!audible}
             loop
             autoPlay
             playsInline
@@ -3447,27 +3768,47 @@ function SavedTile({
       ) : (
         <Skeleton className="h-full w-full rounded-none" />
       )}
-      {(image.kind === "video" || isVideoSrc(src)) && (
-        <span className="pointer-events-none absolute left-1.5 top-1.5 rounded-full bg-black/55 p-1 text-white">
-          <Play className="size-3" fill="currentColor" />
-        </span>
-      )}
       <SelectCheckbox
         checked={selected}
         active={shared.selectionActive}
         onToggle={() => shared.toggle(image.name, index)}
       />
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(image.name);
-        }}
-        aria-label={t("gallery.deleteImage")}
-        className="absolute right-1.5 top-1.5 hidden rounded-full bg-black/50 p-1.5 text-white hover:bg-red-600/80 group-hover:block"
-      >
-        <Trash2 className="size-3.5" />
-      </button>
+      {/* Tile actions, clustered so nothing lands on the selection box in the
+          opposite corner. Sound stays visible on a video (it's state, not just an
+          action: it tells you which tile you're hearing); delete is hover-only. */}
+      <div className="absolute right-1.5 top-1.5 z-10 flex items-center gap-1">
+        {isVideo && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              shared.toggleAudible(image.name);
+            }}
+            aria-label={audible ? t("gallery.mute") : t("gallery.unmute")}
+            aria-pressed={audible}
+            title={audible ? t("gallery.mute") : t("gallery.unmute")}
+            className={cn(
+              "rounded-full p-1.5 text-white transition",
+              audible
+                ? "bg-[var(--brand-to)] hover:brightness-110"
+                : "bg-black/50 opacity-0 hover:bg-black/70 group-hover:opacity-100"
+            )}
+          >
+            {audible ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(image.name);
+          }}
+          aria-label={t("gallery.deleteImage")}
+          className="hidden rounded-full bg-black/50 p-1.5 text-white hover:bg-red-600/80 group-hover:block"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      </div>
       <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
         {image.source && (
           <span className="rounded-full bg-white/20 px-1.5 py-0.5 font-medium capitalize">

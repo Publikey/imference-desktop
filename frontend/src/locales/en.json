@@ -172,11 +172,13 @@
     "wan-square": "Square",
     "wan-portrait": "Portrait",
     "wan-landscape": "Landscape",
+    "freeDims": "any size",
     "custom": "Custom"
   },
   "params": {
     "title": "Parameters",
-    "summary": "{{dims}} · {{steps}} steps · cfg {{cfg}}",
+    "summarySteps": "{{steps}} steps",
+    "summaryCfg": "cfg {{cfg}}",
     "format": "Format",
     "width": "Width",
     "height": "Height",
@@ -185,8 +187,12 @@
     "seed": "Seed",
     "random": "Random",
     "advanced": "Advanced · local only",
+    "duration": "Clip length",
+    "seconds_one": "{{count}} s",
+    "seconds_other": "{{count}} s",
     "clipSkip": "Clip skip",
     "scheduler": "Scheduler",
+    "fixedByModel": "Fixed by this model",
     "modelDefault": "model default",
     "reset": "Reset to model defaults"
   },
@@ -250,6 +256,8 @@
     "columns_one": "{{count}} column",
     "columns_other": "{{count}} columns",
     "seed": "seed {{seed}}",
+    "mute": "Mute",
+    "unmute": "Unmute — mutes any other playing tile",
     "deleteImage": "Delete image",
     "search": "Search prompts…",
     "counter": "{{i}} / {{n}}",
@@ -325,8 +333,12 @@
     "cost": "{{cost}} cr",
     "removeTitle": "Remove from list (the file is not deleted)",
     "removeAria": "Remove custom model",
+    "media": {
+      "all": "All",
+      "image": "Image",
+      "video": "Video"
+    },
     "typeCloudApi": "Cloud API",
-    "typeOther": "Other",
     "costUsd": "${{usd}}",
     "badgeCached": "On disk"
   },
@@ -444,6 +456,7 @@
     "phaseError": "Error",
     "badgeInstalling": "installing",
     "badgeError": "error",
+    "badgeIncomplete": "Engine missing — repairing",
     "badgeInstalled": "installed",
     "badgeNotInstalled": "not installed",
     "startingMsg": "Starting…",

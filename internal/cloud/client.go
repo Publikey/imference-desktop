@@ -30,16 +30,25 @@ const (
 	postTimeout   = 30 * time.Second
 	statusTimeout = 10 * time.Second
 	pollInterval  = 1 * time.Second
-	// Image poll budget. Sized for a LOADED cloud queue (a request can wait
-	// minutes for a free worker), not just the denoise. A generous budget is
-	// safe now that /status returns 422 on failure — the client stops polling on
-	// a real failure instead of only bailing on this timeout, so this cap only
-	// ever fires for a genuinely stuck-in-queue job.
-	overallTimeout = 10 * time.Minute
-	// Video generations (WAN) additionally run minutes of denoise + mp4 upload
-	// on top of the queue wait. The unified /generate response reports the media
-	// kind, so polling stretches its budget for video.
-	videoOverallTimeout = 20 * time.Minute
+	// Poll budget, one for the whole catalog. This cap is NOT a model of how long
+	// a generation takes — /status returns 422 on a real failure, so polling
+	// already stops early on anything that went wrong. It exists only so a job
+	// the server never resolves can't be polled forever, which makes it a
+	// property of our patience, not of the media kind.
+	//
+	// It used to be split (10 min image / 20 min video) off the kind the server
+	// reported at enqueue, and that split was the bug: /generate classifies video
+	// by engine, so a video model on an engine it didn't know came back tagged
+	// "image" and died mid-queue on the short budget. Sizing every job for the
+	// worst case a busy queue can produce removes the classification — and the
+	// possibility of getting it wrong — from the picture entirely. An image
+	// waiting at minute 11 is no more "failed" than a clip is.
+	pollBudget = 45 * time.Minute
+	// Polling starts fast (a server-cached image can come back in under a
+	// second) then eases off: a job sitting in a queue for 45 minutes doesn't
+	// need 2700 status requests to notice it moved.
+	pollBackoffAfter    = 30 * time.Second
+	pollIntervalBackoff = 5 * time.Second
 	catalogTTL          = 5 * time.Minute // the model catalog is effectively static per session
 
 	// Downloading the finished image is separate from the generation budget
@@ -93,6 +102,13 @@ type postBody struct {
 	GuidanceScale  float64 `json:"guidance_scale,omitempty"`
 	Seed           *int    `json:"seed,omitempty"`
 	BatchNbr       int     `json:"batch_nbr,omitempty"`
+	// DurationS is the clip length for video models that publish the knob. The
+	// server clamps it to the catalog's bounds and drops it entirely for models
+	// that don't take one.
+	DurationS float64 `json:"duration_s,omitempty"`
+	// FormatCode names the format the user picked. The server prices per format
+	// (credit_multiplier), and would otherwise have to guess from width×height.
+	FormatCode string `json:"format_code,omitempty"`
 }
 
 type postResponse struct {
@@ -132,13 +148,17 @@ type apiModel struct {
 	ModelURL          string  `json:"model_url"`
 	PromptPre         string  `json:"prompt_pre"`
 	PromptNegative    string  `json:"prompt_negative"`
-	StepsDefault      int     `json:"steps_default"`
-	StepsMin          int     `json:"steps_min"`
-	StepsMax          int     `json:"steps_max"`
-	CfgDefault        float64 `json:"cfg_default"`
-	CfgMin            float64 `json:"cfg_min"`
-	CfgMax            float64 `json:"cfg_max"`
-	SkipDefault       int     `json:"skip_default"`
+	// Steps / cfg / clip-skip bounds. Pointers because the catalog publishes
+	// null for a knob a model doesn't expose (gpt-image-1 has no steps or cfg,
+	// minimax-h3 no cfg), and a zero cannot say that — nor could it, since zero
+	// is a legitimate clip-skip. The UI hides a control the catalog is silent on.
+	StepsDefault      *int     `json:"steps_default"`
+	StepsMin          *int     `json:"steps_min"`
+	StepsMax          *int     `json:"steps_max"`
+	CfgDefault        *float64 `json:"cfg_default"`
+	CfgMin            *float64 `json:"cfg_min"`
+	CfgMax            *float64 `json:"cfg_max"`
+	SkipDefault       *int     `json:"skip_default"`
 	SchedulerDefault  string  `json:"scheduler_default"`
 	FormatCode        string  `json:"format_code"`
 	// ImEngine is the catalog's engine discriminator: an image backend (sdxl,
@@ -160,12 +180,22 @@ type apiModel struct {
 	// All three are pointers: an absent field means "this server predates the
 	// column", which refImageSlots must tell apart from an explicit false/0.
 	AcceptsImageInput *bool `json:"accepts_image_input"`
-	ImageInputMax     *int  `json:"image_input_max"`
-	HasAudio          *bool `json:"has_audio"`
+	// ModelType is what the model produces, straight from the catalog view:
+	// "image" or "video". "" for rows the view hasn't filled in yet.
+	ModelType string `json:"model_type"`
+	// Duration controls (seconds) for video models. A nil Default is the
+	// catalog saying this model has NO duration knob — an image model, or a
+	// video model with a fixed length.
+	DurationSDefault *float64 `json:"duration_s_default"`
+	DurationSMin     *float64 `json:"duration_s_min"`
+	DurationSMax     *float64 `json:"duration_s_max"`
+	ImageInputMax    *int     `json:"image_input_max"`
+	HasAudio         *bool    `json:"has_audio"`
 	// Catalog organization — order + family/group for sorting/grouping the list.
 	ModelOrder      int    `json:"model_order"`
 	ModelFamilyCode string `json:"model_family_code"`
 	FamilyName      string `json:"family_name"`
+	FamilyOrder     int    `json:"family_order"`
 	ModelGroupCode  string `json:"model_group_code"`
 }
 
@@ -173,6 +203,35 @@ type apiModel struct {
 // most any model needs today (first + last frame); the clamp is here so a bad
 // catalog value can't produce an absurd form.
 const maxRefImageSlots = 2
+
+// mediaKind is what a model produces, for the picker's Image / Video filter.
+//
+// The catalog's model_type answers when it has a value. The engine test below
+// is a fallback for rows the view hasn't filled in: without it every model
+// would answer "image" while the column is still NULL, and the Video filter
+// would come up empty on a catalog that plainly has video in it. Unlike the
+// server's copy of this question, nothing here bills or times out — the worst a
+// wrong guess does is file a card under the wrong chip.
+func mediaKind(m apiModel, backend string) string {
+	switch strings.ToLower(strings.TrimSpace(m.ModelType)) {
+	case "video":
+		return "video"
+	case "image":
+		return "image"
+	}
+	if backend == "wan" || videoFallbackEngines[strings.ToLower(strings.TrimSpace(m.ImEngine))] {
+		return "video"
+	}
+	if m.HasAudio != nil && *m.HasAudio {
+		return "video" // an audio track is a video-only trait
+	}
+	return "image"
+}
+
+// videoFallbackEngines covers engines the desktop can't run locally (so
+// normalizeEngine returns "") but that still produce clips. Delete once
+// model_type is non-null across the catalog.
+var videoFallbackEngines = map[string]bool{"wan22": true, "wan": true, "minimax": true}
 
 // localBackend returns the backend the sidecar would load for this entry, or ""
 // when it isn't being prepared for local use — the same "locally runnable" test
@@ -194,9 +253,11 @@ func localBackend(m apiModel, backend string, forLocal bool) string {
 // point: the catalog flag describes what the HOSTED endpoint is wired to
 // accept, which is not the same question as what the local engine can do.
 //
-//   - Cloud: honour the flag exactly. Offering a slot the API drops would let
-//     someone spend credits on a run that quietly ignored their image. An
-//     absent column (a server predating it) means no.
+//   - Cloud: none at all, for now — reference images are local-only until the
+//     cloud round trip is validated (see the TEMPORARY note in the body). The
+//     rule this replaces was "honour the flag exactly", since offering a slot
+//     the API drops would let someone spend credits on a run that quietly
+//     ignored their image.
 //   - Local image backends that do img2img: it's the sidecar's own capability,
 //     available with any checkpoint it can load, so the slot is offered whatever
 //     the catalog says about the hosted endpoint. The flag can only ADD slots.
@@ -218,10 +279,16 @@ func refImageSlots(m apiModel, localBackend string) int {
 		}
 	}
 	if localBackend == "" {
-		if declared < 0 {
-			return 0
-		}
-		return declared
+		// TEMPORARY: reference images are a LOCAL-only feature for now. The cloud
+		// request path can carry them (refImagesForCloud below still encodes
+		// req.RefImages), but the round trip isn't validated end to end, so the
+		// desktop must not offer a slot it can't honour — a user would spend
+		// credits on a run that ignored their image.
+		//
+		// To lift this once the cloud path is proven: delete the next line and
+		// the catalog's answer takes over again (`declared`, 0 when the column
+		// is absent). Nothing else is gated on it.
+		return 0
 	}
 	if declared < 0 {
 		declared = 1 // pre-column server: every local model took an img2img source
@@ -249,6 +316,9 @@ type apiFormat struct {
 	Height     int    `json:"height"`
 	Ratio      string `json:"ratio"`
 	IsDefault  bool   `json:"is_default"`
+	// CreditMultiplier scales the model's price for this format (1 = SD, 2 = HD).
+	// Absent means no surcharge — priced as 1.
+	CreditMultiplier *float64 `json:"credit_multiplier"`
 }
 
 // normalizeEngine maps the catalog's im_engine value to the internal backend
@@ -392,12 +462,19 @@ func toModelInfo(m apiModel, forLocal bool) types.ModelInfo {
 		CanCloud:          m.ImCloud,
 		// Locally runnable = the same test ListModels applies for the local
 		// catalog: the flag plus downloadable weights and a known backend.
-		RefImages:  refImageSlots(m, localBackend(m, backend, forLocal)),
-		HasAudio:   m.HasAudio != nil && *m.HasAudio,
-		Order:      m.ModelOrder,
-		FamilyCode: m.ModelFamilyCode,
-		FamilyName: m.FamilyName,
-		GroupCode:  m.ModelGroupCode,
+		RefImages: refImageSlots(m, localBackend(m, backend, forLocal)),
+		ModelType: mediaKind(m, backend),
+		// Straight through: a nil Default is the catalog saying "no duration
+		// control", which the composer reads as "offer nothing".
+		DurationDefault: m.DurationSDefault,
+		DurationMin:     m.DurationSMin,
+		DurationMax:     m.DurationSMax,
+		HasAudio:        m.HasAudio != nil && *m.HasAudio,
+		Order:           m.ModelOrder,
+		FamilyCode:      m.ModelFamilyCode,
+		FamilyName:      m.FamilyName,
+		FamilyOrder:     m.FamilyOrder,
+		GroupCode:       m.ModelGroupCode,
 	}
 }
 
@@ -422,7 +499,7 @@ func (c *Client) ListModels(ctx context.Context, localOnly bool) ([]types.ModelI
 		for _, f := range fs {
 			formatsByModel[f.ModelCode] = append(formatsByModel[f.ModelCode], types.FormatOption{
 				FormatCode: f.FormatCode, Name: f.Name, Width: f.Width, Height: f.Height,
-				Ratio: f.Ratio, IsDefault: f.IsDefault,
+				Ratio: f.Ratio, IsDefault: f.IsDefault, CreditMultiplier: f.CreditMultiplier,
 			})
 		}
 	}
@@ -600,25 +677,25 @@ func (c *Client) Generate(
 		"steps":  req.NumSteps,
 	})
 
-	requestID, kind, err := c.postGenerate(ctx, apiKey, model, req)
+	requestID, serverKind, err := c.postGenerate(ctx, apiKey, model, req)
 	if err != nil {
 		c.bus.Error("cloud", "postGenerate failed", map[string]any{"err": err.Error()})
 		return types.GenerationResult{}, err
 	}
-	c.bus.Info("cloud", "postGenerate ok", map[string]any{"request_id": requestID, "kind": kind})
+	c.bus.Info("cloud", "postGenerate ok", map[string]any{"request_id": requestID, "kind": serverKind})
 	if onEnqueued != nil {
-		onEnqueued(requestID, kind)
+		onEnqueued(requestID, serverKind)
 	}
 
-	return c.pollAndDownload(ctx, "credits", apiKey, requestID, kind)
+	return c.pollAndDownload(ctx, "credits", apiKey, requestID)
 }
 
 // pollAndDownload runs the shared tail of every cloud generation: poll /status
-// (kind-sized budget) then download the finished media. Rail "x402" polls the
+// (one budget for every model) then download the finished media. Rail "x402" polls the
 // unauthenticated /ondemand/status; anything else uses the bearer /status.
 // Reused by the live Generate path AND the resume-on-launch path.
-func (c *Client) pollAndDownload(ctx context.Context, rail, apiKey, requestID, kind string) (types.GenerationResult, error) {
-	pollCtx, cancel := context.WithTimeout(ctx, pollBudget(kind))
+func (c *Client) pollAndDownload(ctx context.Context, rail, apiKey, requestID string) (types.GenerationResult, error) {
+	pollCtx, cancel := context.WithTimeout(ctx, pollBudget)
 	defer cancel()
 
 	var mediaURL string
@@ -655,9 +732,9 @@ func (c *Client) pollAndDownload(ctx context.Context, rail, apiKey, requestID, k
 // Resume re-polls and downloads a previously-enqueued generation by its
 // request_id — used on launch/recheck to reclaim an interrupted job. apiKey is
 // needed only for the credits rail (x402 status is public).
-func (c *Client) Resume(ctx context.Context, rail, apiKey, requestID, kind string) (types.GenerationResult, error) {
-	c.bus.Info("cloud", "resume", map[string]any{"request_id": requestID, "rail": rail, "kind": kind})
-	return c.pollAndDownload(ctx, rail, apiKey, requestID, kind)
+func (c *Client) Resume(ctx context.Context, rail, apiKey, requestID string) (types.GenerationResult, error) {
+	c.bus.Info("cloud", "resume", map[string]any{"request_id": requestID, "rail": rail})
+	return c.pollAndDownload(ctx, rail, apiKey, requestID)
 }
 
 // GenerateX402 is the x402 / pay-per-call USDC variant of Generate.
@@ -695,18 +772,18 @@ func (c *Client) GenerateX402(
 	x402Client.HTTP = c.http
 	x402Client.Logger = busAsLogger{bus: c.bus}
 
-	requestID, kind, err := c.postGenerateX402(ctx, x402Client, model, req)
+	requestID, serverKind, err := c.postGenerateX402(ctx, x402Client, model, req)
 	if err != nil {
 		c.bus.Error("cloud", "postGenerateX402 failed", map[string]any{"err": err.Error()})
 		return types.GenerationResult{}, err
 	}
-	c.bus.Info("cloud", "postGenerateX402 ok", map[string]any{"request_id": requestID, "kind": kind})
+	c.bus.Info("cloud", "postGenerateX402 ok", map[string]any{"request_id": requestID, "kind": serverKind})
 	if onEnqueued != nil {
-		onEnqueued(requestID, kind)
+		onEnqueued(requestID, serverKind)
 	}
 
 	// Payment is settled; polling the result needs no auth/wallet.
-	return c.pollAndDownload(ctx, "x402", "", requestID, kind)
+	return c.pollAndDownload(ctx, "x402", "", requestID)
 }
 
 // busAsLogger adapts *logbus.Bus to the x402.Logger interface so the
@@ -723,13 +800,17 @@ func (b busAsLogger) Error(_, message string, data ...any) {
 	b.bus.Error("x402", message, data...)
 }
 
-// pollBudget sizes the status-polling window from the media kind the server
-// reported at enqueue. Unknown/empty kinds keep the image budget.
-func pollBudget(kind string) time.Duration {
-	if kind == "video" {
-		return videoOverallTimeout
+// easeOffPolling stretches a poll ticker from pollInterval to
+// pollIntervalBackoff once the job has clearly gone into a queue. The fast first
+// seconds keep a server-cached result feeling instant; after that, a job waiting
+// tens of minutes doesn't need a request every second to notice it moved.
+// Returns true the first time it fires so callers only re-arm once.
+func easeOffPolling(t *time.Ticker, started time.Time, eased bool) bool {
+	if eased || time.Since(started) < pollBackoffAfter {
+		return eased
 	}
-	return overallTimeout
+	t.Reset(pollIntervalBackoff)
+	return true
 }
 
 // terminalError marks a generation outcome that will never succeed by retrying
@@ -770,7 +851,7 @@ func transientStatus(code int) bool {
 // out", not a cryptic "context deadline exceeded".
 func pollTimedOut(ctx context.Context, fetchErr error, what string) error {
 	if ctx.Err() != nil {
-		return fmt.Errorf("cloud: %s status polling timed out — the queue may be busy; try again", what)
+		return fmt.Errorf("cloud: %s status polling timed out — the job is still running server-side and stays pending; it's reclaimed on the next launch or with Recheck", what)
 	}
 	return fetchErr
 }
@@ -800,6 +881,13 @@ func (c *Client) postGenerateX402(
 	// derives the media kind — and the x402 price — from the catalog model.
 	resp, err := x402Client.DoJSON(postCtx, http.MethodPost, c.base+"/ondemand/generate", body, nil)
 	if err != nil {
+		// An empty wallet is a user problem with a clear remedy, not a transport
+		// failure: surface it as written, with no "cloud: POST …" prefix in
+		// front of the sentence the user actually needs to read.
+		var funds *x402.InsufficientFundsError
+		if errors.As(err, &funds) {
+			return "", "", &terminalError{funds.Error()}
+		}
 		return "", "", fmt.Errorf("cloud: POST /ondemand/generate: %w", err)
 	}
 	defer resp.Body.Close()
@@ -833,11 +921,13 @@ func (c *Client) pollStatusX402(ctx context.Context, requestID string) (string, 
 		return got, seed, nil
 	}
 
+	started, eased := time.Now(), false
 	for {
 		select {
 		case <-ctx.Done():
-			return "", 0, errors.New("cloud: x402 status polling timed out — the queue may be busy; try again")
+			return "", 0, errors.New("cloud: x402 status polling timed out — the job is still running server-side and stays pending; it's reclaimed on the next launch or with Recheck")
 		case <-ticker.C:
+			eased = easeOffPolling(ticker, started, eased)
 			got, seed, done, err := c.fetchStatusX402(ctx, statusURL)
 			if err != nil {
 				return "", 0, pollTimedOut(ctx, err, "x402")
@@ -953,11 +1043,13 @@ func (c *Client) pollStatus(ctx context.Context, apiKey, requestID string) (stri
 		return got, seed, nil
 	}
 
+	started, eased := time.Now(), false
 	for {
 		select {
 		case <-ctx.Done():
-			return "", 0, errors.New("cloud: status polling timed out — the queue may be busy; try again")
+			return "", 0, errors.New("cloud: status polling timed out — the job is still running server-side and stays pending; it's reclaimed on the next launch or with Recheck")
 		case <-ticker.C:
+			eased = easeOffPolling(ticker, started, eased)
 			got, seed, done, err := c.fetchStatus(ctx, statusURL, apiKey)
 			if err != nil {
 				return "", 0, pollTimedOut(ctx, err, "")

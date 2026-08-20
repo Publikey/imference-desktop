@@ -12,9 +12,10 @@ import {
 import { cn, creditsToUSD } from "@/lib/utils";
 import type { ModelInfo, PaymentMode } from "@/lib/types";
 
-// Display label + ordering for the LOCAL backends the cards group by. Keys are
-// the normalized BackendType (cloud.normalizeEngine). Family names are proper
-// nouns (not translated); only "Cloud API" goes through i18n.
+// Display label + ordering for the LOCAL backends — the fallback grouping for
+// entries without a catalog family (user checkpoints). Keys are the normalized
+// BackendType (cloud.normalizeEngine). Family names are proper nouns (not
+// translated); only "Cloud API" goes through i18n.
 const TYPE_LABEL: Record<string, string> = {
   sdxl: "SDXL",
   sd15: "SD 1.5",
@@ -45,29 +46,32 @@ function matchesMedia(m: ModelInfo, filter: MediaFilter): boolean {
   return (m.modelType || "image") === filter;
 }
 
-// A model's group. Models the sidecar can run group by their backend — that's
-// the thing that decides what actually loads. A cloud-only model has no backend
-// to group by, so it falls back to the catalog family it belongs to (MiniMax,
-// OpenAI, …): without that, every external model landed in one "Cloud API"
-// bucket, which said nothing about what the model IS. The prefix keeps a family
-// code from colliding with a backend name of the same spelling.
+// A model's group. Catalog models group by their catalog family — the display
+// taxonomy (Wan, Illustrious, MiniMax, …), which cuts across engines: several
+// families can run on the same backend, and one family can span local and
+// cloud-only members (Wan 2.2 runs on the local wan engine, Wan 3.0 is a
+// remote API). The backend stays the engine discriminator elsewhere; here it's
+// only the fallback for entries without a family — user checkpoints from the
+// "My models" tab. The prefix keeps a family code from colliding with a
+// backend name of the same spelling.
 function groupKey(m: ModelInfo): string {
-  if (m.backendType) return m.backendType;
-  return m.familyCode ? `family:${m.familyCode}` : "";
+  if (m.familyCode) return `family:${m.familyCode}`;
+  return m.backendType || "";
 }
 
 function groupLabel(m: ModelInfo, t: TFunction): string {
-  if (m.backendType) return TYPE_LABEL[m.backendType] ?? m.backendType.toUpperCase();
   // The catalog's family_name is the display name — it stays as written there.
-  return m.familyName || t("modelPicker.typeCloudApi");
+  if (m.familyCode) return m.familyName || m.familyCode.toUpperCase();
+  if (m.backendType) return TYPE_LABEL[m.backendType] ?? m.backendType.toUpperCase();
+  return t("modelPicker.typeCloudApi");
 }
 
 function groupRank(m: ModelInfo): number {
+  if (m.familyCode) return FAMILY_RANK_BASE + (m.familyOrder || 0);
   if (m.backendType) {
     const i = TYPE_ORDER.indexOf(m.backendType);
     return i === -1 ? FAMILY_RANK_BASE - 1 : i; // unknown backend: just before families
   }
-  if (m.familyCode) return FAMILY_RANK_BASE + (m.familyOrder || 0);
   return UNGROUPED_RANK;
 }
 

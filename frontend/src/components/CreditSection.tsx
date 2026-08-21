@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Coins, AlertTriangle } from "lucide-react";
+import { RefreshCw, Coins, AlertTriangle, ExternalLink } from "lucide-react";
+import { Browser } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/wails-bridge";
@@ -11,6 +12,16 @@ type Props = {
    *  back to the saved key when this is empty. */
   apiKey: string;
 };
+
+// The payments page prefills its key inputs from this param, so the user tops
+// up the balance the app is already configured with — no retyping, and no
+// confusion about which account the credits land on.
+function buyCreditsURL(apiKey: string): string {
+  const key = apiKey.trim();
+  return key
+    ? `https://imference.com/payments?api_key=${encodeURIComponent(key)}`
+    : "https://imference.com/payments";
+}
 
 // Mirrors the imference web app's credit readout: shows the remaining balance
 // for the configured Bearer key. Auto-checks on mount and (debounced) whenever
@@ -49,11 +60,21 @@ export function CreditSection({ apiKey }: Props) {
         <Coins className="text-muted-foreground size-3.5" />
         <Label className="text-muted-foreground text-xs">{t("credit.balance")}</Label>
         <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void Browser.OpenURL(buyCreditsURL(apiKey))}
+          className="text-muted-foreground hover:text-foreground ml-auto h-6 gap-1 px-2 text-xs"
+          title={t("credit.buyTitle")}
+        >
+          {t("credit.buy")}
+          <ExternalLink className="size-3" />
+        </Button>
+        <Button
           size="icon"
           variant="ghost"
           onClick={() => void check()}
           disabled={loading}
-          className="ml-auto size-6"
+          className="size-6"
           title={t("credit.refreshTitle")}
         >
           <RefreshCw className={"size-3.5 " + (loading ? "animate-spin" : "")} />

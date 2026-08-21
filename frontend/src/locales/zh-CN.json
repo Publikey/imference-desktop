@@ -520,7 +520,9 @@
     "balance": "积分余额",
     "refreshTitle": "刷新余额",
     "enterKey": "在上方输入 API 密钥即可查看剩余积分。",
-    "credits": "积分"
+    "credits": "积分",
+    "buy": "购买积分",
+    "buyTitle": "在 imference.com 为此密钥充值 — 积分可在应用、Claude（MCP）和 API 中通用"
   },
   "logs": {
     "title": "日志",

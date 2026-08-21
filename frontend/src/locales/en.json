@@ -528,7 +528,9 @@
     "balance": "Credit balance",
     "refreshTitle": "Refresh balance",
     "enterKey": "Enter your API key above to see your remaining credits.",
-    "credits": "credits"
+    "credits": "credits",
+    "buy": "Buy credits",
+    "buyTitle": "Top up this key on imference.com — credits work in the app, in Claude (MCP) and via the API"
   },
   "logs": {
     "title": "Logs",

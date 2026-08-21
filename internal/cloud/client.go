@@ -862,6 +862,10 @@ func (c *Client) postGenerateX402(
 	model string,
 	req types.GenerationRequest,
 ) (string, string, error) {
+	// FormatCode is the supported way to name the output size — the server
+	// resolves it to dimensions and prices it (credit_multiplier). Width/Height
+	// ride along for API builds that predate format resolution; when both are
+	// present the server gives the code priority.
 	body := postBody{
 		Model:          model,
 		Prompt:         req.Prompt,
@@ -872,6 +876,8 @@ func (c *Client) postGenerateX402(
 		GuidanceScale:  req.GuidanceScale,
 		Seed:           req.Seed,
 		BatchNbr:       1,
+		DurationS:      req.DurationS,
+		FormatCode:     req.FormatCode,
 	}
 
 	postCtx, cancel := context.WithTimeout(ctx, postTimeout)
@@ -983,6 +989,8 @@ func (c *Client) postGenerate(
 	apiKey, model string,
 	req types.GenerationRequest,
 ) (string, string, error) {
+	// Same field set as postGenerateX402: FormatCode names the size (the server
+	// resolves and prices it), Width/Height ride along for older API builds.
 	body := postBody{
 		Model:          model,
 		Prompt:         req.Prompt,
@@ -993,6 +1001,8 @@ func (c *Client) postGenerate(
 		GuidanceScale:  req.GuidanceScale,
 		Seed:           req.Seed,
 		BatchNbr:       1,
+		DurationS:      req.DurationS,
+		FormatCode:     req.FormatCode,
 	}
 	buf, _ := json.Marshal(body)
 

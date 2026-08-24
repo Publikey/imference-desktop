@@ -38,11 +38,14 @@ import (
 // main that could break the sidecar.
 //
 // The extras list is deliberately the seven image backends and nothing else.
-// 0.3.4 added a [minimax-h3] extra that needs an unreleased diffusers (PR
-// #14355) and so CANNOT share a venv with the repo-wide diffusers==0.39.0 pin
-// the image backends require — adding it here would break every local model.
-// H3 stays server-side: normalizeEngine doesn't recognise it, so those catalog
-// rows are cloud-only.
+// 0.3.4 added a [minimax-h3] extra that needs diffusers >= 0.40.0 (its
+// integration, PR #14355, shipped in the 0.40.0 release) and so CANNOT share
+// a venv with the repo-wide diffusers==0.39.0 pin the image backends require
+// — adding it here would break every local model. That stays true until the
+// engine re-validates the image suite on 0.40 and folds its repo-wide pin up;
+// even then H3's ~75 GB host-RAM floor makes it a poor local fit. H3 stays
+// server-side: normalizeEngine doesn't recognise it, so those catalog rows
+// are cloud-only.
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.

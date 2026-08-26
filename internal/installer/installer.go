@@ -38,15 +38,18 @@ import (
 // main that could break the sidecar.
 //
 // The extras list is deliberately the seven image backends and nothing else.
-// 0.3.4 added a [minimax-h3] extra that needs an unreleased diffusers (PR
-// #14355) and so CANNOT share a venv with the repo-wide diffusers==0.39.0 pin
-// the image backends require — adding it here would break every local model.
-// H3 stays server-side: normalizeEngine doesn't recognise it, so those catalog
-// rows are cloud-only.
+// As of engine v0.4.0 every extra — [minimax-h3] included — shares one
+// diffusers==0.40.0 pin, so the old venv conflict that kept H3 out is gone;
+// H3 stays excluded anyway because its ~75 GB host-RAM floor makes it a poor
+// local fit. It remains server-side: normalizeEngine doesn't recognise it, so
+// those catalog rows are cloud-only.
+//
+// NOTE: the v0.4.0 tag is cut after the engine's diffusers-0.40 branch passes
+// GPU re-validation and merges (see imference-engine RELEASING.md).
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.3.4.tar.gz"
+const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.0.tar.gz"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute
@@ -69,7 +72,7 @@ func resolveEngineSource() (spec string, editable bool) {
 	}
 	// Local path → editable install with all image-backend extras. Pip accepts
 	// "path[extras]" syntax even on Windows paths with spaces. The seven image
-	// backends share byte-identical deps (torch + diffusers 0.39 + transformers +
+	// backends share byte-identical deps (torch + diffusers 0.40 + transformers +
 	// sentencepiece), so this resolves once — matching the pinned GitHub tarball.
 	return override + "[sdxl,sd15,zimage,flux,chroma,qwenimage,anima]", true
 }

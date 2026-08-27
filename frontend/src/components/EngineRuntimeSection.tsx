@@ -66,6 +66,12 @@ export function EngineRuntimeSection({
           value={image.enableCpuOffload}
           onChange={(enableCpuOffload) => setImage({ enableCpuOffload })}
         />
+        {image.enableCpuOffload !== false && (
+          <OffloadModeSelect
+            value={image.offloadMode}
+            onChange={(offloadMode) => setImage({ offloadMode })}
+          />
+        )}
       </div>
 
       {/* WAN video — applies once the video backend is enabled */}
@@ -190,6 +196,36 @@ function OffloadSelect({
         <option value="auto">{t("runtime.offloadAuto")}</option>
         <option value="on">{t("runtime.offloadOn")}</option>
         <option value="off">{t("runtime.offloadOff")}</option>
+      </Select>
+    </label>
+  );
+}
+
+// Offload MECHANISM (engine IMAGE_OFFLOAD_MODE), shown while offload is not
+// explicitly Off. Auto lets the desktop pick per backend: heavy DiTs (FLUX /
+// Qwen-Image / Krea 2) whose compute module overflows the card get "group"
+// (block-streamed, ~5-6 GB peak VRAM); everything else gets "model". Maps to
+// the Go ImageRuntimeSettings.OffloadMode ("" = Auto).
+function OffloadModeSelect({
+  value,
+  onChange,
+}: {
+  value?: string;
+  onChange: (v: string) => void;
+}) {
+  const { t } = useTranslation();
+  const current = value === "model" || value === "group" ? value : "auto";
+  return (
+    <label className="grid gap-1 text-xs">
+      {t("runtime.offloadMode")}
+      <Select
+        fullWidth
+        value={current}
+        onChange={(v) => onChange(v === "auto" ? "" : v)}
+      >
+        <option value="auto">{t("runtime.offloadModeAuto")}</option>
+        <option value="model">{t("runtime.offloadModeModel")}</option>
+        <option value="group">{t("runtime.offloadModeGroup")}</option>
       </Select>
     </label>
   );

@@ -1,6 +1,7 @@
 {
   "common": {
     "cancel": "取消",
+    "retry": "重试",
     "done": "完成",
     "close": "关闭",
     "copy": "复制",
@@ -104,6 +105,7 @@
     "engineStarting": "本地引擎启动中…",
     "engineError": "本地引擎出错 — 请查看日志",
     "startEngine": "启动本地引擎后即可生成",
+    "downloadComponents": "需要组件 — 请用模型名称旁的下载按钮",
     "pickModel": "请在上方选择模型",
     "preparing": "正在准备 {{name}}",
     "usdPerRun": "{{name}} · ${{usd}} / 次"
@@ -182,6 +184,8 @@
     "height": "高度",
     "steps": "步数",
     "cfg": "CFG",
+    "cfgZeroOffHint": "0 = 关闭引导（Turbo 推荐）。Civitai/ComfyUI 的配方从 1 起算：它们的 CFG 1 = 这里的 0。",
+    "cfgZeroOffTitle": "此模型的引导从 0（关闭）起算。ComfyUI 与 civitai 从 1 起算 — 复制配方时请减 1。",
     "seed": "种子",
     "random": "随机",
     "advanced": "高级 · 仅本地",
@@ -307,7 +311,12 @@
     "selectModel": "选择模型",
     "noModels": "暂无模型",
     "working": "处理中…",
-    "switchQueued": "将在当前生成完成后切换到 {{name}}"
+    "switchQueued": "将在当前生成完成后切换到 {{name}}",
+    "componentsChecking": "正在检查模型组件…",
+    "componentsMissing": "需要共享组件（约 {{size}}）",
+    "componentsMissingTitle": "{{repo}} 缺少 {{files}} 个文件（约 {{size}}）— 生成前需先下载",
+    "downloadComponents": "下载组件",
+    "componentsDownloading": "组件 {{index}}/{{total}} — {{file}}"
   },
   "modelPicker": {
     "cloudTitle": "云端模型",
@@ -347,6 +356,7 @@
     "hintChroma": "基于 FLUX（单 T5 编码器）；需要基础模型仓库。",
     "hintQwenimage": "20B MMDiT，文字渲染能力强；需要基础模型仓库。",
     "hintAnima": "单文件 DiT（Cosmos）；需要 Anima 基础仓库（Qwen3 编码器 + VAE）。",
+    "hintKrea2": "Krea 2 Turbo 仅含 Transformer 的模型文件（fp8 或 bf16，ComfyUI 文件可直接加载）；需要受限的 Krea 2 基础仓库。显存需求高：约 13 GB。",
     "baseModel": "基础模型（Hugging Face 仓库 ID）— 可选",
     "baseModelHint": "留空则使用默认值（{{base}}）。",
     "use": "使用此模型"
@@ -492,7 +502,11 @@
     "cpuOffload": "CPU 卸载",
     "offloadAuto": "自动 — 在低显存 GPU 上启用（推荐）",
     "offloadOn": "开 — 始终启用（峰值显存最低）",
-    "offloadOff": "关 — 全部常驻（需要 ≳ 12 GB 显存）"
+    "offloadOff": "关 — 全部常驻（需要 ≳ 12 GB 显存）",
+    "offloadMode": "卸载模式",
+    "offloadModeAuto": "自动 — 大模型在小显存 GPU 上用分组流式（推荐）",
+    "offloadModeModel": "整体 — 按子模型交换（快，但最大子模型必须放得下）",
+    "offloadModeGroup": "分组 — 按块流式，峰值约 6 GB（8 GB 显卡跑大模型；较慢且占内存）"
   },
   "wallet": {
     "loading": "正在加载钱包…",

@@ -106,6 +106,33 @@ func (f *Fetcher) Fetch(
 		return false, fmt.Errorf("modelfetch: mkdir %s: %w", filepath.Dir(destPath), err)
 	}
 
+	// Big files go through parallel range requests when the size is knowable
+	// (the Probe also runs the text/* guard). Any ranged failure — a server
+	// without Range support, a mid-flight error — falls back to the
+	// single-stream path below; a cancelled context propagates instead.
+	if size, perr := f.Probe(ctx, url); perr == nil && size >= rangedThreshold {
+		partPath := destPath + ".part"
+		f.bus.Info("modelfetch", "GET (ranged) "+url, map[string]any{
+			"bytes": size, "streams": rangedStreams,
+		})
+		if rerr := f.fetchRanged(ctx, url, partPath, size, onProgress); rerr == nil {
+			if err := os.Rename(partPath, destPath); err != nil {
+				_ = os.Remove(partPath)
+				return false, fmt.Errorf("modelfetch: finalize %s: %w", destPath, err)
+			}
+			f.bus.Info("modelfetch", "model downloaded (ranged)", map[string]any{
+				"path": destPath, "bytes": size,
+			})
+			return false, nil
+		} else if ctx.Err() != nil {
+			return false, fmt.Errorf("modelfetch: download: %w", ctx.Err())
+		} else {
+			f.bus.Warn("modelfetch", "ranged download failed; retrying single-stream", map[string]any{
+				"err": rerr.Error(),
+			})
+		}
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return false, fmt.Errorf("modelfetch: build request: %w", err)

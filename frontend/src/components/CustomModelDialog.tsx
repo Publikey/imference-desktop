@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 
-type Backend = "sdxl" | "sd15" | "zimage" | "flux" | "chroma" | "qwenimage" | "anima";
+type Backend = "sdxl" | "sd15" | "zimage" | "flux" | "chroma" | "qwenimage" | "anima" | "krea2";
 
 // One row per image backend that can load a SINGLE .safetensors checkpoint.
 // `base` (when set) is the shared base-components repo a transformer-only
@@ -28,6 +28,7 @@ const BACKENDS: { id: Backend; label: string; hintKey: string; base?: string }[]
   { id: "chroma", label: "Chroma", hintKey: "customModel.hintChroma", base: "lodestones/Chroma1-HD" },
   { id: "qwenimage", label: "Qwen-Image", hintKey: "customModel.hintQwenimage", base: "Qwen/Qwen-Image" },
   { id: "anima", label: "Anima", hintKey: "customModel.hintAnima", base: "circlestone-labs/Anima-Base-v1.0-Diffusers" },
+  { id: "krea2", label: "Krea 2", hintKey: "customModel.hintKrea2", base: "krea/Krea-2-Turbo" },
 ];
 
 type Props = {

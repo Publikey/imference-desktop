@@ -65,6 +65,8 @@ import type {
   StorageInfo,
   FolderSizes,
   WalletInfo,
+  ComponentsReadiness,
+  ComponentsProgress,
 } from "./types";
 
 // Wails-generated functions are typed as (anyOfTheArgs) => Promise<any>.
@@ -147,6 +149,20 @@ const raw = {
   // the same reason as cancelModelDownload (no generated binding to race).
   dropPendingCloudJob: ((jobID: string) =>
     Call.ByName("main.App.DropPendingCloudJob", jobID)) as (jobID: string) => Promise<void>,
+  // Base-components readiness: a transformer-only checkpoint needs a multi-GB
+  // shared base repo (text encoder / VAE / tokenizer). checkModelReadiness asks
+  // whether it's already in the offline tree (gate for Generate);
+  // downloadModelComponents pre-pulls it with progress events, so the first
+  // generation never hides a download behind "generating". Called by name —
+  // no generated binding to race.
+  checkModelReadiness: ((baseRepo: string) =>
+    Call.ByName("main.App.CheckModelReadiness", baseRepo)) as (
+    baseRepo: string
+  ) => Promise<ComponentsReadiness>,
+  downloadModelComponents: ((baseRepo: string) =>
+    Call.ByName("main.App.DownloadModelComponents", baseRepo)) as (
+    baseRepo: string
+  ) => Promise<void>,
   // Custom user-supplied checkpoints (referenced in place, no download).
   // pickModelFile returns "" when the user cancels the native dialog.
   pickModelFile: PickModelFile as () => Promise<string>,
@@ -198,6 +214,12 @@ const raw = {
     Events.On("generate:progress", (e) => cb(e.data as GenerateProgress)),
   onCloudResolved: (cb: (r: CloudResolved) => void): (() => void) =>
     Events.On("cloud:resolved", (e) => cb(e.data as CloudResolved)),
+  onComponentsProgress: (cb: (p: ComponentsProgress) => void): (() => void) =>
+    Events.On("components:progress", (e) => cb(e.data as ComponentsProgress)),
+  onComponentsDone: (cb: (d: { baseRepo: string }) => void): (() => void) =>
+    Events.On("components:done", (e) => cb(e.data as { baseRepo: string })),
+  onComponentsError: (cb: (d: { baseRepo: string; error: string }) => void): (() => void) =>
+    Events.On("components:error", (e) => cb(e.data as { baseRepo: string; error: string })),
   // Fired whenever the cached set changes (reconcile, download, eviction,
   // manual delete, purge) so badges and the storage screen stay truthful.
   onModelCacheChanged: (cb: () => void): (() => void) => Events.On("model:cache", () => cb()),
@@ -209,6 +231,9 @@ const raw = {
 
 const NO_WRAP = new Set([
   "logFromFrontend",
+  "onComponentsProgress",
+  "onComponentsDone",
+  "onComponentsError",
   "onSidecarStatus",
   "onLogEntry",
   "onInstallProgress",

@@ -80,6 +80,35 @@ export type UpdateInfo = {
  * share this one block — only one loads per sidecar. useTinyVae only affects
  * SDXL / SD 1.5; the engine ignores it for the others.
  */
+/**
+ * Answer to "can the selected model generate right now without a hidden
+ * multi-GB base-components download?". hasManifest=false means the check
+ * couldn't run (self-contained model, CDN off, base not mirrored) — never
+ * gate on that; the engine's lazy download still works.
+ */
+export type ComponentsReadiness = {
+  baseRepo: string;
+  hasManifest: boolean;
+  ready: boolean;
+  totalFiles: number;
+  missingFiles: number;
+  /** Sum of missing file sizes (bytes), best-effort ("at least"). */
+  missingBytes: number;
+};
+
+/** Progress of a base-components download (one bar + caption). */
+export type ComponentsProgress = {
+  baseRepo: string;
+  file: string;
+  fileIndex: number;
+  totalFiles: number;
+  doneBytes: number;
+  /** -1 when any file size was unknown → indeterminate bar. */
+  totalBytes: number;
+  percent: number;
+  done: boolean;
+};
+
 export type ImageRuntimeSettings = {
   /**
    * "" / "auto" | cuda | cuda:N | mps | cpu. "cuda" covers both NVIDIA and
@@ -94,6 +123,13 @@ export type ImageRuntimeSettings = {
    * false = force off. Maps to the Go *bool.
    */
   enableCpuOffload?: boolean;
+  /**
+   * Offload MECHANISM when offload is enabled (engine IMAGE_OFFLOAD_MODE):
+   * "" or "auto" = backend+VRAM-aware pick (heavy DiTs whose compute module
+   * can't fit the card get "group" — block-streamed, ~6 GB peak; the rest get
+   * "model"); "model" / "group" force it. Ignored while offload is off.
+   */
+  offloadMode?: string;
   /** "" / "auto" / integer */
   maxGpuModels?: string;
   maxCpuModels?: string;

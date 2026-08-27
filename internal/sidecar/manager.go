@@ -55,6 +55,28 @@ const (
 // launch to point elsewhere — or set it empty to fall back to HuggingFace.
 const imageModelCDN = "https://gen-models.ml-cnd-gen.cc/image"
 
+// ImageCDNBase returns the CDN base the sidecar's engine will actually use:
+// the IMAGE_MODEL_CDN env override when set (empty string = CDN disabled),
+// else the built-in default. Exposed so the components pre-downloader
+// (internal/components) checks the SAME mirror the engine will read.
+func ImageCDNBase() string {
+	if v, ok := os.LookupEnv("IMAGE_MODEL_CDN"); ok {
+		return v
+	}
+	return imageModelCDN
+}
+
+// ImageCacheDir returns the offline model tree the sidecar's engine will
+// actually use — the IMAGE_MODEL_CACHE env override when set (engineEnv only
+// defaults it when unset), else ModelCacheDir. Same-tree guarantee for the
+// components pre-downloader.
+func ImageCacheDir() (string, error) {
+	if v, ok := os.LookupEnv("IMAGE_MODEL_CACHE"); ok && strings.TrimSpace(v) != "" {
+		return v, nil
+	}
+	return ModelCacheDir()
+}
+
 // ModelCacheDir is the persistent, symlink-free offline model tree the engine
 // fills from the CDN (IMAGE_MODEL_CACHE / RuntimeConfig.model_cache_dir). Under
 // UserCacheDir alongside the venv + downloaded weights — large, regenerable
@@ -86,42 +108,117 @@ func bool01(b bool) string {
 // autoOffloadVRAMThresholdGiB: SDXL / Z-Image at full residency peak ~8.8 GiB at
 // 1024². GPUs below this threshold oversubscribe VRAM and spill to WDDM shared
 // system memory (measured ~50× slowdown on an 8 GiB card — 12 min vs 12 s for a
-// 20-step run), so Auto mode enables enable_model_cpu_offload for them. Cards
-// at/above it hold the whole pipe and are fastest at full residency, so Auto
-// leaves offload off. 12 GiB keeps the common 6/8/10/11 GiB consumer cards safe
-// while letting 12 GiB+ run full residency.
+// 20-step run), so Auto mode enables offload for them. Cards at/above it hold
+// the whole pipe and are fastest at full residency, so Auto leaves offload off.
+// 12 GiB keeps the common 6/8/10/11 GiB consumer cards safe while letting
+// 12 GiB+ run full residency. Applies to the LIGHT backends — the heavy DiTs
+// have per-backend thresholds below.
 const autoOffloadVRAMThresholdGiB = 12.0
 
-// resolveCPUOffload maps the tri-state offload setting to the sidecar's
-// IMAGE_ENABLE_CPU_OFFLOAD value ("0"/"1") plus a human-readable reason for the
-// log. An explicit *bool (user picked On/Off in Settings) always wins. nil =
-// Auto: enable offload only on a discrete GPU (NVIDIA or AMD — both present as
-// torch device "cuda") whose total VRAM is below the threshold — the case where
-// full residency would spill and crawl. cpu/mps, or a GPU we can't measure,
-// leaves it off (we never silently slow a machine we couldn't probe).
-func resolveCPUOffload(setting *bool, device string) (value string, reason string) {
+// Heavy-DiT sizing (GiB), driving the backend-aware Auto decisions:
+//
+//   - heavyResidencyGiB: approx VRAM for FULL residency (whole pipe on GPU).
+//     Below it, Auto turns offload ON for that backend.
+//   - heavyModuleGiB: approx VRAM of the COMPUTE MODULE alone (what
+//     enable_model_cpu_offload still needs resident during the denoise).
+//     Below it, "model" offload cannot help — Auto picks "group" (the engine
+//     block-streams the module: ~5-6 GiB peak, measured 5.9 for Krea 2 12.9B).
+//
+// krea2 numbers assume the fp8-resident path (~13 GiB module) — the dominant
+// civitai distribution; a bf16 checkpoint on a 16-24 GiB card may still need
+// an explicit "group" pick in Settings.
+var (
+	heavyResidencyGiB = map[string]float64{
+		"flux": 26, "chroma": 20, "qwenimage": 44, "krea2": 16,
+		// Z-Image: ~12 GiB bf16 transformer + multi-GiB Qwen text encoder.
+		// Cards under ~20 GiB must offload; under ~13 GiB even "model" offload
+		// leaves the transformer spilling to WDDM shared memory (the measured
+		// ~50x slowdown) — group streams it instead.
+		"zimage": 20,
+	}
+	heavyModuleGiB = map[string]float64{
+		"flux": 24, "chroma": 18, "qwenimage": 42, "krea2": 14,
+		"zimage": 13,
+	}
+)
+
+// resolveOffload maps the Settings (tri-state enable + mode) to the sidecar's
+// IMAGE_ENABLE_CPU_OFFLOAD ("0"/"1") and IMAGE_OFFLOAD_MODE ("model"/"group"),
+// plus a human-readable reason for the log.
+//
+// Enable: an explicit *bool always wins. nil = Auto: on a discrete GPU (NVIDIA
+// or AMD — both present as torch device "cuda") offload turns on below the
+// backend's threshold — 12 GiB for the light backends, the per-backend
+// full-residency size for the heavy DiTs (a 16 GiB card runs SDXL resident but
+// must offload FLUX). cpu/mps, or a GPU we can't measure, leaves it off (we
+// never silently slow a machine we couldn't probe).
+//
+// Mode: an explicit "model"/"group" wins. Auto picks "group" when the
+// backend's compute module alone would overflow the card (where "model"
+// offload still OOMs — e.g. Krea 2 on 8 GiB), "model" otherwise.
+func resolveOffload(setting *bool, modeSetting, device, backend string) (value, mode, reason string) {
+	explicitMode := strings.ToLower(strings.TrimSpace(modeSetting))
+	if explicitMode != "model" && explicitMode != "group" {
+		explicitMode = "" // "", "auto", anything else -> auto-pick
+	}
+
+	// GPU probe is needed by both the Auto-enable decision and the Auto mode
+	// pick; resolve it lazily once.
+	var info gpu.Info
+	probed := false
+	probe := func() gpu.Info {
+		if !probed {
+			info = gpu.Detect(context.Background())
+			probed = true
+		}
+		return info
+	}
+	pickMode := func() (string, string) {
+		if explicitMode != "" {
+			return explicitMode, "mode=" + explicitMode + " (Settings)"
+		}
+		moduleGiB, heavy := heavyModuleGiB[backend]
+		if !heavy {
+			return "model", "mode=model (light backend)"
+		}
+		g := probe()
+		if g.VRAMGiB > 0 && g.VRAMGiB < moduleGiB {
+			return "group", "mode=group (compute module ~" +
+				strconv.FormatFloat(moduleGiB, 'f', 0, 64) + " GiB > " +
+				strconv.FormatFloat(g.VRAMGiB, 'f', 1, 64) + " GiB VRAM)"
+		}
+		return "model", "mode=model (compute module fits)"
+	}
+
 	if setting != nil {
 		if *setting {
-			return "1", "explicit On (Settings)"
+			m, mreason := pickMode()
+			return "1", m, "explicit On (Settings); " + mreason
 		}
-		return "0", "explicit Off (Settings)"
+		return "0", "model", "explicit Off (Settings)"
 	}
 	dev := strings.ToLower(strings.TrimSpace(device))
 	if dev != "" && dev != "auto" && !strings.HasPrefix(dev, "cuda") {
-		return "0", "Auto: device=" + dev + " (offload applies to CUDA/ROCm GPUs only)"
+		return "0", "model", "Auto: device=" + dev + " (offload applies to CUDA/ROCm GPUs only)"
 	}
-	info := gpu.Detect(context.Background())
-	if (info.Vendor != gpu.VendorNVIDIA && info.Vendor != gpu.VendorAMD) || info.VRAMGiB <= 0 {
-		return "0", "Auto: VRAM undetectable (no NVIDIA/AMD probe succeeded) — leaving offload off"
+	g := probe()
+	if (g.Vendor != gpu.VendorNVIDIA && g.Vendor != gpu.VendorAMD) || g.VRAMGiB <= 0 {
+		return "0", "model", "Auto: VRAM undetectable (no NVIDIA/AMD probe succeeded) — leaving offload off"
 	}
-	g := strconv.FormatFloat(info.VRAMGiB, 'f', 1, 64)
-	thr := strconv.FormatFloat(autoOffloadVRAMThresholdGiB, 'f', 0, 64)
-	label := string(info.Vendor)
-	if gib := info.VRAMGiB; gib < autoOffloadVRAMThresholdGiB {
-		return "1", "Auto: " + g + " GiB VRAM (" + label + ") < " + thr +
-			" GiB threshold — enabling offload to avoid VRAM spill"
+	threshold := autoOffloadVRAMThresholdGiB
+	if t, heavy := heavyResidencyGiB[backend]; heavy {
+		threshold = t
 	}
-	return "0", "Auto: " + g + " GiB VRAM (" + label + ") ≥ " + thr + " GiB — full residency (offload off)"
+	gs := strconv.FormatFloat(g.VRAMGiB, 'f', 1, 64)
+	thr := strconv.FormatFloat(threshold, 'f', 0, 64)
+	label := string(g.Vendor)
+	if g.VRAMGiB < threshold {
+		m, mreason := pickMode()
+		return "1", m, "Auto: " + gs + " GiB VRAM (" + label + ") < " + thr +
+			" GiB threshold for " + backend + " — enabling offload; " + mreason
+	}
+	return "0", "model", "Auto: " + gs + " GiB VRAM (" + label + ") ≥ " + thr +
+		" GiB for " + backend + " — full residency (offload off)"
 }
 
 // runtimeEnv builds the engine's env from the user's settings for the ACTIVE
@@ -154,18 +251,23 @@ func (m *Manager) runtimeEnv(rt types.EngineRuntimeSettings, backend string) []s
 	if dev == "" {
 		dev = "auto"
 	}
-	// Auto mode probes VRAM and may flip offload on for small cards — log the
-	// decision so a surprised user can see WHY offload engaged (or didn't) in the
-	// LogPanel. An explicit Settings toggle short-circuits the probe.
-	offloadVal, offloadReason := resolveCPUOffload(cpuOffload, dev)
+	// Auto mode probes VRAM and may flip offload on for small cards (and pick
+	// "group" for a heavy DiT whose compute module can't fit) — log the decision
+	// so a surprised user can see WHY offload engaged (or didn't) in the
+	// LogPanel. Explicit Settings picks short-circuit the probe.
+	offloadVal, offloadMode, offloadReason := resolveOffload(
+		cpuOffload, img.OffloadMode, dev, backend)
 	if m.bus != nil {
 		m.bus.Info("sidecar", "CPU offload — "+offloadReason,
-			map[string]any{"backend": backend, "IMAGE_ENABLE_CPU_OFFLOAD": offloadVal})
+			map[string]any{"backend": backend,
+				"IMAGE_ENABLE_CPU_OFFLOAD": offloadVal,
+				"IMAGE_OFFLOAD_MODE":       offloadMode})
 	}
 	env = append(env,
 		"IMAGE_DEVICE="+dev,
 		"IMAGE_USE_TINY_VAE="+bool01(tinyVAE),
 		"IMAGE_ENABLE_CPU_OFFLOAD="+offloadVal,
+		"IMAGE_OFFLOAD_MODE="+offloadMode,
 	)
 	set("MAX_GPU_MODELS", maxGPU)
 	set("MAX_CPU_MODELS", maxCPU)

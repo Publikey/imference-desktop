@@ -153,16 +153,25 @@ def generate(payload: dict, ctx: dict) -> dict:
     if not strength:  # None or 0 → engine default
         strength = 0.75
 
+    # guidance_scale MUST preserve an explicit 0 — for Krea 2 Turbo (and other
+    # guidance-distilled models) 0 means "guidance OFF", their nominal recipe;
+    # the old `or 6.0` silently turned it into CFG 6 and doubled the transformer
+    # passes. For every sampling param, absent/0-for-never-legit-zero values are
+    # passed as None so the ENGINE's precedence chain (request > model > engine
+    # family > global) fills them — hardcoded fallbacks here would shadow the
+    # per-backend recipes (e.g. krea2's 8 steps).
+    guidance = payload.get("guidance_scale")
+    if guidance is None:
+        guidance = payload.get("guidanceScale")
+
     gen_kwargs = dict(
         model=MODEL_NAME,
         prompt=prompt,
         negative_prompt=payload.get("negative_prompt") or payload.get("negativePrompt"),
-        width=payload.get("width") or 1024,
-        height=payload.get("height") or 1024,
-        num_steps=payload.get("num_steps") or payload.get("numSteps") or 28,
-        guidance_scale=payload.get("guidance_scale")
-        or payload.get("guidanceScale")
-        or 6.0,
+        width=payload.get("width") or None,
+        height=payload.get("height") or None,
+        num_steps=payload.get("num_steps") or payload.get("numSteps") or None,
+        guidance_scale=guidance,
         seed=payload.get("seed"),
         source_image=source_image,
         strength=strength,

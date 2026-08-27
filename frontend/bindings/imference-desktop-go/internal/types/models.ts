@@ -341,6 +341,15 @@ export interface ImageRuntimeSettings {
     "enableCpuOffload"?: boolean | null;
 
     /**
+     * OffloadMode picks the offload MECHANISM when offload is enabled
+     * (engine env IMAGE_OFFLOAD_MODE): "" or "auto" = backend+VRAM-aware pick
+     * (heavy DiTs whose compute module can't fit the card get "group" —
+     * block-streamed, ~5-6 GB peak VRAM; everything else gets "model"),
+     * "model" / "group" force it. Ignored while offload is off.
+     */
+    "offloadMode"?: string;
+
+    /**
      * "" / "auto" / int
      */
     "maxGpuModels"?: string;

@@ -49,6 +49,7 @@ import { useConfirm } from "@/components/ui/confirm";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
+import { LocalReadinessCard } from "@/components/LocalReadinessCard";
 import { PaymentBar } from "@/components/PaymentBar";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
@@ -522,21 +523,27 @@ export default function App() {
   // selected self-contained SDXL.
   const shownLocalModel = pendingLocalModel ?? settings?.localModel ?? null;
   const activeBaseRepo = shownLocalModel?.baseModel ?? "";
+  const activeBackend = shownLocalModel?.backendType ?? "";
   useEffect(() => {
     let alive = true;
     setCompReadiness(null);
     setCompError(null);
-    if (!activeBaseRepo) return; // self-contained model → nothing to check
+    // Always ask, even with no base repo: some backends (SDXL/SD1.5) have
+    // AUXILIARY component repos of their own (config repo, fp16-fix VAE) that
+    // the Go side resolves per backend — a "self-contained" SDXL once hid a
+    // ~340 MB VAE pull behind its first generation.
+    if (!shownLocalModel) return;
     setCompChecking(true);
     api
-      .checkModelReadiness(activeBaseRepo)
+      .checkModelReadiness(activeBaseRepo, activeBackend)
       .then((r) => alive && setCompReadiness(r))
       .catch(() => alive && setCompReadiness(null)) // unknown → don't gate
       .finally(() => alive && setCompChecking(false));
     return () => {
       alive = false;
     };
-  }, [activeBaseRepo, shownLocalModel?.modelCode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBaseRepo, activeBackend, shownLocalModel?.modelCode]);
 
   useEffect(() => {
     const offProgress = api.onComponentsProgress((p) => {
@@ -547,7 +554,9 @@ export default function App() {
       setCompDownloading(false);
       setCompProgress(null);
       setCompError(null);
-      void api.checkModelReadiness(d.baseRepo).then(setCompReadiness);
+      void api
+        .checkModelReadiness(d.baseRepo, compBackendRef.current)
+        .then(setCompReadiness);
     });
     const offError = api.onComponentsError((d) => {
       setCompDownloading(false);
@@ -561,15 +570,18 @@ export default function App() {
     };
   }, []);
 
+  // Mirror the shown backend for the done-handler (subscribed once).
+  const compBackendRef = useRef(activeBackend);
+  compBackendRef.current = activeBackend;
+
   const downloadComponents = useCallback(() => {
-    if (!activeBaseRepo) return;
     setCompError(null);
     setCompDownloading(true);
-    api.downloadModelComponents(activeBaseRepo).catch((e) => {
+    api.downloadModelComponents(activeBaseRepo, activeBackend).catch((e) => {
       setCompDownloading(false);
       setCompError(e instanceof Error ? e.message : String(e));
     });
-  }, [activeBaseRepo]);
+  }, [activeBaseRepo, activeBackend]);
 
   // Gate: only a POSITIVE "files are missing" verdict blocks — an unknown
   // readiness (no manifest, check failed) falls back to the engine's lazy path.
@@ -1361,23 +1373,9 @@ export default function App() {
   // already cached → it stays Generate / Add to queue, and swapping them into
   // the engine rides along with the run. Cmd/Ctrl+Enter triggers whichever is
   // current.
+  // The primary button is ALWAYS Generate now — downloads and engine
+  // lifecycle live in the LocalReadinessCard, never behind this label.
   const primary: ComposerAction = useMemo(() => {
-    if (mode === "local" && downloading)
-      return {
-        label: activationIsLoad ? t("composer.loadingModelBtn") : t("composer.downloadingBtn"),
-        onClick: () => {},
-        disabled: true,
-        busy: true,
-        kind: "download",
-      };
-    if (mode === "local" && localNeedsDownload)
-      return {
-        label: t("composer.downloadModelBtn"),
-        onClick: downloadLocalModel,
-        disabled: !pendingLocalModel,
-        busy: false,
-        kind: "download",
-      };
     return {
       // Local runs are enqueued one-at-a-time, so when the queue is already busy
       // the button adds to it rather than starting immediately — say so.
@@ -1395,8 +1393,16 @@ export default function App() {
         // its own when the queue drains.
         if (mode !== "local" || !localNeedsActivation || pendingSwitch) return;
         if (pendingLocalModel?.localPath) {
-          // User checkpoint: no cache index, its own activation path.
-          void selectCustomModel(pendingLocalModel).catch(() => {});
+          if (settings?.localModel?.modelCode === pendingLocalModel.modelCode) {
+            // The custom checkpoint is ALREADY the registered model — the
+            // engine is just down. useCustomModel only restarts a RUNNING
+            // sidecar, so re-registering here left the queued job stuck on
+            // "next up" forever; a plain start loads it.
+            void api.startSidecar().catch(() => {});
+          } else {
+            // User checkpoint: no cache index, its own activation path.
+            void selectCustomModel(pendingLocalModel).catch(() => {});
+          }
         } else {
           activateLocalModel(true);
         }
@@ -1405,7 +1411,7 @@ export default function App() {
       busy: false,
       kind: "generate",
     };
-  }, [mode, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, pendingSwitch, pendingLocalModel, downloadLocalModel, activateLocalModel, selectCustomModel, canGenerate, localQueueActive, run, t]);
+  }, [mode, localNeedsActivation, pendingSwitch, pendingLocalModel, settings?.localModel?.modelCode, activateLocalModel, selectCustomModel, canGenerate, localQueueActive, run, t]);
 
   // Global ⌘/Ctrl+Enter → run the primary action from anywhere in the app, not
   // only when the prompt field has focus. Suppressed while a modal that captures
@@ -1682,14 +1688,33 @@ export default function App() {
                         onSelectLocal={setPendingLocalModel}
                         cachedCodes={cachedCodes}
                         downloading={downloading}
-                        loadingCached={activationIsLoad}
-                        progress={dlProgress}
-                        onCancelDownload={cancelDownload}
                         onAddCustom={addCustomModel}
                         onSelectCustom={selectCustomModel}
                         onRemoveCustom={removeCustomModel}
                         pickerOpen={modelPickerOpen}
                         onPickerOpenChange={setModelPickerOpen}
+                      />
+                    )}
+
+                    {/* 2b. Local readiness — the ONE preflight panel: weights,
+                        shared components, engine. Every action that used to be
+                        scattered (header start, under-model download, Generate
+                        hijacked into a downloader) lives here. */}
+                    {!firstRun && mode === "local" && (
+                      <LocalReadinessCard
+                        model={pendingLocalModel}
+                        engineInstalled={engineInstalled}
+                        installing={installing}
+                        sidecar={sidecar}
+                        onInstallEngine={installEngine}
+                        onStartEngine={startEngine}
+                        onStopEngine={stopEngine}
+                        weightsCached={localCached}
+                        weightsDownloading={downloading}
+                        weightsIsLoad={activationIsLoad}
+                        weightsProgress={dlProgress}
+                        onDownloadWeights={downloadLocalModel}
+                        onCancelWeights={cancelDownload}
                         componentsReadiness={compReadiness}
                         componentsProgress={compProgress}
                         componentsDownloading={compDownloading}

@@ -155,13 +155,15 @@ const raw = {
   // downloadModelComponents pre-pulls it with progress events, so the first
   // generation never hides a download behind "generating". Called by name —
   // no generated binding to race.
-  checkModelReadiness: ((baseRepo: string) =>
-    Call.ByName("main.App.CheckModelReadiness", baseRepo)) as (
-    baseRepo: string
+  checkModelReadiness: ((baseRepo: string, backend: string) =>
+    Call.ByName("main.App.CheckModelReadiness", baseRepo, backend)) as (
+    baseRepo: string,
+    backend: string
   ) => Promise<ComponentsReadiness>,
-  downloadModelComponents: ((baseRepo: string) =>
-    Call.ByName("main.App.DownloadModelComponents", baseRepo)) as (
-    baseRepo: string
+  downloadModelComponents: ((baseRepo: string, backend: string) =>
+    Call.ByName("main.App.DownloadModelComponents", baseRepo, backend)) as (
+    baseRepo: string,
+    backend: string
   ) => Promise<void>,
   // Custom user-supplied checkpoints (referenced in place, no download).
   // pickModelFile returns "" when the user cancels the native dialog.

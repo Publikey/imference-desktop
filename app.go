@@ -1837,38 +1837,79 @@ func (a *App) UseCustomModel(path, backendType, baseModel string) (types.Setting
 	return saved, nil
 }
 
-// CheckModelReadiness reports whether a model's shared base components (text
-// encoder / VAE / tokenizer / scheduler — the multi-GB repo a transformer-only
-// checkpoint needs) are already in the offline tree. STATELESS on purpose: the
-// renderer passes the base repo of the model it is DISPLAYING (which may be a
-// pending pick, not yet the saved LocalModel — reading saved settings here
-// once showed krea2's missing components under a freshly selected SDXL). The
-// UI gates the Generate button on Ready and offers DownloadModelComponents
-// when files are missing — so a cold first generation never hides a multi-GB
-// download behind "generating". Never gates on uncertainty: an empty repo
-// (self-contained model), a disabled CDN, or an unmirrored base all report
-// Ready=true (HasManifest=false) and fall back to the engine's lazy download.
-func (a *App) CheckModelReadiness(baseRepo string) components.Readiness {
-	repo := strings.TrimSpace(baseRepo)
-	cacheDir, err := sidecar.ImageCacheDir()
-	if err != nil {
-		return components.Readiness{BaseRepo: repo, Ready: true}
+// componentRepos lists EVERY shared repo a model needs beyond its own
+// checkpoint: the base_model (text encoder / VAE / tokenizer for the
+// transformer-only backends) PLUS the backend's auxiliary repos that its
+// load_pipeline fetches on its own — the SDXL/SD1.5 config repos and the VAE
+// swaps (fp16-fix, or TAESD under the tiny-VAE setting). Without the aux list
+// a "no components required" SDXL still hid a ~340 MB fp16-fix pull behind
+// its first generation. Mirrors the engine backends' constants (pipelines/
+// sdxl.py, sd15.py) — keep in sync.
+func (a *App) componentRepos(baseRepo, backend string) []string {
+	var repos []string
+	if r := strings.TrimSpace(baseRepo); r != "" {
+		repos = append(repos, r)
 	}
-	return a.components.Check(a.ctx, sidecar.ImageCDNBase(), cacheDir, repo)
+	tinyVAE := a.settings.Get().EngineRuntime.Image.UseTinyVAE
+	switch backend {
+	case "sdxl":
+		repos = append(repos, "stabilityai/stable-diffusion-xl-base-1.0")
+		if tinyVAE {
+			repos = append(repos, "madebyollin/taesdxl")
+		} else {
+			repos = append(repos, "madebyollin/sdxl-vae-fp16-fix")
+		}
+	case "sd15":
+		repos = append(repos, "stable-diffusion-v1-5/stable-diffusion-v1-5")
+		if tinyVAE {
+			repos = append(repos, "madebyollin/taesd")
+		}
+	}
+	return repos
 }
 
-// DownloadModelComponents pre-downloads a model's base components from the CDN
-// mirror into the engine's offline tree, asynchronously. Stateless like
-// CheckModelReadiness — the renderer passes the displayed model's base repo.
-// Progress streams via "components:progress" events; a final "components:done"
-// or "components:error" settles the UI. Idempotent and resumable (present
-// files are skipped; a cancelled run resumes on the next call). On completion
-// the engine's own completion marker is written, so its cold load is a cache
-// hit.
-func (a *App) DownloadModelComponents(baseRepo string) error {
-	repo := strings.TrimSpace(baseRepo)
-	if repo == "" {
-		return errors.New("model has no shared base components to download")
+// CheckModelReadiness reports whether a model's shared components — its base
+// repo plus the backend's auxiliary repos (see componentRepos) — are already
+// in the offline tree. STATELESS on purpose: the renderer passes the base
+// repo and backend of the model it is DISPLAYING (which may be a pending
+// pick, not yet the saved LocalModel — reading saved settings here once
+// showed krea2's missing components under a freshly selected SDXL). The UI
+// gates the Generate button on Ready and offers DownloadModelComponents when
+// files are missing — so a cold first generation never hides a download
+// behind "generating". Never gates on uncertainty: a repo without a CDN
+// manifest reports ready and falls back to the engine's lazy download.
+func (a *App) CheckModelReadiness(baseRepo, backend string) components.Readiness {
+	cacheDir, err := sidecar.ImageCacheDir()
+	if err != nil {
+		return components.Readiness{BaseRepo: baseRepo, Ready: true}
+	}
+	agg := components.Readiness{BaseRepo: strings.TrimSpace(baseRepo), Ready: true}
+	for _, repo := range a.componentRepos(baseRepo, backend) {
+		r := a.components.Check(a.ctx, sidecar.ImageCDNBase(), cacheDir, repo)
+		agg.HasManifest = agg.HasManifest || r.HasManifest
+		agg.TotalFiles += r.TotalFiles
+		agg.MissingFiles += r.MissingFiles
+		agg.MissingBytes += r.MissingBytes
+		if r.HasManifest && !r.Ready {
+			agg.Ready = false
+		}
+	}
+	return agg
+}
+
+// DownloadModelComponents pre-downloads a model's shared components — base
+// repo + backend auxiliaries (see componentRepos) — from the CDN mirror into
+// the engine's offline tree, asynchronously. Stateless like
+// CheckModelReadiness. Progress streams via "components:progress" events; a
+// final "components:done" or "components:error" settles the UI. Idempotent
+// and resumable (present files are skipped; a cancelled run resumes on the
+// next call). On completion each repo's engine completion marker is written,
+// so the cold load is a cache hit. A repo without a CDN manifest is skipped
+// (the engine's lazy path covers it).
+func (a *App) DownloadModelComponents(baseRepo, backend string) error {
+	repos := a.componentRepos(baseRepo, backend)
+	if len(repos) == 0 {
+		return errors.New("model has no shared components to download")
 	}
 	cacheDir, err := sidecar.ImageCacheDir()
 	if err != nil {
@@ -1882,30 +1923,39 @@ func (a *App) DownloadModelComponents(baseRepo string) error {
 	a.compBusy = true
 	a.compMu.Unlock()
 
-	a.bus.Info("app", "components download started", map[string]any{"repo": repo})
+	a.bus.Info("app", "components download started", map[string]any{"repos": repos})
 	go func() {
 		defer func() {
 			a.compMu.Lock()
 			a.compBusy = false
 			a.compMu.Unlock()
 		}()
-		err := a.components.Download(a.ctx, sidecar.ImageCDNBase(), cacheDir, repo,
-			func(p components.Progress) {
-				if a.app != nil {
-					a.app.Event.Emit("components:progress", p)
+		for _, repo := range repos {
+			err := a.components.Download(a.ctx, sidecar.ImageCDNBase(), cacheDir, repo,
+				func(p components.Progress) {
+					if a.app != nil {
+						a.app.Event.Emit("components:progress", p)
+					}
+				})
+			if err != nil {
+				// A missing manifest is a mirror gap, not a user problem — the
+				// engine's lazy path covers that repo; keep going.
+				if strings.Contains(err.Error(), "HTTP 404") {
+					a.bus.Warn("app", "components repo not mirrored — engine lazy path will cover it", map[string]any{
+						"repo": repo})
+					continue
 				}
-			})
-		if err != nil {
-			a.bus.Error("app", "components download failed", map[string]any{
-				"repo": repo, "err": err.Error()})
-			if a.app != nil {
-				a.app.Event.Emit("components:error", map[string]any{
-					"baseRepo": repo, "error": err.Error()})
+				a.bus.Error("app", "components download failed", map[string]any{
+					"repo": repo, "err": err.Error()})
+				if a.app != nil {
+					a.app.Event.Emit("components:error", map[string]any{
+						"baseRepo": repo, "error": err.Error()})
+				}
+				return
 			}
-			return
 		}
 		if a.app != nil {
-			a.app.Event.Emit("components:done", map[string]any{"baseRepo": repo})
+			a.app.Event.Emit("components:done", map[string]any{"baseRepo": strings.TrimSpace(baseRepo)})
 		}
 	}()
 	return nil

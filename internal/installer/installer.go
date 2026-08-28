@@ -37,19 +37,20 @@ import (
 // tag — not refs/heads/main — so the desktop never silently picks up a drifting
 // main that could break the sidecar.
 //
-// The extras list is deliberately the seven image backends and nothing else.
+// The extras list is deliberately the eight image backends and nothing else.
 // As of engine v0.4.0 every extra — [minimax-h3] included — shares one
 // diffusers==0.40.0 pin, so the old venv conflict that kept H3 out is gone;
 // H3 stays excluded anyway because its ~75 GB host-RAM floor makes it a poor
 // local fit. It remains server-side: normalizeEngine doesn't recognise it, so
 // those catalog rows are cloud-only.
 //
-// NOTE: the v0.4.0 tag is cut after the engine's diffusers-0.40 branch passes
-// GPU re-validation and merges (see imference-engine RELEASING.md).
+// v0.4.1 (tagged 2026-08-28) adds the krea2 backend (civitai fp8 single-files
+// as-is, fp8-resident), group offloading (IMAGE_OFFLOAD_MODE=group — what the
+// offload UI setting drives), SDXL user LoRAs, and surrogate-safe prompts.
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.0.tar.gz"
+const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.1.tar.gz"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute
@@ -73,9 +74,7 @@ func resolveEngineSource() (spec string, editable bool) {
 	// Local path → editable install with all image-backend extras. Pip accepts
 	// "path[extras]" syntax even on Windows paths with spaces. The image
 	// backends share byte-identical deps (torch + diffusers 0.40 + transformers +
-	// sentencepiece), so this resolves once — matching the pinned GitHub tarball.
-	// krea2 is listed here (engine >= 0.4.1 checkouts); pip only WARNS on an
-	// extra the older pinned tarball doesn't know, so this stays compatible.
+	// sentencepiece), so this resolves once — same extras as EngineTarball.
 	return override + "[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2]", true
 }
 

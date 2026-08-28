@@ -1,6 +1,7 @@
 {
   "common": {
     "cancel": "Cancel",
+    "retry": "Retry",
     "done": "Done",
     "close": "Close",
     "copy": "Copy",
@@ -100,12 +101,13 @@
     "creditsPerRun": "{{name}} · {{cost}} credits / run",
     "engineNotInstalled": "Local engine not installed — click Install engine",
     "downloadingModel": "Downloading model…",
-    "clickDownload": "{{name}} — click Download model",
+    "clickDownload": "{{name}} — download the weights in the readiness panel above",
     "loadingModel": "Loading model into the engine…",
     "willLoad": "{{name}} — loads into the engine on generate",
     "engineStarting": "Local engine starting…",
     "engineError": "Local engine error — see Logs",
-    "startEngine": "Start the local engine to generate",
+    "startEngine": "Start the local engine in the readiness panel above",
+    "downloadComponents": "Shared components required — see the readiness panel above",
     "pickModel": "Pick a model above",
     "preparing": "Preparing {{name}}",
     "usdPerRun": "{{name}} · ${{usd}} / run"
@@ -184,6 +186,8 @@
     "height": "Height",
     "steps": "Steps",
     "cfg": "CFG",
+    "cfgZeroOffHint": "0 = guidance off (recommended for Turbo). Civitai/ComfyUI recipes count from 1: their CFG 1 = 0 here.",
+    "cfgZeroOffTitle": "This model counts guidance from 0 (off). ComfyUI and civitai count from 1 — subtract 1 when copying a recipe.",
     "seed": "Seed",
     "random": "Random",
     "advanced": "Advanced · local only",
@@ -306,6 +310,26 @@
     "youHave": " (you have v{{version}})",
     "dismissTitle": "Dismiss (shown again at next launch)"
   },
+  "readiness": {
+    "title": "Local model readiness",
+    "prepareAll": "Prepare everything",
+    "readyLine": "Ready — {{name}} · engine running",
+    "weights": "Model weights",
+    "weightsCached": "on disk",
+    "weightsLocalFile": "local file",
+    "weightsLoading": "Loading into the engine…",
+    "weightsDownloading": "Downloading…",
+    "download": "Download",
+    "downloadSized": "Download (~{{size}})",
+    "components": "Shared components",
+    "componentsOk": "in the offline cache",
+    "componentsNone": "none required",
+    "engine": "Local engine",
+    "engineRunning": "running",
+    "engineStarting": "Starting…",
+    "engineInstalling": "Installing the engine…",
+    "engineError": "Engine error — see Logs"
+  },
   "modelBar": {
     "cloudModel": "Cloud model",
     "localModel": "Local model",
@@ -313,7 +337,12 @@
     "selectModel": "Select a model",
     "noModels": "No models",
     "working": "Working…",
-    "switchQueued": "Switching to {{name}} after the current generation"
+    "switchQueued": "Switching to {{name}} after the current generation",
+    "componentsChecking": "Checking model components…",
+    "componentsMissing": "Shared components required (~{{size}})",
+    "componentsMissingTitle": "{{files}} file(s) missing from {{repo}} (~{{size}}) — download them before generating",
+    "downloadComponents": "Download components",
+    "componentsDownloading": "Components {{index}}/{{total}} — {{file}}"
   },
   "modelPicker": {
     "cloudTitle": "Cloud models",
@@ -353,6 +382,7 @@
     "hintChroma": "FLUX-derived (single T5 encoder); needs a base repo.",
     "hintQwenimage": "20B MMDiT, strong text rendering; needs a base repo.",
     "hintAnima": "Single-file DiT (Cosmos); needs the Anima base repo (Qwen3 encoder + VAE).",
+    "hintKrea2": "Krea 2 Turbo transformer-only checkpoint (fp8 or bf16, ComfyUI files load as-is); needs the gated Krea 2 base repo. Heavy: ~13 GB VRAM.",
     "baseModel": "Base model (Hugging Face repo id) — optional",
     "baseModelHint": "Leave blank to use the default ({{base}}).",
     "use": "Use this model"
@@ -500,7 +530,11 @@
     "cpuOffload": "CPU offload",
     "offloadAuto": "Auto — enabled on low-VRAM GPUs (recommended)",
     "offloadOn": "On — always (lowest peak VRAM)",
-    "offloadOff": "Off — full residency (needs ≳ 12 GB VRAM)"
+    "offloadOff": "Off — full residency (needs ≳ 12 GB VRAM)",
+    "offloadMode": "Offload mode",
+    "offloadModeAuto": "Auto — group for big models on small GPUs (recommended)",
+    "offloadModeModel": "Model — whole submodels swap (fast, needs the biggest one to fit)",
+    "offloadModeGroup": "Group — block streaming, ~6 GB peak (big models on 8 GB cards; slower, RAM-hungry)"
   },
   "wallet": {
     "loading": "Loading wallet…",

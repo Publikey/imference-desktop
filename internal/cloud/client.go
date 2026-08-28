@@ -343,6 +343,8 @@ func normalizeEngine(imEngine string) string {
 		return "qwenimage"
 	case "anima":
 		return "anima"
+	case "krea2", "krea-2", "krea2-turbo":
+		return "krea2"
 	case "wan22", "wan":
 		return "wan"
 	default:
@@ -356,6 +358,10 @@ func normalizeEngine(imEngine string) string {
 var imageBackends = map[string]bool{
 	"sdxl": true, "sd15": true, "zimage": true, "flux": true,
 	"chroma": true, "qwenimage": true, "anima": true,
+	// krea2 loads locally like the others but its fp8-resident transformer
+	// wants ~13 GB VRAM (no sub-module offload in the image engine) — small
+	// cards OOM at load, so catalog rows should gate it via ImLocal.
+	"krea2": true,
 }
 
 // IsImageBackend reports whether name is a normalized image backend the desktop
@@ -367,8 +373,9 @@ func IsImageBackend(name string) bool {
 // refImageBackends is the subset of image backends whose LOCAL pipeline can
 // actually start from a reference image. It's the img2img question, not the
 // "can this backend run" question: Anima is a Modular Diffusers text-to-image
-// pipeline with no image input at all, so offering the box on an Anima model
-// (catalog or user checkpoint) promises something the engine cannot do.
+// pipeline with no image input at all, and Krea 2 has no diffusers img2img
+// yet (upstream PR open) — offering the box on either promises something the
+// engine cannot do.
 var refImageBackends = map[string]bool{
 	"sdxl": true, "sd15": true, "zimage": true,
 	"flux": true, "chroma": true, "qwenimage": true,
@@ -392,6 +399,10 @@ var singleFileBackends = map[string]bool{
 	// Anima: a single-file DiT (.safetensors) + a base modular repo (encoder /
 	// VAE / config) — the engine's Anima backend injects the DiT into the base.
 	"anima": true,
+	// Krea 2: civitai/ComfyUI transformer-only single-files (native keys,
+	// fp8_scaled/fp8/bf16 — the engine normalizes in memory) + the gated
+	// krea/Krea-2-Turbo base repo.
+	"krea2": true,
 }
 
 // IsSingleFileBackend reports whether a user-supplied single .safetensors can be
@@ -419,6 +430,8 @@ func DefaultBaseModel(backend string) string {
 		return "Qwen/Qwen-Image"
 	case "anima":
 		return "circlestone-labs/Anima-Base-v1.0-Diffusers"
+	case "krea2":
+		return "krea/Krea-2-Turbo"
 	default:
 		return ""
 	}

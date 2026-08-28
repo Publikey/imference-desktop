@@ -127,9 +127,15 @@ type ImageRuntimeSettings struct {
 	// — so a small-VRAM GPU doesn't oversubscribe VRAM and crawl via WDDM
 	// shared-memory spill), *true = force on, *false = force off. On a card the
 	// full pipe fits on, Auto leaves it off (full residency is fastest).
-	EnableCPUOffload *bool  `json:"enableCpuOffload,omitempty"`
-	MaxGPUModels     string `json:"maxGpuModels,omitempty"` // "" / "auto" / int
-	MaxCPUModels     string `json:"maxCpuModels,omitempty"` // "" / "auto" / int
+	EnableCPUOffload *bool `json:"enableCpuOffload,omitempty"`
+	// OffloadMode picks the offload MECHANISM when offload is enabled
+	// (engine env IMAGE_OFFLOAD_MODE): "" or "auto" = backend+VRAM-aware pick
+	// (heavy DiTs whose compute module can't fit the card get "group" —
+	// block-streamed, ~5-6 GB peak VRAM; everything else gets "model"),
+	// "model" / "group" force it. Ignored while offload is off.
+	OffloadMode  string `json:"offloadMode,omitempty"`
+	MaxGPUModels string `json:"maxGpuModels,omitempty"` // "" / "auto" / int
+	MaxCPUModels string `json:"maxCpuModels,omitempty"` // "" / "auto" / int
 }
 
 // WanRuntimeSettings tunes the WAN video backend (WAN_* env contract). Applies

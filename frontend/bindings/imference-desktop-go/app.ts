@@ -18,6 +18,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as components$0 from "./internal/components/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as logbus$0 from "./internal/logbus/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -39,6 +42,22 @@ export function CancelModelDownload(): $CancellablePromise<void> {
  */
 export function CheckForUpdate(): $CancellablePromise<types$0.UpdateInfo> {
     return $Call.ByID(2347956003);
+}
+
+/**
+ * CheckModelReadiness reports whether a model's shared components — its base
+ * repo plus the backend's auxiliary repos (see componentRepos) — are already
+ * in the offline tree. STATELESS on purpose: the renderer passes the base
+ * repo and backend of the model it is DISPLAYING (which may be a pending
+ * pick, not yet the saved LocalModel — reading saved settings here once
+ * showed krea2's missing components under a freshly selected SDXL). The UI
+ * gates the Generate button on Ready and offers DownloadModelComponents when
+ * files are missing — so a cold first generation never hides a download
+ * behind "generating". Never gates on uncertainty: a repo without a CDN
+ * manifest reports ready and falls back to the engine's lazy download.
+ */
+export function CheckModelReadiness(baseRepo: string, backend: string): $CancellablePromise<components$0.Readiness> {
+    return $Call.ByID(158653036, baseRepo, backend);
 }
 
 export function ClearLogs(): $CancellablePromise<void> {
@@ -72,6 +91,21 @@ export function DeleteSavedImage(name: string): $CancellablePromise<void> {
  */
 export function DetectPython(): $CancellablePromise<types$0.PythonInfo> {
     return $Call.ByID(425866076);
+}
+
+/**
+ * DownloadModelComponents pre-downloads a model's shared components — base
+ * repo + backend auxiliaries (see componentRepos) — from the CDN mirror into
+ * the engine's offline tree, asynchronously. Stateless like
+ * CheckModelReadiness. Progress streams via "components:progress" events; a
+ * final "components:done" or "components:error" settles the UI. Idempotent
+ * and resumable (present files are skipped; a cancelled run resumes on the
+ * next call). On completion each repo's engine completion marker is written,
+ * so the cold load is a cache hit. A repo without a CDN manifest is skipped
+ * (the engine's lazy path covers it).
+ */
+export function DownloadModelComponents(baseRepo: string, backend: string): $CancellablePromise<void> {
+    return $Call.ByID(2424424962, baseRepo, backend);
 }
 
 /**

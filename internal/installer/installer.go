@@ -71,10 +71,12 @@ func resolveEngineSource() (spec string, editable bool) {
 		return override, false
 	}
 	// Local path → editable install with all image-backend extras. Pip accepts
-	// "path[extras]" syntax even on Windows paths with spaces. The seven image
+	// "path[extras]" syntax even on Windows paths with spaces. The image
 	// backends share byte-identical deps (torch + diffusers 0.40 + transformers +
 	// sentencepiece), so this resolves once — matching the pinned GitHub tarball.
-	return override + "[sdxl,sd15,zimage,flux,chroma,qwenimage,anima]", true
+	// krea2 is listed here (engine >= 0.4.1 checkouts); pip only WARNS on an
+	// extra the older pinned tarball doesn't know, so this stays compatible.
+	return override + "[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2]", true
 }
 
 // pinnedEngineVersionRe pulls the X.Y.Z out of the EngineTarball tag URL

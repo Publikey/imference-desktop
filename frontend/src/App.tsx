@@ -49,6 +49,7 @@ import { useConfirm } from "@/components/ui/confirm";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
+import { LocalReadinessCard } from "@/components/LocalReadinessCard";
 import { PaymentBar } from "@/components/PaymentBar";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
@@ -74,6 +75,8 @@ import type {
   FormatOption,
   GenerationRequest,
   GenerationResult,
+  ComponentsProgress,
+  ComponentsReadiness,
   InstallProgress,
   Job,
   LogEntry,
@@ -502,6 +505,89 @@ export default function App() {
     setSettings(next);
   }, []);
 
+  // --- Base components (shared text encoder / VAE / tokenizer repo) --------
+  // A transformer-only model can't generate until its base repo is in the
+  // offline tree; the readiness check gates Generate and the ModelBar offers
+  // an explicit download (progress via components:* events). Readiness is
+  // re-checked whenever the selected local model (or its base repo) changes,
+  // and after a download completes.
+  const [compReadiness, setCompReadiness] = useState<ComponentsReadiness | null>(null);
+  const [compProgress, setCompProgress] = useState<ComponentsProgress | null>(null);
+  const [compDownloading, setCompDownloading] = useState(false);
+  const [compChecking, setCompChecking] = useState(false);
+  const [compError, setCompError] = useState<string | null>(null);
+
+  // Follow the model the ModelBar DISPLAYS: the pending pick when there is
+  // one, else the saved active model. Keying off settings.localModel alone
+  // once showed the previous model's missing components under a freshly
+  // selected self-contained SDXL.
+  const shownLocalModel = pendingLocalModel ?? settings?.localModel ?? null;
+  const activeBaseRepo = shownLocalModel?.baseModel ?? "";
+  const activeBackend = shownLocalModel?.backendType ?? "";
+  useEffect(() => {
+    let alive = true;
+    setCompReadiness(null);
+    setCompError(null);
+    // Always ask, even with no base repo: some backends (SDXL/SD1.5) have
+    // AUXILIARY component repos of their own (config repo, fp16-fix VAE) that
+    // the Go side resolves per backend — a "self-contained" SDXL once hid a
+    // ~340 MB VAE pull behind its first generation.
+    if (!shownLocalModel) return;
+    setCompChecking(true);
+    api
+      .checkModelReadiness(activeBaseRepo, activeBackend)
+      .then((r) => alive && setCompReadiness(r))
+      .catch(() => alive && setCompReadiness(null)) // unknown → don't gate
+      .finally(() => alive && setCompChecking(false));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBaseRepo, activeBackend, shownLocalModel?.modelCode]);
+
+  useEffect(() => {
+    const offProgress = api.onComponentsProgress((p) => {
+      setCompDownloading(!p.done);
+      setCompProgress(p.done ? null : p);
+    });
+    const offDone = api.onComponentsDone((d) => {
+      setCompDownloading(false);
+      setCompProgress(null);
+      setCompError(null);
+      void api
+        .checkModelReadiness(d.baseRepo, compBackendRef.current)
+        .then(setCompReadiness);
+    });
+    const offError = api.onComponentsError((d) => {
+      setCompDownloading(false);
+      setCompProgress(null);
+      setCompError(d.error);
+    });
+    return () => {
+      offProgress();
+      offDone();
+      offError();
+    };
+  }, []);
+
+  // Mirror the shown backend for the done-handler (subscribed once).
+  const compBackendRef = useRef(activeBackend);
+  compBackendRef.current = activeBackend;
+
+  const downloadComponents = useCallback(() => {
+    setCompError(null);
+    setCompDownloading(true);
+    api.downloadModelComponents(activeBaseRepo, activeBackend).catch((e) => {
+      setCompDownloading(false);
+      setCompError(e instanceof Error ? e.message : String(e));
+    });
+  }, [activeBaseRepo, activeBackend]);
+
+  // Gate: only a POSITIVE "files are missing" verdict blocks — an unknown
+  // readiness (no manifest, check failed) falls back to the engine's lazy path.
+  const componentsBlocked =
+    !!compReadiness && compReadiness.hasManifest && !compReadiness.ready;
+
   // Open Settings, optionally scrolled to a section (payment-bar deep-links).
   const openSettings = useCallback((section?: string) => {
     setSettingsSection(section);
@@ -867,7 +953,8 @@ export default function App() {
   // local runs are enqueued, so the user can keep launching either way. Locally
   // it's the WEIGHTS being on disk that decides — not whether they're loaded:
   // the engine restart is queued behind the click, not in front of it.
-  const localCanRun = engineInstalled && localCached && sidecar.state !== "error";
+  const localCanRun =
+    engineInstalled && localCached && sidecar.state !== "error" && !componentsBlocked;
   const canGenerate = (mode === "cloud" ? cloudReady : localCanRun) && !!prompt.trim();
 
   // IDs of running local jobs the user asked to stop. Stopping hard-restarts the
@@ -1286,23 +1373,9 @@ export default function App() {
   // already cached → it stays Generate / Add to queue, and swapping them into
   // the engine rides along with the run. Cmd/Ctrl+Enter triggers whichever is
   // current.
+  // The primary button is ALWAYS Generate now — downloads and engine
+  // lifecycle live in the LocalReadinessCard, never behind this label.
   const primary: ComposerAction = useMemo(() => {
-    if (mode === "local" && downloading)
-      return {
-        label: activationIsLoad ? t("composer.loadingModelBtn") : t("composer.downloadingBtn"),
-        onClick: () => {},
-        disabled: true,
-        busy: true,
-        kind: "download",
-      };
-    if (mode === "local" && localNeedsDownload)
-      return {
-        label: t("composer.downloadModelBtn"),
-        onClick: downloadLocalModel,
-        disabled: !pendingLocalModel,
-        busy: false,
-        kind: "download",
-      };
     return {
       // Local runs are enqueued one-at-a-time, so when the queue is already busy
       // the button adds to it rather than starting immediately — say so.
@@ -1320,8 +1393,16 @@ export default function App() {
         // its own when the queue drains.
         if (mode !== "local" || !localNeedsActivation || pendingSwitch) return;
         if (pendingLocalModel?.localPath) {
-          // User checkpoint: no cache index, its own activation path.
-          void selectCustomModel(pendingLocalModel).catch(() => {});
+          if (settings?.localModel?.modelCode === pendingLocalModel.modelCode) {
+            // The custom checkpoint is ALREADY the registered model — the
+            // engine is just down. useCustomModel only restarts a RUNNING
+            // sidecar, so re-registering here left the queued job stuck on
+            // "next up" forever; a plain start loads it.
+            void api.startSidecar().catch(() => {});
+          } else {
+            // User checkpoint: no cache index, its own activation path.
+            void selectCustomModel(pendingLocalModel).catch(() => {});
+          }
         } else {
           activateLocalModel(true);
         }
@@ -1330,7 +1411,7 @@ export default function App() {
       busy: false,
       kind: "generate",
     };
-  }, [mode, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, pendingSwitch, pendingLocalModel, downloadLocalModel, activateLocalModel, selectCustomModel, canGenerate, localQueueActive, run, t]);
+  }, [mode, localNeedsActivation, pendingSwitch, pendingLocalModel, settings?.localModel?.modelCode, activateLocalModel, selectCustomModel, canGenerate, localQueueActive, run, t]);
 
   // Global ⌘/Ctrl+Enter → run the primary action from anywhere in the app, not
   // only when the prompt field has focus. Suppressed while a modal that captures
@@ -1388,11 +1469,15 @@ export default function App() {
     if (sidecar.state === "error") return t("hint.engineError");
     // Cached but not resident: generating loads it first, so say that rather
     // than sending the user off to the engine control.
+    // Components before the activation hint: a cached-but-unloaded model whose
+    // shared base is missing must say "download components", not "will load" —
+    // generating would gate on the components either way.
+    if (componentsBlocked) return t("hint.downloadComponents");
     if (localNeedsActivation) return t("hint.willLoad", { name: pendingLocalModel?.name });
     if (sidecar.state === "starting") return t("hint.engineStarting");
     if (sidecar.state !== "ready") return t("hint.startEngine");
     return settings?.localModel?.name ?? t("hint.pickModel");
-  }, [mode, cloudConfigured, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, params?.formatCode, params?.durationS, engineInstalled, t]);
+  }, [mode, cloudConfigured, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, componentsBlocked, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, params?.formatCode, params?.durationS, engineInstalled, t]);
 
   // Activity-panel derivations: in-flight count (running + queued) for the badge,
   // finished rows for the Clear action, and the done subset the gallery shows as
@@ -1603,14 +1688,39 @@ export default function App() {
                         onSelectLocal={setPendingLocalModel}
                         cachedCodes={cachedCodes}
                         downloading={downloading}
-                        loadingCached={activationIsLoad}
-                        progress={dlProgress}
-                        onCancelDownload={cancelDownload}
                         onAddCustom={addCustomModel}
                         onSelectCustom={selectCustomModel}
                         onRemoveCustom={removeCustomModel}
                         pickerOpen={modelPickerOpen}
                         onPickerOpenChange={setModelPickerOpen}
+                      />
+                    )}
+
+                    {/* 2b. Local readiness — the ONE preflight panel: weights,
+                        shared components, engine. Every action that used to be
+                        scattered (header start, under-model download, Generate
+                        hijacked into a downloader) lives here. */}
+                    {!firstRun && mode === "local" && (
+                      <LocalReadinessCard
+                        model={pendingLocalModel}
+                        engineInstalled={engineInstalled}
+                        installing={installing}
+                        sidecar={sidecar}
+                        onInstallEngine={installEngine}
+                        onStartEngine={startEngine}
+                        onStopEngine={stopEngine}
+                        weightsCached={localCached}
+                        weightsDownloading={downloading}
+                        weightsIsLoad={activationIsLoad}
+                        weightsProgress={dlProgress}
+                        onDownloadWeights={downloadLocalModel}
+                        onCancelWeights={cancelDownload}
+                        componentsReadiness={compReadiness}
+                        componentsProgress={compProgress}
+                        componentsDownloading={compDownloading}
+                        componentsChecking={compChecking}
+                        componentsError={compError}
+                        onDownloadComponents={downloadComponents}
                       />
                     )}
 
@@ -2483,9 +2593,15 @@ function ParamsPanel({
   // they invented values the model doesn't accept: a 6–7 steps slider on a
   // model that only runs 6. When a knob is pinned, show the value instead.
   const stepsPinned = isPinned(model.stepsMin, model.stepsMax);
-  const cfgDefault = knob(model.cfgDefault);
+  // cfg 0 is a REAL value for guidance-off models (Krea 2 Turbo publishes
+  // cfgDefault 0, cfgMin 0) — knob() would misread it as "unset" (that rule
+  // exists for legacy snapshots whose EVERY field is 0). A published cfgMax > 0
+  // marks the row as real, so trust its zero default/min then.
+  const cfgRowIsReal = model.cfgMax != null && model.cfgMax > 0;
+  const cfgDefault =
+    cfgRowIsReal && model.cfgDefault != null ? model.cfgDefault : knob(model.cfgDefault);
   const showCfg = cfgDefault != null;
-  const cfgMin = knob(model.cfgMin) ?? 1;
+  const cfgMin = cfgRowIsReal && model.cfgMin != null ? model.cfgMin : (knob(model.cfgMin) ?? 1);
   const cfgMax = Math.max(knob(model.cfgMax) ?? 20, cfgMin + 0.5);
   const cfgPinned = isPinned(model.cfgMin, model.cfgMax);
   const showClip = knob(model.skipDefault) != null; // model uses clip-skip
@@ -2544,7 +2660,21 @@ function ParamsPanel({
               (cfgPinned ? (
                 <FixedRow label={t("params.cfg")} value={String(cfgDefault)} />
               ) : (
-                <RangeRow label={t("params.cfg")} value={params.cfg ?? cfgDefault} min={cfgMin} max={cfgMax} step={0.5} onChange={(v) => set({ cfg: v })} />
+                <div
+                  className="grid gap-1"
+                  title={model.backendType === "krea2" ? t("params.cfgZeroOffTitle") : undefined}
+                >
+                  <RangeRow label={t("params.cfg")} value={params.cfg ?? cfgDefault} min={cfgMin} max={cfgMax} step={0.5} onChange={(v) => set({ cfg: v })} />
+                  {/* Krea 2 counts guidance from 0 (off = the Turbo recipe) while
+                      civitai/ComfyUI recipes count from 1 (their CFG 1 == our 0) —
+                      say it, or users will "match the recipe" and double their
+                      step time re-enabling guidance. */}
+                  {model.backendType === "krea2" && (
+                    <p className="text-muted-foreground text-[11px] leading-snug">
+                      {t("params.cfgZeroOffHint")}
+                    </p>
+                  )}
+                </div>
               ))}
 
             <div className="grid gap-1.5">

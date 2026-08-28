@@ -30,6 +30,7 @@ import (
 
 	"imference-desktop-go/internal/cloud"
 	"imference-desktop-go/internal/cloudjobs"
+	"imference-desktop-go/internal/components"
 	"imference-desktop-go/internal/diskspace"
 	"imference-desktop-go/internal/imagesink"
 	"imference-desktop-go/internal/installer"
@@ -84,6 +85,14 @@ type App struct {
 	galleryMu    sync.Mutex
 	galleryCache map[string]*types.GenerationMeta
 	galleryValid bool
+
+	// components pre-downloads a model's shared base components (text encoder /
+	// VAE / tokenizer) from the CDN mirror so the first generation never hides
+	// a multi-GB pull behind "generating". compMu/compBusy serialize: one
+	// download at a time, UI-triggered.
+	components *components.Manager
+	compMu     sync.Mutex
+	compBusy   bool
 
 	// dlCancel aborts an in-flight local model download (SelectLocalModel). Set
 	// while a download runs, nil otherwise; guarded by dlMu.
@@ -144,6 +153,7 @@ func NewApp() *App {
 		cloudJobs:  cloudStore,
 		cloudBusy:  map[string]bool{},
 		modelCache: cacheStore,
+		components: components.New(bus),
 	}
 	a.sidecar = sidecar.New(scriptPath, logDir, a.broadcastSidecarStatus, bus)
 	a.sidecar.SetProgressListener(a.broadcastGenerateProgress)
@@ -1014,20 +1024,64 @@ func customRefImages(backendType string) int {
 	return 0
 }
 
-// Generic sampling bounds for user checkpoints. The catalog publishes these per
-// model; a custom file has no row to ask, so we state them here rather than let
-// the form invent them. They must stay set: a nil default now means "this model
-// has no such knob", which would take the sliders away from a checkpoint that
-// very much needs them.
-var (
-	customStepsDefault, customStepsMin, customStepsMax = 28, 1, 50
-	customCfgDefault, customCfgMin, customCfgMax       = 6.0, 1.0, 20.0
-)
+// Per-backend sampling recipes for user checkpoints. The catalog publishes
+// these per model; a custom file has no row to ask, so we state the ENGINE
+// FAMILY's recipe here (mirroring the engine's own per-backend defaults)
+// rather than one generic guess — a Krea 2 Turbo checkpoint wants 8 steps and
+// guidance OFF (cfg 0, Krea convention), not SDXL's 28/6. They must stay set:
+// a nil default means "this model has no such knob", which would take the
+// sliders away from a checkpoint that very much needs them.
+type samplingBounds struct {
+	steps, stepsMin, stepsMax int
+	cfg, cfgMin, cfgMax       float64
+}
 
-// withCustomSamplingDefaults stamps those bounds onto a user checkpoint.
+var customSamplingByBackend = map[string]samplingBounds{
+	"sdxl":   {28, 1, 50, 6.0, 1, 20},
+	"sd15":   {25, 1, 50, 7.0, 1, 20},
+	"zimage": {8, 1, 50, 1.0, 1, 10}, // turbo-family norm; a base finetune can slide up
+	"flux":   {28, 1, 50, 3.5, 0, 10},
+	"chroma": {28, 1, 50, 2.0, 0, 10},
+	"qwenimage": {40, 1, 50, 4.0, 0, 10},
+	"anima":     {28, 1, 50, 6.0, 1, 20},
+	// Krea 2 Turbo: TDM-distilled — 8 steps, guidance OFF (cfg 0 in the Krea
+	// convention; >0 re-enables CFG and doubles the transformer passes).
+	"krea2": {8, 1, 16, 0.0, 0, 10},
+}
+
+var genericSampling = samplingBounds{28, 1, 50, 6.0, 1, 20}
+
+func samplingFor(backend string) samplingBounds {
+	if b, ok := customSamplingByBackend[backend]; ok {
+		return b
+	}
+	return genericSampling
+}
+
+// withCustomSamplingDefaults stamps the backend's recipe onto a user checkpoint.
 func withCustomSamplingDefaults(m *types.ModelInfo) {
-	m.StepsDefault, m.StepsMin, m.StepsMax = &customStepsDefault, &customStepsMin, &customStepsMax
-	m.CfgDefault, m.CfgMin, m.CfgMax = &customCfgDefault, &customCfgMin, &customCfgMax
+	b := samplingFor(m.BackendType)
+	steps, stepsMin, stepsMax := b.steps, b.stepsMin, b.stepsMax
+	cfg, cfgMin, cfgMax := b.cfg, b.cfgMin, b.cfgMax
+	m.StepsDefault, m.StepsMin, m.StepsMax = &steps, &stepsMin, &stepsMax
+	m.CfgDefault, m.CfgMin, m.CfgMax = &cfg, &cfgMin, &cfgMax
+}
+
+// hasLegacyGenericStamp reports whether a checkpoint still carries the
+// pre-per-backend GENERIC bounds (everything 28/1/50 + 6/1/20) although its
+// backend now publishes a different recipe — e.g. a krea2 file registered
+// before the split. Used by the startup backfill to migrate it.
+func hasLegacyGenericStamp(m *types.ModelInfo) bool {
+	g := genericSampling
+	if samplingFor(m.BackendType) == g {
+		return false // its recipe IS the generic one — nothing to migrate
+	}
+	return m.StepsDefault != nil && *m.StepsDefault == g.steps &&
+		m.StepsMin != nil && *m.StepsMin == g.stepsMin &&
+		m.StepsMax != nil && *m.StepsMax == g.stepsMax &&
+		m.CfgDefault != nil && *m.CfgDefault == g.cfg &&
+		m.CfgMin != nil && *m.CfgMin == g.cfgMin &&
+		m.CfgMax != nil && *m.CfgMax == g.cfgMax
 }
 
 // backfillCustomRefImages fills RefImages on checkpoints registered before the
@@ -1046,10 +1100,18 @@ func (a *App) backfillCustomRefImages() {
 			dirty = true
 		}
 		// Entries saved before the sampling bounds became nullable carry a
-		// literal 0, which now reads as "the model publishes a default of zero"
-		// instead of "unset" — and would leave the form showing a dead 0..0
-		// slider. Nothing legitimately defaults to zero steps or zero cfg.
-		if m.StepsDefault == nil || *m.StepsDefault <= 0 || m.CfgDefault == nil || *m.CfgDefault <= 0 {
+		// literal 0 for EVERYTHING, which read as "unset". Zero STEPS is never
+		// legitimate, so it stays the legacy detector — but cfg 0 now is (Krea 2
+		// Turbo publishes cfgDefault 0 = guidance off), so only a NEGATIVE cfg
+		// counts as garbage.
+		if m.StepsDefault == nil || *m.StepsDefault <= 0 || m.CfgDefault == nil || *m.CfgDefault < 0 {
+			withCustomSamplingDefaults(m)
+			dirty = true
+		}
+		// Migrate entries stamped with the old one-size-fits-all bounds to
+		// their backend's recipe (e.g. a krea2 checkpoint registered before the
+		// per-backend split: 28 steps / cfg 6 → 8 steps / cfg 0).
+		if hasLegacyGenericStamp(m) {
 			withCustomSamplingDefaults(m)
 			dirty = true
 		}
@@ -1773,6 +1835,130 @@ func (a *App) UseCustomModel(path, backendType, baseModel string) (types.Setting
 		}()
 	}
 	return saved, nil
+}
+
+// componentRepos lists EVERY shared repo a model needs beyond its own
+// checkpoint: the base_model (text encoder / VAE / tokenizer for the
+// transformer-only backends) PLUS the backend's auxiliary repos that its
+// load_pipeline fetches on its own — the SDXL/SD1.5 config repos and the VAE
+// swaps (fp16-fix, or TAESD under the tiny-VAE setting). Without the aux list
+// a "no components required" SDXL still hid a ~340 MB fp16-fix pull behind
+// its first generation. Mirrors the engine backends' constants (pipelines/
+// sdxl.py, sd15.py) — keep in sync.
+func (a *App) componentRepos(baseRepo, backend string) []string {
+	var repos []string
+	if r := strings.TrimSpace(baseRepo); r != "" {
+		repos = append(repos, r)
+	}
+	tinyVAE := a.settings.Get().EngineRuntime.Image.UseTinyVAE
+	switch backend {
+	case "sdxl":
+		repos = append(repos, "stabilityai/stable-diffusion-xl-base-1.0")
+		if tinyVAE {
+			repos = append(repos, "madebyollin/taesdxl")
+		} else {
+			repos = append(repos, "madebyollin/sdxl-vae-fp16-fix")
+		}
+	case "sd15":
+		repos = append(repos, "stable-diffusion-v1-5/stable-diffusion-v1-5")
+		if tinyVAE {
+			repos = append(repos, "madebyollin/taesd")
+		}
+	}
+	return repos
+}
+
+// CheckModelReadiness reports whether a model's shared components — its base
+// repo plus the backend's auxiliary repos (see componentRepos) — are already
+// in the offline tree. STATELESS on purpose: the renderer passes the base
+// repo and backend of the model it is DISPLAYING (which may be a pending
+// pick, not yet the saved LocalModel — reading saved settings here once
+// showed krea2's missing components under a freshly selected SDXL). The UI
+// gates the Generate button on Ready and offers DownloadModelComponents when
+// files are missing — so a cold first generation never hides a download
+// behind "generating". Never gates on uncertainty: a repo without a CDN
+// manifest reports ready and falls back to the engine's lazy download.
+func (a *App) CheckModelReadiness(baseRepo, backend string) components.Readiness {
+	cacheDir, err := sidecar.ImageCacheDir()
+	if err != nil {
+		return components.Readiness{BaseRepo: baseRepo, Ready: true}
+	}
+	agg := components.Readiness{BaseRepo: strings.TrimSpace(baseRepo), Ready: true}
+	for _, repo := range a.componentRepos(baseRepo, backend) {
+		r := a.components.Check(a.ctx, sidecar.ImageCDNBase(), cacheDir, repo)
+		agg.HasManifest = agg.HasManifest || r.HasManifest
+		agg.TotalFiles += r.TotalFiles
+		agg.MissingFiles += r.MissingFiles
+		agg.MissingBytes += r.MissingBytes
+		if r.HasManifest && !r.Ready {
+			agg.Ready = false
+		}
+	}
+	return agg
+}
+
+// DownloadModelComponents pre-downloads a model's shared components — base
+// repo + backend auxiliaries (see componentRepos) — from the CDN mirror into
+// the engine's offline tree, asynchronously. Stateless like
+// CheckModelReadiness. Progress streams via "components:progress" events; a
+// final "components:done" or "components:error" settles the UI. Idempotent
+// and resumable (present files are skipped; a cancelled run resumes on the
+// next call). On completion each repo's engine completion marker is written,
+// so the cold load is a cache hit. A repo without a CDN manifest is skipped
+// (the engine's lazy path covers it).
+func (a *App) DownloadModelComponents(baseRepo, backend string) error {
+	repos := a.componentRepos(baseRepo, backend)
+	if len(repos) == 0 {
+		return errors.New("model has no shared components to download")
+	}
+	cacheDir, err := sidecar.ImageCacheDir()
+	if err != nil {
+		return fmt.Errorf("model cache dir unavailable: %w", err)
+	}
+	a.compMu.Lock()
+	if a.compBusy {
+		a.compMu.Unlock()
+		return errors.New("a components download is already running")
+	}
+	a.compBusy = true
+	a.compMu.Unlock()
+
+	a.bus.Info("app", "components download started", map[string]any{"repos": repos})
+	go func() {
+		defer func() {
+			a.compMu.Lock()
+			a.compBusy = false
+			a.compMu.Unlock()
+		}()
+		for _, repo := range repos {
+			err := a.components.Download(a.ctx, sidecar.ImageCDNBase(), cacheDir, repo,
+				func(p components.Progress) {
+					if a.app != nil {
+						a.app.Event.Emit("components:progress", p)
+					}
+				})
+			if err != nil {
+				// A missing manifest is a mirror gap, not a user problem — the
+				// engine's lazy path covers that repo; keep going.
+				if strings.Contains(err.Error(), "HTTP 404") {
+					a.bus.Warn("app", "components repo not mirrored — engine lazy path will cover it", map[string]any{
+						"repo": repo})
+					continue
+				}
+				a.bus.Error("app", "components download failed", map[string]any{
+					"repo": repo, "err": err.Error()})
+				if a.app != nil {
+					a.app.Event.Emit("components:error", map[string]any{
+						"baseRepo": repo, "error": err.Error()})
+				}
+				return
+			}
+		}
+		if a.app != nil {
+			a.app.Event.Emit("components:done", map[string]any{"baseRepo": strings.TrimSpace(baseRepo)})
+		}
+	}()
+	return nil
 }
 
 // RemoveCustomModel drops a custom checkpoint from the registry (the file on

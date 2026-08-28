@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Download, Loader2, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ProgressBar } from "@/components/ui/progress";
 import { ModelPickerDialog, ModelThumb } from "@/components/ModelPickerDialog";
-import type { AppSettings, InstallProgress, ModelInfo } from "@/lib/types";
+import type { AppSettings, ModelInfo } from "@/lib/types";
 
 type Mode = "local" | "cloud";
 
@@ -20,19 +19,14 @@ type Props = {
   // Called with refetched settings after a cloud switch.
   onModelSwitched: (next: AppSettings) => void;
   // Local selection is App-owned (decoupled from the download): the pending pick
-  // and the download state/progress are passed in.
+  // is passed in; download/readiness state now lives in the LocalReadinessCard.
   pendingLocalModel: ModelInfo | null;
   onSelectLocal: (m: ModelInfo) => void;
   // Local model codes whose weights are already on disk, so the picker can say
   // which ones load instantly vs. which still need downloading.
   cachedCodes: Set<string>;
+  // A download in flight keeps the picker busy (no mid-download switches).
   downloading: boolean;
-  // True when the activation in flight is loading cached weights rather than
-  // downloading them — there's nothing to abort.
-  loadingCached: boolean;
-  progress: InstallProgress | null;
-  // Abort an in-flight local download.
-  onCancelDownload: () => void;
   // Custom user checkpoints: open the add flow (native picker + backend
   // dialog), activate a registered one, or drop one from the registry.
   onAddCustom: () => void;
@@ -59,9 +53,6 @@ export function ModelBar({
   onSelectLocal,
   cachedCodes,
   downloading,
-  loadingCached,
-  progress,
-  onCancelDownload,
   onAddCustom,
   onSelectCustom,
   onRemoveCustom,
@@ -194,19 +185,11 @@ export function ModelBar({
         )}
       </div>
 
-      {downloading && progress ? (
-        <DownloadProgress p={progress} onCancel={onCancelDownload} cancellable={!loadingCached} />
-      ) : customError && mode === "local" ? (
+      {/* Download progress / components state moved to the LocalReadinessCard —
+          only the custom-activation error still belongs to the selector. */}
+      {customError && mode === "local" && (
         <p className="text-destructive mt-2 text-xs">{customError}</p>
-      ) : progress?.error && mode === "local" ? (
-        // Prose we author (e.g. out of disk) ships a key; raw Go/network errors
-        // don't and stay in English, as everywhere else in the app.
-        <p className="text-destructive mt-2 text-xs">
-          {progress.messageKey
-            ? t(progress.messageKey, { ...progress.messageArgs, defaultValue: progress.error })
-            : progress.error}
-        </p>
-      ) : null}
+      )}
 
       <ModelPickerDialog
         open={pickerOpen}
@@ -229,54 +212,5 @@ export function ModelBar({
         onRemoveCustom={onRemoveCustom}
       />
     </section>
-  );
-}
-
-function DownloadProgress({
-  p,
-  onCancel,
-  cancellable,
-}: {
-  p: InstallProgress;
-  onCancel: () => void;
-  cancellable: boolean;
-}) {
-  const { t } = useTranslation();
-  // The Go side sends an i18n key plus already-formatted values (byte sizes read
-  // the same in every locale); p.message is the English fallback for a key this
-  // build doesn't know yet.
-  const text = p.messageKey
-    ? t(p.messageKey, { ...p.messageArgs, defaultValue: p.message })
-    : p.message;
-  return (
-    <div className="mt-2.5 space-y-1.5 pl-9">
-      <div className="flex items-center justify-between gap-2 text-[11px]">
-        <span className="text-muted-foreground inline-flex min-w-0 items-center gap-1.5">
-          <Download className="text-primary size-3 shrink-0 animate-pulse" />
-          <span className="truncate" title={text}>
-            {text || t("modelBar.working")}
-          </span>
-        </span>
-        <div className="flex shrink-0 items-center gap-2">
-          {p.percentEstimate > 0 && (
-            <span className="text-muted-foreground tabular-nums">{p.percentEstimate}%</span>
-          )}
-          {/* Loading cached weights has no fetch to abort — the engine restart
-              runs to completion either way, so don't offer a dead Cancel. */}
-          {cancellable && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-muted-foreground/70 hover:text-destructive inline-flex items-center gap-1 rounded font-medium transition-colors"
-            title={t("common.cancel")}
-          >
-            <X className="size-3" />
-            {t("common.cancel")}
-          </button>
-          )}
-        </div>
-      </div>
-      <ProgressBar percent={p.percentEstimate > 0 ? p.percentEstimate : null} />
-    </div>
   );
 }

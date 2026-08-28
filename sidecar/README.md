@@ -48,8 +48,9 @@ pip install torch --index-url https://download.pytorch.org/whl/cu124
 # AMD on Linux:
 #   pip install torch --index-url https://download.pytorch.org/whl/rocm6.4
 
-# 3. imference-engine with runtime extras
-pip install "imference-engine[runtime] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.2.1.tar.gz"
+# 3. imference-engine with the image-backend extras (keep the tag in sync with
+#    EngineTarball in internal/installer/installer.go)
+pip install "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.2.tar.gz"
 
 # 4. Sidecar deps (runqy-python)
 pip install -r "C:\git windows\imference-desktop-go\sidecar\requirements.txt"

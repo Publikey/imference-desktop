@@ -67,9 +67,9 @@ available; code signing and silent in-app auto-update are on the roadmap.
 - ⚡ **One-click setup** — the app installs an isolated inference engine for
   you (nothing touches your system Python), detects your GPU, and starts and
   stops the engine on demand. No terminal, no CUDA wrestling.
-- 🖥️ **Local generation, $0 per image** — run **seven model families** on your
-  own GPU: **SDXL, SD 1.5, Z-Image, FLUX, Chroma, Qwen-Image and Anima**. Your
-  prompts and images never leave your machine.
+- 🖥️ **Local generation, $0 per image** — run **eight model families** on your
+  own GPU: **SDXL, SD 1.5, Z-Image, FLUX, Chroma, Qwen-Image, Anima and
+  Krea 2**. Your prompts and images never leave your machine.
 - 🧩 **Preconfigured models, zero setup** — pick a model from the curated
   catalog and hit Generate: the weights **download automatically**, and every
   model ships pre-tuned (steps, CFG, resolutions, quality tags, negative
@@ -101,7 +101,7 @@ available; code signing and silent in-app auto-update are on the roadmap.
 
 | Mode | What you need |
 |---|---|
-| **Local** | Windows: an NVIDIA GPU (CUDA), or an AMD Radeon RX 7000/9000 (ROCm preview — needs Python 3.12 + a recent Adrenalin driver) · macOS: Apple Silicon. ~6–7 GB disk per model. |
+| **Local** | Windows: an NVIDIA GPU (CUDA), or an AMD Radeon RX 7000/9000 (ROCm preview — needs Python 3.12 + a recent Adrenalin driver) · macOS: Apple Silicon. ~6–13 GB disk per model. |
 | **Cloud** | Any machine — an [imference.com API key](https://imference.com/payments), or a funded x402 wallet. |
 
 Linux (NVIDIA CUDA / AMD ROCm) is supported by the engine and builds from

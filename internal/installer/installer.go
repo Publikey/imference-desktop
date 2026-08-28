@@ -44,14 +44,16 @@ import (
 // local fit. It remains server-side: normalizeEngine doesn't recognise it, so
 // those catalog rows are cloud-only.
 //
-// v0.4.1/v0.4.2 (tagged 2026-08-28) add the krea2 backend (civitai single-files
+// v0.4.1–v0.4.3 (tagged 2026-08-28) add the krea2 backend (civitai single-files
 // as-is: scaled-fp8, plain fp8, and int8-ConvRot, all fp8-resident with a
-// GPU-streamed dequant), group offloading (IMAGE_OFFLOAD_MODE=group — what the
-// offload UI setting drives), SDXL user LoRAs, and surrogate-safe prompts.
+// GPU-streamed dequant; v0.4.3 unifies stray fp32 params to bf16 — some
+// finetune files crashed mid-inference otherwise), group offloading
+// (IMAGE_OFFLOAD_MODE=group — what the offload UI setting drives), SDXL user
+// LoRAs, and surrogate-safe prompts.
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.2.tar.gz"
+const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.3.tar.gz"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute

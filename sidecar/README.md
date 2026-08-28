@@ -50,7 +50,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cu124
 
 # 3. imference-engine with the image-backend extras (keep the tag in sync with
 #    EngineTarball in internal/installer/installer.go)
-pip install "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.2.tar.gz"
+pip install "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.3.tar.gz"
 
 # 4. Sidecar deps (runqy-python)
 pip install -r "C:\git windows\imference-desktop-go\sidecar\requirements.txt"

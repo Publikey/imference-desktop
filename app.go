@@ -654,6 +654,9 @@ func (a *App) emitCloudResolved(jobID string, result *types.GenerationResult, er
 func (a *App) GenerateLocal(req types.GenerationRequest) (types.GenerationResult, error) {
 	normalizeRefImages(&req)
 	a.applyLocalModelConfig(&req)
+	if err := a.validateLoras(&req); err != nil {
+		return types.GenerationResult{}, err
+	}
 	result, err := a.sidecar.Generate(a.ctx, req)
 	if err != nil {
 		return result, err
@@ -677,6 +680,7 @@ func genMeta(req types.GenerationRequest, model *types.ModelInfo) types.Generati
 		ClipSkip:       req.ClipSkip,
 		Img2Img:        req.SourceImage != "",
 		Strength:       req.Strength,
+		Loras:          req.Loras,
 	}
 	if model != nil {
 		m.ModelCode = model.ModelCode
@@ -692,6 +696,7 @@ func cloudMeta(req types.GenerationRequest, model *types.ModelInfo) types.Genera
 	m := genMeta(req, model)
 	m.Img2Img = false
 	m.Strength = 0
+	m.Loras = nil // local-only for now
 	return m
 }
 

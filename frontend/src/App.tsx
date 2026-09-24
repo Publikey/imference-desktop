@@ -50,6 +50,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
 import { LocalReadinessCard } from "@/components/LocalReadinessCard";
+import { LORA_BACKENDS, LoraCard, loraFitsBackend } from "@/components/LoraCard";
 import { PaymentBar } from "@/components/PaymentBar";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
@@ -74,6 +75,7 @@ import type {
   GenerationMeta,
   FormatOption,
   GenerationRequest,
+  LoraRef,
   GenerationResult,
   ComponentsProgress,
   ComponentsReadiness,
@@ -423,6 +425,9 @@ export default function App() {
   // comes from the selected model's refImages.
   const [refImages, setRefImages] = useState<(string | null)[]>([]);
   const [strength, setStrength] = useState(0.6);
+  // LoRAs checked in the LoRA card (local mode). Kept across model switches;
+  // only the ones that fit the model actually running are sent.
+  const [activeLoras, setActiveLoras] = useState<LoraRef[]>([]);
   const sourceImage = refImages[0] ?? null;
   const setSourceImage = useCallback(
     (v: string | null) => setRefImages((prev) => [v, ...prev.slice(1)]),
@@ -1131,6 +1136,15 @@ export default function App() {
         req.refImages = refs;
         req.strength = strength;
       }
+      // LoRAs: local only, and only those that still fit the model's family.
+      const backend = model?.backendType ?? "";
+      if (which === "local" && LORA_BACKENDS.has(backend)) {
+        const library = settings?.loras ?? [];
+        const loras = activeLoras.filter((a) =>
+          library.some((l) => l.path === a.path && loraFitsBackend(l, backend))
+        );
+        if (loras.length > 0) req.loras = loras;
+      }
 
       const id = nextJobId();
       const now = Date.now();
@@ -1156,7 +1170,7 @@ export default function App() {
         ]);
       }
     },
-    [prompt, pendingLocalModel, settings?.localModel, settings?.cloudModelInfo, params, refImages, refSlots, strength, settleJob]
+    [prompt, pendingLocalModel, settings?.localModel, settings?.cloudModelInfo, settings?.loras, params, refImages, refSlots, strength, activeLoras, settleJob]
   );
 
   // Local FIFO dispatcher — the sidecar runs one local job at a time. Whenever
@@ -1775,6 +1789,17 @@ export default function App() {
                             targetH={refDims.height}
                             strength={strength}
                             onStrengthChange={setStrength}
+                          />
+                        )}
+
+                        {/* 3c. LoRAs — local mode, LoRA-capable backends only. */}
+                        {mode === "local" && activeModel && LORA_BACKENDS.has(activeModel.backendType ?? "") && (
+                          <LoraCard
+                            backend={activeModel.backendType ?? ""}
+                            library={settings?.loras ?? []}
+                            active={activeLoras}
+                            onActiveChange={setActiveLoras}
+                            onSettingsChange={setSettings}
                           />
                         )}
 
@@ -4336,6 +4361,7 @@ function MetaPanel({ meta }: { meta: GenerationMeta }) {
   add(t("meta.clipSkip"), meta.clipSkip);
   add(t("meta.seed"), meta.seed);
   if (meta.img2img) add(t("meta.img2img"), t("meta.strength", { strength: meta.strength ?? "" }));
+  add(t("meta.loras"), (meta.loras ?? []).map((l) => `${l.name || l.path} (${l.weight})`).join(", "));
   add(t("meta.created"), meta.createdAt ? meta.createdAt.replace("T", " ").slice(0, 19) : "");
 
   return (

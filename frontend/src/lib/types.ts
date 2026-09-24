@@ -23,6 +23,8 @@ export type AppSettings = {
   cloudModelInfo?: ModelInfo | null;
   /** User-supplied checkpoints (localPath set), referenced in place. */
   customModels?: ModelInfo[];
+  /** The user's LoRA library (AddLora), referenced in place. */
+  loras?: LoraEntry[];
   /** Cap on the total size of downloaded weights. 0 → Go default (100 GB).
    *  Past it, least-recently-used models are evicted; the active one never is. */
   modelCacheQuotaBytes?: number;
@@ -249,6 +251,23 @@ export type CreditInfo = {
   error?: string;
 };
 
+/** One LoRA file in the user's library. */
+export type LoraEntry = {
+  path: string;
+  name: string;
+  /** Family the file was trained for ("sdxl", "sd15", "flux", …), read from its
+   *  safetensors header. Absent when unrecognized. */
+  family?: string;
+  sizeBytes: number;
+};
+
+/** One LoRA applied to a generation. */
+export type LoraRef = {
+  path: string;
+  name?: string;
+  weight: number;
+};
+
 export type GenerationRequest = {
   prompt: string;
   negativePrompt?: string;
@@ -273,6 +292,8 @@ export type GenerationRequest = {
   durationS?: number;
   /** The format the user picked. Cloud pricing depends on it (credit_multiplier). */
   formatCode?: string;
+  /** LoRAs stacked on the local model (local mode, LoRA-capable backends only). */
+  loras?: LoraRef[];
 };
 
 /** Per-step local generation progress, from the "generate:progress" event. */
@@ -322,6 +343,7 @@ export type GenerationMeta = {
   seed: number;
   img2img?: boolean;
   strength?: number;
+  loras?: LoraRef[];
   createdAt: string;
 };
 

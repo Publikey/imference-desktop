@@ -302,7 +302,8 @@
     "strength": "strength {{strength}}",
     "created": "Created",
     "prompt": "Prompt",
-    "negative": "Negative"
+    "negative": "Negative",
+    "loras": "LoRAs"
   },
   "update": {
     "availablePrefix": "Imference Desktop",
@@ -624,5 +625,14 @@
     "prevNext": "Previous / next",
     "zoom": "Zoom",
     "close": "Close"
+  },
+  "lora": {
+    "title": "LoRAs",
+    "optional": "optional",
+    "add": "Add",
+    "remove": "Remove from the list (the file stays on disk)",
+    "hint": "Add a LoRA file (.safetensors) made for this model family to steer style, a character or a concept. Files stay where they are.",
+    "tooMany": "At most {{max}} LoRAs at once",
+    "addedOtherFamily": "{{name}} was made for {{family}} models — it will show up when one is selected"
   }
 }

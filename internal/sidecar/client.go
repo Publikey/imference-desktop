@@ -21,17 +21,24 @@ const generateTimeout = 30 * time.Minute
 // generatePayload is the inbound shape the sidecar expects. Keys mirror
 // the kwargs of imference_engine.Engine.generate, snake_case for Python.
 type generatePayload struct {
-	Prompt         string  `json:"prompt"`
-	NegativePrompt string  `json:"negative_prompt,omitempty"`
-	Width          int     `json:"width,omitempty"`
-	Height         int     `json:"height,omitempty"`
-	NumSteps       int     `json:"num_steps,omitempty"`
-	GuidanceScale  float64 `json:"guidance_scale,omitempty"`
-	Seed           *int    `json:"seed,omitempty"`
-	Scheduler      string  `json:"scheduler,omitempty"`
-	ClipSkip       *int    `json:"clip_skip,omitempty"`
-	SourceImage    string  `json:"source_image,omitempty"`
-	Strength       float64 `json:"strength,omitempty"`
+	Prompt         string        `json:"prompt"`
+	NegativePrompt string        `json:"negative_prompt,omitempty"`
+	Width          int           `json:"width,omitempty"`
+	Height         int           `json:"height,omitempty"`
+	NumSteps       int           `json:"num_steps,omitempty"`
+	GuidanceScale  float64       `json:"guidance_scale,omitempty"`
+	Seed           *int          `json:"seed,omitempty"`
+	Scheduler      string        `json:"scheduler,omitempty"`
+	ClipSkip       *int          `json:"clip_skip,omitempty"`
+	SourceImage    string        `json:"source_image,omitempty"`
+	Strength       float64       `json:"strength,omitempty"`
+	Loras          []loraPayload `json:"loras,omitempty"`
+}
+
+// loraPayload is one entry of Engine.generate(loras=...).
+type loraPayload struct {
+	Source string  `json:"source"`
+	Weight float64 `json:"weight"`
 }
 
 // stripDataURL returns the raw base64 the sidecar's base64.b64decode expects,
@@ -73,6 +80,9 @@ func (m *Manager) Generate(ctx context.Context, req types.GenerationRequest) (ty
 		ClipSkip:       req.ClipSkip,
 		SourceImage:    stripDataURL(req.SourceImage),
 		Strength:       req.Strength,
+	}
+	for _, l := range req.Loras {
+		payload.Loras = append(payload.Loras, loraPayload{Source: l.Path, Weight: l.Weight})
 	}
 
 	m.bus.Info("sidecar", "Generate start", map[string]any{

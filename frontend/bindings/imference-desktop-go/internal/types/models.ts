@@ -214,6 +214,7 @@ export interface GenerationMeta {
     "seed": number;
     "img2img"?: boolean;
     "strength"?: number;
+    "loras"?: LoraRef[] | null;
 
     /**
      * RFC3339
@@ -283,6 +284,12 @@ export interface GenerationRequest {
      * img2img the output size is derived from the source image (Width/Height ignored).
      */
     "strength"?: number;
+
+    /**
+     * Loras are stacked on the local model (local mode, SDXL only for now —
+     * see loras.BackendSupports). Paths must be entries of Settings.Loras.
+     */
+    "loras"?: LoraRef[] | null;
 }
 
 /**
@@ -358,6 +365,30 @@ export interface ImageRuntimeSettings {
      * "" / "auto" / int
      */
     "maxCpuModels"?: string;
+}
+
+/**
+ * LoraEntry is one LoRA file in the user's library.
+ */
+export interface LoraEntry {
+    "path": string;
+    "name": string;
+
+    /**
+     * Family is the model family the file was trained for ("sdxl", "sd15",
+     * "flux", …), read from its safetensors header; "" when unrecognized.
+     */
+    "family"?: string;
+    "sizeBytes": number;
+}
+
+/**
+ * LoraRef is one LoRA applied to a generation.
+ */
+export interface LoraRef {
+    "path": string;
+    "name"?: string;
+    "weight": number;
 }
 
 /**
@@ -640,6 +671,12 @@ export interface Settings {
      * UI-only: not a sidecar-affecting field (the active model is LocalModel).
      */
     "customModels"?: ModelInfo[] | null;
+
+    /**
+     * Loras is the user's LoRA library, registered via AddLora. Files are
+     * referenced in place — never copied, never deleted.
+     */
+    "loras"?: LoraEntry[] | null;
 
     /**
      * ModelCacheQuotaBytes caps the total size of downloaded weights. Downloaded

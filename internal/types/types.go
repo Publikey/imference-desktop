@@ -42,6 +42,9 @@ type Settings struct {
 	// files themselves are referenced in place — never copied, never deleted.
 	// UI-only: not a sidecar-affecting field (the active model is LocalModel).
 	CustomModels []ModelInfo `json:"customModels,omitempty"`
+	// Loras is the user's LoRA library, registered via AddLora. Files are
+	// referenced in place — never copied, never deleted.
+	Loras []LoraEntry `json:"loras,omitempty"`
 	// ModelCacheQuotaBytes caps the total size of downloaded weights. Downloaded
 	// models are kept so switching back is instant; past the quota the least
 	// recently used are evicted. 0 means the default (modelcache.DefaultQuotaBytes).
@@ -53,6 +56,23 @@ type Settings struct {
 	// volume. Unlike the quota (a housekeeping target), this is a hard wall: a
 	// download that would eat into it fails before any network call. 0 = default.
 	ModelCacheMinFreeBytes int64 `json:"modelCacheMinFreeBytes,omitempty"`
+}
+
+// LoraEntry is one LoRA file in the user's library.
+type LoraEntry struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
+	// Family is the model family the file was trained for ("sdxl", "sd15",
+	// "flux", …), read from its safetensors header; "" when unrecognized.
+	Family    string `json:"family,omitempty"`
+	SizeBytes int64  `json:"sizeBytes"`
+}
+
+// LoraRef is one LoRA applied to a generation.
+type LoraRef struct {
+	Path   string  `json:"path"`
+	Name   string  `json:"name,omitempty"`
+	Weight float64 `json:"weight"`
 }
 
 // CachedModel is one downloaded checkpoint, as shown in Settings → Storage.
@@ -165,9 +185,9 @@ type ModelInfo struct {
 	// LocalPath is the absolute path of a user-supplied checkpoint (custom
 	// model added via UseCustomModel). Non-empty = custom: no catalog entry,
 	// no download — the sidecar loads this file directly.
-	LocalPath        string  `json:"localPath,omitempty"`
-	PromptPre        string  `json:"promptPre"`
-	PromptNegative   string  `json:"promptNegative"`
+	LocalPath      string `json:"localPath,omitempty"`
+	PromptPre      string `json:"promptPre"`
+	PromptNegative string `json:"promptNegative"`
 	// Steps / cfg / clip-skip bounds, straight from the catalog. A nil Default
 	// is the catalog saying the model has no such knob — the form then offers no
 	// control for it, rather than a slider that moves nothing (gpt-image-1
@@ -180,8 +200,8 @@ type ModelInfo struct {
 	CfgMin           *float64 `json:"cfgMin,omitempty"`
 	CfgMax           *float64 `json:"cfgMax,omitempty"`
 	SkipDefault      *int     `json:"skipDefault,omitempty"` // clip-skip
-	SchedulerDefault string  `json:"schedulerDefault"`
-	FormatCode       string  `json:"formatCode"`
+	SchedulerDefault string   `json:"schedulerDefault"`
+	FormatCode       string   `json:"formatCode"`
 	// BackendType is the internal engine backend, normalized from the catalog's
 	// im_engine field, one of the image backends (sdxl, sd15, zimage, flux,
 	// chroma, qwenimage, anima) or "wan". (im_engine "external" and null
@@ -309,6 +329,9 @@ type GenerationRequest struct {
 	// Only meaningful with SourceImage set. 0/unset → engine default (0.75). In
 	// img2img the output size is derived from the source image (Width/Height ignored).
 	Strength float64 `json:"strength,omitempty"`
+	// Loras are stacked on the local model (local mode, SDXL only for now —
+	// see loras.BackendSupports). Paths must be entries of Settings.Loras.
+	Loras []LoraRef `json:"loras,omitempty"`
 }
 
 // SavedImage is one previously-generated image found on disk in the output
@@ -352,23 +375,24 @@ type PendingCloudJob struct {
 }
 
 type GenerationMeta struct {
-	Prompt         string  `json:"prompt"`
-	NegativePrompt string  `json:"negativePrompt,omitempty"`
-	Source         string  `json:"source"`              // "local" | "cloud"
-	ModelCode      string  `json:"modelCode,omitempty"` // catalog code
-	ModelName      string  `json:"modelName,omitempty"` // display name
-	Engine         string  `json:"engine,omitempty"`    // e.g. "sdxl" | "flux" | "zimage" | "wan"
-	Width          int     `json:"width,omitempty"`
-	Height         int     `json:"height,omitempty"`
-	FormatCode     string  `json:"formatCode,omitempty"` // "square" | "portrait" | "landscape"
-	NumSteps       int     `json:"numSteps,omitempty"`
-	GuidanceScale  float64 `json:"guidanceScale,omitempty"`
-	Scheduler      string  `json:"scheduler,omitempty"`
-	ClipSkip       *int    `json:"clipSkip,omitempty"`
-	Seed           int     `json:"seed"`
-	Img2Img        bool    `json:"img2img,omitempty"`
-	Strength       float64 `json:"strength,omitempty"`
-	CreatedAt      string  `json:"createdAt"` // RFC3339
+	Prompt         string    `json:"prompt"`
+	NegativePrompt string    `json:"negativePrompt,omitempty"`
+	Source         string    `json:"source"`              // "local" | "cloud"
+	ModelCode      string    `json:"modelCode,omitempty"` // catalog code
+	ModelName      string    `json:"modelName,omitempty"` // display name
+	Engine         string    `json:"engine,omitempty"`    // e.g. "sdxl" | "flux" | "zimage" | "wan"
+	Width          int       `json:"width,omitempty"`
+	Height         int       `json:"height,omitempty"`
+	FormatCode     string    `json:"formatCode,omitempty"` // "square" | "portrait" | "landscape"
+	NumSteps       int       `json:"numSteps,omitempty"`
+	GuidanceScale  float64   `json:"guidanceScale,omitempty"`
+	Scheduler      string    `json:"scheduler,omitempty"`
+	ClipSkip       *int      `json:"clipSkip,omitempty"`
+	Seed           int       `json:"seed"`
+	Img2Img        bool      `json:"img2img,omitempty"`
+	Strength       float64   `json:"strength,omitempty"`
+	Loras          []LoraRef `json:"loras,omitempty"`
+	CreatedAt      string    `json:"createdAt"` // RFC3339
 }
 
 // GalleryFilter narrows ListSavedImages. Empty fields mean "no constraint".

@@ -27,6 +27,15 @@ import * as logbus$0 from "./internal/logbus/models.js";
 import * as types$0 from "./internal/types/models.js";
 
 /**
+ * AddLora registers a LoRA file in the library (referenced in place — never
+ * copied, never deleted). Its family is read from the safetensors header so
+ * the UI can offer it only with compatible models.
+ */
+export function AddLora(path: string): $CancellablePromise<types$0.Settings> {
+    return $Call.ByID(1589676372, path);
+}
+
+/**
  * CancelModelDownload aborts an in-flight local model download (if any). The
  * download goroutine sees context.Canceled, cleans up the partial file, and
  * emits a "cancelled" progress event; a no-op when nothing is downloading.
@@ -352,6 +361,14 @@ export function OpenCacheFolder(kind: string): $CancellablePromise<void> {
 }
 
 /**
+ * PickLoraFile opens the native file picker filtered to .safetensors and
+ * returns the chosen absolute path, or "" when the user cancels.
+ */
+export function PickLoraFile(): $CancellablePromise<string> {
+    return $Call.ByID(2628065406);
+}
+
+/**
  * PickModelFile opens the native file picker filtered to .safetensors and
  * returns the chosen absolute path, or "" when the user cancels.
  */
@@ -397,6 +414,13 @@ export function RefreshWalletBalance(): $CancellablePromise<string> {
  */
 export function RemoveCustomModel(path: string): $CancellablePromise<types$0.Settings> {
     return $Call.ByID(1818023451, path);
+}
+
+/**
+ * RemoveLora drops a LoRA from the library. The file itself is left on disk.
+ */
+export function RemoveLora(path: string): $CancellablePromise<types$0.Settings> {
+    return $Call.ByID(1195692449, path);
 }
 
 export function RestartSidecar(): $CancellablePromise<void> {

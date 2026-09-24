@@ -15,6 +15,8 @@ export type {
     GenerationRequest,
     GenerationResult,
     ImageRuntimeSettings,
+    LoraEntry,
+    LoraRef,
     ModelInfo,
     PendingCloudJob,
     PythonInfo,

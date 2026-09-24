@@ -29,6 +29,9 @@ import {
   ListSavedImages,
   LogFromFrontend,
   PickModelFile,
+  PickLoraFile,
+  AddLora,
+  RemoveLora,
   RecheckPendingCloud,
   RefreshWalletBalance,
   RemoveCustomModel,
@@ -174,6 +177,10 @@ const raw = {
     baseModel: string
   ) => Promise<AppSettings>,
   removeCustomModel: RemoveCustomModel as unknown as (path: string) => Promise<AppSettings>,
+  // LoRA library (files referenced in place). pickLoraFile returns "" on cancel.
+  pickLoraFile: PickLoraFile as () => Promise<string>,
+  addLora: AddLora as unknown as (path: string) => Promise<AppSettings>,
+  removeLora: RemoveLora as unknown as (path: string) => Promise<AppSettings>,
   // Saved-image gallery (output folder history). listSavedImages returns one
   // page of metadata (optionally filtered); getSavedImage fetches one file's
   // bytes (base64) lazily; deleteSavedImage removes a file; galleryFacets lists

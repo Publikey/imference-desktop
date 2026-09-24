@@ -192,6 +192,13 @@ def generate(payload: dict, ctx: dict) -> dict:
         gen_kwargs["clip_skip"] = payload.get("clip_skip") or payload.get("clipSkip")
         gen_kwargs["scheduler"] = payload.get("scheduler") or payload.get("schedulerDefault")
 
+    # User LoRAs ([{source: <local path>, weight}]), validated Go-side against
+    # the library and the backend. The engine applies them unfused and clears
+    # them after the request.
+    loras = payload.get("loras")
+    if loras:
+        gen_kwargs["loras"] = loras
+
     result = engine.generate(**gen_kwargs)
 
     errors_by_index = {e.batch_index: e.error for e in result.errors}

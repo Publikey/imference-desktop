@@ -41,7 +41,21 @@ var crossAttnWidth = map[int]string{2048: FamilySDXL, 768: FamilySD15, 1024: Fam
 type Info struct {
 	Family string // "" when unrecognized
 	Reason string // what the detection was based on
+	// TriggerWords are the prompt words the LoRA was trained with, when the
+	// file says so (see triggerWords). Empty when unknown.
+	TriggerWords []string
+	// TextEncoderTrained is true when the file carries text-encoder weights.
+	// Without them no token was learned, so trigger words are optional: the
+	// style applies regardless of the prompt.
+	TextEncoderTrained bool
 }
+
+// maxTriggerWords caps what is surfaced to the UI.
+const maxTriggerWords = 5
+
+// triggerShare is the share of training captions a leading tag must start
+// for it to count as the trigger (kohya keep_tokens puts it first).
+const triggerShare = 0.8
 
 // BackendSupports reports whether generations on backend accept LoRAs.
 func BackendSupports(backend string) bool { return supportedBackends[backend] }
@@ -79,22 +93,87 @@ func Inspect(path string) (Info, error) {
 	if raw, ok := header["__metadata__"]; ok {
 		_ = json.Unmarshal(raw, &metadata) // malformed metadata = no metadata
 	}
-	if fam := familyFromMetadata(metadata); fam != "" {
-		return Info{fam, "trainer metadata"}, nil
-	}
 	keys := make([]string, 0, len(header))
 	for k := range header {
 		if k != "__metadata__" {
 			keys = append(keys, k)
 		}
 	}
-	if fam := familyFromKeys(keys); fam != "" {
-		return Info{fam, "key layout"}, nil
+	info := Info{
+		TriggerWords:       triggerWords(metadata),
+		TextEncoderTrained: hasTextEncoderKeys(keys),
 	}
-	if fam := familyFromCrossAttention(header, keys); fam != "" {
-		return Info{fam, "cross-attention width"}, nil
+	switch {
+	case familyFromMetadata(metadata) != "":
+		info.Family, info.Reason = familyFromMetadata(metadata), "trainer metadata"
+	case familyFromKeys(keys) != "":
+		info.Family, info.Reason = familyFromKeys(keys), "key layout"
+	case familyFromCrossAttention(header, keys) != "":
+		info.Family, info.Reason = familyFromCrossAttention(header, keys), "cross-attention width"
+	default:
+		info.Reason = "unrecognized layout"
 	}
-	return Info{"", "unrecognized layout"}, nil
+	return info, nil
+}
+
+// triggerWords reads the trigger words from the metadata:
+//   - modelspec.trigger_phrase when the trainer wrote one (comma-separated);
+//   - otherwise kohya's ss_tag_frequency ({dataset_dir: {caption: count}}):
+//     the leading tag shared by at least triggerShare of the captions. A
+//     sentence caption ("pixelbuildings128 a red couch") contributes its
+//     first word, a tag caption ("sks_girl, 1girl, smile") its first tag.
+func triggerWords(md map[string]string) []string {
+	if phrase := strings.TrimSpace(md["modelspec.trigger_phrase"]); phrase != "" {
+		return splitWords(phrase)
+	}
+	var freq map[string]map[string]int
+	if json.Unmarshal([]byte(md["ss_tag_frequency"]), &freq) != nil {
+		return nil
+	}
+	lead := map[string]int{}
+	total := 0
+	for _, captions := range freq {
+		for caption, n := range captions {
+			if n <= 0 {
+				n = 1
+			}
+			total += n
+			first := strings.TrimSpace(strings.SplitN(caption, ",", 2)[0])
+			if fields := strings.Fields(first); len(fields) > 1 && !strings.Contains(caption, ",") {
+				first = fields[0] // sentence caption: its first word
+			}
+			if first != "" {
+				lead[first] += n
+			}
+		}
+	}
+	var out []string
+	for word, n := range lead {
+		if total > 0 && float64(n) >= triggerShare*float64(total) {
+			out = append(out, word)
+		}
+	}
+	return out // at most one word can pass an 80 % share
+}
+
+func splitWords(phrase string) []string {
+	var out []string
+	for _, w := range strings.Split(phrase, ",") {
+		if w = strings.TrimSpace(w); w != "" && len(out) < maxTriggerWords {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+func hasTextEncoderKeys(keys []string) bool {
+	for _, k := range keys {
+		if strings.HasPrefix(k, "lora_te") || strings.HasPrefix(k, "text_encoder") ||
+			strings.Contains(k, ".text_encoder") {
+			return true
+		}
+	}
+	return false
 }
 
 func familyFromMetadata(md map[string]string) string {

@@ -259,6 +259,11 @@ export type LoraEntry = {
    *  safetensors header. Absent when unrecognized. */
   family?: string;
   sizeBytes: number;
+  /** Prompt words the file says it was trained with (trigger phrase or the
+   *  leading tag of its training captions). */
+  triggerWords?: string[];
+  /** False = UNet-only LoRA: no token was learned, trigger words are optional. */
+  textEncoderTrained?: boolean;
 };
 
 /** One LoRA applied to a generation. */

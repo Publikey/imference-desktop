@@ -633,6 +633,9 @@
     "remove": "Remove from the list (the file stays on disk)",
     "hint": "Add a LoRA file (.safetensors) made for this model family to steer style, a character or a concept. Files stay where they are.",
     "tooMany": "At most {{max}} LoRAs at once",
-    "addedOtherFamily": "{{name}} was made for {{family}} models — it will show up when one is selected"
+    "addedOtherFamily": "{{name}} was made for {{family}} models — it will show up when one is selected",
+    "insertTrigger": "Add to the prompt",
+    "triggerNeeded": "trigger word — needed",
+    "triggerOptional": "trigger word — optional (style applies anyway)"
   }
 }

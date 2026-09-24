@@ -623,6 +623,9 @@
     "remove": "从列表中移除（文件保留在磁盘上）",
     "hint": "添加为该模型系列训练的 LoRA 文件（.safetensors），用于控制风格、角色或概念。文件保留在原位置。",
     "tooMany": "最多同时使用 {{max}} 个 LoRA",
-    "addedOtherFamily": "{{name}} 适用于 {{family}} 模型——选择此类模型时会显示"
+    "addedOtherFamily": "{{name}} 适用于 {{family}} 模型——选择此类模型时会显示",
+    "insertTrigger": "添加到提示词",
+    "triggerNeeded": "触发词——必需",
+    "triggerOptional": "触发词——可选（风格始终生效）"
   }
 }

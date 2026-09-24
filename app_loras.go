@@ -54,10 +54,12 @@ func (a *App) AddLora(path string) (types.Settings, error) {
 
 	base := filepath.Base(path)
 	entry := types.LoraEntry{
-		Path:      path,
-		Name:      strings.TrimSuffix(base, filepath.Ext(base)),
-		Family:    info.Family,
-		SizeBytes: fi.Size(),
+		Path:               path,
+		Name:               strings.TrimSuffix(base, filepath.Ext(base)),
+		Family:             info.Family,
+		SizeBytes:          fi.Size(),
+		TriggerWords:       info.TriggerWords,
+		TextEncoderTrained: info.TextEncoderTrained,
 	}
 	s := a.settings.Get()
 	kept := []types.LoraEntry{entry} // upsert by path, newest first

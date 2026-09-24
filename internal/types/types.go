@@ -66,6 +66,10 @@ type LoraEntry struct {
 	// "flux", …), read from its safetensors header; "" when unrecognized.
 	Family    string `json:"family,omitempty"`
 	SizeBytes int64  `json:"sizeBytes"`
+	// TriggerWords are the prompt words the file says it was trained with.
+	TriggerWords []string `json:"triggerWords,omitempty"`
+	// TextEncoderTrained false = UNet-only LoRA: trigger words are optional.
+	TextEncoderTrained bool `json:"textEncoderTrained,omitempty"`
 }
 
 // LoraRef is one LoRA applied to a generation.

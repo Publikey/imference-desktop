@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,6 +69,42 @@ func TestInspectDetectsFamily(t *testing.T) {
 				t.Fatalf("got (%q, %q), want (%q, %q)", info.Family, info.Reason, c.family, c.reason)
 			}
 		})
+	}
+}
+
+func TestInspectTriggerWords(t *testing.T) {
+	sentence := `{"50_pixelbuildings128": {"pixelbuildings128 a red couch": 1, "pixelbuildings128 a pine tree": 2}}`
+	tags := `{"10_char": {"sks_girl, 1girl, smile": 3, "sks_girl, solo": 1, "1girl, outdoors": 1}}`
+	mixed := `{"10_x": {"a, b": 1, "c, d": 1}}`
+	cases := []struct {
+		name string
+		md   map[string]string
+		want []string
+	}{
+		{"trigger phrase", map[string]string{"modelspec.trigger_phrase": "neon style, glow"}, []string{"neon style", "glow"}},
+		{"sentence captions", map[string]string{"ss_tag_frequency": sentence}, []string{"pixelbuildings128"}},
+		{"leading tag at 80%", map[string]string{"ss_tag_frequency": tags}, []string{"sks_girl"}},
+		{"no dominant tag", map[string]string{"ss_tag_frequency": mixed}, nil},
+		{"no metadata", nil, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			info, err := Inspect(writeLora(t, map[string][]int{"x.lora_A.weight": {4, 8}}, c.md))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Join(info.TriggerWords, "|") != strings.Join(c.want, "|") {
+				t.Fatalf("got %q, want %q", info.TriggerWords, c.want)
+			}
+		})
+	}
+}
+
+func TestInspectTextEncoderTrained(t *testing.T) {
+	unetOnly, _ := Inspect(writeLora(t, map[string][]int{"lora_unet_input_blocks_1_0.lora_down.weight": {4, 8}}, nil))
+	withTE, _ := Inspect(writeLora(t, map[string][]int{"lora_te1_text_model_x.lora_down.weight": {4, 8}}, nil))
+	if unetOnly.TextEncoderTrained || !withTE.TextEncoderTrained {
+		t.Fatalf("unet-only=%v with-te=%v", unetOnly.TextEncoderTrained, withTE.TextEncoderTrained)
 	}
 }
 

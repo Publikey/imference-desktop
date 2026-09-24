@@ -1800,6 +1800,15 @@ export default function App() {
                             active={activeLoras}
                             onActiveChange={setActiveLoras}
                             onSettingsChange={setSettings}
+                            onInsertTrigger={(word) =>
+                              setPrompt((p) =>
+                                p.toLowerCase().includes(word.toLowerCase())
+                                  ? p
+                                  : p.trim()
+                                    ? `${word}, ${p}`
+                                    : word
+                              )
+                            }
                           />
                         )}
 

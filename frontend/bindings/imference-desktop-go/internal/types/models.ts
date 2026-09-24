@@ -380,6 +380,16 @@ export interface LoraEntry {
      */
     "family"?: string;
     "sizeBytes": number;
+
+    /**
+     * TriggerWords are the prompt words the file says it was trained with.
+     */
+    "triggerWords"?: string[] | null;
+
+    /**
+     * TextEncoderTrained false = UNet-only LoRA: trigger words are optional.
+     */
+    "textEncoderTrained"?: boolean;
 }
 
 /**

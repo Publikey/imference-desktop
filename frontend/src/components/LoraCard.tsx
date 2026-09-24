@@ -30,12 +30,15 @@ export function LoraCard({
   active,
   onActiveChange,
   onSettingsChange,
+  onInsertTrigger,
 }: {
   backend: string;
   library: LoraEntry[];
   active: LoraRef[];
   onActiveChange: (next: LoraRef[]) => void;
   onSettingsChange: (next: AppSettings) => void;
+  /** Adds a trigger word to the prompt (no-op when it's already there). */
+  onInsertTrigger: (word: string) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -128,6 +131,24 @@ export function LoraCard({
                     <X className="size-3" />
                   </button>
                 </div>
+                {!!entry.triggerWords?.length && (
+                  <div className="flex flex-wrap items-center gap-1 pl-6">
+                    {entry.triggerWords.map((w) => (
+                      <button
+                        key={w}
+                        type="button"
+                        onClick={() => onInsertTrigger(w)}
+                        title={t("lora.insertTrigger")}
+                        className="bg-muted hover:bg-accent rounded px-1.5 py-0.5 font-mono text-[10px]"
+                      >
+                        {w}
+                      </button>
+                    ))}
+                    <span className="text-muted-foreground/60 text-[10px]">
+                      {entry.textEncoderTrained ? t("lora.triggerNeeded") : t("lora.triggerOptional")}
+                    </span>
+                  </div>
+                )}
                 {on && (
                   <input
                     type="range"

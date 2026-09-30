@@ -82,10 +82,10 @@
   },
   "composer": {
     "qualityTags": "Quality tags",
-    "qualityTagsPlaceholder": "masterpiece, best quality, …",
-    "promptPlaceholder": "A serene mountain lake at golden hour, photorealistic…",
+    "qualityTagsPlaceholder": "Added before your prompt",
+    "promptPlaceholder": "Describe the image you want",
     "negativePrompt": "Negative prompt",
-    "negativePlaceholder": "things to avoid…",
+    "negativePlaceholder": "What to leave out",
     "downloadingBtn": "Downloading…",
     "downloadModelBtn": "Download model",
     "generateBtn": "Generate",
@@ -93,7 +93,11 @@
     "clear": "Clear prompt",
     "charCount_one": "{{count}} char",
     "charCount_other": "{{count}} chars",
-    "loadingModelBtn": "Loading model…"
+    "loadingModelBtn": "Loading model…",
+    "prompt": "Prompt",
+    "promptHelp": "Describe the image you want: subject, setting, style, lighting. Ctrl+Enter (⌘+Enter) generates.",
+    "negativeHelp": "What the model should avoid. Pre-filled with the model's own recommendation.",
+    "qualityTagsHelp": "Added in front of your prompt. Pre-filled with the tags this model responds to best."
   },
   "hint": {
     "configurePayment": "Configure a payment method above",
@@ -198,7 +202,8 @@
     "scheduler": "Scheduler",
     "fixedByModel": "Fixed by this model",
     "modelDefault": "model default",
-    "reset": "Reset to model defaults"
+    "reset": "Reset to model defaults",
+    "formatHelp": "Output size and aspect ratio. Larger formats can cost more in the cloud."
   },
   "refImage": {
     "title": "Reference image",
@@ -312,7 +317,7 @@
     "dismissTitle": "Dismiss (shown again at next launch)"
   },
   "readiness": {
-    "title": "Local model readiness",
+    "title": "Local setup",
     "prepareAll": "Prepare everything",
     "readyLine": "Ready — {{name}} · engine running",
     "weights": "Model weights",
@@ -329,7 +334,8 @@
     "engineRunning": "running",
     "engineStarting": "Starting…",
     "engineInstalling": "Installing the engine…",
-    "engineError": "Engine error — see Logs"
+    "engineError": "Engine error — see Logs",
+    "help": "What your machine needs before this model can run: its weights, the shared components of its family, and the local engine."
   },
   "modelBar": {
     "cloudModel": "Cloud model",
@@ -343,7 +349,9 @@
     "componentsMissing": "Shared components required (~{{size}})",
     "componentsMissingTitle": "{{files}} file(s) missing from {{repo}} (~{{size}}) — download them before generating",
     "downloadComponents": "Download components",
-    "componentsDownloading": "Components {{index}}/{{total}} — {{file}}"
+    "componentsDownloading": "Components {{index}}/{{total}} — {{file}}",
+    "localHelp": "Runs on your machine's GPU. The weights are downloaded once, then generations are free and private.",
+    "cloudHelp": "Runs on imference's GPUs. Nothing to download; each generation is billed in credits or USDC."
   },
   "modelPicker": {
     "cloudTitle": "Cloud models",

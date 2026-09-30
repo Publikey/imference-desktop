@@ -51,7 +51,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
 import { LocalReadinessCard } from "@/components/LocalReadinessCard";
-import { AddButton, ComposerCardHeader } from "@/components/ComposerCard";
+import { AddButton, ComposerCardHeader, FieldLabel } from "@/components/ComposerCard";
 import { HoverPopover } from "@/components/ui/hover-popover";
 import { CloudLoraCard, LORA_BACKENDS, LoraCard, loraFits } from "@/components/LoraCard";
 import { PaymentBar } from "@/components/PaymentBar";
@@ -2334,78 +2334,74 @@ function Composer({
   const promptRef = useAutoGrow(prompt);
   const preRef = useAutoGrow(prePrompt);
   const negRef = useAutoGrow(negativePrompt);
+  const secondaryField =
+    "border-input bg-background/60 placeholder:text-muted-foreground/40 focus:border-primary/40 block max-h-24 w-full resize-none rounded-lg border px-3 py-1.5 text-xs leading-snug outline-none transition-colors";
 
   return (
-    <div className="composer bg-card rounded-2xl border">
-      {/* Pre-prompt (quality tags) — secondary: small, dim, tucked at the top. */}
-      {showModelFields && (
-        <label className="hover:bg-muted/30 focus-within:bg-muted/30 block rounded-t-2xl px-5 pb-2 pt-2.5 transition-colors">
-          <span className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wide">
-            {t("composer.qualityTags")}
-          </span>
-          <textarea
-            ref={preRef}
-            value={prePrompt}
-            onChange={(e) => onPrePromptChange(e.target.value)}
-            placeholder={t("composer.qualityTagsPlaceholder")}
-            rows={1}
-            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-24 w-full resize-none border-0 bg-transparent text-xs leading-snug outline-none"
-          />
-        </label>
-      )}
+    <section className="composer bg-card rounded-2xl border px-4 py-3">
+      <ComposerCardHeader
+        title={t("composer.prompt")}
+        help={t("composer.promptHelp")}
+        action={
+          prompt.length > 0 && (
+            <>
+              <span className="text-muted-foreground/60 text-[10px] tabular-nums">
+                {t("composer.charCount", { count: prompt.length })}
+              </span>
+              <button
+                type="button"
+                onClick={() => onPromptChange("")}
+                title={t("composer.clear")}
+                aria-label={t("composer.clear")}
+                className="text-muted-foreground/60 hover:text-foreground hover:bg-muted rounded p-0.5 transition-colors"
+              >
+                <X className="size-3.5" />
+              </button>
+            </>
+          )
+        }
+      />
 
-      {/* Prompt — the hero: largest text, most room, clear separation. */}
-      <div className={cn("relative", showModelFields ? "border-border/60 border-y" : "")}>
-        <textarea
-          ref={promptRef}
-          value={prompt}
-          onChange={(e) => onPromptChange(e.target.value)}
-          placeholder={t("composer.promptPlaceholder")}
-          rows={3}
-          className={cn(
-            "placeholder:text-muted-foreground/60 focus:bg-muted/15 block max-h-72 min-h-32 w-full resize-none border-0 bg-transparent px-5 pb-7 pt-4 text-base font-medium leading-relaxed outline-none transition-colors",
-            showModelFields ? "" : "rounded-t-2xl"
-          )}
-        />
-        {/* Clear + character count — only while there's something to clear. The
-            count sits in a faint pill so it stays legible over the last line. */}
-        {prompt.length > 0 && (
-          <div className="absolute bottom-1.5 right-2.5 flex items-center gap-1.5">
-            <span className="bg-card/70 text-muted-foreground/60 rounded px-1 text-[10px] tabular-nums backdrop-blur-sm">
-              {t("composer.charCount", { count: prompt.length })}
-            </span>
-            <button
-              type="button"
-              onClick={() => onPromptChange("")}
-              title={t("composer.clear")}
-              aria-label={t("composer.clear")}
-              className="text-muted-foreground/50 hover:text-foreground hover:bg-muted rounded p-0.5 transition-colors"
-            >
-              <X className="size-3.5" />
-            </button>
+      {/* The prompt is the hero: the biggest field, the readable size. */}
+      <textarea
+        id="composer-prompt"
+        ref={promptRef}
+        value={prompt}
+        onChange={(e) => onPromptChange(e.target.value)}
+        placeholder={t("composer.promptPlaceholder")}
+        rows={3}
+        className="border-input bg-background/60 placeholder:text-muted-foreground/40 focus:border-primary/40 mt-2 block max-h-72 min-h-28 w-full resize-none rounded-xl border px-3 py-2.5 text-sm leading-relaxed outline-none transition-colors"
+      />
+
+      {showModelFields && (
+        <div className="mt-3 grid gap-2.5">
+          <div>
+            <FieldLabel label={t("composer.negativePrompt")} help={t("composer.negativeHelp")} htmlFor="composer-negative" />
+            <textarea
+              id="composer-negative"
+              ref={negRef}
+              value={negativePrompt}
+              onChange={(e) => onNegativePromptChange(e.target.value)}
+              placeholder={t("composer.negativePlaceholder")}
+              rows={1}
+              className={secondaryField}
+            />
           </div>
-        )}
-      </div>
-
-      {/* Negative prompt — secondary, mirrors the pre-prompt styling, and now
-          the card's last child (hence the rounded bottom). */}
-      {showModelFields && (
-        <label className="hover:bg-muted/30 focus-within:bg-muted/30 block rounded-b-2xl px-5 pb-3 pt-2 transition-colors">
-          <span className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wide">
-            {t("composer.negativePrompt")}
-          </span>
-          <textarea
-            ref={negRef}
-            value={negativePrompt}
-            onChange={(e) => onNegativePromptChange(e.target.value)}
-            placeholder={t("composer.negativePlaceholder")}
-            rows={1}
-            className="placeholder:text-muted-foreground/40 text-muted-foreground/90 block max-h-24 w-full resize-none border-0 bg-transparent text-xs leading-snug outline-none"
-          />
-        </label>
+          <div>
+            <FieldLabel label={t("composer.qualityTags")} help={t("composer.qualityTagsHelp")} htmlFor="composer-quality" />
+            <textarea
+              id="composer-quality"
+              ref={preRef}
+              value={prePrompt}
+              onChange={(e) => onPrePromptChange(e.target.value)}
+              placeholder={t("composer.qualityTagsPlaceholder")}
+              rows={1}
+              className={secondaryField}
+            />
+          </div>
+        </div>
       )}
-
-    </div>
+    </section>
   );
 }
 
@@ -2502,10 +2498,8 @@ function FormatSelector({
 
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
-      <div className="flex flex-col gap-1.5">
-        <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
-          {t("params.format")}
-        </span>
+      <div className="flex flex-col gap-2">
+        <ComposerCardHeader title={t("params.format")} help={t("params.formatHelp")} />
         {/* A fixed 3-column grid of equal cells, not a wrapping segmented
             control: with nine formats of uneven label lengths, wrapping put a
             different number of pills on each line and the whole box read as
@@ -2692,9 +2686,10 @@ function ParamsPanel({
         className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
       >
         <div className="flex min-w-0 items-center gap-2">
-          <SlidersHorizontal className="text-muted-foreground size-4 shrink-0" />
-          <span className="text-sm font-semibold">{t("params.title")}</span>
-          <span className="text-muted-foreground/80 truncate text-[11px]">{summary}</span>
+          <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+            {t("params.title")}
+          </span>
+          <span className="text-muted-foreground/60 truncate text-[11px]">{summary}</span>
         </div>
         <ChevronDown
           className={cn("text-muted-foreground size-4 shrink-0 transition", open && "rotate-180")}

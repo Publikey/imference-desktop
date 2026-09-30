@@ -81,17 +81,21 @@
   },
   "composer": {
     "qualityTags": "质量标签",
-    "qualityTagsPlaceholder": "masterpiece, best quality, …",
-    "promptPlaceholder": "描述想生成的图像（建议用英文），例如 a serene mountain lake at golden hour, photorealistic…",
-    "negativePrompt": "负面提示词",
-    "negativePlaceholder": "不想出现的内容…",
+    "qualityTagsPlaceholder": "添加在提示词之前",
+    "promptPlaceholder": "描述你想要的图像",
+    "negativePrompt": "反向提示词",
+    "negativePlaceholder": "要排除的内容",
     "downloadingBtn": "下载中…",
     "downloadModelBtn": "下载模型",
     "generateBtn": "生成",
     "addToQueueBtn": "加入队列",
     "clear": "清除提示词",
     "charCount_other": "{{count}} 字符",
-    "loadingModelBtn": "加载模型中…"
+    "loadingModelBtn": "加载模型中…",
+    "prompt": "提示词",
+    "promptHelp": "描述你想要的图像：主体、场景、风格、光线。Ctrl+Enter（⌘+Enter）生成。",
+    "negativeHelp": "模型应避免的内容。已预填该模型推荐的内容。",
+    "qualityTagsHelp": "添加在提示词之前。已预填该模型效果最佳的标签。"
   },
   "hint": {
     "configurePayment": "请先在上方配置支付方式",
@@ -195,7 +199,8 @@
     "scheduler": "调度器",
     "fixedByModel": "该模型固定此值",
     "modelDefault": "模型默认",
-    "reset": "重置为模型默认值"
+    "reset": "重置为模型默认值",
+    "formatHelp": "输出尺寸和宽高比。在云端，较大的格式可能费用更高。"
   },
   "refImage": {
     "title": "参考图",
@@ -306,7 +311,7 @@
     "dismissTitle": "忽略（下次启动时会再次提示）"
   },
   "readiness": {
-    "title": "本地模型就绪状态",
+    "title": "本地设置",
     "prepareAll": "一键准备",
     "readyLine": "已就绪 — {{name}} · 引擎运行中",
     "weights": "模型权重",
@@ -323,7 +328,8 @@
     "engineRunning": "运行中",
     "engineStarting": "启动中…",
     "engineInstalling": "正在安装引擎…",
-    "engineError": "引擎错误 — 请查看日志"
+    "engineError": "引擎错误 — 请查看日志",
+    "help": "运行该模型前本机需要的内容：模型权重、该系列的共享组件以及本地引擎。"
   },
   "modelBar": {
     "cloudModel": "云端模型",
@@ -337,7 +343,9 @@
     "componentsMissing": "需要共享组件（约 {{size}}）",
     "componentsMissingTitle": "{{repo}} 缺少 {{files}} 个文件（约 {{size}}）— 生成前需先下载",
     "downloadComponents": "下载组件",
-    "componentsDownloading": "组件 {{index}}/{{total}} — {{file}}"
+    "componentsDownloading": "组件 {{index}}/{{total}} — {{file}}",
+    "localHelp": "在本机 GPU 上运行。权重只需下载一次，之后生成免费且私密。",
+    "cloudHelp": "在 imference 的 GPU 上运行。无需下载；每次生成按积分或 USDC 计费。"
   },
   "modelPicker": {
     "cloudTitle": "云端模型",

@@ -35,6 +35,31 @@ export function ComposerCardHeader({
   );
 }
 
+/** Secondary field label inside a card (negative prompt, quality tags…): the
+ *  header's style one step quieter, with the same info tooltip. */
+export function FieldLabel({
+  label,
+  help,
+  htmlFor,
+}: {
+  label: string;
+  help?: string;
+  htmlFor?: string;
+}) {
+  return (
+    <span className="text-muted-foreground/80 mb-1 inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide">
+      <label htmlFor={htmlFor} className="cursor-text">
+        {label}
+      </label>
+      {help && (
+        <HoverPopover content={help} always className="inline-flex normal-case">
+          <Info className="text-muted-foreground/50 hover:text-foreground size-3 cursor-help" />
+        </HoverPopover>
+      )}
+    </span>
+  );
+}
+
 export function AddButton({
   label,
   onClick,

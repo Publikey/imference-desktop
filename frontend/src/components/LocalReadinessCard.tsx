@@ -1,3 +1,4 @@
+import { ComposerCardHeader } from "@/components/ComposerCard";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -152,7 +153,7 @@ export function LocalReadinessCard({
   return (
     <section className="bg-card grid gap-2.5 rounded-2xl border px-4 py-3 text-xs shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="font-medium">{t("readiness.title")}</span>
+        <ComposerCardHeader title={t("readiness.title")} help={t("readiness.help")} />
         <div className="flex items-center gap-2">
           {pendingActions > 1 && (
             <button

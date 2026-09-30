@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useState } from "react";
+import { ComposerCardHeader } from "@/components/ComposerCard";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
@@ -142,7 +143,11 @@ export function ModelBar({
 
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
-      <div className="flex items-center">
+      <ComposerCardHeader
+        title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
+        help={isCloud ? t("modelBar.cloudHelp") : t("modelBar.localHelp")}
+      />
+      <div className="mt-2 flex items-center">
         {listError ? (
           <div className="flex h-10 flex-1 items-center gap-2">
             <AlertTriangle className="text-destructive size-4 shrink-0" />

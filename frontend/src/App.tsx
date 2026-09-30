@@ -2302,7 +2302,10 @@ function useAutoGrow(value: string) {
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
+    // scrollHeight excludes the borders while the fields are border-box: without
+    // them the box is 2px short and shows a scrollbar on a single line. Past
+    // max-height the CSS cap wins and the scrollbar is real.
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
   }, [value]);
   return ref;
 }

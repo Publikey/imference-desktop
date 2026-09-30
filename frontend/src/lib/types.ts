@@ -344,6 +344,14 @@ export type GenerationRequest = {
   formatCode?: string;
   /** LoRAs stacked on the local model (local mode, LoRA-capable backends only). */
   loras?: LoraRef[];
+  /** Catalog LoRAs (by code) for a cloud generation; imference resolves them. */
+  cloudLoras?: CloudLoraRef[];
+};
+
+/** One catalog LoRA applied to a cloud generation. */
+export type CloudLoraRef = {
+  code: string;
+  weight: number;
 };
 
 /** Per-step local generation progress, from the "generate:progress" event. */

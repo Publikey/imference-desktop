@@ -4,6 +4,7 @@
 export type {
     CachedModel,
     CatalogLora,
+    CloudLoraRef,
     CreditInfo,
     EngineInfo,
     EngineRuntimeSettings,

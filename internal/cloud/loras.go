@@ -33,6 +33,7 @@ type apiLora struct {
 	WeightMin             float64  `json:"weight_min"`
 	WeightMax             float64  `json:"weight_max"`
 	ImLocal               *bool    `json:"im_local"`
+	ImCloud               *bool    `json:"im_cloud"`
 	CreatorName           string   `json:"creator_name"`
 	CreatorURL            string   `json:"creator_url"`
 	Licence               string   `json:"licence"`
@@ -44,10 +45,10 @@ var ErrUnknownModel = fmt.Errorf("cloud: model not in the catalog")
 
 // ListLoras fetches the curated LoRA catalog. With modelCode set, only the
 // LoRAs compatible with that catalog model are returned (server-side family
-// filter); ErrUnknownModel when the catalog doesn't know it. LoRAs flagged not
-// local-runnable (im_local=false) are dropped: the desktop runs them locally.
-// Public endpoint, no auth.
-func (c *Client) ListLoras(ctx context.Context, modelCode string) ([]types.CatalogLora, error) {
+// filter); ErrUnknownModel when the catalog doesn't know it. local picks the
+// placement flag that must not be false: im_local for the local engine,
+// im_cloud for cloud generations. Public endpoint, no auth.
+func (c *Client) ListLoras(ctx context.Context, modelCode string, local bool) ([]types.CatalogLora, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
 
@@ -78,7 +79,11 @@ func (c *Client) ListLoras(ctx context.Context, modelCode string) ([]types.Catal
 	}
 	out := make([]types.CatalogLora, 0, len(parsed.Loras))
 	for _, l := range parsed.Loras {
-		if l.ImLocal != nil && !*l.ImLocal {
+		flag := l.ImCloud
+		if local {
+			flag = l.ImLocal
+		}
+		if flag != nil && !*flag {
 			continue
 		}
 		var size int64

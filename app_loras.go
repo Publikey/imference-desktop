@@ -146,7 +146,7 @@ func (a *App) ListCatalogLoras() ([]types.CatalogLora, error) {
 		return []types.CatalogLora{}, nil
 	}
 	if m.LocalPath == "" && m.ModelCode != "" {
-		list, err := a.cloud.ListLoras(a.ctx, m.ModelCode)
+		list, err := a.cloud.ListLoras(a.ctx, m.ModelCode, true)
 		if err == nil {
 			return list, nil
 		}
@@ -154,7 +154,7 @@ func (a *App) ListCatalogLoras() ([]types.CatalogLora, error) {
 			return nil, err
 		}
 	}
-	all, err := a.cloud.ListLoras(a.ctx, "")
+	all, err := a.cloud.ListLoras(a.ctx, "", true)
 	if err != nil {
 		return nil, err
 	}
@@ -167,12 +167,28 @@ func (a *App) ListCatalogLoras() ([]types.CatalogLora, error) {
 	return out, nil
 }
 
+// ListCloudLoras returns the curated LoRAs that go on the selected cloud model
+// (server-side family filter). Empty when that model's engine doesn't take
+// LoRAs or no cloud model is selected. Nothing is downloaded: imference applies
+// them on its workers.
+func (a *App) ListCloudLoras() ([]types.CatalogLora, error) {
+	s := a.settings.Get()
+	if s.CloudModel == "" || s.CloudModelInfo == nil || !loras.BackendSupports(s.CloudModelInfo.BackendType) {
+		return []types.CatalogLora{}, nil
+	}
+	list, err := a.cloud.ListLoras(a.ctx, s.CloudModel, false)
+	if errors.Is(err, cloud.ErrUnknownModel) {
+		return []types.CatalogLora{}, nil
+	}
+	return list, err
+}
+
 // DownloadCatalogLora downloads a curated LoRA into the managed folder, checks
 // its SHA256 and header, and adds it to the library with the catalog's
 // pre-config. Returns immediately; progress streams on "lora:progress"
 // ({done:true} ends it, with error set on failure).
 func (a *App) DownloadCatalogLora(code string) error {
-	all, err := a.cloud.ListLoras(a.ctx, "")
+	all, err := a.cloud.ListLoras(a.ctx, "", true)
 	if err != nil {
 		return err
 	}

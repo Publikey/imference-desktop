@@ -327,6 +327,16 @@ export function ListCatalogLoras(): $CancellablePromise<types$0.CatalogLora[] | 
 }
 
 /**
+ * ListCloudLoras returns the curated LoRAs that go on the selected cloud model
+ * (server-side family filter). Empty when that model's engine doesn't take
+ * LoRAs or no cloud model is selected. Nothing is downloaded: imference applies
+ * them on its workers.
+ */
+export function ListCloudLoras(): $CancellablePromise<types$0.CatalogLora[] | null> {
+    return $Call.ByID(2646026747);
+}
+
+/**
  * ListCloudModels returns the full imference catalog (cloud can run any model
  * code, including the proprietary cloud-only ones the local picker hides).
  * Public endpoint — works without an API key.

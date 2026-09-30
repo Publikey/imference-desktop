@@ -30,7 +30,7 @@ func TestListLoras(t *testing.T) {
 	c := New(logbus.New())
 	c.base = srv.URL
 
-	list, err := c.ListLoras(t.Context(), "cyberrealistic-xl")
+	list, err := c.ListLoras(t.Context(), "cyberrealistic-xl", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,10 @@ func TestListLoras(t *testing.T) {
 		t.Errorf("unexpected mapping: %+v", l)
 	}
 
-	if _, err := c.ListLoras(t.Context(), "nope"); !errors.Is(err, ErrUnknownModel) {
+	if cloud, _ := c.ListLoras(t.Context(), "cyberrealistic-xl", false); len(cloud) != 2 {
+		t.Errorf("cloud listing drops only im_cloud=false, got %d", len(cloud))
+	}
+	if _, err := c.ListLoras(t.Context(), "nope", true); !errors.Is(err, ErrUnknownModel) {
 		t.Errorf("unknown model: want ErrUnknownModel, got %v", err)
 	}
 }

@@ -31,6 +31,7 @@ import {
   PickModelFile,
   PickLoraFile,
   ListCatalogLoras,
+  ListCloudLoras,
   DownloadCatalogLora,
   AddLora,
   RemoveLora,
@@ -187,6 +188,7 @@ const raw = {
   removeLora: RemoveLora as unknown as (path: string) => Promise<AppSettings>,
   // Curated catalog LoRAs for the active model; downloads report on "lora:progress".
   listCatalogLoras: ListCatalogLoras as unknown as () => Promise<CatalogLora[]>,
+  listCloudLoras: ListCloudLoras as unknown as () => Promise<CatalogLora[]>,
   downloadCatalogLora: DownloadCatalogLora as (code: string) => Promise<void>,
   // Saved-image gallery (output folder history). listSavedImages returns one
   // page of metadata (optionally filtered); getSavedImage fetches one file's

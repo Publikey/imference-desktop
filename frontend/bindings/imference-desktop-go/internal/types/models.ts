@@ -54,6 +54,14 @@ export interface CatalogLora {
 }
 
 /**
+ * CloudLoraRef is one catalog LoRA applied to a cloud generation.
+ */
+export interface CloudLoraRef {
+    "code": string;
+    "weight": number;
+}
+
+/**
  * CreditInfo is the renderer's view of the cloud account's remaining credits,
  * fetched with the Bearer API key (the "API key (credit)" payment mode). Mirrors
  * the balance readout the imference web app shows. Configured is false when no
@@ -318,6 +326,12 @@ export interface GenerationRequest {
      * see loras.BackendSupports). Paths must be entries of Settings.Loras.
      */
     "loras"?: LoraRef[] | null;
+
+    /**
+     * CloudLoras are catalog LoRAs (by code) for a cloud generation; imference
+     * resolves and validates them against its im_lora catalog.
+     */
+    "cloudLoras"?: CloudLoraRef[] | null;
 }
 
 /**

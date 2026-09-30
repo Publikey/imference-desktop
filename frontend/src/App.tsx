@@ -50,7 +50,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
 import { LocalReadinessCard } from "@/components/LocalReadinessCard";
-import { LORA_BACKENDS, LoraCard, loraFits } from "@/components/LoraCard";
+import { CloudLoraCard, LORA_BACKENDS, LoraCard, loraFits } from "@/components/LoraCard";
 import { PaymentBar } from "@/components/PaymentBar";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
@@ -76,6 +76,7 @@ import type {
   FormatOption,
   GenerationRequest,
   LoraRef,
+  CloudLoraRef,
   GenerationResult,
   ComponentsProgress,
   ComponentsReadiness,
@@ -428,6 +429,8 @@ export default function App() {
   // LoRAs checked in the LoRA card (local mode). Kept across model switches;
   // only the ones that fit the model actually running are sent.
   const [activeLoras, setActiveLoras] = useState<LoraRef[]>([]);
+  // Catalog LoRAs checked in cloud mode (codes; imference resolves the files).
+  const [activeCloudLoras, setActiveCloudLoras] = useState<CloudLoraRef[]>([]);
   const sourceImage = refImages[0] ?? null;
   const setSourceImage = useCallback(
     (v: string | null) => setRefImages((prev) => [v, ...prev.slice(1)]),
@@ -1145,6 +1148,9 @@ export default function App() {
         );
         if (loras.length > 0) req.loras = loras;
       }
+      if (which === "cloud" && LORA_BACKENDS.has(backend) && activeCloudLoras.length > 0) {
+        req.cloudLoras = activeCloudLoras;
+      }
 
       const id = nextJobId();
       const now = Date.now();
@@ -1170,7 +1176,7 @@ export default function App() {
         ]);
       }
     },
-    [prompt, pendingLocalModel, settings?.localModel, settings?.cloudModelInfo, settings?.loras, params, refImages, refSlots, strength, activeLoras, settleJob]
+    [prompt, pendingLocalModel, settings?.localModel, settings?.cloudModelInfo, settings?.loras, params, refImages, refSlots, strength, activeLoras, activeCloudLoras, settleJob]
   );
 
   // Local FIFO dispatcher — the sidecar runs one local job at a time. Whenever
@@ -1789,6 +1795,20 @@ export default function App() {
                             targetH={refDims.height}
                             strength={strength}
                             onStrengthChange={setStrength}
+                          />
+                        )}
+
+                        {/* 3c. LoRAs — catalog LoRAs in cloud mode (applied by imference). */}
+                        {mode === "cloud" && activeModel && LORA_BACKENDS.has(activeModel.backendType ?? "") && (
+                          <CloudLoraCard
+                            modelCode={activeModel.modelCode}
+                            active={activeCloudLoras}
+                            onActiveChange={setActiveCloudLoras}
+                            onInsertTrigger={(word) =>
+                              setPrompt((p) =>
+                                p.toLowerCase().includes(word.toLowerCase()) ? p : p.trim() ? `${word}, ${p}` : word
+                              )
+                            }
                           />
                         )}
 

@@ -696,7 +696,11 @@ func cloudMeta(req types.GenerationRequest, model *types.ModelInfo) types.Genera
 	m := genMeta(req, model)
 	m.Img2Img = false
 	m.Strength = 0
-	m.Loras = nil // local-only for now
+	// Cloud LoRAs are catalog codes, not local files.
+	m.Loras = nil
+	for _, l := range req.CloudLoras {
+		m.Loras = append(m.Loras, types.LoraRef{Name: l.Code, Weight: l.Weight})
+	}
 	return m
 }
 

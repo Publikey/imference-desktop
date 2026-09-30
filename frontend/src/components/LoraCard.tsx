@@ -4,7 +4,7 @@ import { Download, Loader2, Plus, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/wails-bridge";
-import type { AppSettings, CatalogLora, LoraEntry, LoraRef } from "@/lib/types";
+import type { AppSettings, CatalogLora, CloudLoraRef, LoraEntry, LoraRef } from "@/lib/types";
 
 /** Backends whose local engine applies user LoRAs. Mirrors the Go gate
  *  (internal/loras.BackendSupports) — flip both when a family is enabled. */
@@ -286,6 +286,120 @@ export function LoraCard({
           </ul>
         </div>
       )}
+    </section>
+  );
+}
+
+// Cloud-mode LoRA card: catalog LoRAs that go on the selected cloud model
+// (imference filters by family and applies them on its workers; nothing is
+// downloaded). A checked LoRA starts at its catalog weight; the slider is
+// bounded by the catalog. Selections that stop fitting (another model) drop.
+export function CloudLoraCard({
+  modelCode,
+  active,
+  onActiveChange,
+  onInsertTrigger,
+}: {
+  modelCode: string;
+  active: CloudLoraRef[];
+  onActiveChange: (next: CloudLoraRef[]) => void;
+  onInsertTrigger: (word: string) => void;
+}) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const [loras, setLoras] = useState<CatalogLora[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listCloudLoras()
+      .then((list) => !cancelled && setLoras(list ?? []))
+      .catch(() => !cancelled && setLoras([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [modelCode]);
+
+  // Drop selections the current model doesn't take.
+  useEffect(() => {
+    if (!loras) return;
+    const codes = new Set(loras.map((l) => l.code));
+    if (active.some((a) => !codes.has(a.code))) onActiveChange(active.filter((a) => codes.has(a.code)));
+  }, [loras, active, onActiveChange]);
+
+  if (!loras || loras.length === 0) return null;
+  const weightOf = (code: string) => active.find((a) => a.code === code)?.weight;
+
+  const toggle = (lora: CatalogLora, on: boolean) => {
+    if (!on) {
+      onActiveChange(active.filter((a) => a.code !== lora.code));
+    } else if (active.length >= MAX_ACTIVE_LORAS) {
+      toast.error(t("lora.tooMany", { max: MAX_ACTIVE_LORAS }));
+    } else {
+      onActiveChange([...active, { code: lora.code, weight: lora.weightDefault }]);
+    }
+  };
+
+  return (
+    <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
+      <div className="mb-2">
+        <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+          {t("lora.title")}
+          <span className="text-muted-foreground/50 ml-1.5 normal-case">· {t("lora.optional")}</span>
+        </span>
+      </div>
+      <ul className="grid gap-2">
+        {loras.map((lora) => {
+          const weight = weightOf(lora.code);
+          const on = weight !== undefined;
+          const w = weight ?? lora.weightDefault;
+          return (
+            <li key={lora.code} className="grid gap-1">
+              <div className="flex items-center gap-2">
+                <Checkbox checked={on} onCheckedChange={(v) => toggle(lora, v)} />
+                {lora.image && <img src={lora.image} alt="" className="size-6 rounded object-cover" />}
+                <span className="min-w-0 flex-1 truncate text-xs" title={lora.mediumDescription}>
+                  {lora.name}
+                  {lora.shortDescription && (
+                    <span className="text-muted-foreground/70 ml-1.5 text-[10px]">{lora.shortDescription}</span>
+                  )}
+                </span>
+                {on && <span className="text-muted-foreground text-xs tabular-nums">{w.toFixed(2)}</span>}
+              </div>
+              {on && lora.triggerWords.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1 pl-6">
+                  {lora.triggerWords.map((word) => (
+                    <button
+                      key={word}
+                      type="button"
+                      onClick={() => onInsertTrigger(word)}
+                      title={t("lora.insertTrigger")}
+                      className="bg-muted hover:bg-accent rounded px-1.5 py-0.5 font-mono text-[10px]"
+                    >
+                      {word}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {on && (
+                <input
+                  type="range"
+                  min={lora.weightMin}
+                  max={lora.weightMax}
+                  step={0.05}
+                  value={w}
+                  onChange={(e) =>
+                    onActiveChange(
+                      active.map((a) => (a.code === lora.code ? { ...a, weight: Number(e.target.value) } : a))
+                    )
+                  }
+                  className="range w-full"
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

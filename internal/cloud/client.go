@@ -109,6 +109,24 @@ type postBody struct {
 	// FormatCode names the format the user picked. The server prices per format
 	// (credit_multiplier), and would otherwise have to guess from width×height.
 	FormatCode string `json:"format_code,omitempty"`
+	// Loras are catalog codes + weights (imference resolves the files).
+	Loras []postLora `json:"loras,omitempty"`
+}
+
+type postLora struct {
+	Code   string  `json:"code"`
+	Weight float64 `json:"weight"`
+}
+
+func postLoras(refs []types.CloudLoraRef) []postLora {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]postLora, len(refs))
+	for i, r := range refs {
+		out[i] = postLora{Code: r.Code, Weight: r.Weight}
+	}
+	return out
 }
 
 type postResponse struct {
@@ -891,6 +909,7 @@ func (c *Client) postGenerateX402(
 		BatchNbr:       1,
 		DurationS:      req.DurationS,
 		FormatCode:     req.FormatCode,
+		Loras:          postLoras(req.CloudLoras),
 	}
 
 	postCtx, cancel := context.WithTimeout(ctx, postTimeout)
@@ -1016,6 +1035,7 @@ func (c *Client) postGenerate(
 		BatchNbr:       1,
 		DurationS:      req.DurationS,
 		FormatCode:     req.FormatCode,
+		Loras:          postLoras(req.CloudLoras),
 	}
 	buf, _ := json.Marshal(body)
 

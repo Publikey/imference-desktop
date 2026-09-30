@@ -386,6 +386,15 @@ type GenerationRequest struct {
 	// Loras are stacked on the local model (local mode, SDXL only for now —
 	// see loras.BackendSupports). Paths must be entries of Settings.Loras.
 	Loras []LoraRef `json:"loras,omitempty"`
+	// CloudLoras are catalog LoRAs (by code) for a cloud generation; imference
+	// resolves and validates them against its im_lora catalog.
+	CloudLoras []CloudLoraRef `json:"cloudLoras,omitempty"`
+}
+
+// CloudLoraRef is one catalog LoRA applied to a cloud generation.
+type CloudLoraRef struct {
+	Code   string  `json:"code"`
+	Weight float64 `json:"weight"`
 }
 
 // SavedImage is one previously-generated image found on disk in the output

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, FileBox, Loader2, PackageOpen, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import type { TFunction } from "i18next";
+import { Check, FileBox, Info, Loader2, PackageOpen, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { HoverPopover } from "@/components/ui/hover-popover";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
@@ -38,6 +40,14 @@ export function loraFits(entry: LoraEntry, backend: string, familyCode?: string)
   return !familyCode || families.length === 0 || families.includes(familyCode);
 }
 
+/** A catalog LoRA goes on a model of that engine whose family it lists (a user
+ *  checkpoint has no catalog family: the engine alone decides). Same rule as
+ *  imference's resolveLoras. */
+export function catalogFits(lora: CatalogLora, backend: string, familyCode?: string): boolean {
+  if (lora.engine !== backend) return false;
+  return !familyCode || lora.compatibleFamilyCodes.includes(familyCode);
+}
+
 /** The weight a newly added LoRA starts at: its catalog pre-config, else 0.8. */
 export function initialWeight(entry: LoraEntry): number {
   return entry.weightDefault ?? DEFAULT_WEIGHT;
@@ -53,13 +63,22 @@ function withoutKey<T>(rec: Record<string, T>, key: string): Record<string, T> {
   return rest;
 }
 
+function familyLabel(lora: CatalogLora): string {
+  return lora.familyName || lora.familyCode.toUpperCase();
+}
+
+function fitsHint(t: TFunction, families: string[]): string {
+  return t("loraPicker.otherFamilyHint", { families: families.map((f) => f.toUpperCase()).join(", ") });
+}
+
 // ---------------------------------------------------------------------------
 // Composer cards: the selected LoRAs + an "Add" button that opens the picker.
 // ---------------------------------------------------------------------------
 
-// Local mode. The picker offers the curated catalog (downloaded on demand into
-// the app's LoRA folder, SHA256-checked, then added) and "My LoRAs" (imported
-// files, referenced in place). Selections are library paths.
+// Local mode. The picker shows the whole curated catalog (compatible ones
+// usable; a pick downloads the file once into the app's LoRA folder, SHA256-
+// checked, then selects it) and "My LoRAs" (imported files, referenced in
+// place). Selections are library paths.
 export function LoraCard({
   backend,
   modelCode,
@@ -99,7 +118,6 @@ export function LoraCard({
     };
   }, [modelCode]);
 
-  const fitting = library.filter((l) => loraFits(l, backend, familyCode));
   const byPath = new Map(library.map((l) => [l.path, l]));
   const byCatalogCode = new Map(library.filter((l) => l.catalogCode).map((l) => [l.catalogCode!, l]));
   const isActive = (path: string) => active.some((a) => a.path === path);
@@ -132,9 +150,9 @@ export function LoraCard({
         void api.getSettings().then((s) => {
           onSettingsChange(s);
           const entry = s.loras?.find((l) => l.catalogCode === p.code);
-          if (entry) onActiveChange(active.some((a) => a.path === entry.path)
-            ? active
-            : active.length >= MAX_ACTIVE_LORAS ? active : [...active, { path: entry.path, weight: initialWeight(entry) }]);
+          if (entry && !active.some((a) => a.path === entry.path) && active.length < MAX_ACTIVE_LORAS) {
+            onActiveChange([...active, { path: entry.path, weight: initialWeight(entry) }]);
+          }
         });
       }),
     [active, onActiveChange, onSettingsChange, t, toast]
@@ -175,12 +193,7 @@ export function LoraCard({
     }
     if (!path) return;
     try {
-      const next = await api.addLora(path);
-      onSettingsChange(next);
-      const entry = next.loras?.find((l) => l.path === path);
-      if (entry && !loraFits(entry, backend, familyCode)) {
-        toast.toast(t("lora.addedOtherFamily", { name: entry.name, family: entry.family }));
-      }
+      onSettingsChange(await api.addLora(path));
     } catch (e) {
       toast.error(String(e));
     }
@@ -197,6 +210,7 @@ export function LoraCard({
 
   const catalogItems: PickerItem[] = catalog.map((lora) => {
     const entry = byCatalogCode.get(lora.code);
+    const fits = catalogFits(lora, backend, familyCode);
     return {
       key: `catalog:${lora.code}`,
       name: lora.name,
@@ -205,6 +219,9 @@ export function LoraCard({
       category: lora.category,
       nsfw: lora.nsfw,
       sizeBytes: lora.sizeBytes,
+      group: familyLabel(lora),
+      compatible: fits,
+      incompatibleHint: fits ? undefined : fitsHint(t, lora.compatibleFamilyCodes),
       downloaded: !!entry,
       active: !!entry && isActive(entry.path),
       progress: downloading[lora.code],
@@ -213,19 +230,25 @@ export function LoraCard({
       removeTitle: t("lora.removeDownloaded"),
     };
   });
-  const mineItems: PickerItem[] = fitting
+  const mineItems: PickerItem[] = library
     .filter((l) => !l.catalogCode)
-    .map((entry) => ({
-      key: `mine:${entry.path}`,
-      name: entry.name,
-      description: entry.path,
-      custom: true,
-      sizeBytes: entry.sizeBytes,
-      active: isActive(entry.path),
-      onPick: () => pickMine(entry),
-      onRemove: () => void removeFromLibrary(entry),
-      removeTitle: t("lora.remove"),
-    }));
+    .map((entry) => {
+      const fits = loraFits(entry, backend, familyCode);
+      return {
+        key: `mine:${entry.path}`,
+        name: entry.name,
+        description: entry.path,
+        custom: true,
+        sizeBytes: entry.sizeBytes,
+        group: entry.family ? entry.family.toUpperCase() : t("loraPicker.unknownFamily"),
+        compatible: fits,
+        incompatibleHint: fits ? undefined : fitsHint(t, [entry.family ?? "?"]),
+        active: isActive(entry.path),
+        onPick: () => pickMine(entry),
+        onRemove: () => void removeFromLibrary(entry),
+        removeTitle: t("lora.remove"),
+      };
+    });
 
   const rows = active
     .map((a) => {
@@ -266,16 +289,20 @@ export function LoraCard({
   );
 }
 
-// Cloud mode: the curated LoRAs that go on the selected cloud model; imference
-// applies them on its workers, nothing is downloaded. Selections are catalog
-// codes; ones the current model doesn't take are dropped.
+// Cloud mode: the whole curated catalog, the ones fitting the selected cloud
+// model usable; imference applies them on its workers, nothing is downloaded.
+// Selections are catalog codes; ones the current model doesn't take are dropped.
 export function CloudLoraCard({
+  backend,
   modelCode,
+  familyCode,
   active,
   onActiveChange,
   onInsertTrigger,
 }: {
+  backend: string;
   modelCode: string;
+  familyCode?: string;
   active: CloudLoraRef[];
   onActiveChange: (next: CloudLoraRef[]) => void;
   onInsertTrigger: (word: string) => void;
@@ -298,11 +325,11 @@ export function CloudLoraCard({
 
   useEffect(() => {
     if (!loras) return;
-    const codes = new Set(loras.map((l) => l.code));
-    if (active.some((a) => !codes.has(a.code))) onActiveChange(active.filter((a) => codes.has(a.code)));
-  }, [loras, active, onActiveChange]);
+    const fitting = new Set(loras.filter((l) => catalogFits(l, backend, familyCode)).map((l) => l.code));
+    if (active.some((a) => !fitting.has(a.code))) onActiveChange(active.filter((a) => fitting.has(a.code)));
+  }, [loras, active, onActiveChange, backend, familyCode]);
 
-  // No catalog LoRA for this model: no card at all (nothing to add).
+  // Empty catalog: nothing to add, no card.
   if (!loras || loras.length === 0) return null;
   const byCode = new Map(loras.map((l) => [l.code, l]));
   const isActive = (code: string) => active.some((a) => a.code === code);
@@ -318,16 +345,22 @@ export function CloudLoraCard({
     }
   };
 
-  const items: PickerItem[] = loras.map((lora) => ({
-    key: lora.code,
-    name: lora.name,
-    description: lora.shortDescription,
-    image: lora.image,
-    category: lora.category,
-    nsfw: lora.nsfw,
-    active: isActive(lora.code),
-    onPick: () => toggle(lora),
-  }));
+  const items: PickerItem[] = loras.map((lora) => {
+    const fits = catalogFits(lora, backend, familyCode);
+    return {
+      key: lora.code,
+      name: lora.name,
+      description: lora.shortDescription,
+      image: lora.image,
+      category: lora.category,
+      nsfw: lora.nsfw,
+      group: familyLabel(lora),
+      compatible: fits,
+      incompatibleHint: fits ? undefined : fitsHint(t, lora.compatibleFamilyCodes),
+      active: isActive(lora.code),
+      onPick: () => toggle(lora),
+    };
+  });
 
   const rows = active
     .map((a) => {
@@ -373,10 +406,12 @@ function LoraCardShell({
   const { t } = useTranslation();
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide">
           {t("lora.title")}
-          <span className="text-muted-foreground/50 ml-1.5 normal-case">· {t("lora.optional")}</span>
+          <HoverPopover content={t("lora.help")}>
+            <Info className="text-muted-foreground/60 hover:text-foreground size-3.5 cursor-help" />
+          </HoverPopover>
         </span>
         <button
           type="button"
@@ -388,11 +423,7 @@ function LoraCardShell({
           {t("lora.add")}
         </button>
       </div>
-      {count === 0 ? (
-        <p className="text-muted-foreground/70 mt-2 text-[11px] leading-snug">{t("lora.emptySelected")}</p>
-      ) : (
-        <ul className="mt-2 grid gap-3">{children}</ul>
-      )}
+      {count > 0 && <ul className="mt-3 grid gap-3">{children}</ul>}
     </section>
   );
 }
@@ -454,15 +485,12 @@ function SelectedLoraRow({
               key={word}
               type="button"
               onClick={() => onInsertTrigger(word)}
-              title={t("lora.insertTrigger")}
+              title={triggersNeeded ? t("lora.triggerNeeded") : t("lora.triggerOptional")}
               className="bg-muted hover:bg-accent rounded px-1.5 py-0.5 font-mono text-[10px]"
             >
-              {word}
+              + {word}
             </button>
           ))}
-          <span className="text-muted-foreground/60 text-[10px]">
-            {triggersNeeded ? t("lora.triggerNeeded") : t("lora.triggerOptional")}
-          </span>
         </div>
       )}
     </li>
@@ -471,7 +499,8 @@ function SelectedLoraRow({
 
 // ---------------------------------------------------------------------------
 // Picker dialog — same shape as ModelPickerDialog: tabs (local), search,
-// category chips, a grid of cards. Picking toggles a LoRA on the generation.
+// category chips, family-grouped card grid. Every LoRA is shown; the ones that
+// don't fit the selected model are dimmed and can't be picked.
 // ---------------------------------------------------------------------------
 
 type PickerItem = {
@@ -482,6 +511,11 @@ type PickerItem = {
   category?: string;
   nsfw?: boolean;
   sizeBytes?: number;
+  /** Section the card sits in (the LoRA's family). */
+  group: string;
+  /** Goes on the selected model. Others are shown dimmed, not pickable. */
+  compatible: boolean;
+  incompatibleHint?: string;
   /** Catalog LoRA already on disk (local mode). */
   downloaded?: boolean;
   /** Imported file ("My LoRAs"). */
@@ -496,12 +530,35 @@ type PickerItem = {
 
 function matches(item: PickerItem, q: string): boolean {
   if (!q) return true;
-  const hay = `${item.name} ${item.description ?? ""} ${item.category ?? ""}`.toLowerCase();
+  const hay = `${item.name} ${item.description ?? ""} ${item.category ?? ""} ${item.group}`.toLowerCase();
   return q
     .toLowerCase()
     .split(/\s+/)
     .filter(Boolean)
     .every((tok) => hay.includes(tok));
+}
+
+type Group = { label: string; items: PickerItem[]; compatible: number };
+
+// Sections by family: the ones holding compatible LoRAs first, then by name;
+// inside a section compatible cards first, then by name.
+function groupItems(items: PickerItem[]): Group[] {
+  const byLabel = new Map<string, Group>();
+  for (const item of items) {
+    let g = byLabel.get(item.group);
+    if (!g) {
+      g = { label: item.group, items: [], compatible: 0 };
+      byLabel.set(item.group, g);
+    }
+    g.items.push(item);
+    if (item.compatible) g.compatible++;
+  }
+  return [...byLabel.values()]
+    .sort((a, b) => Number(b.compatible > 0) - Number(a.compatible > 0) || a.label.localeCompare(b.label))
+    .map((g) => ({
+      ...g,
+      items: g.items.sort((a, b) => Number(b.compatible) - Number(a.compatible) || a.name.localeCompare(b.name)),
+    }));
 }
 
 function LoraPickerDialog({
@@ -524,6 +581,7 @@ function LoraPickerDialog({
   const [tab, setTab] = useState<"catalog" | "mine">("catalog");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
+  const [fitsOnly, setFitsOnly] = useState(false);
 
   const source = isCloud || tab === "catalog" ? catalog : mine;
   const presentCategories = useMemo(() => {
@@ -535,9 +593,15 @@ function LoraPickerDialog({
     if (category !== "all" && !presentCategories.includes(category)) setCategory("all");
   }, [presentCategories, category]);
 
-  const items = source.filter(
-    (i) => (category === "all" || (i.category || "other") === category) && matches(i, search)
+  const groups = groupItems(
+    source.filter(
+      (i) =>
+        (!fitsOnly || i.compatible) &&
+        (category === "all" || (i.category || "other") === category) &&
+        matches(i, search)
+    )
   );
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
   const showMine = !isCloud && tab === "mine";
 
   return (
@@ -579,18 +643,24 @@ function LoraPickerDialog({
                 className="border-input bg-background h-9 w-full rounded-md border pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            {presentCategories.length > 1 && (
-              <div className="flex flex-wrap gap-1.5">
-                <Chip active={category === "all"} onClick={() => setCategory("all")}>
-                  {t("common.all")}
-                </Chip>
-                {presentCategories.map((c) => (
-                  <Chip key={c} active={category === c} onClick={() => setCategory(c)}>
-                    {t(`loraPicker.category.${c}`)}
+            <div className="flex flex-wrap gap-1.5">
+              <Chip active={fitsOnly} onClick={() => setFitsOnly((v) => !v)}>
+                {t("loraPicker.fitsOnly")}
+              </Chip>
+              {presentCategories.length > 1 && (
+                <>
+                  <span className="bg-border mx-0.5 w-px self-stretch" />
+                  <Chip active={category === "all"} onClick={() => setCategory("all")}>
+                    {t("common.all")}
                   </Chip>
-                ))}
-              </div>
-            )}
+                  {presentCategories.map((c) => (
+                    <Chip key={c} active={category === c} onClick={() => setCategory(c)}>
+                      {t(`loraPicker.category.${c}`)}
+                    </Chip>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
         </DialogHeader>
 
@@ -611,7 +681,7 @@ function LoraPickerDialog({
             </button>
           )}
 
-          {items.length === 0 ? (
+          {total === 0 ? (
             <div className="text-muted-foreground flex flex-col items-center gap-3 py-12 text-center">
               <div className="bg-muted flex size-12 items-center justify-center rounded-2xl">
                 <PackageOpen className="size-6 opacity-70" strokeWidth={1.75} />
@@ -619,17 +689,26 @@ function LoraPickerDialog({
               <p className="text-sm">
                 {showMine
                   ? t("loraPicker.emptyMine")
-                  : search || category !== "all"
+                  : search || category !== "all" || fitsOnly
                     ? t("loraPicker.emptyFiltered")
                     : t("loraPicker.empty")}
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-              {items.map((item) => (
-                <LoraPickerCard key={item.key} item={item} />
-              ))}
-            </div>
+            groups.map((g) => (
+              <section key={g.label} className="mb-5 last:mb-0">
+                <h4 className="text-muted-foreground mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                  {g.label}
+                  <span className="bg-border h-px flex-1" />
+                  <span className="opacity-70">{g.items.length}</span>
+                </h4>
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  {g.items.map((item) => (
+                    <LoraPickerCard key={item.key} item={item} />
+                  ))}
+                </div>
+              </section>
+            ))
           )}
         </div>
       </DialogContent>
@@ -640,24 +719,30 @@ function LoraPickerDialog({
 function LoraPickerCard({ item }: { item: PickerItem }) {
   const { t } = useTranslation();
   const downloading = item.progress !== undefined;
+  const blocked = !item.compatible && !item.active;
   return (
     <div
+      title={item.incompatibleHint}
       className={cn(
-        "group bg-card relative flex flex-col overflow-hidden rounded-xl border text-left transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-md",
-        item.active ? "border-primary ring-primary/20 ring-2" : "hover:border-primary/40"
+        "group bg-card relative flex flex-col overflow-hidden rounded-xl border text-left transition-[transform,box-shadow,border-color,opacity] duration-200",
+        blocked ? "opacity-50" : "hover:-translate-y-0.5 hover:shadow-md",
+        item.active ? "border-primary ring-primary/20 ring-2" : !blocked && "hover:border-primary/40"
       )}
     >
       <button
         type="button"
-        disabled={downloading}
+        disabled={downloading || blocked}
         onClick={item.onPick}
-        className="flex flex-col text-left disabled:cursor-progress"
+        className={cn("flex flex-col text-left", downloading && "cursor-progress", blocked && "cursor-not-allowed")}
       >
         <div className="bg-muted relative aspect-square w-full overflow-hidden">
           <LoraThumb
             image={item.image}
             custom={item.custom}
-            className="size-full transition-transform duration-300 group-hover:scale-[1.04]"
+            className={cn(
+              "size-full transition-transform duration-300",
+              blocked ? "grayscale" : "group-hover:scale-[1.04]"
+            )}
             iconClassName="size-8"
           />
           {item.active && (
@@ -665,8 +750,10 @@ function LoraPickerCard({ item }: { item: PickerItem }) {
               <Check className="size-3.5" />
             </span>
           )}
-          <div className="absolute top-1.5 left-1.5 flex gap-1">
-            {item.custom ? (
+          <div className="absolute top-1.5 left-1.5 flex flex-wrap gap-1">
+            {!item.compatible ? (
+              <Badge className="bg-black/70 text-white">{t("loraPicker.badgeOtherFamily")}</Badge>
+            ) : item.custom ? (
               <Badge className="bg-amber-500/90 text-white">{t("loraPicker.badgeCustom")}</Badge>
             ) : item.downloaded && !item.active ? (
               <Badge className="bg-emerald-600/90 text-white">{t("loraPicker.badgeDownloaded")}</Badge>
@@ -679,6 +766,7 @@ function LoraPickerCard({ item }: { item: PickerItem }) {
               {t("loraPicker.downloading", { percent: item.progress })}
             </div>
           ) : (
+            item.compatible &&
             !item.custom &&
             !item.downloaded &&
             item.sizeBytes !== undefined &&

@@ -98,6 +98,7 @@ type CatalogLora struct {
 	Nsfw                  bool     `json:"nsfw"`
 	Engine                string   `json:"engine"`
 	FamilyCode            string   `json:"familyCode"`
+	FamilyName            string   `json:"familyName,omitempty"`
 	CompatibleFamilyCodes []string `json:"compatibleFamilyCodes"`
 	URL                   string   `json:"url"`
 	Filename              string   `json:"filename,omitempty"`

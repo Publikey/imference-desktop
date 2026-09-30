@@ -622,14 +622,13 @@
     "add": "添加",
     "remove": "从列表中移除（文件保留在磁盘上）",
     "tooMany": "最多同时使用 {{max}} 个 LoRA",
-    "addedOtherFamily": "{{name}} 适用于 {{family}} 模型——选择此类模型时会显示",
     "insertTrigger": "添加到提示词",
-    "triggerNeeded": "触发词——必需",
-    "triggerOptional": "触发词——可选（风格始终生效）",
+    "triggerNeeded": "触发词，LoRA 生效所必需。点击添加到提示词。",
+    "triggerOptional": "触发词，可选（效果始终生效）。点击添加到提示词。",
     "downloadFailed": "LoRA 下载失败：{{error}}",
     "removeDownloaded": "移除（删除已下载的文件）",
-    "emptySelected": "尚未添加 LoRA。添加一个来控制风格、角色、概念或细节程度。",
-    "unselect": "从本次生成中移除"
+    "unselect": "从本次生成中移除",
+    "help": "LoRA 是小型附加模块，可引导模型呈现某种风格、角色、概念或更多细节。最多添加 4 个；滑块控制各自的强度。"
   },
   "loraPicker": {
     "title": "添加 LoRA",
@@ -654,6 +653,10 @@
       "pose": "姿势",
       "detail": "细节",
       "other": "其他"
-    }
+    },
+    "fitsOnly": "适用于当前模型",
+    "badgeOtherFamily": "其他模型系列",
+    "otherFamilyHint": "适用于 {{families}} 模型，而非当前所选模型",
+    "unknownFamily": "未知系列"
   }
 }

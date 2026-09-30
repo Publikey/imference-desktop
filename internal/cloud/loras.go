@@ -22,6 +22,7 @@ type apiLora struct {
 	Nsfw                  bool     `json:"nsfw"`
 	ImEngine              string   `json:"im_engine"`
 	ModelFamilyCode       string   `json:"model_family_code"`
+	FamilyName            string   `json:"family_name"`
 	CompatibleFamilyCodes []string `json:"compatible_family_codes"`
 	LoraURL               string   `json:"lora_url"`
 	Filename              string   `json:"filename"`
@@ -94,7 +95,8 @@ func (c *Client) ListLoras(ctx context.Context, modelCode string, local bool) ([
 			Code: l.LoraCode, Name: l.Name,
 			ShortDescription: l.ShortDescription, MediumDescription: l.MediumDescription,
 			Image: l.Image, Category: l.Category, Nsfw: l.Nsfw,
-			Engine: l.ImEngine, FamilyCode: l.ModelFamilyCode, CompatibleFamilyCodes: l.CompatibleFamilyCodes,
+			Engine: l.ImEngine, FamilyCode: l.ModelFamilyCode, FamilyName: l.FamilyName,
+			CompatibleFamilyCodes: l.CompatibleFamilyCodes,
 			URL: l.LoraURL, Filename: l.Filename, SHA256: l.SHA256, SizeBytes: size,
 			TriggerWords: l.TriggerWords, TextEncoderTrained: l.TextEncoderTrained,
 			WeightDefault: l.WeightDefault, WeightMin: l.WeightMin, WeightMax: l.WeightMax,

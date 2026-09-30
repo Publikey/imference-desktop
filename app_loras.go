@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	"imference-desktop-go/internal/cloud"
 	"imference-desktop-go/internal/loras"
 	"imference-desktop-go/internal/modelfetch"
 	"imference-desktop-go/internal/types"
@@ -136,51 +135,18 @@ func isInLorasDir(path string) bool {
 	return err == nil && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel)
 }
 
-// ListCatalogLoras returns the curated LoRAs that go on the active local model:
-// filtered by its catalog family server-side, or — for a user checkpoint the
-// catalog doesn't know — by engine. Empty when the model's backend doesn't take
-// LoRAs.
+// ListCatalogLoras returns every curated LoRA the local engine can run, whatever
+// the active model: the picker shows them all and marks which ones fit (engine
+// + catalog family, same rule as validateLoras) so the catalog reads as a whole.
 func (a *App) ListCatalogLoras() ([]types.CatalogLora, error) {
-	m := a.settings.Get().LocalModel
-	if m == nil || !loras.BackendSupports(m.BackendType) {
-		return []types.CatalogLora{}, nil
-	}
-	if m.LocalPath == "" && m.ModelCode != "" {
-		list, err := a.cloud.ListLoras(a.ctx, m.ModelCode, true)
-		if err == nil {
-			return list, nil
-		}
-		if !errors.Is(err, cloud.ErrUnknownModel) {
-			return nil, err
-		}
-	}
-	all, err := a.cloud.ListLoras(a.ctx, "", true)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]types.CatalogLora, 0, len(all))
-	for _, l := range all {
-		if l.Engine == m.BackendType {
-			out = append(out, l)
-		}
-	}
-	return out, nil
+	return a.cloud.ListLoras(a.ctx, "", true)
 }
 
-// ListCloudLoras returns the curated LoRAs that go on the selected cloud model
-// (server-side family filter). Empty when that model's engine doesn't take
-// LoRAs or no cloud model is selected. Nothing is downloaded: imference applies
-// them on its workers.
+// ListCloudLoras returns every curated LoRA imference runs in the cloud; the
+// picker marks which ones fit the selected cloud model. Nothing is downloaded:
+// imference applies them on its workers (and re-checks compatibility).
 func (a *App) ListCloudLoras() ([]types.CatalogLora, error) {
-	s := a.settings.Get()
-	if s.CloudModel == "" || s.CloudModelInfo == nil || !loras.BackendSupports(s.CloudModelInfo.BackendType) {
-		return []types.CatalogLora{}, nil
-	}
-	list, err := a.cloud.ListLoras(a.ctx, s.CloudModel, false)
-	if errors.Is(err, cloud.ErrUnknownModel) {
-		return []types.CatalogLora{}, nil
-	}
-	return list, err
+	return a.cloud.ListLoras(a.ctx, "", false)
 }
 
 // DownloadCatalogLora downloads a curated LoRA into the managed folder, checks

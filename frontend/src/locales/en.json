@@ -632,14 +632,13 @@
     "add": "Add",
     "remove": "Remove from the list (the file stays on disk)",
     "tooMany": "At most {{max}} LoRAs at once",
-    "addedOtherFamily": "{{name}} was made for {{family}} models — it will show up when one is selected",
     "insertTrigger": "Add to the prompt",
-    "triggerNeeded": "trigger word — needed",
-    "triggerOptional": "trigger word — optional (style applies anyway)",
+    "triggerNeeded": "Trigger word, needed for the LoRA to kick in. Click to add it to the prompt.",
+    "triggerOptional": "Trigger word, optional (the effect applies anyway). Click to add it to the prompt.",
     "downloadFailed": "LoRA download failed: {{error}}",
     "removeDownloaded": "Remove (deletes the downloaded file)",
-    "emptySelected": "No LoRA yet. Add one to steer the style, a character, a concept or the level of detail.",
-    "unselect": "Remove from this generation"
+    "unselect": "Remove from this generation",
+    "help": "LoRAs are small add-ons that steer the model toward a style, a character, a concept or more detail. Add up to 4; the slider sets each one's strength."
   },
   "loraPicker": {
     "title": "Add a LoRA",
@@ -664,6 +663,10 @@
       "pose": "Pose",
       "detail": "Detail",
       "other": "Other"
-    }
+    },
+    "fitsOnly": "Fits this model",
+    "badgeOtherFamily": "Other model family",
+    "otherFamilyHint": "Made for {{families}} models, not the selected one",
+    "unknownFamily": "Unknown family"
   }
 }

@@ -317,20 +317,18 @@ export function ListCachedModels(): $CancellablePromise<types$0.CachedModel[] | 
 }
 
 /**
- * ListCatalogLoras returns the curated LoRAs that go on the active local model:
- * filtered by its catalog family server-side, or — for a user checkpoint the
- * catalog doesn't know — by engine. Empty when the model's backend doesn't take
- * LoRAs.
+ * ListCatalogLoras returns every curated LoRA the local engine can run, whatever
+ * the active model: the picker shows them all and marks which ones fit (engine
+ * + catalog family, same rule as validateLoras) so the catalog reads as a whole.
  */
 export function ListCatalogLoras(): $CancellablePromise<types$0.CatalogLora[] | null> {
     return $Call.ByID(3077009549);
 }
 
 /**
- * ListCloudLoras returns the curated LoRAs that go on the selected cloud model
- * (server-side family filter). Empty when that model's engine doesn't take
- * LoRAs or no cloud model is selected. Nothing is downloaded: imference applies
- * them on its workers.
+ * ListCloudLoras returns every curated LoRA imference runs in the cloud; the
+ * picker marks which ones fit the selected cloud model. Nothing is downloaded:
+ * imference applies them on its workers (and re-checks compatibility).
  */
 export function ListCloudLoras(): $CancellablePromise<types$0.CatalogLora[] | null> {
     return $Call.ByID(2646026747);

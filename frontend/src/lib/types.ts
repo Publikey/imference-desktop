@@ -288,6 +288,7 @@ export type CatalogLora = {
   nsfw: boolean;
   engine: string;
   familyCode: string;
+  familyName?: string;
   compatibleFamilyCodes: string[];
   url: string;
   filename?: string;

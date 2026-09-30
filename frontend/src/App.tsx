@@ -1801,7 +1801,9 @@ export default function App() {
                         {/* 3c. LoRAs — catalog LoRAs in cloud mode (applied by imference). */}
                         {mode === "cloud" && activeModel && LORA_BACKENDS.has(activeModel.backendType ?? "") && (
                           <CloudLoraCard
+                            backend={activeModel.backendType ?? ""}
                             modelCode={activeModel.modelCode}
+                            familyCode={activeModel.familyCode}
                             active={activeCloudLoras}
                             onActiveChange={setActiveCloudLoras}
                             onInsertTrigger={(word) =>

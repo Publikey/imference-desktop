@@ -38,6 +38,7 @@ export interface CatalogLora {
     "nsfw": boolean;
     "engine": string;
     "familyCode": string;
+    "familyName"?: string;
     "compatibleFamilyCodes": string[] | null;
     "url": string;
     "filename"?: string;

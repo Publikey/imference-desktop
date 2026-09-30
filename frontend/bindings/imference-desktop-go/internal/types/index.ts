@@ -3,6 +3,7 @@
 
 export type {
     CachedModel,
+    CatalogLora,
     CreditInfo,
     EngineInfo,
     EngineRuntimeSettings,

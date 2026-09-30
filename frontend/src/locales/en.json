@@ -636,6 +636,10 @@
     "addedOtherFamily": "{{name}} was made for {{family}} models — it will show up when one is selected",
     "insertTrigger": "Add to the prompt",
     "triggerNeeded": "trigger word — needed",
-    "triggerOptional": "trigger word — optional (style applies anyway)"
+    "triggerOptional": "trigger word — optional (style applies anyway)",
+    "catalog": "From the catalog",
+    "download": "Download",
+    "downloadFailed": "LoRA download failed: {{error}}",
+    "removeDownloaded": "Remove (deletes the downloaded file)"
   }
 }

@@ -30,6 +30,8 @@ import {
   LogFromFrontend,
   PickModelFile,
   PickLoraFile,
+  ListCatalogLoras,
+  DownloadCatalogLora,
   AddLora,
   RemoveLora,
   RecheckPendingCloud,
@@ -54,6 +56,8 @@ import type {
   GenerationResult,
   InstallProgress,
   LogEntry,
+  CatalogLora,
+  LoraProgress,
   LogLevel,
   GalleryFacets as GalleryFacetsType,
   GalleryFilter,
@@ -181,6 +185,9 @@ const raw = {
   pickLoraFile: PickLoraFile as () => Promise<string>,
   addLora: AddLora as unknown as (path: string) => Promise<AppSettings>,
   removeLora: RemoveLora as unknown as (path: string) => Promise<AppSettings>,
+  // Curated catalog LoRAs for the active model; downloads report on "lora:progress".
+  listCatalogLoras: ListCatalogLoras as unknown as () => Promise<CatalogLora[]>,
+  downloadCatalogLora: DownloadCatalogLora as (code: string) => Promise<void>,
   // Saved-image gallery (output folder history). listSavedImages returns one
   // page of metadata (optionally filtered); getSavedImage fetches one file's
   // bytes (base64) lazily; deleteSavedImage removes a file; galleryFacets lists
@@ -219,6 +226,8 @@ const raw = {
     Events.On("install:progress", (e) => cb(e.data as InstallProgress)),
   onModelProgress: (cb: (p: InstallProgress) => void): (() => void) =>
     Events.On("model:progress", (e) => cb(e.data as InstallProgress)),
+  onLoraProgress: (cb: (p: LoraProgress) => void): (() => void) =>
+    Events.On("lora:progress", (e) => cb(e.data as LoraProgress)),
   onGenerateProgress: (cb: (p: GenerateProgress) => void): (() => void) =>
     Events.On("generate:progress", (e) => cb(e.data as GenerateProgress)),
   onCloudResolved: (cb: (r: CloudResolved) => void): (() => void) =>
@@ -247,6 +256,7 @@ const NO_WRAP = new Set([
   "onLogEntry",
   "onInstallProgress",
   "onModelProgress",
+  "onLoraProgress",
   "onGenerateProgress",
   "onCloudResolved",
   "onModelCacheChanged",

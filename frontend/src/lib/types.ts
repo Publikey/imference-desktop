@@ -264,6 +264,51 @@ export type LoraEntry = {
   triggerWords?: string[];
   /** False = UNet-only LoRA: no token was learned, trigger words are optional. */
   textEncoderTrained?: boolean;
+  /** Set for LoRAs downloaded from the imference catalog; the file lives in the
+   *  app's LoRA folder (managed) and is deleted with the entry. */
+  catalogCode?: string;
+  managed?: boolean;
+  image?: string;
+  /** Catalog model families (sdxl / pony / illustrious …) it goes on. */
+  compatibleFamilyCodes?: string[];
+  /** Catalog pre-config: starting weight and bounds. */
+  weightDefault?: number;
+  weightMin?: number;
+  weightMax?: number;
+};
+
+/** One curated LoRA from the imference catalog (GET /api/loras). */
+export type CatalogLora = {
+  code: string;
+  name: string;
+  shortDescription?: string;
+  mediumDescription?: string;
+  image?: string;
+  category?: string;
+  nsfw: boolean;
+  engine: string;
+  familyCode: string;
+  compatibleFamilyCodes: string[];
+  url: string;
+  filename?: string;
+  sha256?: string;
+  sizeBytes?: number;
+  triggerWords: string[];
+  textEncoderTrained?: boolean;
+  weightDefault: number;
+  weightMin: number;
+  weightMax: number;
+  creatorName?: string;
+  creatorUrl?: string;
+  licence?: string;
+};
+
+/** "lora:progress" event while a catalog LoRA downloads. */
+export type LoraProgress = {
+  code: string;
+  percent: number;
+  done: boolean;
+  error?: string;
 };
 
 /** One LoRA applied to a generation. */

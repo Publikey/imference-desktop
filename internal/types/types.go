@@ -70,6 +70,56 @@ type LoraEntry struct {
 	TriggerWords []string `json:"triggerWords,omitempty"`
 	// TextEncoderTrained false = UNet-only LoRA: trigger words are optional.
 	TextEncoderTrained bool `json:"textEncoderTrained,omitempty"`
+
+	// Set for LoRAs downloaded from the imference catalog (DownloadCatalogLora).
+	// CatalogCode is the lora_code; the file lives in the app's managed LoRA
+	// folder and is deleted with the entry (Managed). Local imports leave these
+	// empty and are referenced in place.
+	CatalogCode string `json:"catalogCode,omitempty"`
+	Managed     bool   `json:"managed,omitempty"`
+	Image       string `json:"image,omitempty"`
+	// CompatibleFamilyCodes are the catalog's model families (sdxl / pony /
+	// illustrious …): finer than Family (the architecture). Empty = unknown.
+	CompatibleFamilyCodes []string `json:"compatibleFamilyCodes,omitempty"`
+	// Catalog pre-config: the weight a generation starts at and its bounds.
+	WeightDefault *float64 `json:"weightDefault,omitempty"`
+	WeightMin     *float64 `json:"weightMin,omitempty"`
+	WeightMax     *float64 `json:"weightMax,omitempty"`
+}
+
+// CatalogLora is one curated LoRA from the imference catalog (GET /api/loras).
+type CatalogLora struct {
+	Code                  string   `json:"code"`
+	Name                  string   `json:"name"`
+	ShortDescription      string   `json:"shortDescription,omitempty"`
+	MediumDescription     string   `json:"mediumDescription,omitempty"`
+	Image                 string   `json:"image,omitempty"`
+	Category              string   `json:"category,omitempty"`
+	Nsfw                  bool     `json:"nsfw"`
+	Engine                string   `json:"engine"`
+	FamilyCode            string   `json:"familyCode"`
+	CompatibleFamilyCodes []string `json:"compatibleFamilyCodes"`
+	URL                   string   `json:"url"`
+	Filename              string   `json:"filename,omitempty"`
+	SHA256                string   `json:"sha256,omitempty"`
+	SizeBytes             int64    `json:"sizeBytes,omitempty"`
+	TriggerWords          []string `json:"triggerWords"`
+	TextEncoderTrained    *bool    `json:"textEncoderTrained,omitempty"`
+	WeightDefault         float64  `json:"weightDefault"`
+	WeightMin             float64  `json:"weightMin"`
+	WeightMax             float64  `json:"weightMax"`
+	CreatorName           string   `json:"creatorName,omitempty"`
+	CreatorURL            string   `json:"creatorUrl,omitempty"`
+	Licence               string   `json:"licence,omitempty"`
+}
+
+// LoraProgress is emitted on "lora:progress" while a catalog LoRA downloads.
+// Done=true ends it; Error is set on failure.
+type LoraProgress struct {
+	Code    string `json:"code"`
+	Percent int    `json:"percent"`
+	Done    bool   `json:"done"`
+	Error   string `json:"error,omitempty"`
 }
 
 // LoraRef is one LoRA applied to a generation.

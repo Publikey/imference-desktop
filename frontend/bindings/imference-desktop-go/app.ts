@@ -103,6 +103,16 @@ export function DetectPython(): $CancellablePromise<types$0.PythonInfo> {
 }
 
 /**
+ * DownloadCatalogLora downloads a curated LoRA into the managed folder, checks
+ * its SHA256 and header, and adds it to the library with the catalog's
+ * pre-config. Returns immediately; progress streams on "lora:progress"
+ * ({done:true} ends it, with error set on failure).
+ */
+export function DownloadCatalogLora(code: string): $CancellablePromise<void> {
+    return $Call.ByID(2884358708, code);
+}
+
+/**
  * DownloadModelComponents pre-downloads a model's shared components — base
  * repo + backend auxiliaries (see componentRepos) — from the CDN mirror into
  * the engine's offline tree, asynchronously. Stateless like
@@ -307,6 +317,16 @@ export function ListCachedModels(): $CancellablePromise<types$0.CachedModel[] | 
 }
 
 /**
+ * ListCatalogLoras returns the curated LoRAs that go on the active local model:
+ * filtered by its catalog family server-side, or — for a user checkpoint the
+ * catalog doesn't know — by engine. Empty when the model's backend doesn't take
+ * LoRAs.
+ */
+export function ListCatalogLoras(): $CancellablePromise<types$0.CatalogLora[] | null> {
+    return $Call.ByID(3077009549);
+}
+
+/**
  * ListCloudModels returns the full imference catalog (cloud can run any model
  * code, including the proprietary cloud-only ones the local picker hides).
  * Public endpoint — works without an API key.
@@ -417,7 +437,8 @@ export function RemoveCustomModel(path: string): $CancellablePromise<types$0.Set
 }
 
 /**
- * RemoveLora drops a LoRA from the library. The file itself is left on disk.
+ * RemoveLora drops a LoRA from the library. A local import's file is left on
+ * disk; a downloaded catalog LoRA's file (Managed) is deleted.
  */
 export function RemoveLora(path: string): $CancellablePromise<types$0.Settings> {
     return $Call.ByID(1195692449, path);

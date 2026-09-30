@@ -50,7 +50,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
 import { LocalReadinessCard } from "@/components/LocalReadinessCard";
-import { LORA_BACKENDS, LoraCard, loraFitsBackend } from "@/components/LoraCard";
+import { LORA_BACKENDS, LoraCard, loraFits } from "@/components/LoraCard";
 import { PaymentBar } from "@/components/PaymentBar";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
@@ -1141,7 +1141,7 @@ export default function App() {
       if (which === "local" && LORA_BACKENDS.has(backend)) {
         const library = settings?.loras ?? [];
         const loras = activeLoras.filter((a) =>
-          library.some((l) => l.path === a.path && loraFitsBackend(l, backend))
+          library.some((l) => l.path === a.path && loraFits(l, backend, model?.familyCode))
         );
         if (loras.length > 0) req.loras = loras;
       }
@@ -1796,6 +1796,8 @@ export default function App() {
                         {mode === "local" && activeModel && LORA_BACKENDS.has(activeModel.backendType ?? "") && (
                           <LoraCard
                             backend={activeModel.backendType ?? ""}
+                            modelCode={activeModel.modelCode}
+                            familyCode={activeModel.familyCode}
                             library={settings?.loras ?? []}
                             active={activeLoras}
                             onActiveChange={setActiveLoras}

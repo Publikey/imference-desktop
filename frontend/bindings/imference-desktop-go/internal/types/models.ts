@@ -26,6 +26,34 @@ export interface CachedModel {
 }
 
 /**
+ * CatalogLora is one curated LoRA from the imference catalog (GET /api/loras).
+ */
+export interface CatalogLora {
+    "code": string;
+    "name": string;
+    "shortDescription"?: string;
+    "mediumDescription"?: string;
+    "image"?: string;
+    "category"?: string;
+    "nsfw": boolean;
+    "engine": string;
+    "familyCode": string;
+    "compatibleFamilyCodes": string[] | null;
+    "url": string;
+    "filename"?: string;
+    "sha256"?: string;
+    "sizeBytes"?: number;
+    "triggerWords": string[] | null;
+    "textEncoderTrained"?: boolean | null;
+    "weightDefault": number;
+    "weightMin": number;
+    "weightMax": number;
+    "creatorName"?: string;
+    "creatorUrl"?: string;
+    "licence"?: string;
+}
+
+/**
  * CreditInfo is the renderer's view of the cloud account's remaining credits,
  * fetched with the Bearer API key (the "API key (credit)" payment mode). Mirrors
  * the balance readout the imference web app shows. Configured is false when no
@@ -390,6 +418,29 @@ export interface LoraEntry {
      * TextEncoderTrained false = UNet-only LoRA: trigger words are optional.
      */
     "textEncoderTrained"?: boolean;
+
+    /**
+     * Set for LoRAs downloaded from the imference catalog (DownloadCatalogLora).
+     * CatalogCode is the lora_code; the file lives in the app's managed LoRA
+     * folder and is deleted with the entry (Managed). Local imports leave these
+     * empty and are referenced in place.
+     */
+    "catalogCode"?: string;
+    "managed"?: boolean;
+    "image"?: string;
+
+    /**
+     * CompatibleFamilyCodes are the catalog's model families (sdxl / pony /
+     * illustrious …): finer than Family (the architecture). Empty = unknown.
+     */
+    "compatibleFamilyCodes"?: string[] | null;
+
+    /**
+     * Catalog pre-config: the weight a generation starts at and its bounds.
+     */
+    "weightDefault"?: number | null;
+    "weightMin"?: number | null;
+    "weightMax"?: number | null;
 }
 
 /**

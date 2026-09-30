@@ -626,6 +626,10 @@
     "addedOtherFamily": "{{name}} 适用于 {{family}} 模型——选择此类模型时会显示",
     "insertTrigger": "添加到提示词",
     "triggerNeeded": "触发词——必需",
-    "triggerOptional": "触发词——可选（风格始终生效）"
+    "triggerOptional": "触发词——可选（风格始终生效）",
+    "catalog": "来自目录",
+    "download": "下载",
+    "downloadFailed": "LoRA 下载失败：{{error}}",
+    "removeDownloaded": "移除（删除已下载的文件）"
   }
 }

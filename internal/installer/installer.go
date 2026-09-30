@@ -49,11 +49,13 @@ import (
 // GPU-streamed dequant; v0.4.3 unifies stray fp32 params to bf16 — some
 // finetune files crashed mid-inference otherwise), group offloading
 // (IMAGE_OFFLOAD_MODE=group — what the offload UI setting drives), SDXL user
-// LoRAs, and surrogate-safe prompts.
+// LoRAs, and surrogate-safe prompts. v0.4.4 (2026-09-30) fixes those SDXL LoRAs:
+// they only applied to the first generation on a loaded model, broke with img2img,
+// and LoRAs of another family are now refused up front.
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.3.tar.gz"
+const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.4.tar.gz"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute

@@ -631,15 +631,39 @@
     "optional": "optional",
     "add": "Add",
     "remove": "Remove from the list (the file stays on disk)",
-    "hint": "Add a LoRA file (.safetensors) made for this model family to steer style, a character or a concept. Files stay where they are.",
     "tooMany": "At most {{max}} LoRAs at once",
     "addedOtherFamily": "{{name}} was made for {{family}} models — it will show up when one is selected",
     "insertTrigger": "Add to the prompt",
     "triggerNeeded": "trigger word — needed",
     "triggerOptional": "trigger word — optional (style applies anyway)",
-    "catalog": "From the catalog",
-    "download": "Download",
     "downloadFailed": "LoRA download failed: {{error}}",
-    "removeDownloaded": "Remove (deletes the downloaded file)"
+    "removeDownloaded": "Remove (deletes the downloaded file)",
+    "emptySelected": "No LoRA yet. Add one to steer the style, a character, a concept or the level of detail.",
+    "unselect": "Remove from this generation"
+  },
+  "loraPicker": {
+    "title": "Add a LoRA",
+    "localDesc": "Curated LoRAs for this model (downloaded once, then run on your machine), or your own files.",
+    "cloudDesc": "Curated LoRAs for this model, applied in the cloud.",
+    "catalogTab": "Catalog",
+    "mineTab": "My LoRAs",
+    "searchPlaceholder": "Search LoRAs…",
+    "importFile": "Import a LoRA file…",
+    "importHint": "Your own .safetensors made for this model family (e.g. from Civitai). It stays where it is.",
+    "empty": "No LoRA available for this model yet.",
+    "emptyMine": "No imported LoRA for this model family — import one above.",
+    "emptyFiltered": "No LoRA matches your filters.",
+    "badgeCustom": "custom",
+    "badgeDownloaded": "On disk",
+    "downloading": "Downloading… {{percent}}%",
+    "category": {
+      "style": "Style",
+      "character": "Character",
+      "concept": "Concept",
+      "clothing": "Clothing",
+      "pose": "Pose",
+      "detail": "Detail",
+      "other": "Other"
+    }
   }
 }

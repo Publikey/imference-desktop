@@ -621,15 +621,39 @@
     "optional": "可选",
     "add": "添加",
     "remove": "从列表中移除（文件保留在磁盘上）",
-    "hint": "添加为该模型系列训练的 LoRA 文件（.safetensors），用于控制风格、角色或概念。文件保留在原位置。",
     "tooMany": "最多同时使用 {{max}} 个 LoRA",
     "addedOtherFamily": "{{name}} 适用于 {{family}} 模型——选择此类模型时会显示",
     "insertTrigger": "添加到提示词",
     "triggerNeeded": "触发词——必需",
     "triggerOptional": "触发词——可选（风格始终生效）",
-    "catalog": "来自目录",
-    "download": "下载",
     "downloadFailed": "LoRA 下载失败：{{error}}",
-    "removeDownloaded": "移除（删除已下载的文件）"
+    "removeDownloaded": "移除（删除已下载的文件）",
+    "emptySelected": "尚未添加 LoRA。添加一个来控制风格、角色、概念或细节程度。",
+    "unselect": "从本次生成中移除"
+  },
+  "loraPicker": {
+    "title": "添加 LoRA",
+    "localDesc": "适用于该模型的精选 LoRA（下载一次后在本机运行），或你自己的文件。",
+    "cloudDesc": "适用于该模型的精选 LoRA，在云端应用。",
+    "catalogTab": "目录",
+    "mineTab": "我的 LoRA",
+    "searchPlaceholder": "搜索 LoRA…",
+    "importFile": "导入 LoRA 文件…",
+    "importHint": "为该模型系列训练的 .safetensors 文件（例如来自 Civitai）。文件保留在原位置。",
+    "empty": "该模型暂无可用的 LoRA。",
+    "emptyMine": "没有适用于该模型系列的导入 LoRA——请在上方导入。",
+    "emptyFiltered": "没有符合筛选条件的 LoRA。",
+    "badgeCustom": "自定义",
+    "badgeDownloaded": "已下载",
+    "downloading": "下载中… {{percent}}%",
+    "category": {
+      "style": "风格",
+      "character": "角色",
+      "concept": "概念",
+      "clothing": "服装",
+      "pose": "姿势",
+      "detail": "细节",
+      "other": "其他"
+    }
   }
 }

@@ -127,7 +127,7 @@ func triggerWords(md map[string]string) []string {
 		return splitWords(phrase)
 	}
 	var freq map[string]map[string]int
-	if json.Unmarshal([]byte(md["ss_tag_frequency"]), &freq) != nil {
+	if json.Unmarshal([]byte(md["ss_tag_frequency"]), &freq) != nil || folderLabelsOnly(freq) {
 		return nil
 	}
 	lead := map[string]int{}
@@ -154,6 +154,30 @@ func triggerWords(md map[string]string) []string {
 		}
 	}
 	return out // at most one word can pass an 80 % share
+}
+
+// folderLabelsOnly is true when the "captions" are just kohya folder labels:
+// several dataset folders (<repeats>_<label>) each captioned by exactly its own
+// label — caption-less training sorted into folders (Detail Tweaker XL: 1_misc /
+// 1_all / 1_portrait / 1_anime). Those are bookkeeping, not trigger words. A
+// single folder (Dreambooth-style "10_sks woman") is kept: its label IS the trigger.
+func folderLabelsOnly(freq map[string]map[string]int) bool {
+	if len(freq) < 2 {
+		return false
+	}
+	for folder, captions := range freq {
+		label := folder
+		if repeats, rest, ok := strings.Cut(folder, "_"); ok && repeats != "" && strings.Trim(repeats, "0123456789") == "" {
+			label = rest
+		}
+		if len(captions) != 1 {
+			return false
+		}
+		if _, ok := captions[label]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func splitWords(phrase string) []string {

@@ -85,6 +85,8 @@ func TestInspectTriggerWords(t *testing.T) {
 		{"sentence captions", map[string]string{"ss_tag_frequency": sentence}, []string{"pixelbuildings128"}},
 		{"leading tag at 80%", map[string]string{"ss_tag_frequency": tags}, []string{"sks_girl"}},
 		{"no dominant tag", map[string]string{"ss_tag_frequency": mixed}, nil},
+		{"kohya folder labels", map[string]string{"ss_tag_frequency": `{"1_portrait": {"portrait": 40}, "1_all": {"all": 387}, "1_misc": {"misc": 8208}, "1_anime": {"anime": 20}}`}, nil},
+		{"single dreambooth folder", map[string]string{"ss_tag_frequency": `{"10_sks": {"sks": 30}}`}, []string{"sks"}},
 		{"no metadata", nil, nil},
 	}
 	for _, c := range cases {

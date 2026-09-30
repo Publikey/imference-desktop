@@ -16,11 +16,15 @@ import { cn } from "@/lib/utils";
  */
 export function HoverPopover({
   content,
+  always = false,
   className,
   children,
 }: {
   /** Full text to reveal. Nothing renders when empty. */
   content: string;
+  /** Open on hover even when nothing is truncated — a plain tooltip (e.g. on an
+   *  info icon), not a reveal of clipped text. */
+  always?: boolean;
   /** Applied to the trigger wrapper — pass `truncate` to make it the clipped element. */
   className?: string;
   children: React.ReactNode;
@@ -74,10 +78,10 @@ export function HoverPopover({
       const el = triggerRef.current;
       // Nothing is hidden → nothing to reveal. Saves a pointless panel on the
       // short messages that fit inline.
-      if (!el || el.scrollWidth <= el.clientWidth + 1) return;
+      if (!el || (!always && el.scrollWidth <= el.clientWidth + 1)) return;
       place();
     }, 250);
-  }, [place, pos]);
+  }, [place, pos, always]);
 
   const close = useCallback(() => {
     window.clearTimeout(openTimer.current);

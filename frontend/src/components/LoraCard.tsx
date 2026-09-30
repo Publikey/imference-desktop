@@ -409,7 +409,7 @@ function LoraCardShell({
       <div className="flex items-center justify-between gap-2">
         <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide">
           {t("lora.title")}
-          <HoverPopover content={t("lora.help")}>
+          <HoverPopover content={t("lora.help")} always className="inline-flex normal-case">
             <Info className="text-muted-foreground/60 hover:text-foreground size-3.5 cursor-help" />
           </HoverPopover>
         </span>

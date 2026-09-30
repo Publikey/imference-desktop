@@ -39,6 +39,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -50,6 +51,8 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
 import { ModelBar } from "@/components/ModelBar";
 import { LocalReadinessCard } from "@/components/LocalReadinessCard";
+import { AddButton, ComposerCardHeader } from "@/components/ComposerCard";
+import { HoverPopover } from "@/components/ui/hover-popover";
 import { CloudLoraCard, LORA_BACKENDS, LoraCard, loraFits } from "@/components/LoraCard";
 import { PaymentBar } from "@/components/PaymentBar";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
@@ -2903,78 +2906,99 @@ function RefImageCard({
 }) {
   const { t } = useTranslation();
   const pair = slots >= 2;
-  const filled = images.slice(0, slots).some(Boolean);
+  const current = Array.from({ length: slots }, (_, k) => images[k] ?? null);
+  const filled = current.some(Boolean);
+  const firstEmpty = current.findIndex((img) => !img);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Every image entering a slot is scaled to the model's working resolution
   // first: a raw phone photo is several MB of base64, and the extra pixels are
   // discarded by the engine anyway.
   const setSlot = async (i: number, value: string | null) => {
     const prepared = value ? await prepareRefImage(value, targetW, targetH) : null;
-    const next = Array.from({ length: slots }, (_, k) => images[k] ?? null);
+    const next = [...current];
     next[i] = prepared;
     onImagesChange(next);
   };
 
+  // Header "Add": fills the first empty slot (the first frame on a pair).
+  const addFromFile = (file: File | undefined) => {
+    if (!file || !file.type.startsWith("image/") || firstEmpty === -1) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") void setSlot(firstEmpty, reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
-          {pair ? t("refImage.titlePair") : t("refImage.title")}
-          <span className="text-muted-foreground/50 ml-1.5 normal-case">
-            · {t("refImage.optional")}
-          </span>
-        </span>
-        {filled && (
-          <button
-            type="button"
-            onClick={() => onImagesChange([])}
-            className="text-muted-foreground/70 hover:text-foreground text-[11px]"
-          >
-            {t("common.clear")}
-          </button>
-        )}
-      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          addFromFile(e.target.files?.[0]);
+          e.target.value = ""; // let the same file be re-picked later
+        }}
+      />
+      <ComposerCardHeader
+        title={pair ? t("refImage.titlePair") : t("refImage.title")}
+        optionalLabel={t("refImage.optional")}
+        help={pair ? t("refImage.hintPair") : t("refImage.hint")}
+        action={
+          <>
+            {filled && (
+              <button
+                type="button"
+                onClick={() => onImagesChange([])}
+                className="text-muted-foreground/70 hover:text-foreground text-[11px]"
+              >
+                {t("common.clear")}
+              </button>
+            )}
+            {firstEmpty !== -1 && (
+              <AddButton label={t("refImage.add")} onClick={() => inputRef.current?.click()} />
+            )}
+          </>
+        }
+      />
 
-      <div className="flex items-start gap-3">
-        <div className="flex gap-2">
-          {Array.from({ length: slots }, (_, i) => (
-            <RefImageSlot
-              key={i}
-              image={images[i] ?? null}
-              onChange={(v) => void setSlot(i, v)}
-              label={pair ? (i === 0 ? t("refImage.firstFrame") : t("refImage.lastFrame")) : ""}
-            />
-          ))}
-        </div>
+      {/* Empty: the card is just its header (like the LoRA card); the image can
+          also be dropped anywhere on the panel. */}
+      {filled && (
+        <div className="mt-3 flex items-start gap-3">
+          <div className="flex gap-2">
+            {current.map((img, i) => (
+              <RefImageSlot
+                key={i}
+                image={img}
+                onChange={(v) => void setSlot(i, v)}
+                label={pair ? (i === 0 ? t("refImage.firstFrame") : t("refImage.lastFrame")) : ""}
+              />
+            ))}
+          </div>
 
-        <div className="min-w-0 flex-1 pt-0.5">
-          {filled ? (
-            // Strength only means something once there's an image to denoise
-            // from; showing the slider on an empty card would imply otherwise.
-            <label className="block">
-              <span className="text-muted-foreground text-[11px]">
+          {/* Strength only means something once there's an image to denoise from. */}
+          <label className="min-w-0 flex-1 pt-0.5">
+            <HoverPopover content={t("refImage.strengthHint")} always className="inline-flex">
+              <span className="text-muted-foreground cursor-help text-[11px]">
                 {t("refImage.strength", { strength: strength.toFixed(2) })}
               </span>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={strength}
-                onChange={(e) => onStrengthChange(Number(e.target.value))}
-                className="range mt-1 w-full"
-              />
-              <span className="text-muted-foreground/60 text-[10px]">
-                {t("refImage.strengthHint")}
-              </span>
-            </label>
-          ) : (
-            <p className="text-muted-foreground/70 text-[11px] leading-snug">
-              {pair ? t("refImage.hintPair") : t("refImage.hint")}
-            </p>
-          )}
+            </HoverPopover>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={strength}
+              onChange={(e) => onStrengthChange(Number(e.target.value))}
+              className="range mt-1 w-full"
+            />
+          </label>
         </div>
-      </div>
+      )}
     </section>
   );
 }
@@ -3027,7 +3051,7 @@ function RefImageSlot({
         }}
         className={cn(
           "group/slot relative size-16 shrink-0 overflow-hidden rounded-lg border transition-colors",
-          image ? "border-border" : "border-border/70 border-dashed",
+          image ? "border-border" : "border-primary/40 border-dashed",
           over && "border-primary bg-primary/5"
         )}
       >
@@ -3048,10 +3072,10 @@ function RefImageSlot({
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 flex size-full flex-col items-center justify-center gap-1 transition-colors"
+            className="text-primary/80 hover:text-primary hover:bg-primary/10 bg-primary/5 flex size-full flex-col items-center justify-center gap-1 transition-colors"
           >
-            <ImageIcon className="size-4" />
-            <span className="text-[10px] leading-none">{t("refImage.add")}</span>
+            <Plus className="size-4" strokeWidth={2.5} />
+            <span className="text-[10px] font-medium leading-none">{t("refImage.add")}</span>
           </button>
         )}
       </div>

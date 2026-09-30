@@ -208,7 +208,7 @@
     "sourceAlt": "Reference image",
     "firstFrame": "First frame",
     "lastFrame": "Last frame",
-    "hint": "Start from an image instead of pure noise. Drop one here, or click to browse — leave it empty to generate from the prompt alone.",
+    "hint": "Start from an image instead of pure noise. Add one, or drop it anywhere on this panel. Leave it empty to generate from the prompt alone.",
     "hintPair": "Give this model the frames to start and end on. Both are optional — leave them empty to generate from the prompt alone.",
     "strength": "Strength · {{strength}}",
     "strengthHint": "Lower keeps more of the reference; higher follows the prompt.",

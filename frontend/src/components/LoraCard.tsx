@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Check, FileBox, Info, Loader2, PackageOpen, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
+import { Check, FileBox, Loader2, PackageOpen, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { HoverPopover } from "@/components/ui/hover-popover";
+import { AddButton, ComposerCardHeader } from "@/components/ComposerCard";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
@@ -404,25 +404,22 @@ function LoraCardShell({
   children: React.ReactNode;
 }) {
   const { t } = useTranslation();
+  const full = count >= MAX_ACTIVE_LORAS;
   return (
     <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide">
-          {t("lora.title")}
-          <HoverPopover content={t("lora.help")} always className="inline-flex normal-case">
-            <Info className="text-muted-foreground/60 hover:text-foreground size-3.5 cursor-help" />
-          </HoverPopover>
-        </span>
-        <button
-          type="button"
-          onClick={onAdd}
-          disabled={count >= MAX_ACTIVE_LORAS}
-          className="text-primary hover:bg-primary/10 border-primary/30 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-40"
-        >
-          <Plus className="size-3" />
-          {t("lora.add")}
-        </button>
-      </div>
+      <ComposerCardHeader
+        title={t("lora.title")}
+        optionalLabel={t("lora.optional")}
+        help={t("lora.help")}
+        action={
+          <AddButton
+            label={t("lora.add")}
+            onClick={onAdd}
+            disabled={full}
+            title={full ? t("lora.tooMany", { max: MAX_ACTIVE_LORAS }) : undefined}
+          />
+        }
+      />
       {count > 0 && <ul className="mt-3 grid gap-3">{children}</ul>}
     </section>
   );

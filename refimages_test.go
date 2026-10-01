@@ -77,9 +77,9 @@ func TestNormalizeRefImages(t *testing.T) {
 func TestCustomRefImages(t *testing.T) {
 	cases := map[string]int{
 		"sdxl": 1, "sd15": 1, "zimage": 1, "flux": 1, "chroma": 1, "qwenimage": 1,
-		// Anima loads from a single .safetensors like the others, but its
-		// pipeline takes no image input — the box must stay hidden.
-		"anima": 0,
+		"anima": 1, // img2img since imference-engine v0.4.5
+		// Krea 2 has no img2img pipeline — the box must stay hidden.
+		"krea2": 0,
 		"":      0,
 	}
 	for backend, want := range cases {

@@ -97,10 +97,10 @@ func TestValidateLoras(t *testing.T) {
 		}
 	}
 
-	za := newLoraTestApp(t, "zimage")
+	fa := newLoraTestApp(t, "flux")
 	req = types.GenerationRequest{Loras: []types.LoraRef{{Path: xl, Weight: 1}}}
-	if err := za.validateLoras(&req); err == nil || !strings.Contains(err.Error(), "not supported") {
-		t.Fatalf("LoRAs on zimage must be refused, got %v", err)
+	if err := fa.validateLoras(&req); err == nil || !strings.Contains(err.Error(), "not supported") {
+		t.Fatalf("LoRAs on flux must be refused, got %v", err)
 	}
 }
 

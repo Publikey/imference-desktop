@@ -74,6 +74,10 @@ available; code signing and silent in-app auto-update are on the roadmap.
   catalog and hit Generate: the weights **download automatically**, and every
   model ships pre-tuned (steps, CFG, resolutions, quality tags, negative
   prompt) so your first image already looks right.
+- 🎨 **LoRAs** — stack up to four styles, characters or detail boosters on
+  SDXL (Pony, Illustrious), Z-Image, Krea 2 and Anima models: pick them from
+  the curated catalog (one-click download, weights pre-tuned) or import your
+  own `.safetensors`. Works locally and in the cloud.
 - 📦 **Bring your own model** — load any local `.safetensors` checkpoint
   (e.g. downloaded from Civitai) and pick its family. The file is used in
   place — nothing is copied or uploaded.

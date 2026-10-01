@@ -36,11 +36,13 @@ func TestRefImageSlots(t *testing.T) {
 		{"local text-to-video takes no image", boolp(false), nil, "wan", 0},
 		{"local image-to-video takes one", boolp(true), intp(1), "wan", 1},
 		{"local video interpolation takes two", boolp(true), intp(2), "wan", 2},
-		// Anima is a text-to-image-only pipeline: no image input at all, so the
-		// local floor must not apply and a catalog "true" can't conjure one.
-		{"anima takes no reference image, flag absent", nil, nil, "anima", 0},
-		{"anima takes no reference image, flag false", boolp(false), nil, "anima", 0},
-		{"anima takes no reference image, even if the catalog says yes", boolp(true), intp(1), "anima", 0},
+		// Krea 2 has no img2img pipeline: the local floor must not apply and a
+		// catalog "true" can't conjure one.
+		{"krea2 takes no reference image, flag absent", nil, nil, "krea2", 0},
+		{"krea2 takes no reference image, flag false", boolp(false), nil, "krea2", 0},
+		{"krea2 takes no reference image, even if the catalog says yes", boolp(true), intp(1), "krea2", 0},
+		// Anima does img2img locally (engine v0.4.5), whatever the hosted endpoint says.
+		{"anima takes a reference image, flag false", boolp(false), nil, "anima", 1},
 		{"true with no max means one slot", boolp(true), nil, "sdxl", 1},
 		{"true with max 1", boolp(true), intp(1), "sdxl", 1},
 		{"true with max 2 — first + last frame", boolp(true), intp(2), "sdxl", 2},
@@ -112,8 +114,8 @@ func TestToModelInfoRefImages(t *testing.T) {
 // SupportsRefImages is the one place that answers "can this backend start from
 // an image", for catalog models and user checkpoints alike.
 func TestSupportsRefImages(t *testing.T) {
-	yes := []string{"sdxl", "sd15", "zimage", "flux", "chroma", "qwenimage"}
-	no := []string{"anima", "wan", "", "external"}
+	yes := []string{"sdxl", "sd15", "zimage", "flux", "chroma", "qwenimage", "anima"}
+	no := []string{"krea2", "wan", "", "external"}
 	for _, b := range yes {
 		if !SupportsRefImages(b) {
 			t.Errorf("SupportsRefImages(%q) = false, want true", b)

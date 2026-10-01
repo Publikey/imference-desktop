@@ -51,11 +51,12 @@ import (
 // (IMAGE_OFFLOAD_MODE=group — what the offload UI setting drives), SDXL user
 // LoRAs, and surrogate-safe prompts. v0.4.4 (2026-09-30) fixes those SDXL LoRAs:
 // they only applied to the first generation on a loaded model, broke with img2img,
-// and LoRAs of another family are now refused up front.
+// and LoRAs of another family are now refused up front. v0.4.5 (2026-10-01) adds
+// LoRAs on Z-Image, Krea 2 (fp8-resident included) and Anima, and Anima img2img.
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.4.tar.gz"
+const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.5.tar.gz"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute

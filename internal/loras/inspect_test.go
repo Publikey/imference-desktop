@@ -56,7 +56,17 @@ func TestInspectDetectsFamily(t *testing.T) {
 			nil, "sdxl", "cross-attention width"},
 		{"kohya sd15 width", map[string][]int{"lora_unet_down_blocks_1_attentions_0_transformer_blocks_0_attn2_to_k.lora_down.weight": {4, 768}},
 			nil, "sd15", "cross-attention width"},
-		{"unknown dit", map[string][]int{"layers.0.attention.to_q.lora_A.weight": {4, 3840}},
+		{"zimage layers", map[string][]int{"diffusion_model.layers.0.attention.to_q.lora_A.weight": {4, 3840}},
+			nil, "zimage", "key layout"},
+		{"zimage metadata", map[string][]int{"x.lora_A.weight": {4, 8}},
+			map[string]string{"ss_base_model_version": "zimage"}, "zimage", "trainer metadata"},
+		{"krea2 blocks", map[string][]int{"diffusion_model.blocks.0.attn.wk.lora_A.weight": {4, 3072}},
+			nil, "krea2", "key layout"},
+		{"anima comfy", map[string][]int{"diffusion_model.blocks.0.cross_attn.k_proj.lora_A.weight": {4, 1024}},
+			nil, "anima", "key layout"},
+		{"anima kohya metadata", map[string][]int{"lora_unet_blocks_0_cross_attn_k_proj.lora_down.weight": {32, 1024}},
+			map[string]string{"modelspec.architecture": "anima-preview/lora"}, "anima", "trainer metadata"},
+		{"dit attn2 is not a unet width", map[string][]int{"transformer.blocks.0.attn2.to_k.lora_A.weight": {4, 1024}},
 			nil, "", "unrecognized layout"},
 	}
 	for _, c := range cases {
@@ -124,7 +134,12 @@ func TestCompatibleAndBackendSupports(t *testing.T) {
 	if !Compatible("sdxl", "sdxl") || !Compatible("", "sdxl") || Compatible("sd15", "sdxl") {
 		t.Fatal("Compatible: wrong verdict")
 	}
-	if !BackendSupports("sdxl") || BackendSupports("zimage") {
-		t.Fatal("BackendSupports: only sdxl is wired")
+	for _, b := range []string{"sdxl", "zimage", "krea2", "anima"} {
+		if !BackendSupports(b) {
+			t.Fatalf("BackendSupports(%q) = false", b)
+		}
+	}
+	if BackendSupports("flux") || BackendSupports("sd15") {
+		t.Fatal("BackendSupports: flux / sd15 are not wired")
 	}
 }

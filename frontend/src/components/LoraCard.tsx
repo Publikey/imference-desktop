@@ -17,7 +17,7 @@ import type { AppSettings, CatalogLora, CloudLoraRef, LoraEntry, LoraRef } from 
 
 /** Backends whose local engine applies user LoRAs. Mirrors the Go gate
  *  (internal/loras.BackendSupports) — flip both when a family is enabled. */
-export const LORA_BACKENDS = new Set(["sdxl"]);
+export const LORA_BACKENDS = new Set(["sdxl", "zimage", "krea2", "anima"]);
 
 /** Most LoRAs stacked on one generation (the Go side enforces the same cap). */
 export const MAX_ACTIVE_LORAS = 4;
@@ -217,7 +217,6 @@ export function LoraCard({
       description: lora.shortDescription,
       image: lora.image,
       category: lora.category,
-      nsfw: lora.nsfw,
       sizeBytes: lora.sizeBytes,
       group: familyLabel(lora),
       compatible: fits,
@@ -353,7 +352,6 @@ export function CloudLoraCard({
       description: lora.shortDescription,
       image: lora.image,
       category: lora.category,
-      nsfw: lora.nsfw,
       group: familyLabel(lora),
       compatible: fits,
       incompatibleHint: fits ? undefined : fitsHint(t, lora.compatibleFamilyCodes),
@@ -506,7 +504,6 @@ type PickerItem = {
   description?: string;
   image?: string;
   category?: string;
-  nsfw?: boolean;
   sizeBytes?: number;
   /** Section the card sits in (the LoRA's family). */
   group: string;
@@ -755,7 +752,6 @@ function LoraPickerCard({ item }: { item: PickerItem }) {
             ) : item.downloaded && !item.active ? (
               <Badge className="bg-emerald-600/90 text-white">{t("loraPicker.badgeDownloaded")}</Badge>
             ) : null}
-            {item.nsfw && <Badge className="bg-rose-600/90 text-white">NSFW</Badge>}
           </div>
           {downloading ? (
             <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-black/60 px-2 py-1 text-[11px] text-white">

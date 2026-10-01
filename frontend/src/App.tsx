@@ -922,7 +922,7 @@ export default function App() {
   // How many OPTIONAL reference-image slots the active model offers (0 hides
   // the card entirely). One rule for both kinds of model: the Go side resolves
   // it from the catalog for curated models and from the loading backend for user
-  // checkpoints, so an Anima pick — which has no image input at all — reports 0
+  // checkpoints, so a Krea 2 pick — which has no img2img at all — reports 0
   // either way.
   const refSlots = activeModel?.refImages ?? 0;
   // Mirrored for the gallery drop path, which fires from a callback that must
@@ -1286,7 +1286,7 @@ export default function App() {
       // A video can't seed img2img — ignore the gesture (the lightbox/menu also
       // hide the action for videos; this guards the drag path).
       if (!src || isVideoSrc(src)) return;
-      // The selected model takes no reference image (an Anima pick, say): the
+      // The selected model takes no reference image (a Krea 2 pick, say): the
       // card isn't even mounted, so accepting the drop would swallow it in
       // silence. Say why instead.
       if (refSlotsRef.current < 1) {

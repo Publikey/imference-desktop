@@ -95,7 +95,6 @@ type CatalogLora struct {
 	MediumDescription     string   `json:"mediumDescription,omitempty"`
 	Image                 string   `json:"image,omitempty"`
 	Category              string   `json:"category,omitempty"`
-	Nsfw                  bool     `json:"nsfw"`
 	Engine                string   `json:"engine"`
 	FamilyCode            string   `json:"familyCode"`
 	FamilyName            string   `json:"familyName,omitempty"`

@@ -1024,7 +1024,7 @@ func (a *App) cloudCatalogModel(modelCode string) (*types.ModelInfo, error) {
 
 // customRefImages is how many reference-image slots a user checkpoint offers:
 // one for the backends whose local pipeline does img2img, none for the ones with
-// no image input (Anima). Custom checkpoints never carry more — the multi-slot
+// no img2img (Krea 2). Custom checkpoints never carry more — the multi-slot
 // case (first + last frame) belongs to catalog video models.
 func customRefImages(backendType string) int {
 	if cloud.SupportsRefImages(backendType) {

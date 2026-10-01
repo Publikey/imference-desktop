@@ -279,7 +279,7 @@ func localBackend(m apiModel, backend string, forLocal bool) string {
 //   - Local image backends that do img2img: it's the sidecar's own capability,
 //     available with any checkpoint it can load, so the slot is offered whatever
 //     the catalog says about the hosted endpoint. The flag can only ADD slots.
-//     A backend with no image input at all (Anima) gets none, catalog or not.
+//     A backend with no img2img at all (Krea 2) gets none, catalog or not.
 //   - Local video backends: only the catalog separates text-to-video from
 //     image-to-video, so it is authoritative — a t2v model has nothing to do
 //     with a source image. An absent column keeps the historical fallback of
@@ -390,13 +390,13 @@ func IsImageBackend(name string) bool {
 
 // refImageBackends is the subset of image backends whose LOCAL pipeline can
 // actually start from a reference image. It's the img2img question, not the
-// "can this backend run" question: Anima is a Modular Diffusers text-to-image
-// pipeline with no image input at all, and Krea 2 has no diffusers img2img
-// yet (upstream PR open) — offering the box on either promises something the
-// engine cannot do.
+// "can this backend run" question: Krea 2 has no diffusers img2img yet
+// (upstream PR open) — offering the box promises something the engine cannot
+// do. Anima does img2img since imference-engine v0.4.5 (diffusers 0.40's
+// AnimaAutoBlocks switch on an image input).
 var refImageBackends = map[string]bool{
 	"sdxl": true, "sd15": true, "zimage": true,
-	"flux": true, "chroma": true, "qwenimage": true,
+	"flux": true, "chroma": true, "qwenimage": true, "anima": true,
 }
 
 // SupportsRefImages reports whether a normalized local backend accepts a

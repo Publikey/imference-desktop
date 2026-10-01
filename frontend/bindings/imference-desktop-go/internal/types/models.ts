@@ -35,7 +35,6 @@ export interface CatalogLora {
     "mediumDescription"?: string;
     "image"?: string;
     "category"?: string;
-    "nsfw": boolean;
     "engine": string;
     "familyCode": string;
     "familyName"?: string;

@@ -14,24 +14,44 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 )
 
 // Families a LoRA can be detected as. "flux" covers FLUX-derived DiTs.
 const (
-	FamilySDXL = "sdxl"
-	FamilySD15 = "sd15"
-	FamilySD2  = "sd2"
-	FamilyFlux = "flux"
+	FamilySDXL   = "sdxl"
+	FamilySD15   = "sd15"
+	FamilySD2    = "sd2"
+	FamilyFlux   = "flux"
+	FamilyZImage = "zimage"
+	FamilyKrea2  = "krea2"
+	FamilyAnima  = "anima"
 )
+
+// Key layouts of the DiT families (original / ComfyUI / kohya / diffusers
+// spellings, from diffusers' lora_conversion_utils). Checked before the UNet
+// heuristics: an Anima LoRA in diffusers format has attn2.to_k too.
+var ditKeys = []struct {
+	re     *regexp.Regexp
+	family string
+}{
+	{regexp.MustCompile(`(noise_refiner|context_refiner|(^|[._])layers[._]\d+[._](attention|feed_forward)[._])`), FamilyZImage},
+	{regexp.MustCompile(`(txtfusion\.|text_fusion\.|\.attn\.(wq|wk|wv|wo|to_gate)\.|(^|\.)(tmlp|txtmlp)\.)`), FamilyKrea2},
+	{regexp.MustCompile(`(llm_adapter\.|text_conditioner\.|adaln_modulation_(self_attn|cross_attn|mlp)|` +
+		`\.(self_attn|cross_attn)\.(q_proj|k_proj|v_proj|output_proj)\.|transformer_blocks\.\d+\.norm[123]\.linear_[12])`), FamilyAnima},
+}
+
+// unetKeys mark UNet cross-attention: DiTs have attn2.to_k too, with other widths.
+var unetKeys = []string{"down_blocks", "up_blocks", "mid_block", "input_blocks", "output_blocks", "middle_block"}
 
 // maxHeaderBytes bounds the JSON header; a real one is a few hundred KB.
 const maxHeaderBytes = 100 << 20
 
 // supportedBackends are the backends whose engine side applies user LoRAs
 // (imference-engine PipelineBackend.supports_loras). Flip one here when the
-// engine enables it and the pinned engine version ships it.
-var supportedBackends = map[string]bool{"sdxl": true}
+// engine enables it and the pinned engine version ships it (DiTs: v0.4.5).
+var supportedBackends = map[string]bool{"sdxl": true, "zimage": true, "krea2": true, "anima": true}
 
 // crossAttnWidth maps the input dim of an attn2.to_k down projection (the
 // text-embedding width) to a family.
@@ -211,6 +231,12 @@ func familyFromMetadata(md map[string]string) string {
 		return FamilySD2
 	case strings.HasPrefix(base, "flux"):
 		return FamilyFlux
+	case strings.HasPrefix(base, "zimage"), strings.HasPrefix(base, "z_image"), strings.HasPrefix(base, "z-image"):
+		return FamilyZImage
+	case strings.HasPrefix(base, "krea"):
+		return FamilyKrea2
+	case strings.HasPrefix(base, "anima"):
+		return FamilyAnima
 	}
 	arch := strings.ToLower(md["modelspec.architecture"])
 	switch {
@@ -222,11 +248,24 @@ func familyFromMetadata(md map[string]string) string {
 		return FamilySD2
 	case strings.HasPrefix(arch, "flux"):
 		return FamilyFlux
+	case strings.Contains(arch, "z-image"), strings.Contains(arch, "zimage"):
+		return FamilyZImage
+	case strings.Contains(arch, "krea"):
+		return FamilyKrea2
+	case strings.Contains(arch, "anima"):
+		return FamilyAnima
 	}
 	return ""
 }
 
 func familyFromKeys(keys []string) string {
+	for _, d := range ditKeys {
+		for _, k := range keys {
+			if d.re.MatchString(k) {
+				return d.family
+			}
+		}
+	}
 	for _, k := range keys {
 		if strings.HasPrefix(k, "lora_te2_") || strings.Contains(k, "text_encoder_2.") ||
 			strings.HasPrefix(k, "lora_unet_input_blocks_") ||
@@ -246,7 +285,7 @@ func familyFromKeys(keys []string) string {
 
 func familyFromCrossAttention(header map[string]json.RawMessage, keys []string) string {
 	for _, k := range keys {
-		if !strings.Contains(k, "attn2") || !strings.Contains(k, "to_k") {
+		if !strings.Contains(k, "attn2") || !strings.Contains(k, "to_k") || !isUNetKey(k) {
 			continue
 		}
 		if !strings.HasSuffix(k, "lora_down.weight") && !strings.HasSuffix(k, "lora_A.weight") {
@@ -260,4 +299,13 @@ func familyFromCrossAttention(header map[string]json.RawMessage, keys []string) 
 		}
 	}
 	return ""
+}
+
+func isUNetKey(k string) bool {
+	for _, u := range unetKeys {
+		if strings.Contains(k, u) {
+			return true
+		}
+	}
+	return false
 }

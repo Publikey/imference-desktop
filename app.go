@@ -349,6 +349,15 @@ func (a *App) SaveSettings(next types.Settings) (types.Settings, error) {
 		go a.sweepQuota("")
 	}
 
+	if prev.Tools != saved.Tools {
+		a.applyToolsSettings(saved.Tools)
+		if saved.Tools.LocalAPIDisabled {
+			a.stopToolsAPI()
+		} else {
+			a.startToolsAPI()
+		}
+	}
+
 	restart := settings.SidecarConfigChanged(prev, saved) && a.sidecar.Status().State == "ready"
 	a.bus.Info("app", "SaveSettings ok", map[string]any{"sidecarRestart": restart})
 	if restart {

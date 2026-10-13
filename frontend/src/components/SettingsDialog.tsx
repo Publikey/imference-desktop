@@ -8,6 +8,7 @@ import {
   Languages,
   Server,
   SlidersHorizontal,
+  Wand2,
 } from "lucide-react";
 import {
   Dialog,
@@ -24,6 +25,7 @@ import { WalletSection } from "@/components/WalletSection";
 import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
 import { CreditSection } from "@/components/CreditSection";
 import { StorageSection } from "@/components/StorageSection";
+import { ToolsSection } from "@/components/ToolsSection";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
 import { SUPPORTED_LANGUAGES, setLanguage, storedLanguage } from "@/i18n";
@@ -38,7 +40,7 @@ type Props = {
   initialSection?: string;
 };
 
-type PaneId = "engine" | "runtime" | "cloud" | "paths" | "storage" | "language";
+type PaneId = "engine" | "runtime" | "tools" | "cloud" | "paths" | "storage" | "language";
 
 // Top-level categories. Each is a full pane (icon + title + one-line purpose);
 // only the selected pane renders, so the dialog never becomes one long scroll.
@@ -50,6 +52,7 @@ const PANES: {
 }[] = [
   { id: "engine", labelKey: "settings.navEngine", descKey: "settings.engineDesc", icon: Server },
   { id: "runtime", labelKey: "settings.navRuntime", descKey: "settings.runtimeDesc", icon: SlidersHorizontal },
+  { id: "tools", labelKey: "settings.navTools", descKey: "settings.toolsDesc", icon: Wand2 },
   { id: "cloud", labelKey: "settings.navPayment", descKey: "settings.cloudDesc", icon: Cloud },
   { id: "paths", labelKey: "settings.navPaths", descKey: "settings.pathsDesc", icon: FolderOpen },
   { id: "storage", labelKey: "settings.navStorage", descKey: "settings.storageDesc", icon: HardDrive },
@@ -75,6 +78,8 @@ function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
       return { pane: "runtime" };
     case "paths":
       return { pane: "paths" };
+    case "tools":
+      return { pane: "tools" };
     case "storage":
       return { pane: "storage" };
     case "language":
@@ -334,6 +339,8 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             )}
 
             {pane === "storage" && <StorageSection draft={draft} setDraft={setDraft} />}
+
+            {pane === "tools" && <ToolsSection draft={draft} setDraft={setDraft} />}
 
             {pane === "language" && (
               <div className="bg-card grid gap-2 rounded-2xl border p-4 shadow-sm">

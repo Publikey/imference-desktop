@@ -61,6 +61,8 @@ import { PanelBoard, usePanelLayout } from "@/components/PanelBoard";
 import { ActivityDock } from "@/components/ActivityDock";
 import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
+import { ToolDialog, type ToolSource } from "@/components/ToolDialog";
+import { ToolMenuList } from "@/components/ToolBits";
 import { api } from "@/lib/wails-bridge";
 import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/theme";
@@ -3250,6 +3252,12 @@ function Gallery({
   const [viewIndex, setViewIndex] = useState<number | null>(null);
   // At most one tile plays sound at a time — unmuting one mutes whichever had it.
   const [audibleName, setAudibleName] = useState<string | null>(null);
+  // The editing tool open on an item (ToolDialog), and a saved output waiting
+  // to be opened in the viewer once it is in the list.
+  const [toolDlg, setToolDlg] = useState<{ toolId: string; source: ToolSource; maskMode?: "select" } | null>(null);
+  const [pendingOpen, setPendingOpen] = useState<string | null>(null);
+  const toolDlgRef = useRef(toolDlg);
+  toolDlgRef.current = toolDlg;
   const anchorRef = useRef<number | null>(null); // last-toggled index, for Shift-range
   const viewItemsRef = useRef<ViewerItem[]>([]); // the viewable sequence, in display order
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -3407,6 +3415,52 @@ function Gallery({
 
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
+  // Open an editing tool on a gallery item (closes the viewer: the dialog owns
+  // the keyboard while it is open).
+  const openTool = useCallback((toolId: string, target: ViewerItem, maskMode?: "select") => {
+    setViewIndex(null);
+    setMenu(null);
+    setToolDlg({
+      toolId,
+      maskMode,
+      source: { name: target.name, kind: target.kind, meta: target.meta, getSrc: target.getSrc },
+    });
+  }, []);
+
+  // Tool outputs are already on disk: pull their gallery rows (with metadata)
+  // and prepend them.
+  const addSavedOutputs = useCallback(
+    (names: string[]) => {
+      const want = new Set(names);
+      void api
+        .listSavedImages(0, Math.max(GALLERY_PAGE, names.length + 4), EMPTY_FILTER)
+        .then((page) => {
+          const fresh = page.filter((p) => want.has(p.name));
+          if (!fresh.length) return;
+          diskCountRef.current += fresh.length;
+          setSaved((cur) => {
+            const seen = new Set(cur.map((x) => x.name));
+            const add = fresh.filter((f) => !seen.has(f.name));
+            return add.length ? [...add, ...cur] : cur;
+          });
+        })
+        .catch(() => {});
+      refreshFacets();
+    },
+    [refreshFacets]
+  );
+
+  // "Open" on a tool result: show it in the viewer once it's in the list.
+  useEffect(() => {
+    if (!pendingOpen) return;
+    const i = viewItemsRef.current.findIndex((v) => v.name === pendingOpen);
+    if (i >= 0) {
+      setPendingOpen(null);
+      setAudibleName(null);
+      setViewIndex(i);
+    }
+  }, [pendingOpen, saved]);
+
   const openAt = useCallback((index: number) => {
     // The viewer plays its own audio: hand it a silent grid rather than two
     // soundtracks at once.
@@ -3477,6 +3531,7 @@ function Gallery({
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+      if (toolDlgRef.current) return; // the tool dialog owns the keyboard
       if ((e.metaKey || e.ctrlKey) && (e.key === "a" || e.key === "A")) {
         const names = viewItemsRef.current.map((v) => v.name).filter((n): n is string => !!n);
         if (names.length) {
@@ -3627,6 +3682,20 @@ function Gallery({
           onUseAsSource={onUseAsSource}
           onReuseSettings={onReuseSettings}
           onDelete={deleteOne}
+          onTool={openTool}
+        />
+      )}
+
+      {toolDlg && (
+        <ToolDialog
+          open
+          toolId={toolDlg.toolId}
+          source={toolDlg.source}
+          initialMaskMode={toolDlg.maskMode}
+          onClose={() => setToolDlg(null)}
+          onSaved={addSavedOutputs}
+          onOpenSaved={(name) => setPendingOpen(name)}
+          onUseAsSource={onUseAsSource}
         />
       )}
 
@@ -3639,6 +3708,7 @@ function Gallery({
           onUseAsSource={onUseAsSource}
           onReuseSettings={onReuseSettings}
           onDelete={deleteOne}
+          onTool={openTool}
         />
       )}
     </div>
@@ -4021,8 +4091,11 @@ function SavedTile({
       </div>
       <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
         {image.source && (
-          <span className="rounded-full bg-white/20 px-1.5 py-0.5 font-medium capitalize">
-            {image.source}
+          <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-1.5 py-0.5 font-medium capitalize">
+            {image.source === "tool" && <Wand2 className="size-2.5" />}
+            {image.source === "tool" && image.meta?.tool
+              ? t(`tools.names.${image.meta.tool}`, { defaultValue: image.meta.tool })
+              : image.source}
           </span>
         )}
         {image.seed > 0 && <span className="tabular-nums">{t("gallery.seed", { seed: image.seed })}</span>}
@@ -4042,6 +4115,7 @@ function TileContextMenu({
   onUseAsSource,
   onReuseSettings,
   onDelete,
+  onTool,
 }: {
   x: number;
   y: number;
@@ -4051,6 +4125,7 @@ function TileContextMenu({
   onUseAsSource: (getSrc: () => Promise<string>) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
   onDelete: (name: string) => void;
+  onTool: (toolId: string, target: ViewerItem, maskMode?: "select") => void;
 }) {
   const { t } = useTranslation();
   useEffect(() => {
@@ -4062,8 +4137,8 @@ function TileContextMenu({
   }, [onClose]);
 
   // Clamp so the menu stays on screen (approx sizes; good enough without measuring).
-  const W = 232;
-  const H = 300;
+  const W = 268;
+  const H = Math.min(window.innerHeight - 16, 640);
   const left = Math.min(x, window.innerWidth - W - 8);
   const top = Math.min(y, window.innerHeight - H - 8);
   const meta = target.meta;
@@ -4082,8 +4157,8 @@ function TileContextMenu({
       }}
     >
       <div
-        className="animate-in fade-in zoom-in-95 bg-popover absolute overflow-hidden rounded-xl border p-1 shadow-2xl duration-100"
-        style={{ left, top, width: W }}
+        className="animate-in fade-in zoom-in-95 bg-popover absolute overflow-y-auto rounded-xl border p-1 shadow-2xl duration-100"
+        style={{ left, top, width: W, maxHeight: H }}
         onClick={(e) => e.stopPropagation()}
         role="menu"
       >
@@ -4119,6 +4194,15 @@ function TileContextMenu({
             label={t("gallery.ctxReveal")}
             onClick={run(() => void api.revealInFolder(target.savedPath!).catch(() => {}))}
           />
+        )}
+        {target.name && (
+          <>
+            <div className="bg-border/70 my-1 h-px" />
+            <div className="text-muted-foreground px-2.5 pb-0.5 pt-1 text-[11px] font-medium uppercase tracking-wide">
+              {t("tools.edit")}
+            </div>
+            <ToolMenuList kind={target.kind} onPick={(id, mode) => { onTool(id, target, mode); onClose(); }} />
+          </>
         )}
         {target.name && (
           <>
@@ -4176,6 +4260,7 @@ function Lightbox({
   onUseAsSource,
   onReuseSettings,
   onDelete,
+  onTool,
 }: {
   items: ViewerItem[];
   index: number;
@@ -4184,6 +4269,8 @@ function Lightbox({
   onUseAsSource: (getSrc: () => Promise<string>) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
   onDelete: (name: string) => void;
+  /** Editing tools; absent = no Edit menu (e.g. the unsaved session viewer). */
+  onTool?: (toolId: string, target: ViewerItem, maskMode?: "select") => void;
 }) {
   const { t } = useTranslation();
   const itemsRef = useRef(items);
@@ -4196,6 +4283,9 @@ function Lightbox({
   useEffect(() => setZoom(false), [index]);
   // Distraction-free view: hide the meta panel, go solid black, fill the window.
   const [full, setFull] = useState(false);
+  // The Edit (tools) dropdown in the action bar.
+  const [editOpen, setEditOpen] = useState(false);
+  useEffect(() => setEditOpen(false), [index]);
 
   const total = items.length;
   const current = items[index];
@@ -4226,14 +4316,17 @@ function Lightbox({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // Esc leaves fullscreen first, then closes the viewer.
-      if (e.key === "Escape") setFull((f) => (f ? false : (onClose(), false)));
+      if (e.key === "Escape") {
+        if (editOpen) setEditOpen(false);
+        else setFull((f) => (f ? false : (onClose(), false)));
+      }
       else if (e.key === "ArrowLeft") prev();
       else if (e.key === "ArrowRight") next();
       else if (e.key === "f" || e.key === "F") setFull((f) => !f);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, prev, next]);
+  }, [onClose, prev, next, editOpen]);
 
   if (!current) return null;
   const meta = current.meta;
@@ -4258,6 +4351,38 @@ function Lightbox({
           {t("gallery.counter", { i: index + 1, n: total })}
         </span>
         <div className="flex items-center gap-1.5">
+          {/* Editing tools: a dropdown of the tools for this item. */}
+          {current.name && onTool && (
+            <div className="relative">
+              <button
+                type="button"
+                className={cn(iconBtn, "flex items-center gap-1.5 px-3", editOpen && "bg-white/25")}
+                title={t("tools.edit")}
+                aria-label={t("tools.edit")}
+                aria-expanded={editOpen}
+                onClick={() => setEditOpen((o) => !o)}
+              >
+                <Wand2 className="size-5" />
+                <span className="text-sm font-medium">{t("tools.edit")}</span>
+                <ChevronDown className="size-4" />
+              </button>
+              {editOpen && (
+                <div
+                  role="menu"
+                  className="animate-in fade-in zoom-in-95 absolute right-0 top-full z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto rounded-xl border border-white/15 bg-neutral-900/95 p-1 shadow-2xl backdrop-blur"
+                >
+                  <ToolMenuList
+                    dark
+                    kind={current.kind ?? (isVideoSrc(src) ? "video" : "image")}
+                    onPick={(id, mode) => {
+                      setEditOpen(false);
+                      onTool(id, current, mode);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
           {/* img2img needs an image source — hidden for videos. */}
           {!isVideoSrc(src) && (
             <button type="button" className={iconBtn} title={t("gallery.ctxUseAsSource")} aria-label={t("gallery.ctxUseAsSource")} onClick={() => onUseAsSource(current.getSrc)}>
@@ -4417,6 +4542,11 @@ function MetaPanel({ meta }: { meta: GenerationMeta }) {
   add(t("meta.seed"), meta.seed);
   if (meta.img2img) add(t("meta.img2img"), t("meta.strength", { strength: meta.strength ?? "" }));
   add(t("meta.loras"), (meta.loras ?? []).map((l) => `${l.name || l.path} (${l.weight})`).join(", "));
+  if (meta.tool) {
+    add(t("meta.tool"), t(`tools.names.${meta.tool}`, { defaultValue: meta.tool }));
+    add(t("meta.ranOn"), meta.ranOn ? t(`tools.mode.${meta.ranOn}`) : "");
+    add(t("meta.sourceImage"), meta.sourceImage);
+  }
   add(t("meta.created"), meta.createdAt ? meta.createdAt.replace("T", " ").slice(0, 19) : "");
 
   return (

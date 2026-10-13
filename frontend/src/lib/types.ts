@@ -31,6 +31,8 @@ export type AppSettings = {
   /** Free-space cushion to preserve on the cache volume. 0 → Go default (10 GB).
    *  A hard wall, unlike the quota: a download that would eat into it fails. */
   modelCacheMinFreeBytes?: number;
+  /** Editing-tools preferences. */
+  tools?: ToolsSettings;
 };
 
 /** One downloaded checkpoint, as listed in Settings → Storage. */
@@ -403,6 +405,11 @@ export type GenerationMeta = {
   strength?: number;
   loras?: LoraRef[];
   createdAt: string;
+  /** Editing-tool outputs (source "tool"). */
+  tool?: string;
+  toolParams?: Record<string, unknown>;
+  sourceImage?: string;
+  ranOn?: string;
 };
 
 /** A cloud generation persisted as in-flight (survives app close). Returned by
@@ -553,4 +560,142 @@ export type InstallProgress = {
   percentEstimate: number;
   done: boolean;
   error?: string;
+};
+
+// ------------------------------------------------------------------------
+// Editing tools (imference_engine.tools) — see app_tools.go
+// ------------------------------------------------------------------------
+
+/** Where tools run by default ("auto" = local when this machine can, else cloud). */
+export type ToolsMode = "auto" | "local" | "cloud";
+
+export type ToolsSettings = {
+  mode?: ToolsMode;
+  /** The 127.0.0.1 API for agents is ON unless this is set. */
+  localApiDisabled?: boolean;
+  /** Stop the tools sidecar after this many idle minutes (0 = 10). */
+  idleMinutes?: number;
+  /** Force the tools' device (auto | cpu | cuda | directml | rocm | mps). */
+  device?: string;
+};
+
+export type ToolBadge = "local" | "local_slow" | "cloud" | "unavailable";
+
+export type ToolInputSpec = {
+  name: string;
+  type: "image" | "mask" | "video";
+  required: boolean;
+  multiple: boolean;
+  minItems?: number;
+  maxItems?: number;
+  maxMegapixels?: number;
+  maxMb?: number;
+  maxSeconds?: number;
+  description?: string;
+};
+
+export type ToolParamSpec = {
+  name: string;
+  type: "int" | "float" | "bool" | "string" | "enum" | "points";
+  default?: unknown;
+  required?: boolean;
+  min?: number;
+  max?: number;
+  values?: (string | number)[];
+  maxLength?: number;
+  pattern?: string;
+  maxItems?: number;
+  description?: string;
+};
+
+export type ToolInfo = {
+  id: string;
+  version: string;
+  name: string;
+  description: string;
+  category: "image" | "video" | "generation";
+  mcpName: string;
+  inputs: ToolInputSpec[];
+  params: ToolParamSpec[];
+  outputs: { name: string; type: string; format?: string }[];
+  runtimes: {
+    local: string[];
+    cloudQueue?: string;
+    slowOnCpu?: boolean;
+    minRamGb?: number;
+    minVramGb?: number;
+    needsEngine?: boolean;
+  };
+  credits: number;
+  cloudAvailable: boolean;
+  weightsMb: number;
+  /** This machine's badge + the device a local run would use. */
+  badge: ToolBadge;
+  device?: string;
+  /** Why it is not local (stable code, see tools.reason.* i18n keys). */
+  reason?: string;
+  priceCredits: number;
+  priceUsd: number;
+  /** Generation tools cost the selected cloud model's price. */
+  priceIsModel?: boolean;
+};
+
+export type ToolCloudOffer = { credits: number; usd: number; rail: "credits" | "x402" | string };
+
+export type ToolError = {
+  code: string;
+  message: string;
+  field?: string;
+  cloudRetry?: ToolCloudOffer;
+};
+
+export type ToolRunRequest = {
+  jobId: string;
+  toolId: string;
+  /** input name → gallery file names, absolute paths or data: URIs */
+  inputs: Record<string, string[]>;
+  params: Record<string, unknown>;
+  runOn: ToolsMode | "";
+  /** Transient output (click-to-select): not saved, returned as a data URL. */
+  noSave?: boolean;
+};
+
+export type ToolRunOutput = {
+  name: string;
+  type: "image" | "mask" | "video" | "text" | string;
+  format: string;
+  savedName?: string;
+  path?: string;
+  text?: string;
+  dataUrl?: string;
+  width?: number;
+  height?: number;
+  seed?: number;
+};
+
+export type ToolRunResult = {
+  jobId: string;
+  toolId: string;
+  outputs: ToolRunOutput[];
+  ranOn?: "local" | "cloud";
+  device?: string;
+  durationMs: number;
+  credits?: number;
+  error?: ToolError | null;
+};
+
+/** "tools:progress" event. */
+export type ToolProgress = {
+  jobId: string;
+  toolId: string;
+  /** starting | downloading_weights | loading | running | encoding | uploading | queued | downloading */
+  stage: string;
+  fraction: number;
+};
+
+export type LocalApiInfo = {
+  enabled: boolean;
+  running: boolean;
+  port: number;
+  discoveryPath: string;
 };

@@ -75,6 +75,12 @@ import type {
   WalletInfo,
   ComponentsReadiness,
   ComponentsProgress,
+  ToolInfo,
+  ToolRunRequest,
+  ToolRunResult,
+  ToolProgress,
+  ToolsSettings,
+  LocalApiInfo,
 } from "./types";
 
 // Wails-generated functions are typed as (anyOfTheArgs) => Promise<any>.
@@ -210,6 +216,25 @@ const raw = {
     path: string
   ) => Promise<void>,
 
+  // Editing tools (app_tools.go). Called by name — no generated binding to race.
+  // listTools is cheap (cached probe); probeTools may start the tools sidecar
+  // once to learn the real runtime. runTool never rejects for a tool failure:
+  // it resolves with result.error (typed, with a cloud offer when relevant).
+  listTools: (() => Call.ByName("main.App.ListTools")) as () => Promise<ToolInfo[]>,
+  probeTools: (() => Call.ByName("main.App.ProbeTools")) as () => Promise<ToolInfo[]>,
+  runTool: ((req: ToolRunRequest) => Call.ByName("main.App.RunTool", req)) as (
+    req: ToolRunRequest
+  ) => Promise<ToolRunResult>,
+  cancelTool: ((jobId: string) => Call.ByName("main.App.CancelTool", jobId)) as (jobId: string) => Promise<void>,
+  releaseTools: (() => Call.ByName("main.App.ReleaseTools")) as () => Promise<void>,
+  getToolsSettings: (() => Call.ByName("main.App.GetToolsSettings")) as () => Promise<ToolsSettings>,
+  setToolsSettings: ((ts: ToolsSettings) => Call.ByName("main.App.SetToolsSettings", ts)) as (
+    ts: ToolsSettings
+  ) => Promise<ToolsSettings>,
+  getLocalApiInfo: (() => Call.ByName("main.App.GetLocalAPIInfo")) as () => Promise<LocalApiInfo>,
+  onToolProgress: (cb: (p: ToolProgress) => void): (() => void) =>
+    Events.On("tools:progress", (e) => cb(e.data as ToolProgress)),
+
   // Wallet (x402 mode)
   getWalletInfo: GetWalletInfo as () => Promise<WalletInfo>,
   refreshWalletBalance: RefreshWalletBalance as () => Promise<string>,
@@ -263,6 +288,7 @@ const NO_WRAP = new Set([
   "onCloudResolved",
   "onModelCacheChanged",
   "onSettingsChanged",
+  "onToolProgress",
 ]);
 
 function wrap<K extends keyof typeof raw>(key: K, fn: (typeof raw)[K]): (typeof raw)[K] {
@@ -295,6 +321,17 @@ function sanitize(method: string, args: unknown[]): unknown {
   // getCreditBalance(apiKey): never log the key itself.
   if (method === "getCreditBalance") {
     return [args[0] ? "***" : ""];
+  }
+  // runTool may carry a data: URI mask — keep the log readable.
+  if (method === "runTool" && args[0] && typeof args[0] === "object") {
+    const r = args[0] as { inputs?: Record<string, string[]> };
+    const inputs = Object.fromEntries(
+      Object.entries(r.inputs ?? {}).map(([k, v]) => [
+        k,
+        (v ?? []).map((s) => (s.startsWith("data:") ? `${s.slice(0, 30)}…` : s)),
+      ])
+    );
+    return [{ ...(args[0] as object), inputs }];
   }
   return args;
 }

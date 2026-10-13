@@ -327,6 +327,19 @@
     }
   }
 
+  /* Transparency checkerboard behind tool results (background removal,
+     outpaint frame) so alpha reads as alpha, not as the page color. */
+  .checkerboard {
+    background-color: color-mix(in oklch, var(--muted) 60%, white);
+    background-image:
+      linear-gradient(45deg, color-mix(in oklch, var(--foreground) 9%, transparent) 25%, transparent 25%),
+      linear-gradient(-45deg, color-mix(in oklch, var(--foreground) 9%, transparent) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, color-mix(in oklch, var(--foreground) 9%, transparent) 75%),
+      linear-gradient(-45deg, transparent 75%, color-mix(in oklch, var(--foreground) 9%, transparent) 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  }
+
   /* Shimmering placeholder while async content loads (gallery tiles, model bar,
      lightbox). A soft gradient sweeps across a neutral base. */
   .skeleton {

@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -96,6 +97,46 @@ func resolveEngineSource() (spec string, editable bool) {
 	// backends share byte-identical deps (torch + diffusers 0.40 + transformers +
 	// sentencepiece), so this resolves once — same extras as EngineTarball.
 	return override + "[" + EngineExtras + "]", true
+}
+
+// EngineTarballURL is the download URL inside the active engine spec ("" for a
+// local editable override).
+func EngineTarballURL() string {
+	spec, editable := resolveEngineSource()
+	if editable {
+		return ""
+	}
+	if i := strings.Index(spec, " @ "); i >= 0 {
+		return strings.TrimSpace(spec[i+3:])
+	}
+	if strings.HasPrefix(spec, "http://") || strings.HasPrefix(spec, "https://") {
+		return spec
+	}
+	return ""
+}
+
+// EngineTarballReachable reports whether the pinned engine archive can be
+// downloaded right now. The startup auto-reinstall checks it first: forcing a
+// reinstall towards a tag that is not published yet (or while offline) would
+// uninstall a working engine and leave nothing in its place.
+func EngineTarballReachable(ctx context.Context, client *http.Client) bool {
+	url := EngineTarballURL()
+	if url == "" {
+		return true
+	}
+	if client == nil {
+		client = &http.Client{Timeout: 15 * time.Second}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode >= 200 && resp.StatusCode < 400
 }
 
 // pinnedEngineVersionRe pulls the X.Y.Z out of the EngineTarball tag URL

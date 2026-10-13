@@ -1,6 +1,9 @@
 package installer
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -55,5 +58,28 @@ func TestOnnxRuntimePackage(t *testing.T) {
 		if got := onnxRuntimePackage(c.goos, c.vendor); got != c.want {
 			t.Errorf("onnxRuntimePackage(%s, %q) = %s, want %s", c.goos, c.vendor, got, c.want)
 		}
+	}
+}
+
+func TestEngineTarballReachable(t *testing.T) {
+	t.Setenv(EngineSourceEnvVar, "")
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer ok.Close()
+	missing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	defer missing.Close()
+
+	t.Setenv(EngineSourceEnvVar, ok.URL+"/engine.tar.gz")
+	if !EngineTarballReachable(context.Background(), ok.Client()) {
+		t.Fatal("reachable archive reported unreachable")
+	}
+	t.Setenv(EngineSourceEnvVar, missing.URL+"/engine.tar.gz")
+	if EngineTarballReachable(context.Background(), missing.Client()) {
+		t.Fatal("404 archive reported reachable")
+	}
+	t.Setenv(EngineSourceEnvVar, t.TempDir()) // editable local checkout: nothing to fetch
+	if !EngineTarballReachable(context.Background(), nil) || EngineTarballURL() != "" {
+		t.Fatal("editable override must count as reachable with no URL")
 	}
 }

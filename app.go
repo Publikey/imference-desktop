@@ -2567,6 +2567,14 @@ func (a *App) ensureEngineUpToDate() {
 	if err != nil {
 		return
 	}
+	if !installer.EngineTarballReachable(a.ctx, nil) {
+		// Keep the working engine: an unpublished tag or no network must not
+		// turn a version mismatch into an uninstalled engine.
+		a.bus.Warn("app", "pinned engine archive not reachable — keeping the installed engine", map[string]any{
+			"installed": info.EngineVersion, "pinned": info.PinnedVersion, "url": installer.EngineTarballURL(),
+		})
+		return
+	}
 	if missing {
 		a.bus.Warn("app", "engine package missing from the venv — reinstalling the pinned engine", map[string]any{
 			"pinned": info.PinnedVersion, "venv": venvDir,

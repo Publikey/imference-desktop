@@ -6,6 +6,7 @@
 //	cd frontend && npm run build:web          # -> frontend/dist-web
 //	go build -tags "web server" -o imference-web .
 //	IMFERENCE_WEB_ADDR=:8090 ./imference-web
+//	IMFERENCE_WEB_BASE=/app ./imference-web    # behind the API's /app proxy
 //
 // The frontend keeps calling its generated Wails bindings; in the web build
 // @wailsio/runtime is swapped for src/lib/web-runtime.ts, which sends the same
@@ -36,6 +37,7 @@ func main() {
 		log.Fatal(err)
 	}
 	srv := newWebServer(webConfig{
+		basePath:  os.Getenv("IMFERENCE_WEB_BASE"),
 		dataDir:   envOr("IMFERENCE_WEB_DATA", "web-data"),
 		apiBase:   os.Getenv("IMFERENCE_BASE_URL"),
 		secure:    os.Getenv("IMFERENCE_WEB_SECURE") == "1",

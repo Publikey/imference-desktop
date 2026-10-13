@@ -2,8 +2,9 @@
 // mode === "web"). The generated bindings and wails-bridge.ts keep calling
 // Call.ByID / Call.ByName / Events.On exactly as in the desktop; here those go
 // to the Go web server instead of the Wails webview:
-//   calls  -> POST /web/call  {methodID | methodName, args}  -> {result} | {error}
-//   events <- GET  /web/events (Server-Sent Events: {name, data})
+//   calls  -> POST web/call  {methodID | methodName, args}  -> {result} | {error}
+//   events <- GET  web/events (Server-Sent Events: {name, data})
+// URLs are relative to the app page, so the same build runs at "/" or "/app/".
 // Create and CancellablePromise are the real runtime's pure-JS helpers.
 import * as Create from "wails-runtime-dist/create.js";
 import { CancellablePromise } from "wails-runtime-dist/cancellable.js";
@@ -15,7 +16,7 @@ const CSRF = { "X-Imference-Web": "1" };
 function rpc(body: { methodID?: number; methodName?: string; args: unknown[] }): CancellablePromise<any> {
   const ctl = new AbortController();
   const p = new CancellablePromise<any>((resolve, reject) => {
-    fetch("/web/call", {
+    fetch("web/call", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json", ...CSRF },
@@ -24,7 +25,7 @@ function rpc(body: { methodID?: number; methodName?: string; args: unknown[] }):
     })
       .then(async (r) => {
         if (r.status === 401) {
-          window.location.href = "/login";
+          window.location.href = "login";
           return reject(new Error("not signed in"));
         }
         const j = await r.json().catch(() => ({}));
@@ -53,7 +54,7 @@ let source: EventSource | null = null;
 
 function connect() {
   if (source) return;
-  source = new EventSource("/web/events", { withCredentials: true });
+  source = new EventSource("web/events", { withCredentials: true });
   source.onmessage = (m) => {
     let ev: { name: string; data: any };
     try {

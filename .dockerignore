@@ -1,0 +1,13 @@
+# Keep the build context small: dependencies and outputs are rebuilt inside.
+**/node_modules
+frontend/dist
+frontend/dist-web
+bin
+build/bin
+.task
+.git
+
+**/__pycache__
+sidecar/.venv
+*.log
+web-data

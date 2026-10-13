@@ -111,10 +111,14 @@ func (c *client) call(name string, args ...any) (int, map[string]any) {
 }
 
 func startServer(t *testing.T, apiBase string) (*webServer, *httptest.Server) {
+	return startServerAt(t, apiBase, "")
+}
+
+func startServerAt(t *testing.T, apiBase, basePath string) (*webServer, *httptest.Server) {
 	t.Helper()
 	assets := fstest.MapFS{"index.html": {Data: []byte("<!doctype html><title>app</title>")}}
 	srv := newWebServer(webConfig{
-		dataDir: t.TempDir(), apiBase: apiBase, idleAfter: time.Minute,
+		basePath: basePath, dataDir: t.TempDir(), apiBase: apiBase, idleAfter: time.Minute,
 		checkKey: func(_ context.Context, key string) error {
 			if strings.HasPrefix(key, "good") {
 				return nil
@@ -341,5 +345,39 @@ func TestEvictIdle(t *testing.T) {
 	}
 	if code, _ := c.call("GetSettings"); code != http.StatusUnauthorized {
 		t.Fatalf("evicted session still valid: %d", code)
+	}
+}
+
+
+// Behind the API's /app proxy: everything lives under the prefix, and the
+// session cookie is scoped to it.
+func TestBasePath(t *testing.T) {
+	_, hs := startServerAt(t, "", "/app")
+	c := newClient(t, hs.URL+"/app")
+	resp, _ := c.hc.Get(hs.URL + "/app")
+	if resp.StatusCode != http.StatusMovedPermanently || resp.Header.Get("Location") != "/app/" {
+		t.Fatalf("/app: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	resp, _ = c.hc.Get(hs.URL + "/app/")
+	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/app/login" {
+		t.Fatalf("/app/ without session: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	if resp, _ := c.hc.Get(hs.URL + "/app/login"); resp.StatusCode != http.StatusOK {
+		t.Fatalf("/app/login: %d", resp.StatusCode)
+	}
+	req, _ := http.NewRequest(http.MethodPost, hs.URL+"/app/web/login", strings.NewReader(`{"apiKey":"good-1"}`))
+	req.Header.Set(csrfHeader, "1")
+	resp, err := c.hc.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("login under /app: %v %v", err, resp)
+	}
+	if ck := resp.Cookies(); len(ck) != 1 || ck[0].Path != "/app/" {
+		t.Fatalf("cookie path: %+v", ck)
+	}
+	if code, m := c.call("GetVersion"); code != http.StatusOK {
+		t.Fatalf("call under /app: %d %v", code, m)
+	}
+	if resp, _ := c.hc.Get(hs.URL + "/web/call"); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("routes leak outside the prefix: %d", resp.StatusCode)
 	}
 }

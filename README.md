@@ -199,6 +199,16 @@ How it works — one Go codebase, no business logic in TypeScript:
 | `IMFERENCE_WEB_DATA` | `web-data` | per-user data root |
 | `IMFERENCE_BASE_URL` | `https://imference.com` | API base |
 | `IMFERENCE_WEB_SECURE` | unset | `1` behind HTTPS (Secure cookie) |
+| `IMFERENCE_WEB_BASE` | unset | path prefix, e.g. `/app` behind the imference API proxy |
+
+Container: `docker build -f Dockerfile.web -t imference-web .` (Node 22 +
+Go 1.25 build stages, distroless non-root runtime, ~28 MB), then
+`docker run -p 8090:8090 -v imference-web-data:/data imference-web`. The
+frontend uses relative URLs only, so the same image serves `/` or `/app/`
+(`IMFERENCE_WEB_BASE=/app`). On imference.com it sits behind the API's `/app`
+reverse proxy (`WEB_APP_URL`, see the imference repo README). Base images are
+overridable (`--build-arg NODE_IMAGE=... GO_IMAGE=...`) when Docker Hub
+rate-limits.
 
 Prototype limits: sessions live in memory (a restart signs everyone out) and
 the server is single-instance; the API key is stored in the user's

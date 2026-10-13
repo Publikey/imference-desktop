@@ -29,6 +29,7 @@ const (
 )
 
 type webConfig struct {
+	basePath  string // "" or e.g. "/app" when served behind the API's /app proxy
 	dataDir   string
 	apiBase   string // "" = https://imference.com
 	secure    bool   // Secure cookie (behind HTTPS)
@@ -66,7 +67,24 @@ func newWebServer(cfg webConfig, assets fs.FS) *webServer {
 		users: map[string]*webUser{}, sessions: map[string]string{}}
 }
 
+// routes mounts the app under cfg.basePath. The frontend only uses relative
+// URLs (assets, web/call, web/events, login), so the same build works at "/"
+// and under a prefix such as "/app/".
 func (s *webServer) routes() http.Handler {
+	mux := s.mux()
+	base := strings.TrimRight(s.cfg.basePath, "/")
+	if base == "" {
+		return securityHeaders(mux)
+	}
+	outer := http.NewServeMux()
+	outer.Handle(base+"/", http.StripPrefix(base, mux))
+	outer.HandleFunc(base, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, base+"/", http.StatusMovedPermanently)
+	})
+	return securityHeaders(outer)
+}
+
+func (s *webServer) mux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "ok") })
 	mux.HandleFunc("GET /login", s.loginPage)
@@ -75,7 +93,12 @@ func (s *webServer) routes() http.Handler {
 	mux.HandleFunc("POST /web/call", s.call)
 	mux.HandleFunc("GET /web/events", s.events)
 	mux.HandleFunc("GET /", s.static)
-	return securityHeaders(mux)
+	return mux
+}
+
+// path prefixes p with the base path (for redirects and cookies).
+func (s *webServer) path(p string) string {
+	return strings.TrimRight(s.cfg.basePath, "/") + p
 }
 
 // ------------------------------------------------------------ sessions
@@ -219,7 +242,7 @@ func (s *webServer) login(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.sessions[sid] = u.id
 	s.mu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sid, Path: "/", HttpOnly: true,
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sid, Path: s.path("/"), HttpOnly: true,
 		Secure: s.cfg.secure, SameSite: http.SameSiteStrictMode, MaxAge: 7 * 24 * 3600})
 	writeJSON(w, http.StatusOK, map[string]string{"ok": "1"})
 }
@@ -230,7 +253,7 @@ func (s *webServer) logout(w http.ResponseWriter, r *http.Request) {
 		delete(s.sessions, c.Value)
 		s.mu.Unlock()
 	}
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: s.path("/"), MaxAge: -1, HttpOnly: true,
 		Secure: s.cfg.secure, SameSite: http.SameSiteStrictMode})
 	writeJSON(w, http.StatusOK, map[string]string{"ok": "1"})
 }
@@ -317,7 +340,7 @@ func (s *webServer) static(w http.ResponseWriter, r *http.Request) {
 	p := strings.TrimPrefix(r.URL.Path, "/")
 	if p == "" || p == "index.html" {
 		if s.userFor(r) == nil {
-			http.Redirect(w, r, "/login", http.StatusFound)
+			http.Redirect(w, r, s.path("/login"), http.StatusFound)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
@@ -386,9 +409,9 @@ button{margin-top:16px;width:100%;padding:10px;border:0;border-radius:10px;backg
 document.getElementById('f').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const e = document.getElementById('e'); e.textContent = '';
-  const r = await fetch('/web/login', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Imference-Web': '1'},
+  const r = await fetch('web/login', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Imference-Web': '1'},
     body: JSON.stringify({apiKey: document.getElementById('k').value})});
-  if (r.ok) { location.href = '/'; return; }
+  if (r.ok) { location.href = './'; return; }
   const j = await r.json().catch(() => ({}));
   e.textContent = j.error || ('Sign-in failed (' + r.status + ')');
 });

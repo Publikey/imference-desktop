@@ -1,0 +1,42 @@
+# Imference web version (cloud only): the desktop's Go App behind an HTTP
+# server, one App per signed-in user. See README "Web version".
+#
+#   docker build -f Dockerfile.web -t imference-web .
+#   docker run -p 8090:8090 -v imference-web-data:/data imference-web
+#   # behind the imference API's /app proxy:
+#   docker run -e IMFERENCE_WEB_BASE=/app -e IMFERENCE_WEB_SECURE=1 ...
+
+# Base images are overridable (e.g. a registry mirror when Docker Hub rate-limits:
+#   --build-arg NODE_IMAGE=mirror.gcr.io/library/node:22-slim
+#   --build-arg GO_IMAGE=mirror.gcr.io/library/golang:1.25)
+ARG NODE_IMAGE=node:22-slim
+ARG GO_IMAGE=golang:1.25
+
+# 1. Frontend, web mode (relative URLs, @wailsio/runtime -> src/lib/web-runtime.ts).
+FROM ${NODE_IMAGE} AS web
+WORKDIR /src/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build:web
+
+# 2. Go binary: build tags "web server" = web entrypoint + headless Wails, no CGO.
+FROM ${GO_IMAGE} AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+COPY --from=web /src/frontend/dist-web ./frontend/dist-web
+RUN CGO_ENABLED=0 go build -tags "web server" -trimpath -ldflags "-s -w" -o /out/imference-web . \
+ && mkdir -p /out/data
+
+# 3. Runtime: static binary + CA certificates, non-root.
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/imference-web /imference-web
+COPY --from=build --chown=65532:65532 /out/data /data
+ENV IMFERENCE_WEB_ADDR=0.0.0.0:8090 \
+    IMFERENCE_WEB_DATA=/data
+VOLUME ["/data"]
+EXPOSE 8090
+USER nonroot
+ENTRYPOINT ["/imference-web"]

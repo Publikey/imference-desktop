@@ -1984,8 +1984,8 @@ export default function App() {
 // ---------------------------------------------------------------------------
 
 async function webSignOut() {
-  await fetch("/web/logout", { method: "POST", credentials: "same-origin", headers: { "X-Imference-Web": "1" } });
-  window.location.href = "/login";
+  await fetch("web/logout", { method: "POST", credentials: "same-origin", headers: { "X-Imference-Web": "1" } });
+  window.location.href = "login";
 }
 
 function Header({

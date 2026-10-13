@@ -91,6 +91,10 @@ available; code signing and silent in-app auto-update are on the roadmap.
 - 🗂️ **A gallery that remembers everything** — every image and video is saved
   with its prompt, model and settings. Filter, search, and review in a
   fullscreen viewer.
+- 🪄 **Editing tools** — upscale, vary, remove background, magic eraser with
+  click-to-select, expand (outpaint), repaint, restore faces, describe, and
+  quick utilities (resize, crop, convert, strip metadata, video trim/convert)
+  right from the gallery — on your machine or in the cloud.
 
 <div align="center">
 
@@ -100,6 +104,49 @@ available; code signing and silent in-app auto-update are on the roadmap.
 -->
 
 </div>
+
+## Editing tools
+
+Right-click any image in the gallery (or open it and press **Edit**) to run a
+tool on it. Every tool shows where it will run before you start:
+
+| Badge | Meaning |
+|---|---|
+| **Local** | Runs on this computer at full speed (GPU, or a light CPU tool). Nothing is uploaded. |
+| **Local (slow)** | Runs on this computer on the CPU — no compatible GPU runtime was found. Still private, just slower. |
+| **Cloud** | This computer can't run it (engine not installed, not enough memory, no generation model loaded…): it runs on imference.com at the price shown. |
+
+- **Where it runs.** Settings → *Editing tools* picks the default: **Auto**
+  (local when the badge says so, otherwise the cloud), **Always local** or
+  **Always cloud**; each run can override it. If a local run fails because the
+  machine runs out of memory or lacks a runtime, the app *proposes* the cloud
+  with its price — it never switches silently.
+- **Privacy.** Local tools never upload anything. Cloud runs show *"Runs in
+  the cloud: your image is uploaded"* and the price before you start; uploads
+  are deleted from the cloud within 24 hours.
+- **How it works.** Image and video tools run in a small separate tools engine
+  (ONNX models of 2–500 MB, downloaded on first use and cached) that starts on
+  demand and frees its memory after a few idle minutes. *Vary*, *Repaint* and
+  *Expand* run on the generation model you have loaded (any model that does
+  image-to-image). Results land in your gallery with a **tool** badge and the
+  tool's settings in their metadata; you can chain another tool on a result.
+- **Local API for AI agents.** While the app is open it serves a local API on
+  `127.0.0.1` (port 47823 when free) protected by a random token, so agents —
+  e.g. the Imference MCP server with `run_on: local` — can run tools on your
+  machine for free. The port and token are in
+  `<config dir>/imference-desktop-go/local-api.json` (`{"port","token","pid"}`,
+  readable only by you, removed when the app quits):
+
+  ```bash
+  curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:47823/v1/tools
+  curl -H "Authorization: Bearer $TOKEN" -X POST http://127.0.0.1:47823/v1/tools/upscale \
+       -d '{"inputs": {"image": "/path/to/in.png"}, "params": {"scale": 2}}'
+  ```
+
+  Inputs may be absolute paths, `https://` URLs or `data:` URIs; outputs are
+  saved to the gallery and returned as paths. Runs are local only (`503
+  unsupported_runtime` when this machine can't run the tool). Turn the API off
+  in Settings → *Editing tools*.
 
 ## Requirements
 

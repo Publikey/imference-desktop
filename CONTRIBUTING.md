@@ -41,15 +41,48 @@ check — only CI stamps a real version (see `scripts/set-version.mjs`).
 You do **not** need a GPU to work on most of the app: the UI, settings, gallery
 and cloud paths all run without the local engine installed.
 
+### Testing against a local engine checkout
+
+The installer pins a tagged engine release (`EngineTarball` in
+`internal/installer/installer.go`). To test unreleased engine code — e.g. the
+editing tools before their tag exists — point the installer at a checkout:
+
+```bash
+export IMFERENCE_ENGINE_SOURCE=/path/to/imference-engine   # Windows: $env:IMFERENCE_ENGINE_SOURCE="C:\path\to\imference-engine"
+wails3 dev
+```
+
+then click **Install / Reinstall** in Settings → Local engine. The engine is
+installed editable (`pip install -e <path>[<extras>]`, same extras as the
+release, `tools` included) and the startup version check leaves it alone, so
+engine edits are live after an engine restart. The editing tools'
+`sidecar/tools_main.py` is extracted next to `main.py`; its weights mirror
+defaults to `$IMAGE_MODEL_CDN/tools` (override with `TOOLS_MODEL_CDN`,
+cache dir with `TOOLS_MODEL_CACHE`).
+
+The tool catalog the app ships (`internal/tools/catalog.json`) is a copy of the
+engine's export — refresh it when the engine manifests change:
+
+```bash
+python -m imference_engine.tools export > internal/tools/catalog.json
+```
+
+The Python sidecar tests need the engine with the `tools` extra:
+
+```bash
+pip install -e "/path/to/imference-engine[tools,dev]"
+python -m pytest sidecar/tests
+```
+
 ## Layout
 
 | Path | What lives there |
 |---|---|
 | `app.go`, `main.go` | The Wails-bound facade — every exported `*App` method becomes a frontend call |
-| `internal/` | The real logic, one package per concern: `cloud` (imference.com HTTP client), `sidecar` (Python engine process), `installer`, `settings`, `gpu`, `wallet`, `x402`, `update` |
+| `internal/` | The real logic, one package per concern: `cloud` (imference.com HTTP client), `sidecar` (Python engine process), `tools` (editing tools: catalog, badges, routing, tools sidecar, local API), `installer`, `settings`, `gpu`, `wallet`, `x402`, `update` |
 | `frontend/src/` | React app — `App.tsx` owns state, `components/` the UI, `lib/` the Go bridge and types |
 | `frontend/src/locales/` | Translations (`en.json`, `zh-CN.json`) |
-| `sidecar/` | The Python entry point the installed engine runs |
+| `sidecar/` | The Python entry points the installed engine runs (`main.py` generation, `tools_main.py` editing tools) |
 | `build/` | Wails packaging config and per-platform Taskfiles |
 
 Keep business logic in `internal/` — `app.go` wires requests and emits events,
@@ -58,8 +91,9 @@ it doesn't decide things.
 ## Checks Before You Push
 
 ```bash
-go build ./... && go vet ./... && go test ./...
-cd frontend && npm run build     # runs tsc -b, so it type-checks too
+cd frontend && npm ci && npm run build   # runs tsc -b, so it type-checks too (and fills frontend/dist, which the Go root package embeds)
+cd .. && go build ./... && go vet ./... && go test ./...
+python -m pytest sidecar/tests            # needs imference-engine[tools] (see above)
 ```
 
 CI builds the full app for Windows and macOS on a tagged release, so a change

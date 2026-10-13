@@ -171,7 +171,8 @@ export function ToolDialog({
     setResultSrc(null);
     setProgress(null);
     setShowBefore(false);
-    setHasMask(false);
+    // Switching eraser <-> repaint keeps the painted mask (same editor).
+    setHasMask(maskRef.current ? !maskRef.current.isEmpty() : false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolKey, src.name]);
 
@@ -430,14 +431,7 @@ export function ToolDialog({
                     {firstSaved?.savedName && (
                       <div className="grid gap-1.5">
                         {resultSrc && firstSaved.type !== "video" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onPointerDown={() => setShowBefore(true)}
-                            onPointerUp={() => setShowBefore(false)}
-                            onPointerLeave={() => setShowBefore(false)}
-                            onClick={() => setShowBefore((b) => !b)}
-                          >
+                          <Button variant="outline" size="sm" onClick={() => setShowBefore((b) => !b)}>
                             <SplitSquareHorizontal className="size-3.5" />
                             {showBefore ? t("tools.showingBefore") : t("tools.beforeAfter")}
                           </Button>

@@ -50,7 +50,12 @@ pip install torch --index-url https://download.pytorch.org/whl/cu124
 
 # 3. imference-engine with the image-backend extras (keep the tag in sync with
 #    EngineTarball in internal/installer/installer.go)
-pip install "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.5.tar.gz"
+pip install "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2,tools] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.0.tar.gz"
+#    (or, from a checkout: pip install -e "C:\path\to\imference-engine[sdxl,...,tools]")
+
+# 3b. GPU flavor of onnxruntime for the editing tools (replaces the CPU wheel)
+# NVIDIA:            pip uninstall -y onnxruntime && pip install onnxruntime-gpu
+# Windows (AMD/Intel): pip uninstall -y onnxruntime && pip install onnxruntime-directml
 
 # 4. Sidecar deps (runqy-python)
 pip install -r "C:\git windows\imference-desktop-go\sidecar\requirements.txt"
@@ -73,3 +78,37 @@ Wait for `{"status": "ready"}` on stdout, then send a task line on stdin:
 ```
 
 You'll get back a `{"task_id":"t1","result":{"seeds":[...],"images":["<base64>"],...}}` line.
+
+## Editing-tools sidecar (`tools_main.py`)
+
+A second, light process for the editing tools (`imference_engine.tools`):
+upscale, remove background, eraser, click-to-select, restore faces, describe,
+image and video utilities. It loads no generation model, is started by the app
+on the first local tool run and stopped after a few idle minutes (models
+released first). Same runqy stdio protocol; the payload carries an `op`:
+
+```
+{"task_id":"t1","payload":{"op":"run","job_id":"j1","tool_id":"resize","inputs":{"image":"C:\\in.png"},"params":{"width":512},"output_dir":"C:\\out"}}
+-> {"task_id":"t1","result":{"ok":true,"result":{"tool_id":"resize","outputs":[{"name":"image","type":"image","format":"png","path":"C:\\out\\resize-1a2b3c4d.png",...}],...}}}
+{"task_id":"t2","payload":{"op":"release"}}   -> {"ok":true,"released":2}
+{"task_id":"t3","payload":{"op":"catalog"}}   -> {"ok":true,"catalog":{...}}
+{"task_id":"t4","payload":{"op":"probe"}}     -> {"ok":true,"providers":[...],"ffmpeg":true,"torch_device":"cuda","ram_gb":31.9}
+```
+
+Failures are typed: `{"ok":false,"error":{"code":"oom","message":"..."}}`
+(codes: `invalid_input`, `too_large`, `unsupported_runtime`, `weights_missing`,
+`oom`, `timeout`, `internal`). Outputs are always files under `output_dir` —
+never base64 on stdout. Progress goes to stderr as
+`IMTOOL_PROGRESS {"task_id":"<job_id>","stage":"loading","fraction":0.5}`
+(stages `downloading_weights`, `loading`, `running`, `encoding`).
+
+Env: `IMFERENCE_TOOLS_DEVICE` (auto | cpu | cuda | directml | rocm | mps),
+`TOOLS_MODEL_CDN` (weights mirror, default `<IMAGE_MODEL_CDN>/tools`),
+`TOOLS_MODEL_CACHE` (weights cache).
+
+The generation tools (vary / inpaint / outpaint) run in `main.py` instead, on
+the loaded model: a `generate` payload with a `tool_id` (+ `job_id`, `inputs`,
+`params`, `output_dir`) answers `{"tool": <ToolResult>}` or
+`{"tool_error": {code, message}}`.
+
+Tests: `python -m pytest sidecar/tests` (needs `imference-engine[tools]`).

@@ -66,6 +66,12 @@ type App struct {
 	emitter      func(name string, data ...any)
 	webOutputDir string
 	cloudOnly    bool
+	// clientGallery (web): the gallery lives on the user's own disk, in the
+	// browser. Results are returned (image + metadata) instead of written;
+	// resumed cloud jobs wait in an outbox until the browser takes them.
+	clientGallery bool
+	outboxPath    string
+	outboxMu      sync.Mutex
 
 	bus       *logbus.Bus
 	settings  *settings.Store
@@ -128,9 +134,10 @@ func NewApp() *App {
 // config dir (settings + pending cloud jobs) and gallery folder. The zero value
 // is the desktop: OS user dirs, local engine available.
 type appOptions struct {
-	configDir string // "" = <UserConfigDir>/imference-desktop-go
-	outputDir string // "" = settings / default Pictures folder
-	cloudOnly bool
+	configDir     string // "" = <UserConfigDir>/imference-desktop-go
+	outputDir     string // "" = settings / default Pictures folder
+	cloudOnly     bool
+	clientGallery bool // web: results go back to the browser, which saves them on the user's disk
 }
 
 func newApp(opts appOptions) *App {
@@ -208,8 +215,12 @@ func newApp(opts appOptions) *App {
 		modelCache: cacheStore,
 		components: components.New(bus),
 
-		webOutputDir: opts.outputDir,
-		cloudOnly:    opts.cloudOnly,
+		webOutputDir:  opts.outputDir,
+		cloudOnly:     opts.cloudOnly,
+		clientGallery: opts.clientGallery,
+	}
+	if opts.clientGallery && opts.configDir != "" {
+		a.outboxPath = filepath.Join(opts.configDir, "gallery-outbox.json")
 	}
 	a.sidecar = sidecar.New(scriptPath, logDir, a.broadcastSidecarStatus, bus)
 	a.sidecar.SetProgressListener(a.broadcastGenerateProgress)
@@ -719,6 +730,11 @@ func (a *App) resumeOne(job types.PendingCloudJob) {
 		meta = *job.Meta
 	}
 	a.autoSave(&result, meta)
+	if a.clientGallery {
+		// Nobody may be watching (the tab is closed): keep the result until
+		// the browser takes it and saves it on the user's disk.
+		a.outboxAdd(job.JobID, result)
+	}
 	a.dropPendingCloud(job.JobID)
 	a.emitCloudResolved(job.JobID, &result, "")
 	a.bus.Info("app", "resumed cloud job", map[string]any{"job": job.JobID, "request_id": job.RequestID})
@@ -2122,6 +2138,12 @@ func (a *App) autoSave(result *types.GenerationResult, meta types.GenerationMeta
 	meta.Source = result.Source
 	meta.Seed = result.Seed
 	meta.CreatedAt = time.Now().Format(time.RFC3339)
+	if a.clientGallery {
+		// Web: the browser writes the file + sidecar into the user's folder.
+		result.Meta = &meta
+		result.SavedPath = ""
+		return
+	}
 	path, metaErr, err := imagesink.SaveWithMeta(result.ImageBase64, result.Source, result.Seed, dir, meta)
 	if err != nil {
 		a.bus.Warn("app", "auto-save failed", map[string]any{"err": err.Error(), "dir": dir})

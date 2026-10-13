@@ -5,6 +5,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"context"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,8 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"imference-desktop-go/internal/types"
 )
 
 // mockAPI is a minimal imference.com: generate -> status -> blob.
@@ -110,15 +113,25 @@ func (c *client) call(name string, args ...any) (int, map[string]any) {
 	return c.post("/web/call", map[string]any{"methodName": "main.App." + name, "args": args}, true)
 }
 
+// startServer keeps the gallery on the server (the original prototype mode);
+// startClientGallery runs the default web mode (gallery on the user's disk).
 func startServer(t *testing.T, apiBase string) (*webServer, *httptest.Server) {
-	return startServerAt(t, apiBase, "")
+	return startServerWith(t, apiBase, "", true)
 }
 
 func startServerAt(t *testing.T, apiBase, basePath string) (*webServer, *httptest.Server) {
+	return startServerWith(t, apiBase, basePath, true)
+}
+
+func startClientGallery(t *testing.T, apiBase string) (*webServer, *httptest.Server) {
+	return startServerWith(t, apiBase, "", false)
+}
+
+func startServerWith(t *testing.T, apiBase, basePath string, serverGallery bool) (*webServer, *httptest.Server) {
 	t.Helper()
 	assets := fstest.MapFS{"index.html": {Data: []byte("<!doctype html><title>app</title>")}}
 	srv := newWebServer(webConfig{
-		basePath: basePath, dataDir: t.TempDir(), apiBase: apiBase, idleAfter: time.Minute,
+		basePath: basePath, dataDir: t.TempDir(), apiBase: apiBase, idleAfter: time.Minute, serverGallery: serverGallery,
 		checkKey: func(_ context.Context, key string) error {
 			if strings.HasPrefix(key, "good") {
 				return nil
@@ -379,5 +392,99 @@ func TestBasePath(t *testing.T) {
 	}
 	if resp, _ := c.hc.Get(hs.URL + "/web/call"); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("routes leak outside the prefix: %d", resp.StatusCode)
+	}
+}
+
+
+// Client gallery (default web mode): the server returns the image and its
+// metadata, writes nothing, and tells the browser which mode it runs.
+func TestClientGalleryGenerateReturnsImageAndWritesNothing(t *testing.T) {
+	api, _ := mockAPI(t)
+	srv, hs := startClientGallery(t, api.URL)
+	c := newClient(t, hs.URL)
+	c.post("/web/login", map[string]string{"apiKey": "good-1"}, true)
+	if _, m := c.post("/web/call", map[string]any{"methodName": "web.GetConfig", "args": []any{}}, true); m["result"].(map[string]any)["gallery"] != "client" {
+		t.Fatalf("GetConfig: %v", m)
+	}
+	c.call("SaveSettings", map[string]any{"cloudModel": "flux-dev"})
+	code, m := c.call("GenerateCloud", map[string]any{"prompt": "a red fox", "width": 512, "height": 512})
+	res := m["result"].(map[string]any)
+	if code != 200 || !strings.HasPrefix(res["imageBase64"].(string), "data:image/png;base64,") || res["savedPath"] != "" {
+		t.Fatalf("GenerateCloud: %d %v", code, res)
+	}
+	meta := res["meta"].(map[string]any)
+	if meta["prompt"] != "a red fox" || meta["source"] != "cloud" || meta["createdAt"] == "" {
+		t.Fatalf("meta: %v", meta)
+	}
+	u, _ := srv.ensureUser("good-1")
+	if entries, _ := os.ReadDir(u.app.outputDir()); len(entries) != 0 {
+		t.Fatalf("server wrote %d gallery files", len(entries))
+	}
+}
+
+func TestClientGalleryOutbox(t *testing.T) {
+	srv, hs := startClientGallery(t, "")
+	c := newClient(t, hs.URL)
+	c.post("/web/login", map[string]string{"apiKey": "good-1"}, true)
+	u, _ := srv.ensureUser("good-1")
+	u.app.outboxAdd("job-1", types.GenerationResult{ImageBase64: "data:image/png;base64,AAAA", Seed: 7, Source: "cloud",
+		Meta: &types.GenerationMeta{Prompt: "p"}})
+	u.app.outboxAdd("job-2", types.GenerationResult{ImageBase64: "data:image/png;base64,BBBB", Seed: 8, Source: "cloud"})
+	_, m := c.call("TakeClientGalleryOutbox")
+	items := m["result"].([]any)
+	if len(items) != 2 || items[0].(map[string]any)["jobId"] != "job-1" {
+		t.Fatalf("outbox: %v", m)
+	}
+	if _, m = c.call("TakeClientGalleryOutbox"); len(m["result"].([]any)) != 0 {
+		t.Fatalf("outbox not cleared: %v", m)
+	}
+	// Survives a restart of the App (persisted next to the user's settings).
+	u.app.outboxAdd("job-3", types.GenerationResult{ImageBase64: "data:image/png;base64,CCCC"})
+	again := newApp(appOptions{configDir: filepath.Dir(u.app.outboxPath), cloudOnly: true, clientGallery: true})
+	if got := again.TakeClientGalleryOutbox(); len(got) != 1 || got[0].JobID != "job-3" {
+		t.Fatalf("persisted outbox: %v", got)
+	}
+}
+
+// A cloud tool run in client-gallery mode hands the output back (data URL +
+// metadata, with the source image's metadata sent by the browser) and saves
+// nothing on the server.
+func TestClientGalleryToolOutputsReturned(t *testing.T) {
+	var srvURL string
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/tools/upscale":
+			_, _ = w.Write([]byte(`{"request_id":"t1","kind":"tool","credits":4}`))
+		case "/status":
+			_, _ = w.Write([]byte(`{"data":{"Outputs":[{"url":"` + srvURL + `/blob/o.png","name":"image","type":"image","format":"png","seed":0,"width":2,"height":2}]}}`))
+		case "/blob/o.png":
+			_, _ = w.Write(tinyPNG())
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer api.Close()
+	srvURL = api.URL
+	srv, hs := startClientGallery(t, api.URL)
+	c := newClient(t, hs.URL)
+	c.post("/web/login", map[string]string{"apiKey": "good-1"}, true)
+	src := "data:image/png;base64," + base64.StdEncoding.EncodeToString(tinyPNG())
+	code, m := c.call("RunTool", map[string]any{"toolId": "upscale", "inputs": map[string]any{"image": []string{src}},
+		"params": map[string]any{"scale": 2}, "sourceMeta": map[string]any{"prompt": "original prompt", "modelCode": "flux-dev"}})
+	res := m["result"].(map[string]any)
+	if code != 200 || res["error"] != nil {
+		t.Fatalf("RunTool: %d %v", code, m)
+	}
+	out := res["outputs"].([]any)[0].(map[string]any)
+	if !strings.HasPrefix(out["dataUrl"].(string), "data:image/png;base64,") || out["savedName"] != nil {
+		t.Fatalf("output: %v", out)
+	}
+	meta := out["meta"].(map[string]any)
+	if meta["tool"] != "upscale" || meta["source"] != "tool" || meta["prompt"] != "original prompt" {
+		t.Fatalf("output meta: %v", meta)
+	}
+	u, _ := srv.ensureUser("good-1")
+	if entries, _ := os.ReadDir(u.app.outputDir()); len(entries) != 0 {
+		t.Fatalf("server wrote %d gallery files", len(entries))
 	}
 }

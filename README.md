@@ -200,6 +200,7 @@ How it works — one Go codebase, no business logic in TypeScript:
 | `IMFERENCE_BASE_URL` | `https://imference.com` | API base |
 | `IMFERENCE_WEB_SECURE` | unset | `1` behind HTTPS (Secure cookie) |
 | `IMFERENCE_WEB_BASE` | unset | path prefix, e.g. `/app` behind the imference API proxy |
+| `IMFERENCE_WEB_GALLERY` | unset (`client`) | `server` keeps generated images on the server instead of the user's disk |
 
 Container: `docker build -f Dockerfile.web -t imference-web .` (Node 22 +
 Go 1.25 build stages, distroless non-root runtime, ~28 MB), then
@@ -210,10 +211,23 @@ reverse proxy (`WEB_APP_URL`, see the imference repo README). Base images are
 overridable (`--build-arg NODE_IMAGE=... GO_IMAGE=...`) when Docker Hub
 rate-limits.
 
+**Gallery on the user's disk (default).** The server never keeps images: a
+result comes back to the browser (image + metadata) and
+`src/lib/web-gallery.ts` saves it, in the desktop format
+(`<YYYYMMDD-HHMMSS>_<source>_<seed>.<ext>` + `.json` sidecar), either in a
+folder the user picks (File System Access API: Chrome / Edge / Brave / Opera
+desktop; Settings > Gallery) or in the browser's private storage (OPFS, every
+browser) — the desktop app can point at the same folder and share the gallery.
+`web-runtime.ts` keeps the gallery calls (`ListSavedImages`, `GalleryFacets`,
+`GetSavedImage`, `DeleteSavedImage`) in the browser, saves `GenerateCloud` /
+`RunTool` results, and sends gallery images to tools as data URIs with their
+metadata. Cloud jobs that finish while no tab is open wait in a per-user server
+outbox (`TakeClientGalleryOutbox`) until the next visit. `IMFERENCE_WEB_GALLERY=server`
+keeps the previous server-side gallery.
+
 Prototype limits: sessions live in memory (a restart signs everyone out) and
 the server is single-instance; the API key is stored in the user's
-`settings.json` on the server; no rate limiting; credits only (no x402); the
-gallery lives on the server's disk. `go test -tags "web server" .` covers the
+`settings.json` on the server; no rate limiting; credits only (no x402). `go test -tags "web server" .` covers the
 binding-ID mapping, sign-in/CSRF, the method policy, per-user isolation, the
 event stream and a cloud generation end to end against a mock API.
 

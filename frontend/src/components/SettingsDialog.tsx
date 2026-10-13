@@ -26,6 +26,7 @@ import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
 import { CreditSection } from "@/components/CreditSection";
 import { StorageSection } from "@/components/StorageSection";
 import { isWeb } from "@/lib/target";
+import { WebGallerySection } from "@/components/WebGallerySection";
 import { ToolsSection } from "@/components/ToolsSection";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
@@ -41,7 +42,7 @@ type Props = {
   initialSection?: string;
 };
 
-type PaneId = "engine" | "runtime" | "tools" | "cloud" | "paths" | "storage" | "language";
+type PaneId = "engine" | "runtime" | "tools" | "cloud" | "paths" | "storage" | "gallery" | "language";
 
 // Top-level categories. Each is a full pane (icon + title + one-line purpose);
 // only the selected pane renders, so the dialog never becomes one long scroll.
@@ -60,9 +61,13 @@ const PANES: {
   { id: "language", labelKey: "settings.navLanguage", descKey: "settings.languageDesc", icon: Languages },
 ];
 
-// The web build has no local engine, disk or wallet: only cloud panes remain.
-const WEB_PANES: PaneId[] = ["cloud", "language"];
-const VISIBLE_PANES = isWeb ? PANES.filter((p) => WEB_PANES.includes(p.id)) : PANES;
+// The web build has no local engine, disk or wallet: only cloud panes remain,
+// plus "gallery" (where the browser keeps the user's images).
+const WEB_PANES: PaneId[] = ["cloud", "gallery", "language"];
+const GALLERY_PANE = { id: "gallery" as PaneId, labelKey: "web.gallery.nav", descKey: "web.gallery.desc", icon: FolderOpen };
+const VISIBLE_PANES = isWeb
+  ? [...PANES, GALLERY_PANE].filter((p) => WEB_PANES.includes(p.id)).sort((a, b) => WEB_PANES.indexOf(a.id) - WEB_PANES.indexOf(b.id))
+  : PANES;
 
 // Map a deep-link section id (from the palette / payment bar) to its pane, plus
 // an optional element to scroll to once the pane is mounted.
@@ -89,6 +94,8 @@ function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
       return { pane: "storage" };
     case "language":
       return { pane: "language" };
+    case "gallery":
+      return { pane: "gallery" };
     default:
       return { pane: isWeb ? "cloud" : "engine" };
   }
@@ -180,7 +187,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
     });
   }, [onSaved]);
 
-  const active = PANES.find((p) => p.id === pane) ?? PANES[0];
+  const active = VISIBLE_PANES.find((p) => p.id === pane) ?? VISIBLE_PANES[0];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -347,6 +354,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             )}
 
             {pane === "storage" && <StorageSection draft={draft} setDraft={setDraft} />}
+            {pane === "gallery" && isWeb && <WebGallerySection />}
 
             {pane === "tools" && <ToolsSection draft={draft} setDraft={setDraft} />}
 

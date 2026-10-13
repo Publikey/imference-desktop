@@ -63,6 +63,9 @@ type ToolRunRequest struct {
 	Params map[string]any      `json:"params"`
 	RunOn  string              `json:"runOn"`  // auto | local | cloud ("" = the Settings mode)
 	NoSave bool                `json:"noSave"` // transient output (click-to-select): not saved, returned inline
+	// SourceMeta is the source image's metadata when the gallery lives in the
+	// browser (web, client gallery): the server cannot read the sidecar itself.
+	SourceMeta *types.GenerationMeta `json:"sourceMeta,omitempty"`
 }
 
 // ToolRunOutput is one produced output.
@@ -73,7 +76,9 @@ type ToolRunOutput struct {
 	SavedName string `json:"savedName,omitempty"` // gallery file name
 	Path      string `json:"path,omitempty"`      // absolute path (gallery)
 	Text      string `json:"text,omitempty"`
-	DataURL   string `json:"dataUrl,omitempty"` // NoSave runs only
+	DataURL   string `json:"dataUrl,omitempty"` // NoSave runs, and every output with a client gallery
+	// Meta is the sidecar metadata for a client-gallery save (web).
+	Meta *types.GenerationMeta `json:"meta,omitempty"`
 	Width     int    `json:"width,omitempty"`
 	Height    int    `json:"height,omitempty"`
 	Seed      int    `json:"seed,omitempty"`
@@ -484,6 +489,9 @@ func (a *App) runTool(parent context.Context, req ToolRunRequest) (res ToolRunRe
 	if sourceName != "" {
 		sourceMeta = readSidecar(filepath.Join(a.outputDir(), sourceName))
 	}
+	if sourceMeta == nil && a.clientGallery && req.SourceMeta != nil {
+		sourceMeta = req.SourceMeta
+	}
 
 	s := a.settings.Get()
 	mode := req.RunOn
@@ -566,6 +574,23 @@ func (a *App) runTool(parent context.Context, req ToolRunRequest) (res ToolRunRe
 					ro.Text = string(b)
 				}
 			}
+		case a.clientGallery && !req.NoSave:
+			// Web: hand the file + its sidecar metadata to the browser, which
+			// saves them in the user's gallery folder.
+			b, rerr := os.ReadFile(o.path)
+			if rerr != nil {
+				return fail(tools.NewError(tools.CodeInternal, "could not read the result: "+rerr.Error()))
+			}
+			mt := mime.TypeByExtension(strings.ToLower(filepath.Ext(o.path)))
+			if mt == "" {
+				mt = "application/octet-stream"
+			}
+			ro.DataURL = "data:" + mt + ";base64," + base64.StdEncoding.EncodeToString(b)
+			m := meta
+			m.Source, m.Seed = "tool", o.seed
+			m.Width, m.Height = o.width, o.height
+			m.CreatedAt = time.Now().Format(time.RFC3339)
+			ro.Meta = &m
 		case req.NoSave:
 			if st, serr := os.Stat(o.path); serr == nil && st.Size() <= noSaveDataURLMax {
 				if b, rerr := os.ReadFile(o.path); rerr == nil {

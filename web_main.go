@@ -37,11 +37,12 @@ func main() {
 		log.Fatal(err)
 	}
 	srv := newWebServer(webConfig{
-		basePath:  os.Getenv("IMFERENCE_WEB_BASE"),
-		dataDir:   envOr("IMFERENCE_WEB_DATA", "web-data"),
-		apiBase:   os.Getenv("IMFERENCE_BASE_URL"),
-		secure:    os.Getenv("IMFERENCE_WEB_SECURE") == "1",
-		idleAfter: 30 * time.Minute,
+		basePath:      os.Getenv("IMFERENCE_WEB_BASE"),
+		dataDir:       envOr("IMFERENCE_WEB_DATA", "web-data"),
+		apiBase:       os.Getenv("IMFERENCE_BASE_URL"),
+		secure:        os.Getenv("IMFERENCE_WEB_SECURE") == "1",
+		serverGallery: os.Getenv("IMFERENCE_WEB_GALLERY") == "server",
+		idleAfter:     30 * time.Minute,
 	}, dist)
 	go srv.evictLoop()
 	log.Printf("imference-web listening on http://%s (data: %s)", addr, srv.cfg.dataDir)

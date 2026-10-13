@@ -29,11 +29,14 @@ const (
 )
 
 type webConfig struct {
-	basePath  string // "" or e.g. "/app" when served behind the API's /app proxy
-	dataDir   string
-	apiBase   string // "" = https://imference.com
-	secure    bool   // Secure cookie (behind HTTPS)
-	idleAfter time.Duration
+	basePath string // "" or e.g. "/app" when served behind the API's /app proxy
+	dataDir  string
+	apiBase  string // "" = https://imference.com
+	secure   bool   // Secure cookie (behind HTTPS)
+	// serverGallery keeps generated images on the server (IMFERENCE_WEB_GALLERY=server).
+	// Default: the gallery lives on the user's disk, written by the browser.
+	serverGallery bool
+	idleAfter     time.Duration
 	// checkKey validates an API key; nil = ask the imference API (GET /credits/balance).
 	checkKey func(ctx context.Context, apiKey string) error
 }
@@ -140,7 +143,8 @@ func (s *webServer) ensureUser(apiKey string) (*webUser, error) {
 	if err := os.MkdirAll(filepath.Join(root, "gallery"), 0o700); err != nil {
 		return nil, err
 	}
-	app := newApp(appOptions{configDir: root, outputDir: filepath.Join(root, "gallery"), cloudOnly: true})
+	app := newApp(appOptions{configDir: root, outputDir: filepath.Join(root, "gallery"), cloudOnly: true,
+		clientGallery: !s.cfg.serverGallery})
 	u := &webUser{id: uid, apiKey: apiKey, app: app, subs: map[chan []byte]struct{}{}, lastSeen: time.Now()}
 	app.ctx = context.Background()
 	if s.cfg.apiBase != "" {
@@ -273,6 +277,14 @@ func (s *webServer) call(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad request: " + err.Error()})
 		return
 	}
+	if req.MethodName == "web.GetConfig" {
+		gallery := "client"
+		if s.cfg.serverGallery {
+			gallery = "server"
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"result": map[string]any{"gallery": gallery}})
+		return
+	}
 	m, err := s.rpc.lookup(req)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
@@ -392,6 +404,7 @@ func checkKeyRemote(ctx context.Context, base, key string) error {
 const loginHTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Imference · Sign in</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
 <style>
 :root{color-scheme:light dark;--bg:#f6f8fb;--card:#fff;--fg:#0f172a;--muted:#64748b;--line:#e2e8f0;--acc:#0b72e7}
 @media (prefers-color-scheme:dark){:root{--bg:#0b1020;--card:#121a2e;--fg:#e2e8f0;--muted:#94a3b8;--line:#22304d}}

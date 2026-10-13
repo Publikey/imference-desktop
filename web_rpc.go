@@ -28,6 +28,7 @@ var webAllow = map[string]bool{
 	"GetLogs": true, "ClearLogs": true, "LogFromFrontend": true,
 	"ListCloudLoras": true, "ListCatalogLoras": true,
 	"ListTools": true, "GetToolsSettings": true, "CancelTool": true, "RunTool": true, "ListEditModels": true,
+	"TakeClientGalleryOutbox": true,
 }
 
 var webStub = map[string]bool{

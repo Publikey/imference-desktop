@@ -930,6 +930,21 @@
   },
   "web": {
     "signOut": "Sign out",
-    "apiKeyHint": "Signed in with this key. Sign out to use another one."
+    "apiKeyHint": "Signed in with this key. Sign out to use another one.",
+    "gallery": {
+      "nav": "Gallery",
+      "desc": "Where your images are kept, on your side.",
+      "folder": "Folder: {{name}}",
+      "browser": "Browser storage",
+      "folderHint": "Images and their settings are saved in this folder on your computer, in the same format as Imference Desktop: point both apps at the same folder to share one gallery.",
+      "browserHint": "Images are kept in this browser's private storage on your computer. They are not visible as files and are deleted if you clear this site's data.",
+      "chooseFolder": "Use a folder on my computer…",
+      "changeFolder": "Choose another folder…",
+      "useBrowser": "Use browser storage instead",
+      "reconnect": "Allow access to the folder",
+      "unsupported": "This browser cannot write to a folder (Chrome, Edge or Brave can): images stay in the browser's storage.",
+      "privacy": "Your images are never stored on our servers: a result is uploaded by the generator, handed to your browser, saved here, and the cloud copy expires within 24 hours.",
+      "bannerText": "Your gallery folder needs your permission again to be read."
+    }
   }
 }

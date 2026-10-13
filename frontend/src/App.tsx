@@ -97,6 +97,7 @@ import type {
 } from "@/lib/types";
 import { Browser } from "@wailsio/runtime";
 import { isWeb } from "@/lib/target";
+import { WebGalleryBanner } from "@/components/WebGallerySection";
 
 // Module-load side effect: install console + window error hooks before any
 // component renders. The api wrapping itself happens inside wails-bridge.ts
@@ -1629,6 +1630,7 @@ export default function App() {
         <span className="aurora-blob aurora-blob-2" />
         <span className="aurora-blob aurora-blob-3" />
       </div>
+      {isWeb && <WebGalleryBanner />}
       <Header
         appVersion={appVersion}
         sidecar={sidecar}
@@ -4219,7 +4221,7 @@ function TileContextMenu({
             onClick={run(() => void navigator.clipboard?.writeText(meta.prompt).catch(() => {}))}
           />
         )}
-        {target.savedPath && (
+        {target.savedPath && !isWeb && (
           <MenuItem
             icon={<FolderOpen />}
             label={t("gallery.ctxReveal")}
@@ -4430,7 +4432,7 @@ function Lightbox({
               <Copy className="size-5" />
             </button>
           )}
-          {current.savedPath && (
+          {current.savedPath && !isWeb && (
             <button type="button" className={iconBtn} title={t("gallery.ctxReveal")} aria-label={t("gallery.ctxReveal")} onClick={() => void api.revealInFolder(current.savedPath!).catch(() => {})}>
               <FolderOpen className="size-5" />
             </button>

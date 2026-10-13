@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:dev": "tsc -b && vite build --mode development --minify false",
+    "build:web": "tsc -b && vite build --mode web",
     "preview": "vite preview"
   },
   "dependencies": {

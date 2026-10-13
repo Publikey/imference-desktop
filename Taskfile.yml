@@ -32,6 +32,23 @@ tasks:
     cmds:
       - task: "{{.GOOS}}:run"
 
+  build:web:
+    summary: Builds the web version (cloud only) — bin/imference-web
+    cmds:
+      - cd frontend && {{.PACKAGE_MANAGER}} run build:web
+      - go build -tags "web server" -o {{.BIN_DIR}}/imference-web .
+
+  run:web:
+    summary: Builds and runs the web version on http://127.0.0.1:8090
+    deps: [build:web]
+    cmds:
+      - ./{{.BIN_DIR}}/imference-web
+
+  test:web:
+    summary: Tests the web server (needs frontend/dist-web, see build:web)
+    cmds:
+      - go test -tags "web server" -run "Binding|Login|Policy|Users|Events|GenerateCloud|Evict" .
+
   dev:
     summary: Runs the application in development mode
     cmds:

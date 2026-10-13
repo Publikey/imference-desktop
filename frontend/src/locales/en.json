@@ -927,5 +927,9 @@
       "galleryEmpty": "No images in the gallery yet.",
       "more": "More"
     }
+  },
+  "web": {
+    "signOut": "Sign out",
+    "apiKeyHint": "Signed in with this key. Sign out to use another one."
   }
 }

@@ -60,6 +60,13 @@ type App struct {
 	// Used to emit events to the renderer (a.app.Event.Emit). nil until startup.
 	app *application.App
 
+	// Web build (web_main.go): a per-session event sink replacing the Wails
+	// window, a fixed per-user gallery folder, and cloudOnly, which keeps every
+	// local-engine path (sidecar, installer, local tools, file pickers) off.
+	emitter      func(name string, data ...any)
+	webOutputDir string
+	cloudOnly    bool
+
 	bus       *logbus.Bus
 	settings  *settings.Store
 	sidecar   *sidecar.Manager
@@ -114,9 +121,28 @@ type App struct {
 }
 
 func NewApp() *App {
+	return newApp(appOptions{})
+}
+
+// appOptions lets the web build run one cloud-only App per user, with its own
+// config dir (settings + pending cloud jobs) and gallery folder. The zero value
+// is the desktop: OS user dirs, local engine available.
+type appOptions struct {
+	configDir string // "" = <UserConfigDir>/imference-desktop-go
+	outputDir string // "" = settings / default Pictures folder
+	cloudOnly bool
+}
+
+func newApp(opts appOptions) *App {
 	bus := logbus.New()
 
-	store, err := settings.New()
+	var store *settings.Store
+	var err error
+	if opts.configDir != "" {
+		store, err = settings.NewAt(filepath.Join(opts.configDir, "settings.json"))
+	} else {
+		store, err = settings.New()
+	}
 	if err != nil {
 		// Failing here would mean we can't find UserConfigDir on this OS —
 		// effectively a misconfigured host. Surface to stderr; the UI will
@@ -125,23 +151,35 @@ func NewApp() *App {
 		panic(fmt.Errorf("settings store: %w", err))
 	}
 
-	logDir, _ := os.UserConfigDir()
-	logDir = filepath.Join(logDir, "imference-desktop-go")
+	logDir := opts.configDir
+	if logDir == "" {
+		logDir, _ = os.UserConfigDir()
+		logDir = filepath.Join(logDir, "imference-desktop-go")
+	}
 
 	// The sidecar Python script is optional and NOT embedded: a packaged/portable
 	// build has no sidecar/ folder beside it, so this resolves only in a dev
 	// checkout. Missing → the local engine is unavailable (cloud still works);
 	// don't crash the whole app. The empty path makes sidecar.Start() no-op/fail
 	// gracefully instead of paniquing at construction.
-	scriptPath, err := resolveSidecarScript()
-	if err != nil {
-		bus.Warn("app", "sidecar script not found — local engine unavailable (cloud only)", map[string]any{"err": err.Error()})
-		scriptPath = ""
+	scriptPath := ""
+	if !opts.cloudOnly {
+		scriptPath, err = resolveSidecarScript()
+		if err != nil {
+			bus.Warn("app", "sidecar script not found — local engine unavailable (cloud only)", map[string]any{"err": err.Error()})
+			scriptPath = ""
+		}
 	}
 
 	// Pending-cloud store is best-effort: a failure here (rare — same UserConfigDir
 	// as settings) just disables resume, it must not stop the app booting.
-	cloudStore, cjErr := cloudjobs.New()
+	var cloudStore *cloudjobs.Store
+	var cjErr error
+	if opts.configDir != "" {
+		cloudStore, cjErr = cloudjobs.NewAt(filepath.Join(opts.configDir, "pending-cloud.json"))
+	} else {
+		cloudStore, cjErr = cloudjobs.New()
+	}
 	if cjErr != nil {
 		bus.Warn("app", "pending-cloud store unavailable — interrupted cloud jobs won't resume", map[string]any{"err": cjErr.Error()})
 	}
@@ -150,7 +188,9 @@ func NewApp() *App {
 	// downloads and runs models, it just can't enforce a quota or list what's
 	// cached. Never a reason to fail startup.
 	var cacheStore *modelcache.Store
-	if dir, mdErr := modelsDir(); mdErr == nil {
+	if opts.cloudOnly {
+		// no local weights in the web build
+	} else if dir, mdErr := modelsDir(); mdErr == nil {
 		if mc, mcErr := modelcache.New(dir); mcErr == nil {
 			cacheStore = mc
 		} else {
@@ -167,6 +207,9 @@ func NewApp() *App {
 		cloudBusy:  map[string]bool{},
 		modelCache: cacheStore,
 		components: components.New(bus),
+
+		webOutputDir: opts.outputDir,
+		cloudOnly:    opts.cloudOnly,
 	}
 	a.sidecar = sidecar.New(scriptPath, logDir, a.broadcastSidecarStatus, bus)
 	a.sidecar.SetProgressListener(a.broadcastGenerateProgress)
@@ -186,10 +229,10 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 	// from this point streams to the renderer's <LogPanel/>. The emitter shape
 	// (name, ...data) maps directly onto v3's variadic Event.Emit.
 	a.bus.SetEmitter(func(eventName string, data ...any) {
-		if a.app == nil {
+		if !a.canEmit() {
 			return
 		}
-		a.app.Event.Emit(eventName, data...)
+		a.emit(eventName, data...)
 	})
 	a.bus.Info("app", "startup", nil)
 	// Agents' local tools API (127.0.0.1, token in local-api.json).
@@ -286,18 +329,34 @@ func (a *App) ServiceShutdown() error {
 	return nil
 }
 
+// canEmit reports whether events can reach a renderer: the Wails window
+// (desktop) or the web session's event stream (web build).
+func (a *App) canEmit() bool { return a.emitter != nil || a.app != nil }
+
+// emit sends an event to the renderer. The web build installs its own emitter
+// (per-session event stream); the desktop uses the Wails application.
+func (a *App) emit(name string, data ...any) {
+	if a.emitter != nil {
+		a.emitter(name, data...)
+		return
+	}
+	if a.app != nil {
+		a.app.Event.Emit(name, data...)
+	}
+}
+
 func (a *App) broadcastSidecarStatus(s types.SidecarStatus) {
-	if a.app == nil {
+	if !a.canEmit() {
 		return // Wails hasn't called ServiceStartup yet — nothing to emit to.
 	}
-	a.app.Event.Emit("sidecar:status", s)
+	a.emit("sidecar:status", s)
 }
 
 func (a *App) broadcastGenerateProgress(p types.GenerateProgress) {
-	if a.app == nil {
+	if !a.canEmit() {
 		return
 	}
-	a.app.Event.Emit("generate:progress", p)
+	a.emit("generate:progress", p)
 }
 
 // ------------------------------------------------------------------------
@@ -668,10 +727,10 @@ func (a *App) resumeOne(job types.PendingCloudJob) {
 // emitCloudResolved notifies the renderer that a resumed job finished (or
 // failed). The frontend settles the matching Activity row.
 func (a *App) emitCloudResolved(jobID string, result *types.GenerationResult, errMsg string) {
-	if a.app == nil {
+	if !a.canEmit() {
 		return
 	}
-	a.app.Event.Emit("cloud:resolved", map[string]any{
+	a.emit("cloud:resolved", map[string]any{
 		"jobId":  jobID,
 		"result": result,
 		"error":  errMsg,
@@ -884,8 +943,8 @@ func (a *App) SelectLocalModel(modelCode string) error {
 	newPath := filepath.Join(dir, cacheKey)
 
 	emit := func(p types.InstallProgress) {
-		if a.app != nil {
-			a.app.Event.Emit("model:progress", p)
+		if a.canEmit() {
+			a.emit("model:progress", p)
 		}
 	}
 
@@ -1052,8 +1111,8 @@ func (a *App) refreshCatalogSnapshots() {
 	}
 	a.bus.Info("app", "model snapshots refreshed from the catalog", nil)
 	// The renderer read settings at mount, before this could finish — tell it.
-	if a.app != nil {
-		a.app.Event.Emit("settings:changed", s)
+	if a.canEmit() {
+		a.emit("settings:changed", s)
 	}
 }
 
@@ -1189,8 +1248,8 @@ func (a *App) backfillCustomRefImages() {
 		return
 	}
 	a.bus.Info("app", "custom model capabilities backfilled", nil)
-	if a.app != nil {
-		a.app.Event.Emit("settings:changed", s)
+	if a.canEmit() {
+		a.emit("settings:changed", s)
 	}
 }
 
@@ -1468,8 +1527,8 @@ func (a *App) sweepQuota(protectKey string) {
 // emitCacheChanged tells the renderer the cache contents moved, so the picker
 // badges and the storage screen refresh.
 func (a *App) emitCacheChanged() {
-	if a.app != nil {
-		a.app.Event.Emit("model:cache", nil)
+	if a.canEmit() {
+		a.emit("model:cache", nil)
 	}
 }
 
@@ -1994,8 +2053,8 @@ func (a *App) DownloadModelComponents(baseRepo, backend string) error {
 		for _, repo := range repos {
 			err := a.components.Download(a.ctx, sidecar.ImageCDNBase(), cacheDir, repo,
 				func(p components.Progress) {
-					if a.app != nil {
-						a.app.Event.Emit("components:progress", p)
+					if a.canEmit() {
+						a.emit("components:progress", p)
 					}
 				})
 			if err != nil {
@@ -2008,15 +2067,15 @@ func (a *App) DownloadModelComponents(baseRepo, backend string) error {
 				}
 				a.bus.Error("app", "components download failed", map[string]any{
 					"repo": repo, "err": err.Error()})
-				if a.app != nil {
-					a.app.Event.Emit("components:error", map[string]any{
+				if a.canEmit() {
+					a.emit("components:error", map[string]any{
 						"baseRepo": repo, "error": err.Error()})
 				}
 				return
 			}
 		}
-		if a.app != nil {
-			a.app.Event.Emit("components:done", map[string]any{"baseRepo": strings.TrimSpace(baseRepo)})
+		if a.canEmit() {
+			a.emit("components:done", map[string]any{"baseRepo": strings.TrimSpace(baseRepo)})
 		}
 	}()
 	return nil
@@ -2089,6 +2148,9 @@ func (a *App) invalidateGalleryCache() {
 // outputDir is where generated images are saved and where the gallery reads
 // from — the user's OutputDir setting, or the default Pictures/Imference.
 func (a *App) outputDir() string {
+	if a.webOutputDir != "" {
+		return a.webOutputDir // web: per-user folder, never a path from the browser
+	}
 	if d := a.settings.Get().OutputDir; d != "" {
 		return d
 	}
@@ -2549,8 +2611,8 @@ func (a *App) InstallEngine() error {
 	// Goroutine #2: forward progress events to the renderer.
 	go func() {
 		for p := range progress {
-			if a.app != nil {
-				a.app.Event.Emit("install:progress", p)
+			if a.canEmit() {
+				a.emit("install:progress", p)
 			}
 		}
 	}()
@@ -2638,8 +2700,8 @@ func (a *App) ensureEngineUpToDate() {
 	}()
 	go func() {
 		for p := range progress {
-			if a.app != nil {
-				a.app.Event.Emit("install:progress", p)
+			if a.canEmit() {
+				a.emit("install:progress", p)
 			}
 		}
 	}()

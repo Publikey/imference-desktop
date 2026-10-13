@@ -37,7 +37,12 @@ func New() (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cloudjobs: locate UserConfigDir: %w", err)
 	}
-	s := &Store{path: filepath.Join(dir, appDirName, fileName)}
+	return NewAt(filepath.Join(dir, appDirName, fileName))
+}
+
+// NewAt is New with an explicit file (the web build keeps one per user).
+func NewAt(path string) (*Store, error) {
+	s := &Store{path: path}
 	if err := s.load(); err != nil {
 		return nil, err
 	}

@@ -26,3 +26,6 @@ sidecar/__pycache__/
 sidecar/*.pyc
 sidecar/.venv/
 __pycache__/
+
+# Web build output (npm run build:web), embedded by the web binary
+frontend/dist-web

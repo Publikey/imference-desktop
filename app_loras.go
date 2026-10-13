@@ -178,8 +178,8 @@ func (a *App) DownloadCatalogLora(code string) error {
 	}
 
 	emit := func(p types.LoraProgress) {
-		if a.app != nil {
-			a.app.Event.Emit("lora:progress", p)
+		if a.canEmit() {
+			a.emit("lora:progress", p)
 		}
 	}
 	go func() {

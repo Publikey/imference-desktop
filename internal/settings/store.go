@@ -36,8 +36,11 @@ func New() (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("settings: locate UserConfigDir: %w", err)
 	}
-	path := filepath.Join(dir, appDirName, fileName)
+	return NewAt(filepath.Join(dir, appDirName, fileName))
+}
 
+// NewAt is New with an explicit settings file (the web build keeps one per user).
+func NewAt(path string) (*Store, error) {
 	s := &Store{path: path}
 	if err := s.reload(); err != nil {
 		return nil, err

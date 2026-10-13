@@ -96,6 +96,7 @@ import type {
   UpdateInfo,
 } from "@/lib/types";
 import { Browser } from "@wailsio/runtime";
+import { isWeb } from "@/lib/target";
 
 // Module-load side effect: install console + window error hooks before any
 // component renders. The api wrapping itself happens inside wails-bridge.ts
@@ -392,7 +393,9 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [sidecar, setSidecar] = useState<SidecarStatus>({ state: "idle" });
   const [prompt, setPrompt] = useState("");
-  const [mode, setMode] = useState<Mode>("local");
+  const [mode, setModeRaw] = useState<Mode>(isWeb ? "cloud" : "local");
+  // The web build has no local engine: every mode switch lands on the cloud.
+  const setMode = useCallback((m: Mode) => setModeRaw(isWeb ? "cloud" : m), []);
   // All generations, newest first. Running ones show a live placeholder; done
   // ones stay as images in the grid.
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -1694,15 +1697,17 @@ export default function App() {
                       </div>
                     )}
                     {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
-                    <ModeToggle
-                      mode={mode}
-                      onModeChange={setMode}
-                      localReady={localReady}
-                      cloudReady={cloudReady}
-                    />
+                    {!isWeb && (
+                      <ModeToggle
+                        mode={mode}
+                        onModeChange={setMode}
+                        localReady={localReady}
+                        cloudReady={cloudReady}
+                      />
+                    )}
 
                     {/* 1b. Payment — cloud only: pick x402 or API key, deep-link to config. */}
-                    {!firstRun && mode === "cloud" && (
+                    {!firstRun && !isWeb && mode === "cloud" && (
                       <PaymentBar
                         settings={settings}
                         onModeChange={setPaymentMode}
@@ -1978,6 +1983,11 @@ export default function App() {
 // Header — frosted, sticky, content-deferential.
 // ---------------------------------------------------------------------------
 
+async function webSignOut() {
+  await fetch("/web/logout", { method: "POST", credentials: "same-origin", headers: { "X-Imference-Web": "1" } });
+  window.location.href = "/login";
+}
+
 function Header({
   appVersion,
   sidecar,
@@ -2018,7 +2028,7 @@ function Header({
             {appVersion === "dev" ? "dev" : appVersion ? `v${appVersion}` : ""}
           </span>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className={isWeb ? "hidden" : "flex items-center gap-2.5"}>
           <EngineControl
             status={sidecar}
             engineInstalled={engineInstalled}
@@ -2055,6 +2065,11 @@ function Header({
           <Settings className="size-4" />
           {t("common.settings")}
         </Button>
+        {isWeb && (
+          <Button variant="ghost" size="sm" onClick={() => void webSignOut()} className="h-9">
+            {t("web.signOut")}
+          </Button>
+        )}
         {/* Logs — discreet, for debugging; a dot signals errors. */}
         <Button
           variant="ghost"

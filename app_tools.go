@@ -260,8 +260,8 @@ func (a *App) emitToolProgress(p tools.Progress) {
 		}
 		a.toolMu.Unlock()
 	}
-	if a.app != nil {
-		a.app.Event.Emit("tools:progress", p)
+	if a.canEmit() {
+		a.emit("tools:progress", p)
 	}
 }
 
@@ -411,6 +411,19 @@ func (a *App) ReleaseTools() error {
 // RunTool runs one tool (see ToolRunRequest) and saves its outputs to the
 // gallery. Tool failures come back in ToolRunResult.Error.
 func (a *App) RunTool(req ToolRunRequest) (ToolRunResult, error) {
+	if a.cloudOnly {
+		// Web build: tools only run in the cloud, and inputs are gallery names
+		// or data URIs — never a path on the server's disk.
+		req.RunOn = tools.ModeCloud
+		for name, vals := range req.Inputs {
+			for _, v := range vals {
+				if filepath.IsAbs(strings.TrimSpace(v)) || strings.Contains(v, "..") {
+					return ToolRunResult{JobID: req.JobID, ToolID: req.ToolID, Outputs: []ToolRunOutput{},
+						Error: &tools.Error{Code: tools.CodeInvalidInput, Message: "input " + name + ": file paths are not accepted on the web", Field: name}}, nil
+				}
+			}
+		}
+	}
 	return a.runTool(a.ctx, req), nil
 }
 

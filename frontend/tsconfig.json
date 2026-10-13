@@ -16,7 +16,8 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "wails-runtime-dist/*": ["./node_modules/@wailsio/runtime/types/*"]
     }
   },
   "include": ["src", "wailsjs/**/*"],

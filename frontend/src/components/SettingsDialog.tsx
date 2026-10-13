@@ -25,6 +25,7 @@ import { WalletSection } from "@/components/WalletSection";
 import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
 import { CreditSection } from "@/components/CreditSection";
 import { StorageSection } from "@/components/StorageSection";
+import { isWeb } from "@/lib/target";
 import { ToolsSection } from "@/components/ToolsSection";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
@@ -59,6 +60,10 @@ const PANES: {
   { id: "language", labelKey: "settings.navLanguage", descKey: "settings.languageDesc", icon: Languages },
 ];
 
+// The web build has no local engine, disk or wallet: only cloud panes remain.
+const WEB_PANES: PaneId[] = ["cloud", "language"];
+const VISIBLE_PANES = isWeb ? PANES.filter((p) => WEB_PANES.includes(p.id)) : PANES;
+
 // Map a deep-link section id (from the palette / payment bar) to its pane, plus
 // an optional element to scroll to once the pane is mounted.
 function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
@@ -85,7 +90,7 @@ function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
     case "language":
       return { pane: "language" };
     default:
-      return { pane: "engine" };
+      return { pane: isWeb ? "cloud" : "engine" };
   }
 }
 
@@ -191,7 +196,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             <DialogTitle className="text-sm font-semibold">{t("settings.title")}</DialogTitle>
           </div>
           <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
-            {PANES.map((p) => {
+            {VISIBLE_PANES.map((p) => {
               const Icon = p.icon;
               const isActive = pane === p.id;
               return (
@@ -243,7 +248,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
 
             {pane === "cloud" && (
               <div className="space-y-5">
-                <div className="grid gap-2">
+                <div className={isWeb ? "hidden" : "grid gap-2"}>
                   <Label className="text-xs">{t("settings.activeMethod")}</Label>
                   <div className="bg-muted/60 grid grid-cols-2 gap-1 rounded-lg p-1">
                     {(
@@ -286,12 +291,15 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                     value={draft.apiKey}
                     onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
                     placeholder={t("settings.apiKeyPlaceholder")}
+                    disabled={isWeb}
                   />
+                  {isWeb && <p className="text-muted-foreground text-xs">{t("web.apiKeyHint")}</p>}
                   <CreditSection apiKey={draft.apiKey} />
                 </div>
 
                 <div
                   id="settings-x402"
+                  hidden={isWeb}
                   className={cn(
                     "bg-card scroll-mt-4 rounded-2xl border p-4 shadow-sm transition-opacity",
                     draft.paymentMode !== "x402" && "opacity-55"

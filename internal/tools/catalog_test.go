@@ -17,7 +17,7 @@ func TestEmbeddedCatalogParses(t *testing.T) {
 	for _, id := range []string{
 		"upscale", "vary", "remove-background", "erase-object", "segment", "outpaint",
 		"inpaint", "restore-faces", "describe", "resize", "crop", "convert", "strip-metadata",
-		"video-trim", "video-convert", "video-concat", "interpolate",
+		"video-trim", "video-convert", "video-concat", "interpolate", "instruct-edit",
 	} {
 		if _, ok := c.Get(id); !ok {
 			t.Errorf("catalog lacks %q", id)
@@ -30,6 +30,46 @@ func TestEmbeddedCatalogParses(t *testing.T) {
 		if len(c.Raw(tool.ID)) == 0 {
 			t.Errorf("%s: no raw JSON", tool.ID)
 		}
+	}
+}
+
+func TestInstructEditEntry(t *testing.T) {
+	c, _ := Builtin()
+	ie, ok := c.Get("instruct-edit")
+	if !ok {
+		t.Fatal("no instruct-edit")
+	}
+	if !ie.IsGeneration() || !ie.CloudAvailable || ie.Runtimes.CloudQueue != "generation" || ie.MCPName != "edit_with_instructions" {
+		t.Errorf("instruct-edit = %+v", ie)
+	}
+	refs, ok := ie.Input("references")
+	if !ok || !refs.Multiple || refs.MaxItems != 2 || refs.Required {
+		t.Errorf("references input = %+v", refs)
+	}
+	if img, _ := ie.Input("image"); !img.Required || ie.Inputs[0].Name != "image" {
+		t.Errorf("image input must come first and be required: %+v", ie.Inputs)
+	}
+	var names []string
+	for _, p := range ie.Params {
+		names = append(names, p.Name)
+	}
+	want := []string{"model", "instruction", "negative_prompt", "steps", "guidance", "keep_size", "seed"}
+	if len(names) != len(want) {
+		t.Fatalf("params = %v, want %v", names, want)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("params = %v, want %v", names, want)
+		}
+	}
+	if ins, _ := ie.Param("instruction"); !ins.Required || ins.MaxLength != 2000 {
+		t.Errorf("instruction = %+v", ins)
+	}
+	if ks, _ := ie.Param("keep_size"); ks.Type != "bool" || ks.Default != true {
+		t.Errorf("keep_size = %+v", ks)
+	}
+	if ie.Runtimes.MinVRAMGB != 12 || ie.Runtimes.MinRAMGB != 64 {
+		t.Errorf("runtimes = %+v", ie.Runtimes)
 	}
 }
 

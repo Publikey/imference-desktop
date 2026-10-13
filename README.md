@@ -91,7 +91,8 @@ available; code signing and silent in-app auto-update are on the roadmap.
 - 🗂️ **A gallery that remembers everything** — every image and video is saved
   with its prompt, model and settings. Filter, search, and review in a
   fullscreen viewer.
-- 🪄 **Editing tools** — upscale, vary, remove background, magic eraser with
+- 🪄 **Editing tools** — edit with instructions ("replace the sky with a
+  sunset"), upscale, vary, remove background, magic eraser with
   click-to-select, expand (outpaint), repaint, restore faces, describe, and
   quick utilities (resize, crop, convert, strip metadata, video trim/convert)
   right from the gallery — on your machine or in the cloud.
@@ -130,6 +131,19 @@ tool on it. Every tool shows where it will run before you start:
   *Expand* run on the generation model you have loaded (any model that does
   image-to-image). Results land in your gallery with a **tool** badge and the
   tool's settings in their metadata; you can chain another tool on a result.
+- **Edit with instructions.** Describe the change in plain words ("replace
+  the sky with a sunset", "remove the man on the left", "make it a watercolor")
+  and optionally add up to two reference images ("put the hat from image 2 on
+  the cat"). It uses an instruction-edit model (Qwen-Image-Edit 2511), not
+  your text-to-image model; the instruction is saved as the result's prompt.
+  - *Local*: load an edit model (Qwen-Image-Edit) as your local model. It
+    needs a CUDA or ROCm GPU with about **12 GB of VRAM** (the app streams the
+    20B transformer with group offload) and about **64 GB of RAM**. An edit
+    model can't generate from a prompt: while it is loaded, Generate points
+    you to *Edit with instructions*, and *Vary / Repaint / Expand* run in the
+    cloud.
+  - *Otherwise* it runs in the cloud on `qwen-image-edit-2511` (or another
+    edit model you pick in the dialog) at that model's price.
 - **Local API for AI agents.** While the app is open it serves a local API on
   `127.0.0.1` (port 47823 when free) protected by a random token, so agents —
   e.g. the Imference MCP server with `run_on: local` — can run tools on your
@@ -141,6 +155,10 @@ tool on it. Every tool shows where it will run before you start:
   curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:47823/v1/tools
   curl -H "Authorization: Bearer $TOKEN" -X POST http://127.0.0.1:47823/v1/tools/upscale \
        -d '{"inputs": {"image": "/path/to/in.png"}, "params": {"scale": 2}}'
+  # with an edit model loaded: references is a list (up to 2)
+  curl -H "Authorization: Bearer $TOKEN" -X POST http://127.0.0.1:47823/v1/tools/instruct-edit \
+       -d '{"inputs": {"image": "/path/in.png", "references": ["/path/hat.png"]},
+            "params": {"instruction": "put the hat from image 2 on the cat"}}'
   ```
 
   Inputs may be absolute paths, `https://` URLs or `data:` URIs; outputs are

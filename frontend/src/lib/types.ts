@@ -693,6 +693,18 @@ export type ToolProgress = {
   fraction: number;
 };
 
+/** Instruction-edit models for the "Edit with instructions" dialog
+ *  (App.ListEditModels). */
+export type EditModelsInfo = {
+  /** Cloud catalog models whose engine is qwenimage-edit (else "edit" in the name). */
+  cloud: ModelInfo[];
+  /** The cloud model a run uses when none is picked (qwen-image-edit-2511). */
+  defaultCloud: string;
+  /** The loaded local model when it is an edit model. */
+  local?: ModelInfo | null;
+  cloudError?: string;
+};
+
 export type LocalApiInfo = {
   enabled: boolean;
   running: boolean;

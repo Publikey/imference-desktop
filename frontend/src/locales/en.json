@@ -114,7 +114,9 @@
     "downloadComponents": "Shared components required — see the readiness panel above",
     "pickModel": "Pick a model above",
     "preparing": "Preparing {{name}}",
-    "usdPerRun": "{{name}} · ${{usd}} / run"
+    "usdPerRun": "{{name}} · ${{usd}} / run",
+    "editModel": "Edit model: use Edit with instructions",
+    "editModelLong": "This model edits images: it can't generate from a prompt. Open an image in the gallery and use Edit > Edit with instructions, or pick a text-to-image model to generate."
   },
   "progress": {
     "preparing": "Preparing {{name}}",
@@ -396,6 +398,7 @@
     "hintFlux": "FLUX.1 transformer-only checkpoint; needs a base repo.",
     "hintChroma": "FLUX-derived (single T5 encoder); needs a base repo.",
     "hintQwenimage": "20B MMDiT, strong text rendering; needs a base repo.",
+    "hintQwenimageEdit": "Instruction editing (2509 / 2511) transformer-only file; needs a base repo. Edits gallery images via Edit > Edit with instructions — it cannot generate from a prompt.",
     "hintAnima": "Single-file DiT (Cosmos); needs the Anima base repo (Qwen3 encoder + VAE).",
     "hintKrea2": "Krea 2 Turbo transformer-only checkpoint (fp8 or bf16, ComfyUI files load as-is); needs the gated Krea 2 base repo. Heavy: ~13 GB VRAM.",
     "baseModel": "Base model (Hugging Face repo id) — optional",
@@ -761,7 +764,9 @@
       "generation_not_ready": "Start the local engine with a model to run it locally.",
       "no_img2img": "The loaded local model can't take a source image.",
       "generation_on_cpu": "The local engine runs on the CPU — too slow for this tool.",
-      "no_device": "No compatible runtime on this computer."
+      "no_device": "No compatible runtime on this computer.",
+      "no_edit_model": "Load an edit model (e.g. Qwen-Image-Edit 2511) as the local model to run it on this computer.",
+      "edit_model_loaded": "The loaded local model is an edit model: use Edit with instructions, or load an image model."
     },
     "mask": {
       "brush": "Brush",
@@ -799,7 +804,8 @@
       "video-trim": "Trim video",
       "video-convert": "Convert video",
       "video-concat": "Join videos",
-      "interpolate": "Smooth motion"
+      "interpolate": "Smooth motion",
+      "instruct-edit": "Edit with instructions"
     },
     "params": {
       "scale": "Scale",
@@ -830,7 +836,11 @@
       "end": "End (s)",
       "reencode": "Re-encode (frame-accurate)",
       "fps": "FPS",
-      "factor": "Factor"
+      "factor": "Factor",
+      "instruction": "Instruction",
+      "keep_size": "Keep the original size",
+      "steps": "Steps",
+      "guidance": "Guidance"
     },
     "values": {
       "subtle": "Subtle",
@@ -897,7 +907,25 @@
       "video-trim": "Cut a clip to a time range.",
       "video-convert": "Convert to MP4, GIF or WebM.",
       "video-concat": "Join clips end to end.",
-      "interpolate": "Add in-between frames for smoother motion."
+      "interpolate": "Add in-between frames for smoother motion.",
+      "instruct-edit": "Describe a change in plain words: new background, add or remove objects, restyle, fix text."
+    },
+    "instruct": {
+      "placeholder": "e.g. Replace the sky with a sunset. Remove the man on the left. Make it a watercolor painting.",
+      "hint": "Say what to change; everything else is kept. ⌘/Ctrl+Enter to run.",
+      "references": "Reference images (optional, up to {{max}})",
+      "imageN": "image {{n}}",
+      "removeRef": "Remove reference",
+      "fromGallery": "From gallery",
+      "fromFile": "From file…",
+      "refTooLarge": "That file is over {{mb}} MB.",
+      "refNotImage": "That file is not an image.",
+      "localModel": "The loaded local edit model",
+      "onThisComputer": "this computer",
+      "localHint": "Runs in the cloud. To edit on this computer, load an edit model (Qwen-Image-Edit 2511) as the local model: it needs a CUDA or ROCm GPU with about 12 GB of VRAM and about 64 GB of RAM.",
+      "advanced": "Advanced",
+      "galleryEmpty": "No images in the gallery yet.",
+      "more": "More"
     }
   }
 }

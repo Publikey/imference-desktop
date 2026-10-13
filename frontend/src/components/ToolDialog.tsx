@@ -21,12 +21,16 @@ import {
   Cloud,
   Copy,
   Cpu,
+  ChevronDown,
   FolderOpen,
+  ImagePlus,
   ImageIcon,
+  Images,
   Loader2,
   Maximize2,
   Play,
   ShieldAlert,
+  X,
   Square,
   SplitSquareHorizontal,
 } from "lucide-react";
@@ -44,6 +48,7 @@ import { api } from "@/lib/wails-bridge";
 import {
   EDIT_TOOL_IDS,
   HIDDEN_PARAMS,
+  INSTRUCT_EDIT_ID,
   KNOWN_STAGES,
   UTILITY_TOOL_IDS,
   VIDEO_TOOL_IDS,
@@ -56,7 +61,9 @@ import {
 } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 import type {
+  EditModelsInfo,
   GenerationMeta,
+  SavedImage,
   ToolError,
   ToolInfo,
   ToolParamSpec,
@@ -75,6 +82,10 @@ export type ToolSource = {
 };
 
 type Phase = "form" | "running" | "done" | "error";
+
+/** A reference image of "Edit with instructions": the input sent to the tool
+ *  (gallery name or data: URI) and its preview. */
+type RefImage = { input: string; preview: string; label: string };
 
 const MASK_TOOLS = ["erase-object", "inpaint"] as const;
 
@@ -122,6 +133,8 @@ export function ToolDialog({
   const [showBefore, setShowBefore] = useState(false);
   const [hasMask, setHasMask] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [refs, setRefs] = useState<RefImage[]>([]);
+  const [editModels, setEditModels] = useState<EditModelsInfo | null>(null);
   const jobRef = useRef<string>("");
   const maskRef = useRef<MaskEditorHandle>(null);
 
@@ -171,6 +184,7 @@ export function ToolDialog({
     setResultSrc(null);
     setProgress(null);
     setShowBefore(false);
+    setRefs([]);
     // Switching eraser <-> repaint keeps the painted mask (same editor).
     setHasMask(maskRef.current ? !maskRef.current.isEmpty() : false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -192,8 +206,35 @@ export function ToolDialog({
   }, [phase, onClose]);
 
   const isMaskTool = (MASK_TOOLS as readonly string[]).includes(currentId);
+  const isInstruct = currentId === INSTRUCT_EDIT_ID;
   const effectiveCloud = !!tool && (runOn === "cloud" || (runOn === "auto" && tool.badge === "cloud"));
   const sourceInput = src.name ?? srcData ?? "";
+
+  // Edit with instructions: the edit models (cloud catalog + the loaded local
+  // one), re-read when the badge changes (the local model was swapped).
+  useEffect(() => {
+    if (!open || !isInstruct) return;
+    let alive = true;
+    void api
+      .listEditModels()
+      .then((m) => alive && setEditModels(m))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [open, isInstruct, tool?.badge]);
+  // Its cloud model defaults to the catalog's default edit model.
+  useEffect(() => {
+    if (!isInstruct || !editModels?.defaultCloud) return;
+    setParams((p) => (p.model ? p : { ...p, model: editModels.defaultCloud }));
+  }, [isInstruct, editModels?.defaultCloud, toolKey]);
+  // The price follows the picked edit model (the list price is the default's).
+  const pickedEditModel = isInstruct ? editModels?.cloud.find((m) => m.modelCode === params.model) : undefined;
+  const priced: ToolInfo | undefined =
+    tool && pickedEditModel && pickedEditModel.cost > 0
+      ? { ...tool, priceCredits: pickedEditModel.cost, priceIsModel: false }
+      : tool;
+  const instructionMissing = isInstruct && !String(params.instruction ?? "").trim();
 
   const run = async (forceRunOn?: ToolsMode) => {
     if (!tool || !sourceInput) return;
@@ -209,6 +250,7 @@ export function ToolDialog({
       }
       inputs.mask = [mask];
     }
+    if (isInstruct && refs.length) inputs.references = refs.map((r) => r.input);
     const jobId = newToolJobId();
     jobRef.current = jobId;
     setPhase("running");
@@ -357,6 +399,29 @@ export function ToolDialog({
                     {currentId === "outpaint" && (
                       <OutpaintSides params={params} onChange={(k, v) => setParams((p) => ({ ...p, [k]: v }))} />
                     )}
+                    {isInstruct && (
+                      <InstructEditForm
+                        tool={tool}
+                        params={params}
+                        onChange={(k, v) =>
+                          setParams((p) => {
+                            const next = { ...p };
+                            if (v === undefined) delete next[k];
+                            else next[k] = v;
+                            return next;
+                          })
+                        }
+                        refs={refs}
+                        onRefsChange={setRefs}
+                        models={editModels}
+                        cloud={effectiveCloud}
+                        rail={rail}
+                        disabled={phase === "running"}
+                        onSubmit={() => {
+                          if (!instructionMissing && srcData && tool.badge !== "unavailable") void run();
+                        }}
+                      />
+                    )}
                     <ParamsForm
                       tool={tool}
                       params={params}
@@ -371,8 +436,8 @@ export function ToolDialog({
                       }
                       disabled={phase === "running"}
                     />
-                    <RunOnPicker tool={tool} value={runOn} onChange={setRunOn} rail={rail} />
-                    <WhereNotice tool={tool} cloud={effectiveCloud} rail={rail} />
+                    <RunOnPicker tool={priced ?? tool} value={runOn} onChange={setRunOn} rail={rail} />
+                    <WhereNotice tool={priced ?? tool} cloud={effectiveCloud} rail={rail} />
                   </>
                 )}
 
@@ -504,13 +569,13 @@ export function ToolDialog({
                 ) : (
                   <Button
                     className="flex-1"
-                    disabled={!srcData || tool.badge === "unavailable" || (isMaskTool && !hasMask)}
+                    disabled={!srcData || tool.badge === "unavailable" || (isMaskTool && !hasMask) || instructionMissing}
                     onClick={() => void run()}
                   >
                     <Play className="size-3.5" />
                     {effectiveCloud
                       ? t("tools.runCloud", {
-                          price: formatToolPrice(t, tool.priceCredits, rail, tool.priceIsModel),
+                          price: formatToolPrice(t, (priced ?? tool).priceCredits, rail, (priced ?? tool).priceIsModel),
                         })
                       : t("tools.run")}
                   </Button>
@@ -834,6 +899,316 @@ function ErrorPanel({ error, rail, onCloud }: { error: ToolError; rail: string; 
             <Cloud className="size-3.5" /> {t("tools.cloudRetryAction")} <ArrowRight className="size-3.5" />
           </Button>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------------
+// Edit with instructions: the instruction on top, optional reference images,
+// the model, keep size, and an advanced section.
+// ------------------------------------------------------------------------
+
+const REF_MAX_MB = 30;
+
+function InstructEditForm({
+  tool,
+  params,
+  onChange,
+  refs,
+  onRefsChange,
+  models,
+  cloud,
+  rail,
+  disabled,
+  onSubmit,
+}: {
+  tool: ToolInfo;
+  params: Record<string, unknown>;
+  onChange: (name: string, value: unknown) => void;
+  refs: RefImage[];
+  onRefsChange: (r: RefImage[]) => void;
+  models: EditModelsInfo | null;
+  cloud: boolean;
+  rail: string;
+  disabled?: boolean;
+  onSubmit: () => void;
+}) {
+  const { t } = useTranslation();
+  const [advanced, setAdvanced] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [refError, setRefError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const refSpec = tool.inputs.find((i) => i.name === "references");
+  const maxRefs = refSpec?.maxItems ?? 2;
+  const spec = (name: string) => tool.params.find((p) => p.name === name);
+  const instructionSpec = spec("instruction");
+  const addRef = (r: RefImage) => {
+    setRefError(null);
+    if (refs.length >= maxRefs) return;
+    onRefsChange([...refs, r]);
+  };
+  const onFile = (f: File | undefined) => {
+    if (!f) return;
+    if (f.size > REF_MAX_MB * 1024 * 1024) {
+      setRefError(t("tools.instruct.refTooLarge", { mb: REF_MAX_MB }));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result ?? "");
+      if (url.startsWith("data:image/")) addRef({ input: url, preview: url, label: f.name });
+      else setRefError(t("tools.instruct.refNotImage"));
+    };
+    reader.readAsDataURL(f);
+  };
+  const advancedFields = ["negative_prompt", "steps", "guidance", "seed"]
+    .map(spec)
+    .filter((p): p is ToolParamSpec => !!p);
+  const cloudModels = models?.cloud ?? [];
+  const modelValue = String(params.model ?? models?.defaultCloud ?? "");
+
+  return (
+    <div className="space-y-3">
+      {/* The instruction is the hero of this dialog. */}
+      <div className="grid gap-1.5">
+        <label htmlFor="ie-instruction" className="text-xs font-medium">
+          {t("tools.params.instruction")}
+        </label>
+        <Textarea
+          id="ie-instruction"
+          rows={4}
+          autoFocus
+          maxLength={instructionSpec?.maxLength}
+          value={(params.instruction as string) ?? ""}
+          placeholder={t("tools.instruct.placeholder")}
+          onChange={(e) => onChange("instruction", e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              onSubmit();
+            }
+          }}
+          disabled={disabled}
+          className="min-h-24 text-sm"
+        />
+        <p className="text-muted-foreground text-[11px] leading-snug">{t("tools.instruct.hint")}</p>
+      </div>
+
+      {/* Optional reference images ("image 2", "image 3" in the instruction). */}
+      <div className="grid gap-1.5">
+        <span className="text-xs font-medium">
+          {t("tools.instruct.references", { max: maxRefs })}
+        </span>
+        {refs.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {refs.map((r, i) => (
+              <div key={i} className="group relative">
+                <img
+                  src={r.preview}
+                  alt={r.label}
+                  title={r.label}
+                  className="size-16 rounded-lg border object-cover"
+                />
+                <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 text-[10px] text-white">
+                  {t("tools.instruct.imageN", { n: i + 2 })}
+                </span>
+                <button
+                  type="button"
+                  aria-label={t("tools.instruct.removeRef")}
+                  onClick={() => onRefsChange(refs.filter((_, j) => j !== i))}
+                  disabled={disabled}
+                  className="bg-background absolute -top-1.5 -right-1.5 rounded-full border p-0.5 shadow"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {refs.length < maxRefs && (
+          <div className="flex gap-1.5">
+            <Button variant="outline" size="sm" className="flex-1" disabled={disabled} onClick={() => setPicking((p) => !p)}>
+              <Images className="size-3.5" /> {t("tools.instruct.fromGallery")}
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1" disabled={disabled} onClick={() => fileRef.current?.click()}>
+              <ImagePlus className="size-3.5" /> {t("tools.instruct.fromFile")}
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                onFile(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </div>
+        )}
+        {picking && refs.length < maxRefs && (
+          <GalleryPicker
+            onPick={(name, preview) => {
+              addRef({ input: name, preview, label: name });
+              setPicking(false);
+            }}
+          />
+        )}
+        {refError && <p className="text-destructive text-[11px]">{refError}</p>}
+      </div>
+
+      {/* Model: the loaded local edit model, or a cloud edit model. */}
+      <div className="grid gap-1.5">
+        <span className="text-xs font-medium">{t("tools.params.model")}</span>
+        {cloud ? (
+          cloudModels.length > 0 ? (
+            <Select
+              size="sm"
+              fullWidth
+              value={modelValue}
+              onChange={(v) => onChange("model", v)}
+              disabled={disabled}
+              aria-label={t("tools.params.model")}
+            >
+              {!cloudModels.some((m) => m.modelCode === modelValue) && modelValue && (
+                <option value={modelValue}>{modelValue}</option>
+              )}
+              {cloudModels.map((m) => (
+                <option key={m.modelCode} value={m.modelCode}>
+                  {m.name || m.modelCode}
+                  {m.cost > 0 ? ` · ${formatToolPrice(t, m.cost, rail)}` : ""}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <p className="text-muted-foreground text-xs">{modelValue || "qwen-image-edit-2511"}</p>
+          )
+        ) : (
+          <p className="text-xs">
+            {models?.local?.name ?? models?.local?.modelCode ?? t("tools.instruct.localModel")}
+            <span className="text-muted-foreground"> · {t("tools.instruct.onThisComputer")}</span>
+          </p>
+        )}
+        {tool.badge === "cloud" && (
+          <p className="text-muted-foreground text-[11px] leading-snug">{t("tools.instruct.localHint")}</p>
+        )}
+      </div>
+
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox
+          checked={params.keep_size !== false}
+          onCheckedChange={(c) => onChange("keep_size", !!c)}
+          disabled={disabled}
+        />
+        {t("tools.params.keep_size")}
+      </label>
+
+      <div className="border-t pt-2">
+        <button
+          type="button"
+          onClick={() => setAdvanced((a) => !a)}
+          className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 text-xs font-medium"
+          aria-expanded={advanced}
+        >
+          <ChevronDown className={cn("size-3.5 transition-transform", advanced && "rotate-180")} />
+          {t("tools.instruct.advanced")}
+        </button>
+        {advanced && (
+          <div className="mt-3 space-y-3">
+            {advancedFields.map((p) => (
+              <ParamField
+                key={p.name}
+                toolId={tool.id}
+                spec={p}
+                value={params[p.name]}
+                onChange={(v) => onChange(p.name, v)}
+                disabled={disabled}
+                label={t(`tools.params.${p.name}`, { defaultValue: humanize(p.name) })}
+                hint={t(`tools.paramHints.${tool.id}.${p.name}`, { defaultValue: p.description ?? "" })}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const PICKER_PAGE = 9;
+
+/** A small grid of recent gallery images to pick a reference from. */
+function GalleryPicker({ onPick }: { onPick: (name: string, preview: string) => void }) {
+  const { t } = useTranslation();
+  const [items, setItems] = useState<SavedImage[]>([]);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [done, setDone] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const loadMore = useCallback(
+    async (offset: number) => {
+      setLoading(true);
+      try {
+        const page = await api.listSavedImages(offset, PICKER_PAGE, { engine: "", modelCode: "", source: "", text: "" });
+        const imgs = (page ?? []).filter((x) => x.kind !== "video");
+        setItems((prev) => [...prev, ...imgs]);
+        if ((page ?? []).length < PICKER_PAGE) setDone(true);
+        for (const x of imgs) {
+          void api
+            .getSavedImage(x.name)
+            .then((d) => setThumbs((m) => ({ ...m, [x.name]: d })))
+            .catch(() => {});
+        }
+      } catch {
+        setDone(true);
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+  const offsetRef = useRef(0);
+  useEffect(() => {
+    void loadMore(0);
+    offsetRef.current = PICKER_PAGE;
+  }, [loadMore]);
+
+  return (
+    <div className="space-y-2 rounded-xl border p-2">
+      {items.length === 0 && !loading ? (
+        <p className="text-muted-foreground p-2 text-xs">{t("tools.instruct.galleryEmpty")}</p>
+      ) : (
+        <div className="grid grid-cols-3 gap-1.5">
+          {items.map((x) => (
+            <button
+              key={x.name}
+              type="button"
+              disabled={!thumbs[x.name]}
+              onClick={() => thumbs[x.name] && onPick(x.name, thumbs[x.name])}
+              title={x.meta?.prompt || x.name}
+              className="bg-muted aspect-square overflow-hidden rounded-md border hover:ring-2 hover:ring-[var(--brand-to)]"
+            >
+              {thumbs[x.name] ? (
+                <img src={thumbs[x.name]} alt="" className="size-full object-cover" />
+              ) : (
+                <Loader2 className="text-muted-foreground mx-auto size-4 animate-spin" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+      {!done && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full"
+          disabled={loading}
+          onClick={() => {
+            void loadMore(offsetRef.current);
+            offsetRef.current += PICKER_PAGE;
+          }}
+        >
+          {loading ? <Loader2 className="size-3.5 animate-spin" /> : t("tools.instruct.more")}
+        </Button>
       )}
     </div>
   );

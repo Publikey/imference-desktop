@@ -262,12 +262,12 @@ func TestCloudToolParamsModelChoice(t *testing.T) {
 		{map[string]any{}, nil, types.Settings{}, nil},
 	}
 	for i, c := range cases {
-		got := cloudToolParams(vary, c.params, c.src, c.s)["model"]
+		got := cloudToolParams(vary, c.params, c.src, c.s, "")["model"]
 		if got != c.want {
 			t.Errorf("case %d: model = %v, want %v", i, got, c.want)
 		}
 	}
-	if p := cloudToolParams(up, map[string]any{"scale": 2}, cloudSrc, s); p["model"] != nil {
+	if p := cloudToolParams(up, map[string]any{"scale": 2}, cloudSrc, s, ""); p["model"] != nil {
 		t.Errorf("non-generation tool got a model: %v", p)
 	}
 }

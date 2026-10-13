@@ -40,7 +40,19 @@ type Host struct {
 	GenerationReady   bool   // the generation sidecar is ready
 	GenerationImg2Img bool   // and its backend accepts a source image
 	GenerationDevice  string // its device label ("cuda:0", "cuda:0(rocm)", "mps", "cpu")
+	// GenerationBackend is the loaded model's backend ("sdxl", "qwenimage-edit", …):
+	// instruct-edit needs an edit backend, vary / inpaint / outpaint refuse one.
+	GenerationBackend string
 }
+
+// EditBackends are the engine backends of instruction-edit models (they only
+// edit — no text-to-image, no strength-based img2img).
+var EditBackends = map[string]bool{"qwenimage-edit": true}
+
+// NeedsEditModel reports whether a generation tool runs on an instruction-edit
+// model (instruct-edit) rather than a text-to-image one (vary / inpaint /
+// outpaint).
+func NeedsEditModel(t Tool) bool { return t.ID == "instruct-edit" }
 
 // Assessment is a tool's badge plus the device it would use and why.
 type Assessment struct {
@@ -48,7 +60,8 @@ type Assessment struct {
 	Device string `json:"device,omitempty"` // local device when the badge is local*
 	// Reason is a stable code for the UI tooltip: why the tool is not local
 	// (engine_not_installed, no_onnxruntime, no_ffmpeg, low_ram,
-	// generation_not_ready, no_img2img, generation_on_cpu, no_device) or "".
+	// generation_not_ready, no_img2img, generation_on_cpu, no_device,
+	// no_edit_model, edit_model_loaded) or "".
 	Reason string `json:"reason,omitempty"`
 }
 
@@ -72,7 +85,11 @@ func Assess(t Tool, h Host) Assessment {
 		switch {
 		case !h.GenerationReady:
 			return cloudOr("generation_not_ready")
-		case !h.GenerationImg2Img:
+		case NeedsEditModel(t) && !EditBackends[h.GenerationBackend]:
+			return cloudOr("no_edit_model")
+		case !NeedsEditModel(t) && EditBackends[h.GenerationBackend]:
+			return cloudOr("edit_model_loaded")
+		case !NeedsEditModel(t) && !h.GenerationImg2Img:
 			return cloudOr("no_img2img")
 		}
 		dev := deviceClass(h.GenerationDevice)

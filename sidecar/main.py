@@ -48,6 +48,9 @@ logger = logging.getLogger("imference.sidecar")
 # name. Kept stable so generate() can reference it.
 MODEL_NAME = "local"
 
+# Instruction-edit backends (Qwen-Image-Edit): only the instruct-edit tool.
+EDIT_BACKENDS = ("qwenimage-edit",)
+
 
 def _device_label(dev) -> str:
     """Render the engine's Device for the ready line / result payloads.
@@ -134,12 +137,19 @@ def generate(payload: dict, ctx: dict) -> dict:
     """
     engine = ctx["engine"]
 
-    # Generation editing tools (vary / inpaint / outpaint) run here, on the
-    # loaded model, through imference_engine.tools.run_tool. The result is the
+    # Generation editing tools (vary / inpaint / outpaint, and instruct-edit on
+    # an edit model) run here, on the loaded model, through
+    # imference_engine.tools.run_tool. Multiple inputs (instruct-edit's
+    # "references") arrive as lists of paths. The result is the
     # ToolResult dict with outputs written under output_dir — never base64
     # (the Go reader caps a stdout line at 4 MB).
     if payload.get("tool_id"):
         return _run_tool(payload, engine)
+
+    if ctx.get("backend") in EDIT_BACKENDS:
+        # Instruction-edit models have no text-to-image mode (the Go side
+        # refuses first; this keeps the message clear for any other caller).
+        raise ValueError("this model edits images: use Edit > Edit with instructions")
 
     prompt = payload.get("prompt")
     if not prompt:

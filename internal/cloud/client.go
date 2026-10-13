@@ -363,6 +363,8 @@ func normalizeEngine(imEngine string) string {
 		return "chroma"
 	case "qwenimage", "qwen-image", "qwen_image":
 		return "qwenimage"
+	case "qwenimage-edit", "qwen-image-edit", "qwen_image_edit", "qwenimage_edit":
+		return EditBackend
 	case "anima":
 		return "anima"
 	case "krea2", "krea-2", "krea2-turbo":
@@ -380,10 +382,72 @@ func normalizeEngine(imEngine string) string {
 var imageBackends = map[string]bool{
 	"sdxl": true, "sd15": true, "zimage": true, "flux": true,
 	"chroma": true, "qwenimage": true, "anima": true,
+	// Qwen-Image-Edit: instruction editing only (no text-to-image) — it runs
+	// through the instruct-edit tool, never the Generate flow (IsEditBackend).
+	EditBackend: true,
 	// krea2 loads locally like the others but its fp8-resident transformer
 	// wants ~13 GB VRAM (no sub-module offload in the image engine) — small
 	// cards OOM at load, so catalog rows should gate it via ImLocal.
 	"krea2": true,
+}
+
+// EditBackend is the engine's instruction-edit backend (Qwen-Image-Edit). Its
+// models only edit an existing image from a plain-language instruction: they
+// cannot do text-to-image, so the Generate flow refuses them and the
+// instruct-edit tool is their only use. The heavy 20B DiT gets the same
+// offload treatment as qwenimage (sidecar.resolveOffload).
+const EditBackend = "qwenimage-edit"
+
+// DefaultEditModel is the cloud model the instruct-edit tool uses when the
+// user picked none (and the catalog lists no other edit model first).
+const DefaultEditModel = "qwen-image-edit-2511"
+
+// IsEditBackend reports whether a normalized backend is an instruction-edit one.
+func IsEditBackend(backend string) bool { return backend == EditBackend }
+
+// EditModels filters a catalog list to the instruction-edit models. The
+// backend (im_engine qwenimage-edit) is authoritative when the catalog exposes
+// it on any row; a catalog that doesn't (older server) falls back to a model
+// code / name containing "edit" among the image models.
+func EditModels(models []types.ModelInfo) []types.ModelInfo {
+	out := []types.ModelInfo{}
+	exposed := false
+	for _, m := range models {
+		if IsEditBackend(m.BackendType) {
+			exposed = true
+			break
+		}
+	}
+	for _, m := range models {
+		if exposed {
+			if IsEditBackend(m.BackendType) {
+				out = append(out, m)
+			}
+			continue
+		}
+		if m.ModelType == "video" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(m.ModelCode), "edit") || strings.Contains(strings.ToLower(m.Name), "edit") {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// IsEditModel reports whether one catalog entry is an instruction-edit model
+// (see EditModels for the fallback rule when the backend is unknown).
+func IsEditModel(m *types.ModelInfo) bool {
+	if m == nil {
+		return false
+	}
+	if IsEditBackend(m.BackendType) {
+		return true
+	}
+	if m.BackendType != "" {
+		return false
+	}
+	return len(EditModels([]types.ModelInfo{*m})) == 1
 }
 
 // IsImageBackend reports whether name is a normalized image backend the desktop
@@ -418,6 +482,8 @@ func SupportsRefImages(backend string) bool {
 var singleFileBackends = map[string]bool{
 	"sdxl": true, "sd15": true, "zimage": true,
 	"flux": true, "chroma": true, "qwenimage": true,
+	// Qwen-Image-Edit: a transformer-only single file + the edit base repo.
+	EditBackend: true,
 	// Anima: a single-file DiT (.safetensors) + a base modular repo (encoder /
 	// VAE / config) — the engine's Anima backend injects the DiT into the base.
 	"anima": true,
@@ -450,6 +516,8 @@ func DefaultBaseModel(backend string) string {
 		return "lodestones/Chroma1-HD"
 	case "qwenimage":
 		return "Qwen/Qwen-Image"
+	case EditBackend:
+		return "Qwen/Qwen-Image-Edit-2511"
 	case "anima":
 		return "circlestone-labs/Anima-Base-v1.0-Diffusers"
 	case "krea2":
@@ -601,6 +669,24 @@ func (c *Client) fetchFormats(ctx context.Context) ([]apiFormat, error) {
 	c.formats = parsed.Formats
 	c.formatsFetched = time.Now()
 	return parsed.Formats, nil
+}
+
+// CachedCloudModels returns the cloud-runnable models of the last catalog
+// fetch (any age) without touching the network, or nil when the catalog was
+// never fetched. For cheap lookups on hot paths (tool prices in ListTools).
+func (c *Client) CachedCloudModels() []types.ModelInfo {
+	c.catalogMu.Lock()
+	defer c.catalogMu.Unlock()
+	if c.catalog == nil {
+		return nil
+	}
+	out := make([]types.ModelInfo, 0, len(c.catalog))
+	for _, m := range c.catalog {
+		if m.ImCloud {
+			out = append(out, toModelInfo(m, false))
+		}
+	}
+	return out
 }
 
 // fetchCatalog returns the full (unfiltered) /api/models response, served from

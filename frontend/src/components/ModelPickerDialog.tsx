@@ -23,10 +23,12 @@ const TYPE_LABEL: Record<string, string> = {
   flux: "FLUX",
   chroma: "Chroma",
   qwenimage: "Qwen-Image",
+  // Instruction editing only (Edit > Edit with instructions), no text-to-image.
+  "qwenimage-edit": "Qwen-Image-Edit",
   anima: "Anima",
   wan: "WAN Video",
 };
-const TYPE_ORDER = ["sdxl", "sd15", "zimage", "flux", "chroma", "qwenimage", "anima", "wan"];
+const TYPE_ORDER = ["sdxl", "sd15", "zimage", "flux", "chroma", "qwenimage", "qwenimage-edit", "anima", "wan"];
 // Family groups sort after every local backend, and the nameless bucket last.
 const FAMILY_RANK_BASE = TYPE_ORDER.length;
 const UNGROUPED_RANK = FAMILY_RANK_BASE + 10_000;

@@ -63,6 +63,7 @@ import { CommandPalette, modLabel, type Command } from "@/components/CommandPale
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ToolDialog, type ToolSource } from "@/components/ToolDialog";
 import { ToolMenuList } from "@/components/ToolBits";
+import { isEditModel } from "@/lib/tools";
 import { api } from "@/lib/wails-bridge";
 import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/theme";
@@ -968,7 +969,12 @@ export default function App() {
   // the engine restart is queued behind the click, not in front of it.
   const localCanRun =
     engineInstalled && localCached && sidecar.state !== "error" && !componentsBlocked;
-  const canGenerate = (mode === "cloud" ? cloudReady : localCanRun) && !!prompt.trim();
+  // Instruction-edit models (Qwen-Image-Edit) have no text-to-image mode: they
+  // only run through Edit > Edit with instructions. Generate stays disabled and
+  // the Create panel says where to go instead of failing in the engine.
+  const editModelActive = isEditModel(activeModel);
+  const canGenerate =
+    (mode === "cloud" ? cloudReady : localCanRun) && !!prompt.trim() && !editModelActive;
 
   // IDs of running local jobs the user asked to stop. Stopping hard-restarts the
   // sidecar, so the job's generate() rejects — this set lets settleJob treat that
@@ -1475,6 +1481,7 @@ export default function App() {
   // Hint shown under the composer: what this generation will use (params live in
   // the Parameters panel now, so no steps/cfg duplication here).
   const contextHint = useMemo(() => {
+    if (editModelActive) return t("hint.editModel");
     if (mode === "cloud") {
       if (!cloudConfigured) return t("hint.configurePayment");
       const c = settings?.cloudModelInfo;
@@ -1502,7 +1509,7 @@ export default function App() {
     if (sidecar.state === "starting") return t("hint.engineStarting");
     if (sidecar.state !== "ready") return t("hint.startEngine");
     return settings?.localModel?.name ?? t("hint.pickModel");
-  }, [mode, cloudConfigured, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, componentsBlocked, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, params?.formatCode, params?.durationS, engineInstalled, t]);
+  }, [editModelActive, mode, cloudConfigured, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, componentsBlocked, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, params?.formatCode, params?.durationS, engineInstalled, t]);
 
   // Activity-panel derivations: in-flight count (running + queued) for the badge,
   // finished rows for the Clear action, and the done subset the gallery shows as
@@ -1861,6 +1868,15 @@ export default function App() {
 
                         {/* 6. The run button — last in the panel, but pinned to
                             the bottom of the viewport so it never scrolls away. */}
+                        {editModelActive && (
+                          <div
+                            role="note"
+                            className="flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-200"
+                          >
+                            <Wand2 className="mt-0.5 size-4 shrink-0" />
+                            <p>{t("hint.editModelLong")}</p>
+                          </div>
+                        )}
                         <PrimaryAction action={primary} contextHint={contextHint} mode={mode} />
                       </>
                     )}

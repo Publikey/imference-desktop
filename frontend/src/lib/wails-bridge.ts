@@ -76,6 +76,7 @@ import type {
   ComponentsReadiness,
   ComponentsProgress,
   ToolInfo,
+  EditModelsInfo,
   ToolRunRequest,
   ToolRunResult,
   ToolProgress,
@@ -232,6 +233,8 @@ const raw = {
     ts: ToolsSettings
   ) => Promise<ToolsSettings>,
   getLocalApiInfo: (() => Call.ByName("main.App.GetLocalAPIInfo")) as () => Promise<LocalApiInfo>,
+  // Instruction-edit models (cloud catalog + the loaded local edit model).
+  listEditModels: (() => Call.ByName("main.App.ListEditModels")) as () => Promise<EditModelsInfo>,
   onToolProgress: (cb: (p: ToolProgress) => void): (() => void) =>
     Events.On("tools:progress", (e) => cb(e.data as ToolProgress)),
 

@@ -289,6 +289,7 @@ func (a *App) toolsHost() tools.Host {
 	}
 	if m := s.LocalModel; m != nil {
 		h.GenerationImg2Img = cloud.IsImageBackend(m.BackendType) && cloud.SupportsRefImages(m.BackendType)
+		h.GenerationBackend = m.BackendType
 	}
 	return h
 }
@@ -310,7 +311,13 @@ func (a *App) ListTools() ([]ToolInfo, error) {
 		if t.IsGeneration() {
 			info.PriceIsModel = true
 			info.PriceCredits = 0
-			if s.CloudModelInfo != nil {
+			if tools.NeedsEditModel(t) {
+				// Priced on the edit model the cloud run would use (from the
+				// cached catalog only: ListTools must stay instant offline).
+				if m := a.cachedEditCloudModel(); m != nil {
+					info.PriceCredits = float64(m.Cost)
+				}
+			} else if s.CloudModelInfo != nil {
 				info.PriceCredits = float64(s.CloudModelInfo.Cost)
 			}
 		}
@@ -479,6 +486,11 @@ func (a *App) runTool(parent context.Context, req ToolRunRequest) (res ToolRunRe
 		return fail(rerr)
 	}
 	params := toolParams(t, req.Params, sourceMeta)
+	if tools.NeedsEditModel(t) {
+		if _, ok := params["instruction"]; !ok {
+			return fail(&tools.Error{Code: tools.CodeInvalidInput, Message: "describe the change to make (instruction)", Field: "instruction"})
+		}
+	}
 	outDir := filepath.Join(work, "out")
 	a.bus.Info("tools", "run", map[string]any{"tool": t.ID, "job": req.JobID, "route": string(route), "badge": string(assess.Badge), "device": assess.Device})
 
@@ -497,7 +509,7 @@ func (a *App) runTool(parent context.Context, req ToolRunRequest) (res ToolRunRe
 		}
 	} else {
 		res.RanOn = "cloud"
-		cloudParams := cloudToolParams(t, params, sourceMeta, s)
+		cloudParams := cloudToolParams(t, params, sourceMeta, s, a.editDefaultModel())
 		outs, res.Credits, terr = a.runToolCloud(ctx, req.JobID, t, inputs, cloudParams, outDir)
 		if terr != nil {
 			if job.cancelled.Load() {
@@ -513,6 +525,11 @@ func (a *App) runTool(parent context.Context, req ToolRunRequest) (res ToolRunRe
 	}
 	if t.IsGeneration() {
 		meta.Prompt, _ = params["prompt"].(string)
+		if tools.NeedsEditModel(t) {
+			// The instruction is the run's prompt: "Copy prompt" / "Reuse
+			// settings" / the gallery search show what was asked.
+			meta.Prompt, _ = params["instruction"].(string)
+		}
 		meta.NegativePrompt, _ = params["negative_prompt"].(string)
 		if res.RanOn == "local" && s.LocalModel != nil {
 			meta.ModelCode, meta.ModelName, meta.Engine = s.LocalModel.ModelCode, s.LocalModel.Name, s.LocalModel.BackendType
@@ -584,10 +601,18 @@ type rawOutput struct {
 func (a *App) resolveToolInputs(t tools.Tool, in map[string][]string, work string) (map[string]any, string, *tools.Error) {
 	out := map[string]any{}
 	source := ""
-	for name, vals := range in {
-		spec, ok := t.Input(name)
-		if !ok {
+	for name := range in {
+		if _, ok := t.Input(name); !ok {
 			return nil, "", &tools.Error{Code: tools.CodeInvalidInput, Message: "unknown input " + name, Field: name}
+		}
+	}
+	// Manifest order: the source image is the first image input ("image"),
+	// never a reference image or the mask.
+	for _, spec := range t.Inputs {
+		name := spec.Name
+		vals, ok := in[name]
+		if !ok {
+			continue
 		}
 		var paths []string
 		for i, v := range vals {
@@ -632,6 +657,13 @@ func (a *App) resolveToolInputs(t tools.Tool, in map[string][]string, work strin
 		if len(paths) == 0 {
 			continue
 		}
+		if spec.MaxItems > 0 && len(paths) > spec.MaxItems {
+			return nil, "", &tools.Error{Code: tools.CodeInvalidInput,
+				Message: fmt.Sprintf("input %s: at most %d files", name, spec.MaxItems), Field: name}
+		}
+		if !spec.Multiple && len(paths) > 1 {
+			return nil, "", &tools.Error{Code: tools.CodeInvalidInput, Message: "input " + name + " takes one file", Field: name}
+		}
 		if spec.Multiple {
 			out[name] = paths
 		} else {
@@ -659,6 +691,24 @@ func toolParams(t tools.Tool, in map[string]any, source *types.GenerationMeta) m
 		}
 		out[k] = v
 	}
+	if tools.NeedsEditModel(t) {
+		// instruct-edit has no prompt: its prompt is the instruction (an agent
+		// sending "prompt" means the instruction). The source's generation
+		// prompt describes the old image, not the change — never a default.
+		if p, _ := out["prompt"].(string); p != "" {
+			if ins, _ := out["instruction"].(string); ins == "" {
+				out["instruction"] = p
+			}
+		}
+		delete(out, "prompt")
+		if ins, ok := out["instruction"].(string); ok && strings.TrimSpace(ins) == "" {
+			delete(out, "instruction")
+		}
+		if n, ok := out["negative_prompt"].(string); ok && n == "" {
+			delete(out, "negative_prompt")
+		}
+		return out
+	}
 	if t.IsGeneration() && source != nil {
 		if p, _ := out["prompt"].(string); p == "" && source.Prompt != "" {
 			out["prompt"] = source.Prompt
@@ -672,8 +722,10 @@ func toolParams(t tools.Tool, in map[string]any, source *types.GenerationMeta) m
 
 // cloudToolParams fills the model of a cloud generation tool: an explicit
 // choice wins; else the source image's model when it was made in the cloud;
-// else the selected cloud model; else the source's model.
-func cloudToolParams(t tools.Tool, params map[string]any, source *types.GenerationMeta, s types.Settings) map[string]any {
+// else the selected cloud model; else the source's model. instruct-edit only
+// takes an edit model: the selected cloud model when it is one, else
+// editDefault (see editDefaultFrom).
+func cloudToolParams(t tools.Tool, params map[string]any, source *types.GenerationMeta, s types.Settings, editDefault string) map[string]any {
 	if !t.IsGeneration() {
 		return params
 	}
@@ -682,6 +734,17 @@ func cloudToolParams(t tools.Tool, params map[string]any, source *types.Generati
 		out[k] = v
 	}
 	if m, _ := out["model"].(string); m != "" && m != "local" {
+		return out
+	}
+	if tools.NeedsEditModel(t) {
+		switch {
+		case s.CloudModel != "" && s.CloudModelInfo != nil && s.CloudModelInfo.ModelCode == s.CloudModel && cloud.IsEditModel(s.CloudModelInfo):
+			out["model"] = s.CloudModel
+		case editDefault != "":
+			out["model"] = editDefault
+		default:
+			out["model"] = cloud.DefaultEditModel
+		}
 		return out
 	}
 	switch {
@@ -703,7 +766,7 @@ func (a *App) cloudOffer(t tools.Tool, params map[string]any, source *types.Gene
 	credits := t.Credits
 	if t.IsGeneration() {
 		credits = 0
-		cp := cloudToolParams(t, params, source, s)
+		cp := cloudToolParams(t, params, source, s, a.editDefaultModel())
 		code, _ := cp["model"].(string)
 		switch {
 		case s.CloudModelInfo != nil && s.CloudModelInfo.ModelCode == code:
@@ -800,6 +863,81 @@ func (a *App) runToolCloud(ctx context.Context, jobID string, t tools.Tool, inpu
 			width: o.Width, height: o.Height, seed: seed})
 	}
 	return outs, res.Credits, nil
+}
+
+// ------------------------------------------------------------------------
+// Instruction editing: edit models
+// ------------------------------------------------------------------------
+
+// EditModelsInfo is what the instruct-edit dialog's model selector shows.
+type EditModelsInfo struct {
+	// Cloud lists the catalog's instruction-edit models (cloud.EditModels:
+	// im_engine qwenimage-edit, else a code/name containing "edit").
+	Cloud []types.ModelInfo `json:"cloud"`
+	// DefaultCloud is the model a cloud run uses when none is picked.
+	DefaultCloud string `json:"defaultCloud"`
+	// Local is the loaded local model when it is an edit model (nil otherwise).
+	Local *types.ModelInfo `json:"local,omitempty"`
+	// CloudError is set when the catalog could not be fetched (offline).
+	CloudError string `json:"cloudError,omitempty"`
+}
+
+// ListEditModels returns the instruction-edit models for the dialog.
+func (a *App) ListEditModels() EditModelsInfo {
+	info := EditModelsInfo{Cloud: []types.ModelInfo{}}
+	s := a.settings.Get()
+	if m := s.LocalModel; m != nil && cloud.IsEditBackend(m.BackendType) {
+		lm := *m
+		info.Local = &lm
+	}
+	models, err := a.cloud.ListModels(a.ctx, false)
+	if err != nil {
+		info.CloudError = err.Error()
+	} else {
+		info.Cloud = cloud.EditModels(models)
+	}
+	info.DefaultCloud = editDefaultFrom(info.Cloud, s)
+	return info
+}
+
+// editDefaultFrom picks the default cloud edit model: the selected cloud
+// model when it is an edit model, else qwen-image-edit-2511 when the catalog
+// lists it (or the catalog is unknown), else the catalog's first edit model.
+func editDefaultFrom(editModels []types.ModelInfo, s types.Settings) string {
+	if s.CloudModelInfo != nil && s.CloudModelInfo.ModelCode == s.CloudModel && cloud.IsEditModel(s.CloudModelInfo) {
+		return s.CloudModel
+	}
+	if len(editModels) == 0 {
+		return cloud.DefaultEditModel
+	}
+	for _, m := range editModels {
+		if m.ModelCode == cloud.DefaultEditModel {
+			return m.ModelCode
+		}
+	}
+	return editModels[0].ModelCode
+}
+
+// editDefaultModel resolves the default edit model from the cached catalog
+// (no network: called on the run path, where the catalog is usually warm).
+func (a *App) editDefaultModel() string {
+	return editDefaultFrom(cloud.EditModels(a.cloud.CachedCloudModels()), a.settings.Get())
+}
+
+// cachedEditCloudModel is the default edit model's catalog entry, from the
+// cached catalog (nil when it was never fetched).
+func (a *App) cachedEditCloudModel() *types.ModelInfo {
+	s := a.settings.Get()
+	code := a.editDefaultModel()
+	if s.CloudModelInfo != nil && s.CloudModelInfo.ModelCode == code {
+		return s.CloudModelInfo
+	}
+	for _, m := range a.cloud.CachedCloudModels() {
+		if m.ModelCode == code {
+			return &m
+		}
+	}
+	return nil
 }
 
 // ------------------------------------------------------------------------

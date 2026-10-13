@@ -452,6 +452,10 @@ func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult
 		return types.GenerationResult{}, errors.New("Cloud model not set")
 	}
 
+	if err := editModelGenerateGuard(s.CloudModelInfo); err != nil {
+		a.bus.Warn("app", "GenerateCloud: edit model selected", nil)
+		return types.GenerationResult{}, err
+	}
 	normalizeRefImages(&req)
 	meta := cloudMeta(req, s.CloudModelInfo)
 	rail := cloudRail(s.PaymentMode)
@@ -678,6 +682,10 @@ func (a *App) emitCloudResolved(jobID string, result *types.GenerationResult, er
 // itself is single-threaded (the Engine is stateful) so concurrent calls
 // queue up server-side; that's intentional for the POC.
 func (a *App) GenerateLocal(req types.GenerationRequest) (types.GenerationResult, error) {
+	if err := editModelGenerateGuard(a.settings.Get().LocalModel); err != nil {
+		a.bus.Warn("app", "GenerateLocal: edit model selected", nil)
+		return types.GenerationResult{}, err
+	}
 	normalizeRefImages(&req)
 	a.applyLocalModelConfig(&req)
 	if err := a.validateLoras(&req); err != nil {
@@ -689,6 +697,21 @@ func (a *App) GenerateLocal(req types.GenerationRequest) (types.GenerationResult
 	}
 	a.autoSave(&result, genMeta(req, a.settings.Get().LocalModel))
 	return result, nil
+}
+
+// ErrEditModelGenerate is GenerateLocal/GenerateCloud's answer when the
+// selected model is an instruction-edit model (Qwen-Image-Edit): it has no
+// text-to-image mode, and failing deep in the engine would be obscure.
+var ErrEditModelGenerate = errors.New("this model edits images: use Edit > Edit with instructions on a gallery image (or pick a text-to-image model to generate)")
+
+// editModelGenerateGuard refuses plain generation on an edit model. Keyed on
+// the backend only (not the name heuristic of cloud.EditModels): a cloud model
+// merely named "...edit..." may well do text-to-image.
+func editModelGenerateGuard(m *types.ModelInfo) error {
+	if m != nil && cloud.IsEditBackend(m.BackendType) {
+		return ErrEditModelGenerate
+	}
+	return nil
 }
 
 // genMeta / cloudMeta build the generation metadata from a request + the model
@@ -1078,6 +1101,9 @@ var customSamplingByBackend = map[string]samplingBounds{
 	"flux":   {28, 1, 50, 3.5, 0, 10},
 	"chroma": {28, 1, 50, 2.0, 0, 10},
 	"qwenimage": {40, 1, 50, 4.0, 0, 10},
+	// Qwen-Image-Edit 2511 recipe (40 steps, true CFG 4); only used by the
+	// instruct-edit tool — the Generate flow refuses edit models.
+	"qwenimage-edit": {40, 1, 80, 4.0, 0, 10},
 	"anima":     {28, 1, 50, 6.0, 1, 20},
 	// Krea 2 Turbo: TDM-distilled — 8 steps, guidance OFF (cfg 0 in the Krea
 	// convention; >0 re-enables CFG and doubles the transformer passes).

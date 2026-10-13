@@ -112,7 +112,9 @@
     "downloadComponents": "需要共享组件 — 请查看上方就绪面板",
     "pickModel": "请在上方选择模型",
     "preparing": "正在准备 {{name}}",
-    "usdPerRun": "{{name}} · ${{usd}} / 次"
+    "usdPerRun": "{{name}} · ${{usd}} / 次",
+    "editModel": "编辑模型：请使用指令编辑",
+    "editModelLong": "此模型用于编辑图片，不能根据提示词生成。请在图库中打开图片，选择“编辑 > 指令编辑”；或选择文生图模型进行生成。"
   },
   "progress": {
     "preparing": "正在准备 {{name}}",
@@ -390,6 +392,7 @@
     "hintFlux": "FLUX.1 仅含 Transformer 的模型文件；需要基础模型仓库。",
     "hintChroma": "基于 FLUX（单 T5 编码器）；需要基础模型仓库。",
     "hintQwenimage": "20B MMDiT，文字渲染能力强；需要基础模型仓库。",
+    "hintQwenimageEdit": "指令编辑模型（2509 / 2511）仅含 Transformer 的文件；需要基础模型仓库。通过“编辑 > 指令编辑”修改图库图片，不能根据提示词生成。",
     "hintAnima": "单文件 DiT（Cosmos）；需要 Anima 基础仓库（Qwen3 编码器 + VAE）。",
     "hintKrea2": "Krea 2 Turbo 仅含 Transformer 的模型文件（fp8 或 bf16，ComfyUI 文件可直接加载）；需要受限的 Krea 2 基础仓库。显存需求高：约 13 GB。",
     "baseModel": "基础模型（Hugging Face 仓库 ID）— 可选",
@@ -750,7 +753,9 @@
       "generation_not_ready": "请先用一个模型启动本地引擎，才能在本机运行。",
       "no_img2img": "当前加载的本地模型不支持输入源图。",
       "generation_on_cpu": "本地引擎运行在 CPU 上，对此工具来说太慢。",
-      "no_device": "本机没有兼容的运行时。"
+      "no_device": "本机没有兼容的运行时。",
+      "no_edit_model": "将编辑模型（如 Qwen-Image-Edit 2511）设为本地模型，即可在本机运行。",
+      "edit_model_loaded": "当前加载的本地模型是编辑模型：请使用“指令编辑”，或加载图像生成模型。"
     },
     "mask": {
       "brush": "画笔",
@@ -788,7 +793,8 @@
       "video-trim": "剪辑视频",
       "video-convert": "转换视频",
       "video-concat": "拼接视频",
-      "interpolate": "补帧平滑"
+      "interpolate": "补帧平滑",
+      "instruct-edit": "指令编辑"
     },
     "params": {
       "scale": "倍数",
@@ -819,7 +825,11 @@
       "end": "结束（秒）",
       "reencode": "重新编码（逐帧精确）",
       "fps": "帧率",
-      "factor": "倍数"
+      "factor": "倍数",
+      "instruction": "编辑指令",
+      "keep_size": "保持原始尺寸",
+      "steps": "步数",
+      "guidance": "引导强度"
     },
     "values": {
       "subtle": "轻微",
@@ -885,7 +895,25 @@
       "video-trim": "按时间范围剪辑片段。",
       "video-convert": "转换为 MP4、GIF 或 WebM。",
       "video-concat": "将多个片段首尾拼接。",
-      "interpolate": "插入中间帧，让动作更流畅。"
+      "interpolate": "插入中间帧，让动作更流畅。",
+      "instruct-edit": "用一句话描述修改：换背景、添加或移除物体、改变风格、修正文字。"
+    },
+    "instruct": {
+      "placeholder": "例如：把天空换成日落。移除左边的男人。改成水彩画风格。",
+      "hint": "说明要改什么，其余部分保持不变。⌘/Ctrl+Enter 运行。",
+      "references": "参考图（可选，最多 {{max}} 张）",
+      "imageN": "图 {{n}}",
+      "removeRef": "移除参考图",
+      "fromGallery": "从图库选择",
+      "fromFile": "从文件选择…",
+      "refTooLarge": "文件超过 {{mb}} MB。",
+      "refNotImage": "该文件不是图片。",
+      "localModel": "已加载的本地编辑模型",
+      "onThisComputer": "本机",
+      "localHint": "将在云端运行。若要在本机编辑，请将编辑模型（Qwen-Image-Edit 2511）设为本地模型：需要 CUDA 或 ROCm 显卡（约 12 GB 显存）和约 64 GB 内存。",
+      "advanced": "高级",
+      "galleryEmpty": "图库中还没有图片。",
+      "more": "更多"
     }
   }
 }

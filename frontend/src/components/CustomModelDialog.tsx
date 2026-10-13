@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 
-type Backend = "sdxl" | "sd15" | "zimage" | "flux" | "chroma" | "qwenimage" | "anima" | "krea2";
+type Backend = "sdxl" | "sd15" | "zimage" | "flux" | "chroma" | "qwenimage" | "qwenimage-edit" | "anima" | "krea2";
 
 // One row per image backend that can load a SINGLE .safetensors checkpoint.
 // `base` (when set) is the shared base-components repo a transformer-only
@@ -27,6 +27,12 @@ const BACKENDS: { id: Backend; label: string; hintKey: string; base?: string }[]
   { id: "flux", label: "FLUX", hintKey: "customModel.hintFlux", base: "black-forest-labs/FLUX.1-dev" },
   { id: "chroma", label: "Chroma", hintKey: "customModel.hintChroma", base: "lodestones/Chroma1-HD" },
   { id: "qwenimage", label: "Qwen-Image", hintKey: "customModel.hintQwenimage", base: "Qwen/Qwen-Image" },
+  {
+    id: "qwenimage-edit",
+    label: "Qwen-Image-Edit",
+    hintKey: "customModel.hintQwenimageEdit",
+    base: "Qwen/Qwen-Image-Edit-2511",
+  },
   { id: "anima", label: "Anima", hintKey: "customModel.hintAnima", base: "circlestone-labs/Anima-Base-v1.0-Diffusers" },
   { id: "krea2", label: "Krea 2", hintKey: "customModel.hintKrea2", base: "krea/Krea-2-Turbo" },
 ];

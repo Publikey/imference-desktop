@@ -55,6 +55,16 @@ func TestAssessTable(t *testing.T) {
 		{"vary: on cuda -> local", "vary", Host{GenerationReady: true, GenerationImg2Img: true, GenerationDevice: "cuda:0"}, BadgeLocal, "cuda", ""},
 		{"inpaint: on rocm -> local", "inpaint", Host{GenerationReady: true, GenerationImg2Img: true, GenerationDevice: "cuda:0(rocm)"}, BadgeLocal, "rocm", ""},
 		{"outpaint: on cpu -> cloud", "outpaint", Host{GenerationReady: true, GenerationImg2Img: true, GenerationDevice: "cpu"}, BadgeCloud, "", "generation_on_cpu"},
+
+		// Instruction editing needs an edit model loaded; the img2img tools refuse one.
+		{"instruct-edit: edit model on cuda -> local", "instruct-edit", Host{GenerationReady: true, GenerationBackend: "qwenimage-edit", GenerationDevice: "cuda:0"}, BadgeLocal, "cuda", ""},
+		{"instruct-edit: edit model on rocm -> local", "instruct-edit", Host{GenerationReady: true, GenerationBackend: "qwenimage-edit", GenerationDevice: "cuda:0(rocm)"}, BadgeLocal, "rocm", ""},
+		{"instruct-edit: edit model on mps -> cloud", "instruct-edit", Host{GenerationReady: true, GenerationBackend: "qwenimage-edit", GenerationDevice: "mps"}, BadgeCloud, "", "generation_on_cpu"},
+		{"instruct-edit: sdxl loaded -> cloud", "instruct-edit", Host{GenerationReady: true, GenerationImg2Img: true, GenerationBackend: "sdxl", GenerationDevice: "cuda:0"}, BadgeCloud, "", "no_edit_model"},
+		{"instruct-edit: edit model not ready -> cloud", "instruct-edit", Host{GenerationBackend: "qwenimage-edit", GenerationDevice: "cuda:0"}, BadgeCloud, "", "generation_not_ready"},
+		{"vary: edit model loaded -> cloud", "vary", Host{GenerationReady: true, GenerationBackend: "qwenimage-edit", GenerationDevice: "cuda:0"}, BadgeCloud, "", "edit_model_loaded"},
+		{"inpaint: edit model loaded -> cloud", "inpaint", Host{GenerationReady: true, GenerationImg2Img: true, GenerationBackend: "qwenimage-edit", GenerationDevice: "cuda:0"}, BadgeCloud, "", "edit_model_loaded"},
+		{"outpaint: qwenimage loaded -> local", "outpaint", Host{GenerationReady: true, GenerationImg2Img: true, GenerationBackend: "qwenimage", GenerationDevice: "cuda:0"}, BadgeLocal, "cuda", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -63,6 +73,28 @@ func TestAssessTable(t *testing.T) {
 				t.Fatalf("Assess(%s) = %+v, want badge=%s device=%s reason=%s", c.tool, a, c.badge, c.device, c.reason)
 			}
 		})
+	}
+}
+
+func TestInstructEditRouting(t *testing.T) {
+	ie := tool(t, "instruct-edit")
+	if !ie.IsGeneration() || !NeedsEditModel(ie) || NeedsEditModel(tool(t, "vary")) {
+		t.Fatalf("instruct-edit: generation=%v needsEdit=%v", ie.IsGeneration(), NeedsEditModel(ie))
+	}
+	editHost := Host{GenerationReady: true, GenerationBackend: "qwenimage-edit", GenerationDevice: "cuda:0"}
+	sdxlHost := Host{GenerationReady: true, GenerationImg2Img: true, GenerationBackend: "sdxl", GenerationDevice: "cuda:0"}
+	if r, err := Decide("auto", ie, Assess(ie, editHost)); err != nil || r != RouteLocal {
+		t.Errorf("auto on an edit model = %q %v, want local", r, err)
+	}
+	if r, err := Decide("auto", ie, Assess(ie, sdxlHost)); err != nil || r != RouteCloud {
+		t.Errorf("auto on sdxl = %q %v, want cloud", r, err)
+	}
+	if _, err := Decide("local", ie, Assess(ie, sdxlHost)); err == nil || err.Code != CodeUnsupportedRuntime {
+		t.Errorf("forced local on sdxl: %v", err)
+	}
+	vary := tool(t, "vary")
+	if r, err := Decide("auto", vary, Assess(vary, editHost)); err != nil || r != RouteCloud {
+		t.Errorf("vary on an edit model = %q %v, want cloud", r, err)
 	}
 }
 

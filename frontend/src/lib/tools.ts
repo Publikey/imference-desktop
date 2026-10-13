@@ -3,10 +3,23 @@
 // defaults and progress-stage labels. The Go side (app_tools.go) owns routing.
 import { useEffect, useState } from "react";
 import { api } from "@/lib/wails-bridge";
-import type { ToolInfo, ToolParamSpec } from "@/lib/types";
+import type { ModelInfo, ToolInfo, ToolParamSpec } from "@/lib/types";
+
+/** The engine backend of instruction-edit models (Qwen-Image-Edit). */
+export const EDIT_BACKEND = "qwenimage-edit";
+
+/** Instruction-edit tool id. */
+export const INSTRUCT_EDIT_ID = "instruct-edit";
+
+/** Instruction-edit models only run through "Edit with instructions" — never
+ *  text-to-image. Keyed on the backend (same rule as the Go guard). */
+export function isEditModel(m: Pick<ModelInfo, "backendType"> | null | undefined): boolean {
+  return m?.backendType === EDIT_BACKEND;
+}
 
 /** The image tools offered first in the gallery's Edit menus, in order. */
 export const EDIT_TOOL_IDS = [
+  "instruct-edit",
   "upscale",
   "vary",
   "remove-background",
@@ -33,6 +46,8 @@ export const HIDDEN_PARAMS: Record<string, Set<string>> = {
   inpaint: new Set(["model"]),
   outpaint: new Set(["model", "left", "right", "top", "bottom"]),
   segment: new Set(["points"]),
+  // Its own form (InstructEditForm): instruction on top, references, advanced.
+  "instruct-edit": new Set(["model", "instruction", "negative_prompt", "steps", "guidance", "keep_size", "seed"]),
 };
 
 let cache: ToolInfo[] | null = null;

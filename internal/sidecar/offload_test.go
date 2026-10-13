@@ -52,3 +52,14 @@ func TestBogusModeSettingFallsBackToAuto(t *testing.T) {
 		t.Fatalf("want 1/model, got %s/%s", v, m)
 	}
 }
+
+func TestEditBackendIsHeavyLikeQwenImage(t *testing.T) {
+	// Qwen-Image-Edit is the same 20B DiT: same Auto thresholds (group offload
+	// below the module size).
+	if heavyModuleGiB["qwenimage-edit"] != heavyModuleGiB["qwenimage"] || heavyModuleGiB["qwenimage-edit"] < 40 {
+		t.Fatalf("module GiB: edit=%v qwenimage=%v", heavyModuleGiB["qwenimage-edit"], heavyModuleGiB["qwenimage"])
+	}
+	if heavyResidencyGiB["qwenimage-edit"] != heavyResidencyGiB["qwenimage"] {
+		t.Fatalf("residency GiB: edit=%v qwenimage=%v", heavyResidencyGiB["qwenimage-edit"], heavyResidencyGiB["qwenimage"])
+	}
+}

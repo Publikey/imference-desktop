@@ -25,3 +25,4 @@ build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 sidecar/__pycache__/
 sidecar/*.pyc
 sidecar/.venv/
+__pycache__/

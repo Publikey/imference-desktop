@@ -18,7 +18,7 @@ var assets embed.FS
 // the Go stdio contract — not the heavy engine (that stays a download).
 // Extracted to %LOCALAPPDATA% at startup; see extractEmbeddedSidecar in app.go.
 //
-//go:embed sidecar/main.py sidecar/requirements.txt
+//go:embed sidecar/main.py sidecar/tools_main.py sidecar/requirements.txt
 var sidecarFiles embed.FS
 
 // webviewDataPath returns a fixed, always-writable directory for the WebView2

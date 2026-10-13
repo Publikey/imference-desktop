@@ -56,6 +56,23 @@ type Settings struct {
 	// volume. Unlike the quota (a housekeeping target), this is a hard wall: a
 	// download that would eat into it fails before any network call. 0 = default.
 	ModelCacheMinFreeBytes int64 `json:"modelCacheMinFreeBytes,omitempty"`
+	// Tools holds the editing-tools preferences.
+	Tools ToolsSettings `json:"tools"`
+}
+
+// ToolsSettings are the editing-tools preferences.
+type ToolsSettings struct {
+	// Mode is where tools run by default: "auto" (local when this machine can,
+	// else the cloud — the default), "local" (always local) or "cloud".
+	Mode string `json:"mode,omitempty"`
+	// LocalAPIDisabled turns off the 127.0.0.1 HTTP API agents use to run
+	// tools locally (enabled by default; the zero value keeps it on).
+	LocalAPIDisabled bool `json:"localApiDisabled,omitempty"`
+	// IdleMinutes stops the tools sidecar (releasing its models) after this
+	// many idle minutes. 0 = default (10).
+	IdleMinutes int `json:"idleMinutes,omitempty"`
+	// Device forces the tools' device (auto | cpu | cuda | directml | rocm | mps).
+	Device string `json:"device,omitempty"`
 }
 
 // LoraEntry is one LoRA file in the user's library.
@@ -456,6 +473,13 @@ type GenerationMeta struct {
 	Strength       float64   `json:"strength,omitempty"`
 	Loras          []LoraRef `json:"loras,omitempty"`
 	CreatedAt      string    `json:"createdAt"` // RFC3339
+
+	// Editing-tool outputs (Source "tool"): which tool made the file, with
+	// which params, from which gallery image, and where it ran.
+	Tool        string         `json:"tool,omitempty"`
+	ToolParams  map[string]any `json:"toolParams,omitempty"`
+	SourceImage string         `json:"sourceImage,omitempty"`
+	RanOn       string         `json:"ranOn,omitempty"` // "local" | "cloud"
 }
 
 // GalleryFilter narrows ListSavedImages. Empty fields mean "no constraint".

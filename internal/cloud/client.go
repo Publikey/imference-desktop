@@ -90,6 +90,10 @@ func New(bus *logbus.Bus) *Client {
 	}
 }
 
+// SetBaseURL points the client at another imference deployment (tests, a
+// staging server). Not used in production.
+func (c *Client) SetBaseURL(u string) { c.base = strings.TrimRight(u, "/") }
+
 // postBody mirrors PostImagePayload in imference/app/models/image.go.
 // snake_case JSON tags match the Go server's expectations.
 type postBody struct {

@@ -1,9 +1,10 @@
 """Fake tools sidecar for internal/tools tests: speaks the runqy stdio
 protocol of sidecar/tools_main.py without imference-engine or runqy-python.
 
-Tools:  "copy"  -> writes <output_dir>/copy-out.txt, two progress lines
+Tools:  any    -> writes <output_dir>/<tool>-out.png (the inputs as JSON), two progress lines
         "slow"  -> sleeps 30 s (cancel test)
-        "oom"   -> {"ok": false, "error": {"code": "oom", ...}}
+        "oom" (or params.fail == "oom") -> {"ok": false, "error": {"code": "oom", ...}}
+        "nope"  -> invalid_input
         "crash" -> exits the process
 Env:    FAKE_FAIL_LOAD=1 -> {"status": "error"} at startup
         FAKE_LOG=<path>  -> append every op name (release accounting)
@@ -46,16 +47,19 @@ for line in sys.stdin:
         res = {"ok": True, "released": 1}
     elif op == "run":
         tool = p.get("tool_id")
-        if tool == "copy":
+        fail = (p.get("params") or {}).get("fail")
+        if fail == "oom":
+            tool = "oom"
+        if tool not in ("slow", "oom", "crash", "nope"):
             sys.stderr.write("IMTOOL_PROGRESS " + json.dumps({"task_id": p.get("job_id"), "stage": "running", "fraction": 0.5}) + "\n")
             sys.stderr.flush()
             os.makedirs(p["output_dir"], exist_ok=True)
-            path = os.path.join(p["output_dir"], "copy-out.txt")
+            path = os.path.join(p["output_dir"], tool + "-out.png")
             with open(path, "w") as f:
                 f.write(json.dumps(p.get("inputs")))
             sys.stderr.write("IMTOOL_PROGRESS " + json.dumps({"task_id": p.get("job_id"), "stage": "encoding", "fraction": 1.0}) + "\n")
             sys.stderr.flush()
-            res = {"ok": True, "result": {"tool_id": "copy", "tool_version": "1.0.0", "params": p.get("params"),
+            res = {"ok": True, "result": {"tool_id": tool, "tool_version": "1.0.0", "params": p.get("params"),
                                           "outputs": [{"name": "image", "type": "image", "format": "png", "path": path,
                                                        "width": 8, "height": 4}],
                                           "duration_ms": 3, "runtime": "fake", "stages": ["running", "encoding"]}}

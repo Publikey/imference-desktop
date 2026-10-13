@@ -32,6 +32,7 @@ import (
 	"imference-desktop-go/internal/cloudjobs"
 	"imference-desktop-go/internal/components"
 	"imference-desktop-go/internal/diskspace"
+	"imference-desktop-go/internal/gpu"
 	"imference-desktop-go/internal/imagesink"
 	"imference-desktop-go/internal/installer"
 	"imference-desktop-go/internal/logbus"
@@ -39,6 +40,7 @@ import (
 	"imference-desktop-go/internal/modelfetch"
 	"imference-desktop-go/internal/settings"
 	"imference-desktop-go/internal/sidecar"
+	"imference-desktop-go/internal/tools"
 	"imference-desktop-go/internal/types"
 	"imference-desktop-go/internal/update"
 	"imference-desktop-go/internal/version"
@@ -98,6 +100,17 @@ type App struct {
 	// while a download runs, nil otherwise; guarded by dlMu.
 	dlMu     sync.Mutex
 	dlCancel context.CancelFunc
+
+	// Editing tools (app_tools.go): the catalog, the tools sidecar manager,
+	// in-flight runs (cancel + progress) and the agents' local HTTP API.
+	toolsCat   *tools.Catalog
+	tools      *tools.Manager
+	toolMu     sync.Mutex
+	toolJobs   map[string]*toolJob
+	toolsAPIMu sync.Mutex
+	toolsAPI   *tools.APIServer
+	gpuOnce    sync.Once
+	gpu        gpu.Info
 }
 
 func NewApp() *App {
@@ -157,6 +170,7 @@ func NewApp() *App {
 	}
 	a.sidecar = sidecar.New(scriptPath, logDir, a.broadcastSidecarStatus, bus)
 	a.sidecar.SetProgressListener(a.broadcastGenerateProgress)
+	a.initTools()
 	return a
 }
 
@@ -178,6 +192,8 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 		a.app.Event.Emit(eventName, data...)
 	})
 	a.bus.Info("app", "startup", nil)
+	// Agents' local tools API (127.0.0.1, token in local-api.json).
+	a.startToolsAPI()
 	go func() {
 		// Clean up a stale model selection, but DON'T auto-start the local engine
 		// — it's spawned on demand from the home-screen engine control. Cloud-only
@@ -266,6 +282,7 @@ func (a *App) clearStaleLocalModel() types.Settings {
 func (a *App) ServiceShutdown() error {
 	a.bus.Info("app", "ServiceShutdown — stopping sidecar", nil)
 	a.sidecar.Stop()
+	a.shutdownTools()
 	return nil
 }
 
@@ -2722,7 +2739,7 @@ func extractEmbeddedSidecar() (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	for _, name := range []string{"main.py", "requirements.txt"} {
+	for _, name := range []string{"main.py", "tools_main.py", "requirements.txt"} {
 		data, err := sidecarFiles.ReadFile("sidecar/" + name)
 		if err != nil {
 			return "", fmt.Errorf("read embedded sidecar/%s: %w", name, err)
@@ -2744,6 +2761,20 @@ func resolveSidecarScript() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, "main.py"), nil
+}
+
+// resolveToolsScript is the editing-tools sidecar (sidecar/tools_main.py),
+// shipped next to main.py.
+func resolveToolsScript() (string, error) {
+	dir, err := resolveSidecarDir()
+	if err != nil {
+		return "", err
+	}
+	p := filepath.Join(dir, "tools_main.py")
+	if _, err := os.Stat(p); err != nil {
+		return "", err
+	}
+	return p, nil
 }
 
 func resolveSidecarRequirements() (string, error) {

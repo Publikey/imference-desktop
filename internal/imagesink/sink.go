@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,4 +128,73 @@ func sanitize(s string) string {
 		return "unknown"
 	}
 	return b.String()
+}
+
+// SaveFileWithMeta moves (or copies, across volumes) an existing media file —
+// an editing-tool output — into baseDir under the gallery naming scheme
+// "<YYYYMMDD-HHMMSS>_<source>_<seed><ext>", plus the "<path>.json" metadata
+// sidecar. Unlike Save, a name already taken (two outputs in the same second)
+// gets a "-2", "-3"… suffix on the timestamp instead of being overwritten.
+// The extension comes from src. Same error contract as SaveWithMeta.
+func SaveFileWithMeta(src, source string, seed int, baseDir string, meta types.GenerationMeta) (path string, metaErr error, err error) {
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		return "", nil, fmt.Errorf("imagesink: mkdir %s: %w", baseDir, err)
+	}
+	ext := strings.ToLower(filepath.Ext(src))
+	if ext == ".jpeg" {
+		ext = ".jpg"
+	}
+	ts := time.Now().Format("20060102-150405")
+	for i := 1; ; i++ {
+		stamp := ts
+		if i > 1 {
+			stamp = fmt.Sprintf("%s-%d", ts, i)
+		}
+		path = filepath.Join(baseDir, fmt.Sprintf("%s_%s_%d%s", stamp, sanitize(source), seed, ext))
+		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+			break
+		}
+		if i > 1000 {
+			return "", nil, errors.New("imagesink: no free file name")
+		}
+	}
+	if err := moveFile(src, path); err != nil {
+		return "", nil, fmt.Errorf("imagesink: save %s: %w", path, err)
+	}
+	data, mErr := json.MarshalIndent(meta, "", "  ")
+	if mErr != nil {
+		return path, fmt.Errorf("imagesink: marshal meta: %w", mErr), nil
+	}
+	if mErr := os.WriteFile(path+".json", data, 0o644); mErr != nil {
+		return path, fmt.Errorf("imagesink: write meta %s.json: %w", path, mErr), nil
+	}
+	return path, nil, nil
+}
+
+// moveFile renames src to dst, falling back to copy + remove across volumes.
+func moveFile(src, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(dst)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(dst)
+		return err
+	}
+	in.Close()
+	_ = os.Remove(src)
+	return nil
 }

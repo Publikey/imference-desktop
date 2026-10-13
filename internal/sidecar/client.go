@@ -135,3 +135,26 @@ func (m *Manager) Generate(ctx context.Context, req types.GenerationRequest) (ty
 		Source:      "local",
 	}, nil
 }
+
+// RunTool sends a generation editing tool (vary / inpaint / outpaint) to the
+// loaded engine. payload carries {tool_id, job_id, inputs, params, output_dir}
+// (sidecar/main.py:_run_tool); the raw result is {"tool": ToolResult} or
+// {"tool_error": {code, message}} and is decoded by the caller (internal/tools).
+// Brackets the run like Generate so a model switch waits for it.
+func (m *Manager) RunTool(ctx context.Context, payload any) (json.RawMessage, error) {
+	if m.Status().State != "ready" {
+		return nil, errors.New("sidecar: not ready")
+	}
+	callCtx, cancel := context.WithTimeout(ctx, generateTimeout)
+	defer cancel()
+	m.beginGen()
+	defer m.endGen()
+	start := time.Now()
+	raw, err := m.Send(callCtx, payload)
+	if err != nil {
+		m.bus.Error("sidecar", "RunTool failed", map[string]any{"err": err.Error(), "duration": time.Since(start).String()})
+		return nil, fmt.Errorf("sidecar: %w", err)
+	}
+	m.bus.Info("sidecar", "RunTool done", map[string]any{"duration": time.Since(start).String()})
+	return raw, nil
+}

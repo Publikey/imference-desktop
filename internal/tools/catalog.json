@@ -1,0 +1,1215 @@
+{
+  "version": 1,
+  "tools": [
+    {
+      "id": "convert",
+      "version": "1.0.0",
+      "name": "Convert / compress",
+      "description": "Convert to PNG, JPEG or WebP and set the compression quality.",
+      "category": "image",
+      "mcp_name": "convert",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 40,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "format": {
+          "type": "enum",
+          "default": "webp",
+          "values": [
+            "png",
+            "jpeg",
+            "webp"
+          ]
+        },
+        "quality": {
+          "type": "int",
+          "default": 85,
+          "description": "JPEG/WebP quality.",
+          "min": 1,
+          "max": 100
+        },
+        "lossless": {
+          "type": "bool",
+          "default": false,
+          "description": "WebP lossless."
+        },
+        "max_kb": {
+          "type": "int",
+          "description": "Lower the quality until the file fits (JPEG/WebP).",
+          "min": 10,
+          "max": 50000
+        },
+        "background": {
+          "type": "string",
+          "default": "#ffffff",
+          "description": "Fill for transparent pixels when the format has no alpha (JPEG).",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      },
+      "outputs": {
+        "image": {
+          "type": "image"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu",
+          "cuda",
+          "mps",
+          "rocm",
+          "directml"
+        ],
+        "cloud_queue": "tools-cpu",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 0.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 1.0
+      },
+      "license": {
+        "spdx": "n/a",
+        "source": "Pillow (HPND)",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 0,
+      "cloud_available": true
+    },
+    {
+      "id": "crop",
+      "version": "1.0.0",
+      "name": "Crop",
+      "description": "Crop an image to a rectangle or to an aspect ratio (centered).",
+      "category": "image",
+      "mcp_name": "crop",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 40,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "x": {
+          "type": "int",
+          "default": 0,
+          "min": 0
+        },
+        "y": {
+          "type": "int",
+          "default": 0,
+          "min": 0
+        },
+        "width": {
+          "type": "int",
+          "description": "Crop width (default: to the right edge).",
+          "min": 1
+        },
+        "height": {
+          "type": "int",
+          "description": "Crop height (default: to the bottom edge).",
+          "min": 1
+        },
+        "aspect": {
+          "type": "string",
+          "description": "e.g. 16:9; centered crop, overrides the rectangle.",
+          "pattern": "^[0-9]{1,4}:[0-9]{1,4}$"
+        },
+        "format": {
+          "type": "enum",
+          "default": "same",
+          "values": [
+            "same",
+            "png",
+            "jpeg",
+            "webp"
+          ]
+        }
+      },
+      "outputs": {
+        "image": {
+          "type": "image"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu",
+          "cuda",
+          "mps",
+          "rocm",
+          "directml"
+        ],
+        "cloud_queue": "tools-cpu",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 0.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 1.0
+      },
+      "license": {
+        "spdx": "n/a",
+        "source": "Pillow (HPND)",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 0,
+      "cloud_available": true
+    },
+    {
+      "id": "describe",
+      "version": "1.0.0",
+      "name": "Describe image",
+      "description": "Write a detailed caption of an image, ready to reuse as a prompt (Florence-2).",
+      "category": "image",
+      "mcp_name": "describe_image",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 16,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "detail": {
+          "type": "enum",
+          "default": "more_detailed",
+          "values": [
+            "short",
+            "detailed",
+            "more_detailed"
+          ]
+        }
+      },
+      "outputs": {
+        "text": {
+          "type": "text"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu",
+          "cuda",
+          "mps",
+          "rocm"
+        ],
+        "cloud_queue": "tools-light",
+        "slow_on_cpu": true,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 4.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 2.0
+      },
+      "license": {
+        "spdx": "MIT",
+        "source": "https://huggingface.co/microsoft/Florence-2-base/blob/main/LICENSE",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 465.0,
+      "cloud_available": true
+    },
+    {
+      "id": "erase-object",
+      "version": "1.0.0",
+      "name": "Magic eraser",
+      "description": "Remove what the mask covers and fill it with matching background (LaMa).",
+      "category": "image",
+      "mcp_name": "erase_object",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 16,
+          "max_mb": 30
+        },
+        "mask": {
+          "type": "mask",
+          "required": true,
+          "description": "White = area to erase, same size as the image",
+          "max_megapixels": 16,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "dilate": {
+          "type": "int",
+          "default": 8,
+          "description": "Grow the mask by this many pixels (catches edges and shadows).",
+          "min": 0,
+          "max": 64
+        }
+      },
+      "outputs": {
+        "image": {
+          "type": "image",
+          "format": "png"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu",
+          "cuda",
+          "mps",
+          "rocm",
+          "directml"
+        ],
+        "cloud_queue": "tools-light",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 4.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 4.0
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "source": "https://github.com/advimman/lama/blob/main/LICENSE",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 208.0,
+      "cloud_available": true
+    },
+    {
+      "id": "inpaint",
+      "version": "1.0.0",
+      "name": "Inpaint",
+      "description": "Repaint the masked area from a prompt with a generation model; the rest of the image is kept.",
+      "category": "generation",
+      "mcp_name": "inpaint",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 4,
+          "max_mb": 30
+        },
+        "mask": {
+          "type": "mask",
+          "required": true,
+          "description": "White = area to repaint",
+          "max_megapixels": 4,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "model": {
+          "type": "string",
+          "description": "Generation model (a catalog model name that accepts an image input).",
+          "max_length": 128,
+          "required": true
+        },
+        "prompt": {
+          "type": "string",
+          "description": "What to paint in the masked area.",
+          "max_length": 4000
+        },
+        "negative_prompt": {
+          "type": "string",
+          "max_length": 2000
+        },
+        "strength": {
+          "type": "float",
+          "default": 0.9,
+          "min": 0.3,
+          "max": 1
+        },
+        "seed": {
+          "type": "int",
+          "description": "Fixed seed for a reproducible result (default: random).",
+          "min": 0,
+          "max": 4294967295
+        },
+        "feather": {
+          "type": "int",
+          "default": 12,
+          "description": "Soft edge of the blend, pixels.",
+          "min": 0,
+          "max": 64
+        }
+      },
+      "outputs": {
+        "image": {
+          "type": "image"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cuda",
+          "mps",
+          "rocm"
+        ],
+        "cloud_queue": "generation",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 0.0,
+        "needs_engine": true
+      },
+      "cost": {
+        "credits": 0.0
+      },
+      "license": {
+        "spdx": "model",
+        "source": "license of the selected model",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 0,
+      "cloud_available": true
+    },
+    {
+      "id": "interpolate",
+      "version": "1.0.0",
+      "name": "Smooth motion",
+      "description": "Multiply a video's frame rate with RIFE frame interpolation (2x or 4x).",
+      "category": "video",
+      "mcp_name": "interpolate_frames",
+      "inputs": {
+        "video": {
+          "type": "video",
+          "required": true,
+          "description": "Source video or GIF",
+          "max_mb": 200,
+          "max_seconds": 60
+        }
+      },
+      "params": {
+        "factor": {
+          "type": "enum",
+          "default": 2,
+          "values": [
+            2,
+            4
+          ]
+        }
+      },
+      "outputs": {
+        "video": {
+          "type": "video",
+          "format": "mp4"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu",
+          "cuda",
+          "mps",
+          "rocm",
+          "directml"
+        ],
+        "cloud_queue": "tools-light",
+        "slow_on_cpu": true,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 4.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 6.0
+      },
+      "license": {
+        "spdx": "MIT",
+        "source": "https://github.com/hzwer/Practical-RIFE/blob/main/LICENSE",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 21.0,
+      "cloud_available": true
+    },
+    {
+      "id": "outpaint",
+      "version": "1.0.0",
+      "name": "Expand image",
+      "description": "Extend the canvas on any side and let a generation model paint the new area.",
+      "category": "generation",
+      "mcp_name": "outpaint",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 4,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "model": {
+          "type": "string",
+          "description": "Generation model (a catalog model name that accepts an image input).",
+          "max_length": 128,
+          "required": true
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Prompt (default: empty; reuse the image's original prompt for best results).",
+          "max_length": 4000
+        },
+        "negative_prompt": {
+          "type": "string",
+          "max_length": 2000
+        },
+        "left": {
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 2048
+        },
+        "right": {
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 2048
+        },
+        "top": {
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 2048
+        },
+        "bottom": {
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 2048
+        },
+        "seed": {
+          "type": "int",
+          "description": "Fixed seed for a reproducible result (default: random).",
+          "min": 0,
+          "max": 4294967295
+        }
+      },
+      "outputs": {
+        "image": {
+          "type": "image"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cuda",
+          "mps",
+          "rocm"
+        ],
+        "cloud_queue": "generation",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 0.0,
+        "needs_engine": true
+      },
+      "cost": {
+        "credits": 0.0
+      },
+      "license": {
+        "spdx": "model",
+        "source": "license of the selected model",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 0,
+      "cloud_available": true
+    },
+    {
+      "id": "remove-background",
+      "version": "1.0.0",
+      "name": "Remove background",
+      "description": "Cut out the subject: transparent PNG, a mask, or the subject on a solid color.",
+      "category": "image",
+      "mcp_name": "remove_background",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 16,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "model": {
+          "type": "enum",
+          "default": "birefnet-lite",
+          "description": "birefnet-lite: best edges. isnet: general use. u2netp: tiny and fast (CPU).",
+          "values": [
+            "birefnet-lite",
+            "isnet",
+            "u2netp"
+          ]
+        },
+        "output": {
+          "type": "enum",
+          "default": "png-alpha",
+          "values": [
+            "png-alpha",
+            "mask",
+            "color"
+          ]
+        },
+        "background": {
+          "type": "string",
+          "default": "#ffffff",
+          "description": "Background for output=color.",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "threshold": {
+          "type": "float",
+          "description": "Hard cut at this level (default: soft alpha).",
+          "min": 0,
+          "max": 1
+        }
+      },
+      "outputs": {
+        "image": {
+          "type": "image",
+          "format": "png"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu",
+          "cuda",
+          "mps",
+          "rocm",
+          "directml"
+        ],
+        "cloud_queue": "tools-light",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 4.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 3.0
+      },
+      "license": {
+        "spdx": "MIT",
+        "source": "https://github.com/ZhengPeng7/BiRefNet/blob/main/LICENSE (isnet/u2net: Apache-2.0)",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 389.6,
+      "cloud_available": true
+    },
+    {
+      "id": "resize",
+      "version": "1.0.0",
+      "name": "Resize",
+      "description": "Resize an image to an exact size, a bounding box or a scale factor.",
+      "category": "image",
+      "mcp_name": "resize",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 40,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "width": {
+          "type": "int",
+          "description": "Target width in pixels.",
+          "min": 1,
+          "max": 8192
+        },
+        "height": {
+          "type": "int",
+          "description": "Target height in pixels.",
+          "min": 1,
+          "max": 8192
+        },
+        "scale": {
+          "type": "float",
+          "description": "Scale factor, used when width and height are both empty.",
+          "min": 0.05,
+          "max": 8
+        },
+        "mode": {
+          "type": "enum",
+          "default": "fit",
+          "description": "fit: inside the box, keep ratio. fill: cover the box and center-crop. stretch: exact size.",
+          "values": [
+            "fit",
+            "fill",
+            "stretch"
+          ]
+        },
+        "format": {
+          "type": "enum",
+          "default": "same",
+          "values": [
+            "same",
+            "png",
+            "jpeg",
+            "webp"
+          ]
+        }
+      },
+      "outputs": {
+        "image": {
+          "type": "image"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu",
+          "cuda",
+          "mps",
+          "rocm",
+          "directml"
+        ],
+        "cloud_queue": "tools-cpu",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 0.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 1.0
+      },
+      "license": {
+        "spdx": "n/a",
+        "source": "Pillow (HPND)",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 0,
+      "cloud_available": true
+    },
+    {
+      "id": "restore-faces",
+      "version": "1.0.0",
+      "name": "Restore faces",
+      "description": "Detect faces and restore them with GFPGAN, blended back into the image.",
+      "category": "image",
+      "mcp_name": "restore_faces",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 16,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "strength": {
+          "type": "float",
+          "default": 0.8,
+          "description": "Blend between the original (0) and the restored face (1).",
+          "min": 0,
+          "max": 1
+        },
+        "max_faces": {
+          "type": "int",
+          "default": 10,
+          "min": 1,
+          "max": 20
+        }
+      },
+      "outputs": {
+        "image": {
+          "type": "image",
+          "format": "png"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu",
+          "cuda",
+          "mps",
+          "rocm",
+          "directml"
+        ],
+        "cloud_queue": "tools-light",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 4.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 4.0
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "source": "https://github.com/TencentARC/GFPGAN/blob/master/LICENSE (StyleGAN2 parts: check)",
+        "verified": false
+      },
+      "available": true,
+      "weights_mb": 340.3,
+      "cloud_available": false
+    },
+    {
+      "id": "segment",
+      "version": "1.0.0",
+      "name": "Click to select",
+      "description": "Select an object from one or more clicks and return its mask (MobileSAM).",
+      "category": "image",
+      "mcp_name": "select_object",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 16,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "points": {
+          "type": "points",
+          "description": "Clicks in image pixels: [{x, y, label}] with label 1 = include, 0 = exclude.",
+          "max_items": 16,
+          "required": true
+        },
+        "dilate": {
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 64
+        }
+      },
+      "outputs": {
+        "mask": {
+          "type": "mask",
+          "format": "png"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu",
+          "cuda",
+          "mps",
+          "rocm",
+          "directml"
+        ],
+        "cloud_queue": "tools-light",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 2.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 1.0
+      },
+      "license": {
+        "spdx": "Apache-2.0",
+        "source": "https://github.com/ChaoningZhang/MobileSAM/blob/master/LICENSE",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 44.0,
+      "cloud_available": true
+    },
+    {
+      "id": "strip-metadata",
+      "version": "1.0.0",
+      "name": "Remove metadata",
+      "description": "Remove EXIF, XMP, PNG text chunks (prompts, settings) and GPS data before sharing.",
+      "category": "image",
+      "mcp_name": "strip_metadata",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 40,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "format": {
+          "type": "enum",
+          "default": "same",
+          "values": [
+            "same",
+            "png",
+            "jpeg",
+            "webp"
+          ]
+        }
+      },
+      "outputs": {
+        "image": {
+          "type": "image"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu",
+          "cuda",
+          "mps",
+          "rocm",
+          "directml"
+        ],
+        "cloud_queue": "tools-cpu",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 0.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 1.0
+      },
+      "license": {
+        "spdx": "n/a",
+        "source": "Pillow (HPND)",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 0,
+      "cloud_available": true
+    },
+    {
+      "id": "upscale",
+      "version": "1.0.0",
+      "name": "Upscale",
+      "description": "Upscale 2x or 4x with Real-ESRGAN (sharp details, no hallucinated content).",
+      "category": "image",
+      "mcp_name": "upscale",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image (at most 4 MP; the output is up to 64 MP)",
+          "max_megapixels": 4,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "scale": {
+          "type": "enum",
+          "default": 4,
+          "values": [
+            2,
+            4
+          ]
+        },
+        "model": {
+          "type": "enum",
+          "default": "realesrgan-x4plus",
+          "description": "x4plus for photos and renders, anime for illustrations.",
+          "values": [
+            "realesrgan-x4plus",
+            "realesrgan-x4plus-anime"
+          ]
+        },
+        "tile": {
+          "type": "int",
+          "default": 256,
+          "description": "Tile size (0 = whole image; lower uses less memory).",
+          "min": 0,
+          "max": 1024
+        }
+      },
+      "outputs": {
+        "image": {
+          "type": "image",
+          "format": "png"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu",
+          "cuda",
+          "mps",
+          "rocm",
+          "directml"
+        ],
+        "cloud_queue": "tools-light",
+        "slow_on_cpu": true,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 4.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 4.0
+      },
+      "license": {
+        "spdx": "BSD-3-Clause",
+        "source": "https://github.com/xinntao/Real-ESRGAN/blob/master/LICENSE",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 85.0,
+      "cloud_available": true
+    },
+    {
+      "id": "vary",
+      "version": "1.0.0",
+      "name": "Vary",
+      "description": "Make a variation of an image with a generation model (img2img). Subtle keeps the composition, strong reimagines it.",
+      "category": "generation",
+      "mcp_name": "vary_image",
+      "inputs": {
+        "image": {
+          "type": "image",
+          "required": true,
+          "description": "Source image",
+          "max_megapixels": 4,
+          "max_mb": 30
+        }
+      },
+      "params": {
+        "model": {
+          "type": "string",
+          "description": "Generation model (a catalog model name that accepts an image input).",
+          "max_length": 128,
+          "required": true
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Prompt (default: empty; reuse the image's original prompt for best results).",
+          "max_length": 4000
+        },
+        "negative_prompt": {
+          "type": "string",
+          "max_length": 2000
+        },
+        "strength": {
+          "type": "enum",
+          "default": "subtle",
+          "values": [
+            "subtle",
+            "strong"
+          ]
+        },
+        "seed": {
+          "type": "int",
+          "description": "Fixed seed for a reproducible result (default: random).",
+          "min": 0,
+          "max": 4294967295
+        }
+      },
+      "outputs": {
+        "image": {
+          "type": "image"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cuda",
+          "mps",
+          "rocm"
+        ],
+        "cloud_queue": "generation",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 0.0,
+        "needs_engine": true
+      },
+      "cost": {
+        "credits": 0.0
+      },
+      "license": {
+        "spdx": "model",
+        "source": "license of the selected model",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 0,
+      "cloud_available": true
+    },
+    {
+      "id": "video-concat",
+      "version": "1.0.0",
+      "name": "Join videos",
+      "description": "Concatenate several clips into one MP4 (scaled to the first clip's size).",
+      "category": "video",
+      "mcp_name": "video_concat",
+      "inputs": {
+        "videos": {
+          "type": "video",
+          "required": true,
+          "description": "Clips, in order",
+          "max_mb": 500,
+          "max_seconds": 600,
+          "max_items": 20,
+          "multiple": true,
+          "min_items": 2
+        }
+      },
+      "params": {
+        "fps": {
+          "type": "int",
+          "description": "Output frame rate (default: first clip).",
+          "min": 1,
+          "max": 60
+        }
+      },
+      "outputs": {
+        "video": {
+          "type": "video",
+          "format": "mp4"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu"
+        ],
+        "cloud_queue": "tools-cpu",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 0.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 3.0
+      },
+      "license": {
+        "spdx": "LGPL-2.1-or-later",
+        "source": "https://ffmpeg.org/legal.html",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 0,
+      "cloud_available": true
+    },
+    {
+      "id": "video-convert",
+      "version": "1.0.0",
+      "name": "GIF / MP4 / WebM",
+      "description": "Convert between MP4, WebM and GIF, optionally resizing and changing the frame rate.",
+      "category": "video",
+      "mcp_name": "video_convert",
+      "inputs": {
+        "video": {
+          "type": "video",
+          "required": true,
+          "description": "Source video or GIF",
+          "max_mb": 500,
+          "max_seconds": 600
+        }
+      },
+      "params": {
+        "format": {
+          "type": "enum",
+          "default": "mp4",
+          "values": [
+            "mp4",
+            "gif",
+            "webm"
+          ]
+        },
+        "fps": {
+          "type": "int",
+          "description": "Output frame rate (default: source, GIF: 15).",
+          "min": 1,
+          "max": 60
+        },
+        "width": {
+          "type": "int",
+          "description": "Output width, height follows the ratio.",
+          "min": 16,
+          "max": 3840
+        }
+      },
+      "outputs": {
+        "video": {
+          "type": "video"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu"
+        ],
+        "cloud_queue": "tools-cpu",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 0.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 2.0
+      },
+      "license": {
+        "spdx": "LGPL-2.1-or-later",
+        "source": "https://ffmpeg.org/legal.html",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 0,
+      "cloud_available": true
+    },
+    {
+      "id": "video-trim",
+      "version": "1.0.0",
+      "name": "Trim video",
+      "description": "Cut a video between two timestamps.",
+      "category": "video",
+      "mcp_name": "video_trim",
+      "inputs": {
+        "video": {
+          "type": "video",
+          "required": true,
+          "description": "Source video or GIF",
+          "max_mb": 500,
+          "max_seconds": 600
+        }
+      },
+      "params": {
+        "start": {
+          "type": "float",
+          "default": 0,
+          "description": "Start, seconds.",
+          "min": 0
+        },
+        "end": {
+          "type": "float",
+          "description": "End, seconds (default: end of the video).",
+          "min": 0
+        },
+        "reencode": {
+          "type": "bool",
+          "default": true,
+          "description": "Frame-accurate cut (re-encode). False = fast keyframe cut."
+        }
+      },
+      "outputs": {
+        "video": {
+          "type": "video",
+          "format": "mp4"
+        }
+      },
+      "runtimes": {
+        "local": [
+          "cpu"
+        ],
+        "cloud_queue": "tools-cpu",
+        "slow_on_cpu": false,
+        "min_vram_gb": 0.0,
+        "min_ram_gb": 0.0,
+        "needs_engine": false
+      },
+      "cost": {
+        "credits": 2.0
+      },
+      "license": {
+        "spdx": "LGPL-2.1-or-later",
+        "source": "https://ffmpeg.org/legal.html",
+        "verified": true
+      },
+      "available": true,
+      "weights_mb": 0,
+      "cloud_available": true
+    }
+  ]
+}

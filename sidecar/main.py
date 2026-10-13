@@ -134,6 +134,13 @@ def generate(payload: dict, ctx: dict) -> dict:
     """
     engine = ctx["engine"]
 
+    # Generation editing tools (vary / inpaint / outpaint) run here, on the
+    # loaded model, through imference_engine.tools.run_tool. The result is the
+    # ToolResult dict with outputs written under output_dir — never base64
+    # (the Go reader caps a stdout line at 4 MB).
+    if payload.get("tool_id"):
+        return _run_tool(payload, engine)
+
     prompt = payload.get("prompt")
     if not prompt:
         # @task exceptions are surfaced as {error: traceback} on stdout —
@@ -220,6 +227,46 @@ def generate(payload: dict, ctx: dict) -> dict:
         "errors": error_strs,
         "device": ctx.get("device"),
     }
+
+
+TOOL_PROGRESS_PREFIX = "IMTOOL_PROGRESS "
+
+
+def _run_tool(payload: dict, engine) -> dict:
+    """Run a generation tool on this sidecar's engine. Payload:
+    {"tool_id", "job_id", "inputs": {name: path}, "params", "output_dir"}.
+    Returns {"tool": ToolResult.to_dict()} or {"tool_error": {code, message}}."""
+    import json
+
+    try:
+        from imference_engine.tools import ToolError, run_tool
+    except ImportError as e:  # engine predates the tools (< 0.5.0)
+        return {"tool_error": {"code": "unsupported_runtime",
+                               "message": f"this engine has no editing tools (update to >= 0.5.0): {e}"}}
+    job_id = str(payload.get("job_id") or "")
+
+    def progress(stage, fraction):
+        try:
+            sys.stderr.write(TOOL_PROGRESS_PREFIX + json.dumps(
+                {"task_id": job_id, "stage": stage, "fraction": round(float(fraction), 4)}) + "\n")
+            sys.stderr.flush()
+        except Exception:
+            pass
+
+    params = dict(payload.get("params") or {})
+    # The sidecar holds one model, registered as MODEL_NAME: the tool must use it.
+    params["model"] = MODEL_NAME
+    output_dir = payload.get("output_dir")
+    if not output_dir:
+        return {"tool_error": {"code": "invalid_input", "message": "payload.output_dir is required"}}
+    os.makedirs(output_dir, exist_ok=True)
+    try:
+        res = run_tool(payload["tool_id"], payload.get("inputs") or {}, params,
+                       output_dir=output_dir, engine=engine, on_progress=progress)
+    except ToolError as e:
+        logger.warning("tool %s failed: %s: %s", payload["tool_id"], e.code, e)
+        return {"tool_error": e.to_dict()}
+    return {"tool": res.to_dict()}
 
 
 def _warm() -> None:

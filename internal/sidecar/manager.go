@@ -317,6 +317,11 @@ type StatusListener func(types.SidecarStatus)
 // to a Wails event, same as StatusListener, so this package stays Wails-free.
 type ProgressListener func(types.GenerateProgress)
 
+// ToolProgressListener receives the named stages of a generation editing tool
+// (vary / inpaint / outpaint) running in this sidecar, parsed from the
+// "IMTOOL_PROGRESS {json}" lines sidecar/main.py writes to stderr.
+type ToolProgressListener func(jobID, stage string, fraction float64)
+
 // Manager is goroutine-safe. The hot path (Send) takes stdinMu while
 // writing a request line; readers fan out to per-task channels under
 // pendingMu.
@@ -325,6 +330,7 @@ type Manager struct {
 	logDir     string
 	listener   StatusListener
 	progress   ProgressListener
+	toolProg   ToolProgressListener
 	inferring  atomic.Bool // true between "Inference chunk" and the 100% step
 	stopping   atomic.Bool // true during an intentional Stop, so watchExit doesn't cry "error"
 	bus        *logbus.Bus
@@ -385,6 +391,10 @@ func New(scriptPath, logDir string, listener StatusListener, bus *logbus.Bus) *M
 // SetProgressListener wires per-step generation progress to the caller. Set once
 // at startup, before any generation runs.
 func (m *Manager) SetProgressListener(fn ProgressListener) { m.progress = fn }
+
+// SetToolProgressListener wires generation-tool stage progress to the caller.
+// Set once at startup.
+func (m *Manager) SetToolProgressListener(fn ToolProgressListener) { m.toolProg = fn }
 
 // Status returns a snapshot of the current state.
 func (m *Manager) Status() types.SidecarStatus {
@@ -681,6 +691,10 @@ var deviceLogRE = regexp.MustCompile(`Sidecar ready on (\S+) device`)
 // tqdmRE parses a tqdm progress bar line, e.g. " 45%|████▌ | 9/20 [04:52<05:57,
 // 32.5s/it]" -> percent=45, step=9, total=20. The engine's denoise loop (and its
 // component loaders) render these to stderr with carriage returns.
+// toolProgressPrefix marks a generation-tool progress line on stderr (see
+// sidecar/main.py:_run_tool).
+const toolProgressPrefix = "IMTOOL_PROGRESS "
+
 var tqdmRE = regexp.MustCompile(`(\d+)%\|[^|]*\|\s*(\d+)/(\d+)`)
 
 // scanLinesOrCR splits on either '\n' or '\r' so tqdm's in-place redraws (which
@@ -713,6 +727,19 @@ func (m *Manager) streamStderr(r io.Reader) {
 		line := scanner.Text()
 		if line == "" {
 			continue
+		}
+		if rest, ok := strings.CutPrefix(line, toolProgressPrefix); ok {
+			var ev struct {
+				TaskID   string  `json:"task_id"`
+				Stage    string  `json:"stage"`
+				Fraction float64 `json:"fraction"`
+			}
+			if json.Unmarshal([]byte(rest), &ev) == nil {
+				if m.toolProg != nil {
+					m.toolProg(ev.TaskID, ev.Stage, ev.Fraction)
+				}
+				continue
+			}
 		}
 		// The engine logs "Inference chunk 1-1/1 …" right before the denoise
 		// loop — gate progress parsing on it so the earlier component/fetch

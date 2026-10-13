@@ -56,7 +56,21 @@ import (
 //
 // For local development, override via the IMFERENCE_ENGINE_SOURCE env var.
 // See resolveEngineSource() below.
-const EngineTarball = "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.4.5.tar.gz"
+//
+// v0.5.0 adds the editing tools (imference_engine.tools: upscale, remove
+// background, eraser, click-to-select, restore faces, describe, utilities,
+// video utilities, and the vary / inpaint / outpaint generation tools) behind
+// the [tools] extra (onnxruntime + imageio-ffmpeg). The onnxruntime flavor that
+// matches the GPU is swapped in by the "onnxruntime" phase (onnxRuntimePackage).
+//
+// NOTE: v0.5.0 must be TAGGED from the engine's tools branch before a release
+// build ships this pin — until then use IMFERENCE_ENGINE_SOURCE=/path/to/imference-engine.
+const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.0.tar.gz"
+
+// EngineExtras is the extras list installed with the engine: the eight image
+// backends plus the editing tools. Shared by the tarball spec and the editable
+// IMFERENCE_ENGINE_SOURCE install so both resolve the same dependency set.
+const EngineExtras = "sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2,tools"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute
@@ -81,7 +95,7 @@ func resolveEngineSource() (spec string, editable bool) {
 	// "path[extras]" syntax even on Windows paths with spaces. The image
 	// backends share byte-identical deps (torch + diffusers 0.40 + transformers +
 	// sentencepiece), so this resolves once — same extras as EngineTarball.
-	return override + "[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2]", true
+	return override + "[" + EngineExtras + "]", true
 }
 
 // pinnedEngineVersionRe pulls the X.Y.Z out of the EngineTarball tag URL
@@ -217,6 +231,53 @@ func describeGPU(g gpu.Info) types.InstallProgress {
 	default:
 		return prog("detect", "No NVIDIA/AMD GPU detected — installing the default CUDA build (runs CPU-only without one)", "install.gpuNone", nil)
 	}
+}
+
+// onnxRuntimePackage picks the onnxruntime wheel for the editing tools' ONNX
+// models (upscale, background removal, eraser, click-to-select, restore faces):
+//
+//   - NVIDIA on Windows/Linux: onnxruntime-gpu (CUDA 12 build, matches the
+//     cu124 torch the torch phase installs);
+//   - any other GPU on Windows: onnxruntime-directml (AMD / Intel via DirectX 12);
+//   - everything else (macOS, Linux AMD/none): plain onnxruntime (CPU; the
+//     engine's [tools] extra already installed it).
+//
+// The flavors all ship the same "onnxruntime" import package, so they cannot
+// coexist: the phase uninstalls the plain wheel first, and puts it back when
+// the accelerated one fails to install (the tools then run on CPU).
+func onnxRuntimePackage(goos string, v gpu.Vendor) string {
+	switch {
+	case goos == "darwin":
+		return "onnxruntime"
+	case v == gpu.VendorNVIDIA:
+		return "onnxruntime-gpu"
+	case goos == "windows":
+		return "onnxruntime-directml"
+	default:
+		return "onnxruntime"
+	}
+}
+
+// installOnnxRuntime swaps the CPU onnxruntime pulled by the [tools] extra for
+// the GPU flavor. Best-effort: a failure leaves (or restores) the CPU wheel,
+// the tools still work — slower — so it never fails the install.
+func (i *Installer) installOnnxRuntime(ctx context.Context, venvPython string, g gpu.Info, emit func(types.InstallProgress)) {
+	pkg := onnxRuntimePackage(runtime.GOOS, g.Vendor)
+	if pkg == "onnxruntime" {
+		return // the [tools] extra already installed it
+	}
+	emit(prog("onnxruntime", "Installing "+pkg+" (GPU runtime for the editing tools)", "install.onnxRuntime",
+		map[string]string{"pkg": pkg}))
+	i.bus.Info("installer", "onnxruntime phase start", map[string]any{"pkg": pkg})
+	_ = i.runPip(ctx, venvPython, "onnxruntime", emit, "uninstall", "-y", "onnxruntime", "onnxruntime-gpu", "onnxruntime-directml")
+	if err := i.runPip(ctx, venvPython, "onnxruntime", emit, "install", "--upgrade", pkg); err != nil {
+		i.bus.Warn("installer", pkg+" install failed; editing tools fall back to CPU", map[string]any{"err": err.Error()})
+		_ = i.runPip(ctx, venvPython, "onnxruntime", emit, "install", "onnxruntime")
+		emit(prog("onnxruntime", pkg+" install failed (non-fatal: tools run on CPU)", "install.onnxRuntimeFailed",
+			map[string]string{"pkg": pkg}))
+		return
+	}
+	emit(done100(prog("onnxruntime", pkg+" installed", "install.onnxRuntimeDone", map[string]string{"pkg": pkg})))
 }
 
 // SDEmbedTarball is the GitHub archive URL for sd_embed (weighted prompt
@@ -412,6 +473,9 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 	}
 	emit(done100(prog("engine", "imference-engine installed", "install.engineInstalled", nil)))
 
+	// ----- Phase 5b: onnxruntime flavor for the editing tools -----
+	i.installOnnxRuntime(ctx, venvPython, g, emit)
+
 	// ----- Phase 6: pip install sd-embed (weighted prompts + BREAK keyword) -----
 	// Separate phase BECAUSE sd_embed's setup.py declares unconstrained torch +
 	// torchvision deps. Without --no-deps, pip would tear down our CUDA torch
@@ -517,6 +581,10 @@ func (i *Installer) reinstallEngineOnly(
 		return err
 	}
 	emit(done100(prog("engine", "imference-engine installed", "install.engineInstalled", nil)))
+
+	// The reinstall pulls the plain CPU onnxruntime back in via [tools]: swap
+	// the GPU flavor in again.
+	i.installOnnxRuntime(ctx, venvPython, gpu.Detect(ctx), emit)
 
 	// sd-embed (weighted prompts) — same best-effort --no-deps as the full install.
 	emit(prog("extras", "Installing sd-embed (weighted prompts) with --no-deps", "install.sdEmbed", nil))

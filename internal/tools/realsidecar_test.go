@@ -14,12 +14,20 @@ import (
 )
 
 // TestRealToolsSidecar drives sidecar/tools_main.py with the real engine
-// (runqy-python + imference-engine[tools] importable by python3). Skipped
+// (runqy-python + imference-engine[tools] importable by python3, or by
+// $IMFERENCE_TEST_PYTHON — e.g. a venv's python.exe on Windows). Skipped
 // otherwise. resize needs no weights, so it runs offline.
+//
+// With IMFERENCE_TEST_TOOLS_CACHE pointing at a staged weights cache
+// (validation/stage_tools_r2.py --work), it also runs remove-background on
+// the real model, on IMFERENCE_TEST_TOOLS_DEVICE (default auto).
 func TestRealToolsSidecar(t *testing.T) {
-	py, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("python3 not available")
+	py := os.Getenv("IMFERENCE_TEST_PYTHON")
+	if py == "" {
+		var err error
+		if py, err = exec.LookPath("python3"); err != nil {
+			t.Skip("python3 not available (set IMFERENCE_TEST_PYTHON)")
+		}
 	}
 	if out, err := exec.Command(py, "-c", "import runqy_python, imference_engine.tools").CombinedOutput(); err != nil {
 		t.Skipf("engine with tools not importable: %s", out)
@@ -75,4 +83,25 @@ func TestRealToolsSidecar(t *testing.T) {
 	if err := m.Release(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+
+	cache := os.Getenv("IMFERENCE_TEST_TOOLS_CACHE")
+	if cache == "" {
+		return
+	}
+	m2 := NewManager(logbus.New(), func() (LaunchConfig, error) {
+		return LaunchConfig{Python: py, Script: script, Env: append(os.Environ(), "PYTHONUNBUFFERED=1",
+			"TOOLS_MODEL_CACHE="+cache)}, nil
+	}, prog.add)
+	defer m2.Stop()
+	res, terr = m2.Run(context.Background(), EngineRequest{
+		JobID: "real-3", ToolID: "remove-background", Inputs: map[string]any{"image": src},
+		Params: map[string]any{}, OutputDir: filepath.Join(dir, "out"), Device: os.Getenv("IMFERENCE_TEST_TOOLS_DEVICE"),
+	})
+	if terr != nil {
+		t.Fatal(terr)
+	}
+	if o := res.Outputs[0]; o.Width != 64 || o.Height != 48 {
+		t.Fatalf("remove-background output %+v", o)
+	}
+	t.Logf("remove-background on %s in %d ms", res.Runtime, res.DurationMs)
 }

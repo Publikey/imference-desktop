@@ -24,9 +24,24 @@ const IndexFileName = "index.json"
 
 const (
 	ext         = ".safetensors"
+	ggufExt     = ".gguf" // quantized transformers (Qwen-Image-Edit lite build)
 	maxSlugRune = 48
 	hashLen     = 8
 )
+
+// weightsExt is the cache extension for a weights URL: .gguf when the URL
+// names a GGUF (the engine picks its loader by extension), .safetensors
+// otherwise.
+func weightsExt(modelURL string) string {
+	if u, err := url.Parse(modelURL); err == nil && strings.HasSuffix(strings.ToLower(u.Path), ggufExt) {
+		return ggufExt
+	}
+	return ext
+}
+
+func hasWeightsExt(name string) bool {
+	return strings.HasSuffix(name, ext) || strings.HasSuffix(name, ggufExt)
+}
 
 // Slug normalises a model code into a safe filename component: lowercase,
 // [a-z0-9-_] kept, everything else collapsed to '-', truncated. Truncation and
@@ -82,7 +97,7 @@ func URLHash(modelURL string) string {
 // not NUL).
 func FileName(modelCode, modelURL string) string {
 	sum := sha256.Sum256([]byte(modelCode + "\x00" + modelURL))
-	return Slug(modelCode) + "-" + hex.EncodeToString(sum[:])[:hashLen] + ext
+	return Slug(modelCode) + "-" + hex.EncodeToString(sum[:])[:hashLen] + weightsExt(modelURL)
 }
 
 // LegacyFileName reproduces the pre-cache naming rule exactly: the URL's
@@ -110,11 +125,11 @@ func IsSafeKey(key string) bool {
 	if strings.ContainsAny(key, `/\`) || strings.Contains(key, "..") {
 		return false
 	}
-	return strings.HasSuffix(key, ext)
+	return hasWeightsExt(key)
 }
 
 // IsWeightsFile reports whether a directory entry name is a weights file the
 // cache may index (i.e. not the index itself).
 func IsWeightsFile(name string) bool {
-	return name != IndexFileName && strings.HasSuffix(name, ext)
+	return name != IndexFileName && hasWeightsExt(name)
 }

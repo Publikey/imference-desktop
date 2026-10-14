@@ -53,13 +53,14 @@ func TestBogusModeSettingFallsBackToAuto(t *testing.T) {
 	}
 }
 
-func TestEditBackendIsHeavyLikeQwenImage(t *testing.T) {
-	// Qwen-Image-Edit is the same 20B DiT: same Auto thresholds (group offload
-	// below the module size).
-	if heavyModuleGiB["qwenimage-edit"] != heavyModuleGiB["qwenimage"] || heavyModuleGiB["qwenimage-edit"] < 40 {
-		t.Fatalf("module GiB: edit=%v qwenimage=%v", heavyModuleGiB["qwenimage-edit"], heavyModuleGiB["qwenimage"])
+func TestEditBackendIsHeavyGGUF(t *testing.T) {
+	// Qwen-Image-Edit ships as the GGUF lite build: still heavy (group offload
+	// below ~13 GiB of VRAM — an 8 GB card streams it), but far lighter than
+	// the bf16 Qwen-Image thresholds.
+	if m := heavyModuleGiB["qwenimage-edit"]; m < 12 || m >= heavyModuleGiB["qwenimage"] {
+		t.Fatalf("module GiB: edit=%v qwenimage=%v", m, heavyModuleGiB["qwenimage"])
 	}
-	if heavyResidencyGiB["qwenimage-edit"] != heavyResidencyGiB["qwenimage"] {
-		t.Fatalf("residency GiB: edit=%v qwenimage=%v", heavyResidencyGiB["qwenimage-edit"], heavyResidencyGiB["qwenimage"])
+	if r := heavyResidencyGiB["qwenimage-edit"]; r <= heavyModuleGiB["qwenimage-edit"] || r >= heavyResidencyGiB["qwenimage"] {
+		t.Fatalf("residency GiB: edit=%v", r)
 	}
 }

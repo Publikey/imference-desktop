@@ -130,9 +130,11 @@ const autoOffloadVRAMThresholdGiB = 12.0
 var (
 	heavyResidencyGiB = map[string]float64{
 		"flux": 26, "chroma": 20, "qwenimage": 44, "krea2": 16,
-		// Qwen-Image-Edit: the same 20B MMDiT + Qwen2.5-VL encoder as
-		// qwenimage (plus vision tokens for the condition image).
-		"qwenimage-edit": 44,
+		// Qwen-Image-Edit, GGUF lite build (the catalog's): Q4_K_M transformer
+		// ~13 GiB + NF4 encoder ~6 GiB for the encode phase only. Measured on
+		// an 8 GB RTX 4070 Laptop with group offload: 6.5 GB VRAM peak, ~52 s
+		// per edit. (A bf16 checkpoint would need ~44 / 42 GiB.)
+		"qwenimage-edit": 20,
 		// Z-Image: ~12 GiB bf16 transformer + multi-GiB Qwen text encoder.
 		// Cards under ~20 GiB must offload; under ~13 GiB even "model" offload
 		// leaves the transformer spilling to WDDM shared memory (the measured
@@ -141,7 +143,7 @@ var (
 	}
 	heavyModuleGiB = map[string]float64{
 		"flux": 24, "chroma": 18, "qwenimage": 42, "krea2": 14,
-		"qwenimage-edit": 42,
+		"qwenimage-edit": 13,
 		"zimage": 13,
 	}
 )

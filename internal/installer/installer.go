@@ -69,9 +69,10 @@ import (
 const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.0.tar.gz"
 
 // EngineExtras is the extras list installed with the engine: the eight image
-// backends plus the editing tools. Shared by the tarball spec and the editable
+// backends, the Qwen-Image-Edit GGUF lite build (gguf + bitsandbytes for its
+// NF4 encoder) and the editing tools. Shared by the tarball spec and the editable
 // IMFERENCE_ENGINE_SOURCE install so both resolve the same dependency set.
-const EngineExtras = "sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2,tools"
+const EngineExtras = "sdxl,sd15,zimage,flux,chroma,qwenimage,qwenimage-edit,anima,krea2,tools"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute

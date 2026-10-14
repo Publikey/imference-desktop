@@ -1176,9 +1176,10 @@ var customSamplingByBackend = map[string]samplingBounds{
 	"flux":   {28, 1, 50, 3.5, 0, 10},
 	"chroma": {28, 1, 50, 2.0, 0, 10},
 	"qwenimage": {40, 1, 50, 4.0, 0, 10},
-	// Qwen-Image-Edit 2511 recipe (40 steps, true CFG 4); only used by the
-	// instruct-edit tool — the Generate flow refuses edit models.
-	"qwenimage-edit": {40, 1, 80, 4.0, 0, 10},
+	// Qwen-Image-Edit 2511, GGUF lite build with the Lightning 4-step LoRA
+	// (the catalog's): 4 steps, CFG 1.0. Only used by the instruct-edit tool —
+	// the Generate flow refuses edit models.
+	"qwenimage-edit": {4, 1, 80, 1.0, 0, 10},
 	"anima":     {28, 1, 50, 6.0, 1, 20},
 	// Krea 2 Turbo: TDM-distilled — 8 steps, guidance OFF (cfg 0 in the Krea
 	// convention; >0 re-enables CFG and doubles the transformer passes).

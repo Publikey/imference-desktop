@@ -118,3 +118,16 @@ func TestIsSafeKey(t *testing.T) {
 		}
 	}
 }
+
+func TestFileNameKeepsGGUFExtension(t *testing.T) {
+	k := FileName("qwen-image-edit-2511", "https://cdn/x/qwen-image-edit-2511-Q4_K_M.gguf")
+	if !strings.HasSuffix(k, ".gguf") || !IsSafeKey(k) || !IsWeightsFile(k) {
+		t.Fatalf("gguf key %q", k)
+	}
+	if k := FileName("sdxl", "https://cdn/x/model.safetensors"); !strings.HasSuffix(k, ".safetensors") {
+		t.Fatalf("safetensors key %q", k)
+	}
+	if IsSafeKey("x.bin") || IsWeightsFile("index.json") {
+		t.Fatal("non-weights accepted")
+	}
+}

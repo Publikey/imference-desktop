@@ -136,7 +136,11 @@ export function ToolEditor({
 
   const [srcData, setSrcData] = useState<string | null>(null);
   const [params, setParams] = useState<Record<string, unknown>>({});
-  const [runOn, setRunOn] = useState<ToolsMode>("auto");
+  // Where a run goes: Local or Cloud, nothing in between. Preselected from the
+  // Settings preference; "Automatic" there picks Local when this machine can
+  // run the tool, else Cloud. A click here overrides it for this tool.
+  const [runPref, setRunPref] = useState<ToolsMode>("auto");
+  const [runPick, setRunPick] = useState<"local" | "cloud" | null>(null);
   // The last run started here, and whether the panel shows it (else the form:
   // "Keep editing" goes back to the form while that job runs on).
   const [lastJobId, setLastJobId] = useState<string>("");
@@ -188,7 +192,7 @@ export function ToolEditor({
     if (!open) return;
     void api
       .getToolsSettings()
-      .then((s) => setRunOn((s.mode as ToolsMode) || "auto"))
+      .then((s) => setRunPref((s.mode as ToolsMode) || "auto"))
       .catch(() => {});
   }, [open]);
 
@@ -218,6 +222,7 @@ export function ToolEditor({
   useEffect(() => {
     if (!tool) return;
     setParams(defaultParams(tool));
+    setRunPick(null);
     setShowJob(false);
     setFormError(null);
     setShowBefore(false);
@@ -236,7 +241,10 @@ export function ToolEditor({
 
   const isMaskTool = (MASK_TOOLS as readonly string[]).includes(currentId);
   const isInstruct = currentId === INSTRUCT_EDIT_ID;
-  const effectiveCloud = !!tool && (runOn === "cloud" || (runOn === "auto" && tool.badge === "cloud"));
+  const localOk = !!tool && (tool.badge === "local" || tool.badge === "local_slow");
+  const runOn: "local" | "cloud" = runPick ?? (runPref === "auto" ? (localOk || !tool?.cloudAvailable ? "local" : "cloud") : runPref);
+  const setRunOn = (v: ToolsMode) => setRunPick(v === "cloud" ? "cloud" : "local");
+  const effectiveCloud = !!tool && runOn === "cloud";
   const sourceInput = src.name ?? srcData ?? "";
 
   // Edit with instructions: the edit models (cloud catalog + the loaded local
@@ -884,7 +892,6 @@ function RunOnPicker({
         value={value}
         onChange={onChange}
         items={[
-          { value: "auto", label: t("tools.mode.auto") },
           { value: "local", label: t("tools.mode.local"), icon: <Cpu className="size-3" /> },
           { value: "cloud", label: t("tools.mode.cloud"), icon: <Cloud className="size-3" /> },
         ]}

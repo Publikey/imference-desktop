@@ -1,4 +1,4 @@
-// ToolDialog — runs one editing tool on a gallery item.
+// ToolEditor — the Edit panel: runs editing tools on a gallery item (as Activity jobs).
 //
 // The form is generated from the tool's manifest params (enum -> segmented /
 // select, bounded numbers -> slider, bool -> checkbox, string -> input), plus a
@@ -34,7 +34,6 @@ import {
   Square,
   SplitSquareHorizontal,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,7 +68,8 @@ import type {
   ToolError,
   ToolInfo,
   ToolParamSpec,
-  ToolProgress,
+  Job,
+  ToolRunRequest,
   ToolRunResult,
   ToolsMode,
 } from "@/lib/types";
@@ -95,28 +95,36 @@ function isVideo(src: string | null | undefined): boolean {
   return !!src && src.startsWith("data:video/");
 }
 
-export function ToolDialog({
-  open,
+/**
+ * The image editor (the main window's Edit panel): the source image / mask
+ * editor, a tool and its settings. A run is an Activity job (onRunJob): the
+ * panel never blocks, the job keeps going while the user edits, generates or
+ * closes the panel, and its outputs land in the gallery.
+ */
+export function ToolEditor({
   toolId,
   source,
   initialMaskMode,
+  jobs,
   onClose,
-  onSaved,
-  onOpenSaved,
+  onRunJob,
+  onOpenImage,
   onUseAsSource,
 }: {
-  open: boolean;
   toolId: string;
   source: ToolSource;
   /** "select" when opened from "Click to select". */
   initialMaskMode?: MaskMode;
+  /** The Activity jobs (this editor follows the last one it started). */
+  jobs: Job[];
   onClose: () => void;
-  /** Outputs were saved to the gallery (refresh it). */
-  onSaved: (names: string[]) => void;
-  /** Open a saved output in the gallery viewer. */
-  onOpenSaved: (name: string) => void;
+  /** Start a run as an Activity job (App.runToolJob). */
+  onRunJob: (req: ToolRunRequest, label: string, sourceName: string | null) => void;
+  /** Open an output in the viewer. */
+  onOpenImage: (src: string) => void;
   onUseAsSource: (getSrc: () => Promise<string>) => void;
 }) {
+  const open = true;
   const { t } = useTranslation();
   const tools = useTools();
   const rail = usePaymentRail();
@@ -127,19 +135,43 @@ export function ToolDialog({
   const [srcData, setSrcData] = useState<string | null>(null);
   const [params, setParams] = useState<Record<string, unknown>>({});
   const [runOn, setRunOn] = useState<ToolsMode>("auto");
-  const [phase, setPhase] = useState<Phase>("form");
-  const [progress, setProgress] = useState<ToolProgress | null>(null);
-  const [result, setResult] = useState<ToolRunResult | null>(null);
-  const [error, setError] = useState<ToolError | null>(null);
-  const [resultSrc, setResultSrc] = useState<string | null>(null);
+  // The last run started here, and whether the panel shows it (else the form:
+  // "Keep editing" goes back to the form while that job runs on).
+  const [lastJobId, setLastJobId] = useState<string>("");
+  const [showJob, setShowJob] = useState(false);
+  // A run refused before it started (empty mask, a click-to-select error).
+  const [formError, setFormError] = useState<ToolError | null>(null);
   const [showBefore, setShowBefore] = useState(false);
   const [hasMask, setHasMask] = useState(false);
   const [copied, setCopied] = useState(false);
   const [refs, setRefs] = useState<RefImage[]>([]);
   const [editModels, setEditModels] = useState<EditModelsInfo | null>(null);
   const [editModelsRev, setEditModelsRev] = useState(0);
-  const jobRef = useRef<string>("");
   const maskRef = useRef<MaskEditorHandle>(null);
+  const job = lastJobId ? jobs.find((j) => j.id === lastJobId) : undefined;
+  const result: ToolRunResult | null = (showJob && job?.tool?.result) || null;
+  const resultSrc = (showJob && job?.status === "done" && job.tool?.preview) || null;
+  const progress = job?.tool?.stage ? { stage: job.tool.stage, fraction: job.tool.fraction ?? 0 } : null;
+  const jobError: ToolError | null =
+    job?.status === "error"
+      ? (job.tool?.result?.error ?? { code: "internal", message: job.error ?? "" })
+      : null;
+  const phase: Phase = showJob && job
+    ? job.status === "done"
+      ? "done"
+      : job.status === "error"
+        ? "error"
+        : "running"
+    : formError
+      ? "error"
+      : "form";
+  const error = showJob && jobError ? jobError : formError;
+  const setPhase = (p: Phase) => {
+    if (p === "form") {
+      setShowJob(false);
+      setFormError(null);
+    }
+  };
 
   // Learn the real runtime once (starts the tools sidecar when installed).
   useEffect(() => {
@@ -181,11 +213,8 @@ export function ToolDialog({
   useEffect(() => {
     if (!tool) return;
     setParams(defaultParams(tool));
-    setPhase("form");
-    setResult(null);
-    setError(null);
-    setResultSrc(null);
-    setProgress(null);
+    setShowJob(false);
+    setFormError(null);
     setShowBefore(false);
     setRefs([]);
     // Switching eraser <-> repaint keeps the painted mask (same editor).
@@ -193,20 +222,12 @@ export function ToolDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toolKey, src.name]);
 
-  // Stage progress for the running job.
-  useEffect(() => {
-    if (!open) return;
-    return api.onToolProgress((p) => {
-      if (p.jobId === jobRef.current) setProgress(p);
-    });
-  }, [open]);
-
+  // Closing never cancels a run: it goes on in Activity. The small models are
+  // freed only when no tool run is in flight.
   const close = useCallback(() => {
-    if (phase === "running" && jobRef.current) void api.cancelTool(jobRef.current);
-    // Free the small models loaded during this editing session.
-    void api.releaseTools().catch(() => {});
+    if (!jobs.some((j) => j.kind === "tool" && j.status === "running")) void api.releaseTools().catch(() => {});
     onClose();
-  }, [phase, onClose]);
+  }, [jobs, onClose]);
 
   const isMaskTool = (MASK_TOOLS as readonly string[]).includes(currentId);
   const isInstruct = currentId === INSTRUCT_EDIT_ID;
@@ -239,7 +260,7 @@ export function ToolDialog({
       : tool;
   const instructionMissing = isInstruct && !String(params.instruction ?? "").trim();
 
-  const run = async (forceRunOn?: ToolsMode) => {
+  const run = (forceRunOn?: ToolsMode) => {
     if (!tool || !sourceInput) return;
     const primary = tool.inputs.find((i) => i.type !== "mask");
     const inputs: Record<string, string[]> = {};
@@ -247,51 +268,23 @@ export function ToolDialog({
     if (tool.inputs.some((i) => i.type === "mask")) {
       const mask = maskRef.current?.exportMask();
       if (!mask) {
-        setError({ code: "invalid_input", message: t("tools.mask.empty") });
-        setPhase("error");
+        setFormError({ code: "invalid_input", message: t("tools.mask.empty") });
         return;
       }
       inputs.mask = [mask];
     }
     if (isInstruct && refs.length) inputs.references = refs.map((r) => r.input);
     const jobId = newToolJobId();
-    jobRef.current = jobId;
-    setPhase("running");
-    setError(null);
-    setResult(null);
-    setResultSrc(null);
-    setProgress(null);
-    const res = await api
-      .runTool({ jobId, toolId: tool.id, inputs, params, runOn: forceRunOn ?? runOn })
-      .catch(
-        (e: unknown): ToolRunResult => ({
-          jobId,
-          toolId: tool.id,
-          outputs: [],
-          durationMs: 0,
-          error: { code: "internal", message: e instanceof Error ? e.message : String(e) },
-        })
-      );
-    if (jobRef.current !== jobId) return; // superseded
-    if (res.error) {
-      setError(res.error);
-      setPhase(res.error.code === "cancelled" ? "form" : "error");
-      return;
-    }
-    setResult(res);
-    setPhase("done");
-    const saved = res.outputs.map((o) => o.savedName).filter((n): n is string => !!n);
-    if (saved.length) {
-      onSaved(saved);
-      void api
-        .getSavedImage(saved[0])
-        .then(setResultSrc)
-        .catch(() => {});
-    }
+    const instruction = isInstruct ? String(params.instruction ?? "").trim() : "";
+    const label = toolName(t, tool) + (instruction ? ` · ${instruction}` : "");
+    setFormError(null);
+    setLastJobId(jobId);
+    setShowJob(true);
+    onRunJob({ jobId, toolId: tool.id, inputs, params, runOn: forceRunOn ?? runOn }, label, src.name);
   };
 
   const cancel = () => {
-    if (jobRef.current) void api.cancelTool(jobRef.current);
+    if (lastJobId) void api.cancelTool(lastJobId);
   };
 
   const firstSaved = result?.outputs.find((o) => o.savedName);
@@ -315,23 +308,19 @@ export function ToolDialog({
   const stageLabel = (st: string) => t(`tools.stage.${KNOWN_STAGES.has(st) ? st : "running"}`);
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      <DialogContent
-        onInteractOutside={(e) => e.preventDefault()}
-        className="ring-border/60 flex max-h-[92vh] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-2xl ring-1 sm:max-w-4xl"
-      >
-        <header className="flex items-center gap-3 border-b px-5 py-3.5 pr-12">
+    <div className="@container flex flex-col overflow-hidden rounded-xl border">
+        <header className="flex items-center gap-3 border-b px-3 py-2.5">
           <span className="brand-surface flex size-8 items-center justify-center rounded-xl text-white">
             <ToolIcon id={currentId} className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
               {tool ? toolName(t, tool) : currentId}
               {tool && <ToolBadgeChip badge={tool.badge} />}
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground truncate text-xs">
+            </h3>
+            <p className="text-muted-foreground truncate text-xs">
               {tool ? t(`tools.desc.${tool.id}`, { defaultValue: tool.description }) : ""}
-            </DialogDescription>
+            </p>
           </div>
           {isMaskTool && phase !== "done" && (
             <Segmented<string>
@@ -344,6 +333,15 @@ export function ToolDialog({
               }))}
             />
           )}
+          <button
+            type="button"
+            onClick={close}
+            aria-label={t("common.close")}
+            title={t("common.close")}
+            className="text-muted-foreground hover:text-foreground hover:bg-muted -mr-1 rounded-md p-1.5 transition-colors"
+          >
+            <X className="size-4" />
+          </button>
         </header>
 
         {!tool ? (
@@ -351,7 +349,7 @@ export function ToolDialog({
             <Loader2 className="size-4 animate-spin" /> {t("tools.loading")}
           </div>
         ) : (
-          <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-[1fr_300px]">
+          <div className="grid min-h-0 flex-1 gap-0 overflow-hidden @3xl:grid-cols-[1fr_300px]">
             {/* Left: the image / mask editor / result. */}
             <div className="bg-muted/30 relative flex min-h-[280px] items-center justify-center overflow-auto p-4">
               {phase === "done" && (resultSrc || textOut) ? (
@@ -376,8 +374,7 @@ export function ToolDialog({
                     onSelectError={(e) => {
                       // The offer would re-run the eraser, not the click: the
                       // run-on picker is the way to send selections to the cloud.
-                      setError({ ...e, cloudRetry: undefined });
-                      setPhase("error");
+                      setFormError({ ...e, cloudRetry: undefined });
                     }}
                     disabled={phase === "running"}
                   />
@@ -395,7 +392,7 @@ export function ToolDialog({
             </div>
 
             {/* Right: form, where it runs, progress, result actions. */}
-            <div className="flex min-h-0 flex-col border-l">
+            <div className="flex min-h-0 flex-col border-t @3xl:border-t-0 @3xl:border-l">
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
                 {phase !== "done" && (
                   <>
@@ -454,6 +451,7 @@ export function ToolDialog({
                     <ProgressBar
                       percent={progress && progress.fraction > 0 ? progress.fraction * 100 : null}
                     />
+                    <p className="text-muted-foreground text-[11px] leading-snug">{t("tools.runsInActivity")}</p>
                   </div>
                 )}
 
@@ -508,10 +506,8 @@ export function ToolDialog({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => {
-                            onOpenSaved(firstSaved.savedName!);
-                            close();
-                          }}
+                          disabled={!resultSrc}
+                          onClick={() => resultSrc && onOpenImage(resultSrc)}
                         >
                           <Maximize2 className="size-3.5" /> {t("tools.open")}
                         </Button>
@@ -522,7 +518,6 @@ export function ToolDialog({
                             onClick={() => {
                               const n = firstSaved.savedName!;
                               onUseAsSource(() => api.getSavedImage(n));
-                              close();
                             }}
                           >
                             <ImageIcon className="size-3.5" /> {t("tools.useAsSource")}
@@ -558,9 +553,15 @@ export function ToolDialog({
 
               <footer className="flex items-center gap-2 border-t p-3">
                 {phase === "running" ? (
-                  <Button variant="outline" className="flex-1" onClick={cancel}>
-                    <Square className="size-3.5" /> {t("common.cancel")}
-                  </Button>
+                  <>
+                    <Button variant="outline" className="flex-1" onClick={cancel}>
+                      <Square className="size-3.5" /> {t("common.cancel")}
+                    </Button>
+                    {/* The run goes on in Activity: back to the form meanwhile. */}
+                    <Button variant="outline" className="flex-1" onClick={() => setPhase("form")}>
+                      {t("tools.keepEditing")}
+                    </Button>
+                  </>
                 ) : phase === "done" ? (
                   <>
                     <Button variant="outline" className="flex-1" onClick={() => setPhase("form")}>
@@ -588,8 +589,7 @@ export function ToolDialog({
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 }
 

@@ -494,6 +494,23 @@ export type Job = {
    * record yet and settles on its own within the poll budget.
    */
   resumed?: boolean;
+  /** An editing-tool run (the Edit panel) rather than a generation: kept out of
+   *  the local generation queue, settled by App.runToolJob. */
+  kind?: "tool";
+  tool?: ToolJobInfo;
+};
+
+/** The tool side of an Activity job. */
+export type ToolJobInfo = {
+  toolId: string;
+  /** Live stage from "tools:progress" (starting, running, uploading…). */
+  stage?: string;
+  fraction?: number;
+  result?: ToolRunResult;
+  /** Data URL of the first saved output (Activity thumbnail / viewer). */
+  preview?: string;
+  /** The gallery file the tool ran on (re-open it in the editor). */
+  sourceName?: string | null;
 };
 
 export type SidecarStatus =

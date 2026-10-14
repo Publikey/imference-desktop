@@ -222,6 +222,7 @@
     "dropHere": "拖放到此处作为参考图"
   },
   "panels": {
+    "edit": "编辑",
     "create": "创作",
     "queue": "任务",
     "gallery": "画廊",
@@ -600,6 +601,7 @@
     "modelTakesNoRefImage": "该模型仅按提示词生成，不接受参考图",
     "downloadCancelled": "已取消下载",
     "genFailed": "生成失败",
+    "toolFailed": "{{tool}} 失败",
     "genStopped": "已停止生成 — 正在重新加载引擎",
     "cloudRechecking": "正在重新检查云端生成…",
     "switchQueued": "将在当前生成完成后加载 {{name}}",
@@ -679,6 +681,8 @@
     "unknownFamily": "未知系列"
   },
   "tools": {
+    "keepEditing": "继续编辑",
+    "runsInActivity": "在“活动”中运行：可继续操作或关闭此面板，结果会保存到图库。",
     "edit": "编辑",
     "moreTools": "更多工具…",
     "loading": "正在加载工具…",

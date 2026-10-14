@@ -27,6 +27,7 @@ import {
   Wand2,
   Activity,
   Images,
+  Brush,
   Sun,
   Moon,
   Monitor,
@@ -57,11 +58,11 @@ import { CloudLoraCard, LORA_BACKENDS, LoraCard, loraFits } from "@/components/L
 import { PaymentBar } from "@/components/PaymentBar";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
-import { PanelBoard, usePanelLayout } from "@/components/PanelBoard";
+import { PanelBoard, hidePanel, restorePanel, usePanelLayout } from "@/components/PanelBoard";
 import { ActivityDock } from "@/components/ActivityDock";
 import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
-import { ToolDialog, type ToolSource } from "@/components/ToolDialog";
+import { ToolEditor, type ToolSource } from "@/components/ToolEditor";
 import { ToolMenuList } from "@/components/ToolBits";
 import { isEditModel } from "@/lib/tools";
 import { api } from "@/lib/wails-bridge";
@@ -93,6 +94,8 @@ import type {
   PaymentMode,
   SavedImage,
   SidecarStatus,
+  ToolRunRequest,
+  ToolRunResult,
   UpdateInfo,
 } from "@/lib/types";
 import { Browser } from "@wailsio/runtime";
@@ -405,7 +408,7 @@ export default function App() {
   // denoise crashes the in-flight generation. "Active" = something local is
   // running or still queued (drives the "Add to queue" label).
   const localQueueActive = jobs.some(
-    (j) => j.mode === "local" && !j.hidden && (j.status === "running" || j.status === "queued")
+    (j) => j.kind !== "tool" && j.mode === "local" && !j.hidden && (j.status === "running" || j.status === "queued")
   );
   // The model the engine actually has loaded — the queue is per-model, since a
   // job may be enqueued for a cached model that isn't loaded yet.
@@ -417,6 +420,7 @@ export default function App() {
   // read the latest state without re-binding.
   const localQueueBlocking = jobs.some(
     (j) =>
+      j.kind !== "tool" &&
       j.mode === "local" &&
       !j.hidden &&
       (j.status === "running" || j.status === "queued") &&
@@ -505,7 +509,7 @@ export default function App() {
         setJobs((js) => {
           let target = -1;
           for (let i = js.length - 1; i >= 0; i--) {
-            if (js[i].status === "running" && js[i].mode === "local") {
+            if (js[i].status === "running" && js[i].mode === "local" && js[i].kind !== "tool") {
               target = i;
               break;
             }
@@ -1205,7 +1209,7 @@ export default function App() {
     if (sidecar.state !== "ready") return;
     // A hidden (stopped) job may still be status "running" until its promise
     // settles; don't let it block the next queued job.
-    if (jobs.some((j) => j.mode === "local" && j.status === "running" && !j.hidden)) return;
+    if (jobs.some((j) => j.kind !== "tool" && j.mode === "local" && j.status === "running" && !j.hidden)) return;
     let next: Job | undefined;
     for (let i = jobs.length - 1; i >= 0; i--) {
       const j = jobs[i];
@@ -1243,6 +1247,11 @@ export default function App() {
   // settleJob (cancelledIdsRef) keeps it silent.
   const stopJob = useCallback(
     async (job: Job) => {
+      // A tool run: cancel it (the tools sidecar / cloud poll stop; nothing to reload).
+      if (job.kind === "tool") {
+        if (job.status === "running") void api.cancelTool(job.id).catch(() => {});
+        return;
+      }
       if (job.status === "queued") {
         dismissJob(job.id);
         return;
@@ -1287,6 +1296,81 @@ export default function App() {
         js.map((j) => (j.status === "running" || j.status === "queued" ? j : { ...j, hidden: true }))
       ),
     []
+  );
+
+  // --- Edit panel ------------------------------------------------------------
+  // The item open in the Edit panel (null = panel hidden), and the gallery
+  // files tool runs wrote (the gallery pulls them in).
+  const [editTarget, setEditTarget] = useState<{
+    toolId: string;
+    source: ToolSource;
+    maskMode?: "select";
+    key: number;
+  } | null>(null);
+  const [toolOutputs, setToolOutputs] = useState<string[]>([]);
+  const openEditor = useCallback(
+    (toolId: string, source: ToolSource, maskMode?: "select") =>
+      setEditTarget({ toolId, source, maskMode, key: Date.now() }),
+    []
+  );
+
+  // Tool stages ("tools:progress") onto their Activity rows.
+  useEffect(
+    () =>
+      api.onToolProgress((p) =>
+        setJobs((js) =>
+          js.some((j) => j.id === p.jobId && j.kind === "tool")
+            ? js.map((j) =>
+                j.id === p.jobId && j.tool ? { ...j, tool: { ...j.tool, stage: p.stage, fraction: p.fraction } } : j
+              )
+            : js
+        )
+      ),
+    []
+  );
+
+  // A tool run is an Activity job: it starts right away (tools never wait in
+  // the generation queue), runs while the user keeps working, and settles here.
+  const runToolJob = useCallback(
+    (req: ToolRunRequest, label: string, sourceName: string | null) => {
+      const now = Date.now();
+      setJobs((js) => [
+        {
+          id: req.jobId, kind: "tool", mode: req.runOn === "cloud" ? "cloud" : "local", prompt: label,
+          status: "running", progress: null, queuedAt: now, startedAt: now,
+          tool: { toolId: req.toolId, sourceName, stage: "starting" },
+        },
+        ...js,
+      ]);
+      const settle = (patch: (j: Job) => Partial<Job>) =>
+        setJobs((js) => js.map((j) => (j.id === req.jobId ? { ...j, ...patch(j), endedAt: Date.now() } : j)));
+      void api
+        .runTool(req)
+        .catch(
+          (e: unknown): ToolRunResult => ({
+            jobId: req.jobId, toolId: req.toolId, outputs: [], durationMs: 0,
+            error: { code: "internal", message: e instanceof Error ? e.message : String(e) },
+          })
+        )
+        .then(async (res) => {
+          const mode = res.ranOn === "cloud" ? ("cloud" as const) : ("local" as const);
+          if (res.error) {
+            const cancelled = res.error.code === "cancelled";
+            settle((j) => ({
+              status: "error", error: res.error!.message, hidden: cancelled || j.hidden, mode,
+              tool: { ...j.tool!, result: res, stage: undefined },
+            }));
+            if (!cancelled) toast.error(t("toast.toolFailed", { tool: label }));
+            return;
+          }
+          const saved = res.outputs.map((o) => o.savedName).filter((n): n is string => !!n);
+          const first = res.outputs.find((o) => o.savedName && o.type !== "text");
+          const preview = first?.savedName ? await api.getSavedImage(first.savedName).catch(() => undefined) : undefined;
+          settle((j) => ({ status: "done", mode, tool: { ...j.tool!, result: res, preview, stage: undefined } }));
+          if (saved.length) setToolOutputs((o) => [...o, ...saved]);
+        });
+    },
+    [toast, t]
   );
 
   // --- Gallery → composer bridges ------------------------------------------
@@ -1528,7 +1612,7 @@ export default function App() {
   );
   // Fresh session tiles for the gallery — done AND not dismissed/deleted (a
   // deleted tile is hidden; without this it would linger after its file is gone).
-  const doneJobs = useMemo(() => jobs.filter((j) => j.status === "done" && !j.hidden), [jobs]);
+  const doneJobs = useMemo(() => jobs.filter((j) => j.status === "done" && !j.hidden && j.kind !== "tool"), [jobs]);
 
   // --- Command palette registry --------------------------------------------
   // The single source of truth for app actions. The ⌘K palette renders it now;
@@ -1658,8 +1742,10 @@ export default function App() {
             side on desktop, stacked (in the same order) on narrow windows. */}
         <div className="mx-auto w-full max-w-[110rem] px-6 pt-5 pb-16">
           <PanelBoard
-            columns={panelColumns}
-            onColumnsChange={setPanelColumns}
+            columns={editTarget ? panelColumns : hidePanel(panelColumns, "edit")}
+            onColumnsChange={(next) =>
+              setPanelColumns(editTarget ? next : restorePanel(next, panelColumns, "edit"))
+            }
             collapsed={panelCollapsed}
             onToggleCollapsed={togglePanelCollapsed}
             widths={panelWidths}
@@ -1901,6 +1987,24 @@ export default function App() {
                   </div>
                 ),
               },
+              edit: {
+                title: t("panels.edit"),
+                icon: <Brush />,
+                width: 34,
+                content: editTarget ? (
+                  <ToolEditor
+                    key={editTarget.key}
+                    toolId={editTarget.toolId}
+                    source={editTarget.source}
+                    initialMaskMode={editTarget.maskMode}
+                    jobs={jobs}
+                    onClose={() => setEditTarget(null)}
+                    onRunJob={runToolJob}
+                    onOpenImage={(src) => setLightbox({ src, meta: null })}
+                    onUseAsSource={useAsImg2img}
+                  />
+                ) : null,
+              },
               gallery: {
                 title: t("panels.gallery"),
                 icon: <Images />,
@@ -1908,6 +2012,8 @@ export default function App() {
                 content: (
                   <Gallery
                     jobs={doneJobs}
+                    toolOutputs={toolOutputs}
+                    onOpenTool={openEditor}
                     onUseAsSource={useAsImg2img}
                     onImageDragStart={startImageDrag}
                     onReuseSettings={reuseSettings}
@@ -3269,16 +3375,22 @@ const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
 
 function Gallery({
   jobs,
+  toolOutputs,
   onUseAsSource,
   onImageDragStart,
   onReuseSettings,
   onHideJob,
+  onOpenTool,
 }: {
   jobs: Job[];
+  /** Gallery files written by tool runs (Activity jobs): pulled into the grid. */
+  toolOutputs: string[];
   onUseAsSource: (getSrc: () => Promise<string>) => void;
   onImageDragStart: (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
   onHideJob: (id: string) => void;
+  /** Open an item in the Edit panel. */
+  onOpenTool: (toolId: string, source: ToolSource, maskMode?: "select") => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -3296,12 +3408,6 @@ function Gallery({
   const [viewIndex, setViewIndex] = useState<number | null>(null);
   // At most one tile plays sound at a time — unmuting one mutes whichever had it.
   const [audibleName, setAudibleName] = useState<string | null>(null);
-  // The editing tool open on an item (ToolDialog), and a saved output waiting
-  // to be opened in the viewer once it is in the list.
-  const [toolDlg, setToolDlg] = useState<{ toolId: string; source: ToolSource; maskMode?: "select" } | null>(null);
-  const [pendingOpen, setPendingOpen] = useState<string | null>(null);
-  const toolDlgRef = useRef(toolDlg);
-  toolDlgRef.current = toolDlg;
   const anchorRef = useRef<number | null>(null); // last-toggled index, for Shift-range
   const viewItemsRef = useRef<ViewerItem[]>([]); // the viewable sequence, in display order
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -3459,17 +3565,16 @@ function Gallery({
 
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
-  // Open an editing tool on a gallery item (closes the viewer: the dialog owns
-  // the keyboard while it is open).
-  const openTool = useCallback((toolId: string, target: ViewerItem, maskMode?: "select") => {
-    setViewIndex(null);
-    setMenu(null);
-    setToolDlg({
-      toolId,
-      maskMode,
-      source: { name: target.name, kind: target.kind, meta: target.meta, getSrc: target.getSrc },
-    });
-  }, []);
+  // Open an editing tool on a gallery item, in the Edit panel (closes the
+  // viewer, which would cover it).
+  const openTool = useCallback(
+    (toolId: string, target: ViewerItem, maskMode?: "select") => {
+      setViewIndex(null);
+      setMenu(null);
+      onOpenTool(toolId, { name: target.name, kind: target.kind, meta: target.meta, getSrc: target.getSrc }, maskMode);
+    },
+    [onOpenTool]
+  );
 
   // Tool outputs are already on disk: pull their gallery rows (with metadata)
   // and prepend them.
@@ -3494,16 +3599,14 @@ function Gallery({
     [refreshFacets]
   );
 
-  // "Open" on a tool result: show it in the viewer once it's in the list.
+  // Tool runs finish in Activity: pull each new output into the grid once.
+  const toolMergedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!pendingOpen) return;
-    const i = viewItemsRef.current.findIndex((v) => v.name === pendingOpen);
-    if (i >= 0) {
-      setPendingOpen(null);
-      setAudibleName(null);
-      setViewIndex(i);
-    }
-  }, [pendingOpen, saved]);
+    const fresh = toolOutputs.filter((n) => !toolMergedRef.current.has(n));
+    if (!fresh.length) return;
+    fresh.forEach((n) => toolMergedRef.current.add(n));
+    addSavedOutputs(fresh);
+  }, [toolOutputs, addSavedOutputs]);
 
   const openAt = useCallback((index: number) => {
     // The viewer plays its own audio: hand it a silent grid rather than two
@@ -3575,7 +3678,6 @@ function Gallery({
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
-      if (toolDlgRef.current) return; // the tool dialog owns the keyboard
       if ((e.metaKey || e.ctrlKey) && (e.key === "a" || e.key === "A")) {
         const names = viewItemsRef.current.map((v) => v.name).filter((n): n is string => !!n);
         if (names.length) {
@@ -3730,18 +3832,6 @@ function Gallery({
         />
       )}
 
-      {toolDlg && (
-        <ToolDialog
-          open
-          toolId={toolDlg.toolId}
-          source={toolDlg.source}
-          initialMaskMode={toolDlg.maskMode}
-          onClose={() => setToolDlg(null)}
-          onSaved={addSavedOutputs}
-          onOpenSaved={(name) => setPendingOpen(name)}
-          onUseAsSource={onUseAsSource}
-        />
-      )}
 
       {viewIndex != null && viewItems[viewIndex] && (
         <Lightbox

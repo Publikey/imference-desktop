@@ -12,11 +12,14 @@ import { beginPointerDrag } from "@/lib/pointer-drag";
 // also collapse to a slim rail.
 // ---------------------------------------------------------------------------
 
-export type PanelId = "create" | "gallery";
+export type PanelId = "create" | "edit" | "gallery";
 export type PanelColumns = PanelId[][];
 
-const ALL_PANELS: PanelId[] = ["create", "gallery"];
-const DEFAULT_COLUMNS: PanelColumns = [["create"], ["gallery"]];
+// "edit" (the image editor) only shows while an image is being edited: the
+// App filters it out of the columns it passes otherwise, but its slot is kept
+// in the persisted arrangement so it reopens where the user last put it.
+const ALL_PANELS: PanelId[] = ["create", "edit", "gallery"];
+const DEFAULT_COLUMNS: PanelColumns = [["create"], ["edit"], ["gallery"]];
 // v3: Activity left the panel system (it's a floating dock now). Older keys are
 // simply not read — their layouts (which listed "queue") reset to the v3 default.
 const STORAGE_KEY = "imference.panels.v3";
@@ -24,7 +27,7 @@ const STORAGE_KEY = "imference.panels.v3";
 // Manual-resize bounds for a sidebar column (px). The gallery column always
 // grows to fill the rest, so it isn't width-controlled.
 const MIN_COL_PX = 240;
-const MAX_COL_PX = 640;
+const MAX_COL_PX = 960;
 
 type PersistedLayout = {
   columns: PanelColumns;
@@ -46,12 +49,47 @@ function validColumns(cols: unknown): cols is PanelColumns {
   return ALL_PANELS.every((id) => flat.includes(id));
 }
 
+// A layout saved before the editor panel existed: give "edit" its own column,
+// just before the gallery's.
+function withEditPanel(cols: unknown): PanelColumns | null {
+  if (!Array.isArray(cols) || cols.flat().includes("edit")) return null;
+  const gi = (cols as PanelId[][]).findIndex((c) => Array.isArray(c) && c.includes("gallery"));
+  const next = [...(cols as PanelColumns)];
+  next.splice(gi < 0 ? next.length : gi, 0, ["edit"]);
+  return validColumns(next) ? next : null;
+}
+
+/** Drop a panel from the arrangement (an absent panel takes no column). */
+export function hidePanel(cols: PanelColumns, id: PanelId): PanelColumns {
+  return cols.map((c) => c.filter((x) => x !== id)).filter((c) => c.length > 0);
+}
+
+/** Put a hidden panel back into an arrangement edited while it was hidden: at
+ *  its previous position in `prev` (own column, or under the same neighbour). */
+export function restorePanel(next: PanelColumns, prev: PanelColumns, id: PanelId): PanelColumns {
+  if (next.flat().includes(id)) return next;
+  const pci = prev.findIndex((c) => c.includes(id));
+  const col = prev[pci] ?? [];
+  if (col.length > 1) {
+    const anchor = col.find((x) => x !== id);
+    const ni = next.findIndex((c) => anchor !== undefined && c.includes(anchor));
+    if (ni >= 0) {
+      const out = next.map((c) => [...c]);
+      out[ni].splice(col.indexOf(id) <= col.indexOf(anchor!) ? out[ni].indexOf(anchor!) : out[ni].length, 0, id);
+      return out;
+    }
+  }
+  const out = [...next];
+  out.splice(Math.min(Math.max(pci, 0), out.length), 0, [id]);
+  return out;
+}
+
 function loadLayout(): PersistedLayout {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const p = JSON.parse(raw) as Partial<PersistedLayout>;
-      const columns = validColumns(p.columns) ? (p.columns as PanelColumns) : DEFAULT_COLUMNS;
+      const columns = validColumns(p.columns) ? (p.columns as PanelColumns) : withEditPanel(p.columns) ?? DEFAULT_COLUMNS;
       return { columns, collapsed: p.collapsed ?? {}, widths: p.widths ?? {} };
     }
   } catch {

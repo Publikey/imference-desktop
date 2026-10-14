@@ -4,6 +4,8 @@ import { AlertCircle, Check, Clock, Cloud, Cpu, Loader2, Sparkles, Square, X } f
 import { ProgressBar } from "@/components/ui/progress";
 import { HoverPopover } from "@/components/ui/hover-popover";
 import { cn } from "@/lib/utils";
+import { ToolIcon } from "@/components/ToolBits";
+import { KNOWN_STAGES } from "@/lib/tools";
 import type { GenerationMeta, Job } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -109,8 +111,15 @@ function QueueRow({
   // Elapsed only makes sense once a job has actually started (startedAt set).
   const elapsed = job.startedAt ? fmtElapsed((job.endedAt ?? now) - job.startedAt) : "";
   const ModeIcon = job.mode === "cloud" ? Cloud : Cpu;
+  const isTool = job.kind === "tool";
+  // A tool run reports named stages (no step counter) and shows its saved
+  // output as the thumbnail.
+  const thumb = isTool ? job.tool?.preview : job.image?.imageBase64;
+  const toolPct = isTool && job.tool?.fraction ? job.tool.fraction * 100 : null;
 
-  const statusLine = queued
+  const statusLine = isTool && running
+    ? t(`tools.stage.${KNOWN_STAGES.has(job.tool?.stage ?? "") ? job.tool!.stage : "running"}`)
+    : queued
     ? position && position > 1
       ? t("queue.queuedPosition", { position })
       : t("queue.queuedNext")
@@ -135,17 +144,17 @@ function QueueRow({
       <div className="flex items-start gap-2.5">
         {/* Leading visual: image once done, else a state glyph (ring while
             denoising, spinner while cloud-running, clock while queued). */}
-        {job.status === "done" && job.image ? (
+        {job.status === "done" && thumb ? (
           <button
             type="button"
-            onClick={() => onOpenImage({ src: job.image!.imageBase64, meta: job.image!.meta })}
+            onClick={() => onOpenImage({ src: thumb, meta: job.image?.meta ?? null })}
             className="focus-visible:ring-ring/50 shrink-0 overflow-hidden rounded-lg outline-none transition-transform focus-visible:ring-2 active:scale-95"
           >
-            {job.image.imageBase64.startsWith("data:video/") ? (
+            {thumb.startsWith("data:video/") ? (
               // Video result — a muted looping micro-preview as the thumbnail.
-              <video src={job.image.imageBase64} muted loop autoPlay playsInline className="size-10 object-cover" />
+              <video src={thumb} muted loop autoPlay playsInline className="size-10 object-cover" />
             ) : (
-              <img src={job.image.imageBase64} alt="" className="size-10 object-cover" />
+              <img src={thumb} alt="" className="checkerboard size-10 object-cover" />
             )}
           </button>
         ) : (
@@ -157,7 +166,9 @@ function QueueRow({
                 : "border-border/60 bg-muted/50 text-muted-foreground"
             )}
           >
-            {queued ? (
+            {isTool && !running && job.status !== "error" ? (
+              <ToolIcon id={job.tool?.toolId ?? ""} className="size-4" />
+            ) : queued ? (
               <Clock className="size-4" />
             ) : running ? (
               // One progress language: the glyph is just a spinner; the actual
@@ -204,7 +215,7 @@ function QueueRow({
             run can't be stopped (the request is already in flight server-side);
             a RESUMED one gets an X that only forgets its stuck pending record. */}
         {running ? (
-          job.mode === "local" ? (
+          job.mode === "local" || isTool ? (
             <button
               type="button"
               onClick={() => onStop(job)}
@@ -243,7 +254,7 @@ function QueueRow({
       </div>
 
       {/* Progress: determinate brand bar for local steps, sweeping pulse for cloud. */}
-      {running && <ProgressBar percent={pct} height="h-1" className="mt-2" />}
+      {running && <ProgressBar percent={isTool ? toolPct : pct} height="h-1" className="mt-2" />}
     </li>
   );
 }

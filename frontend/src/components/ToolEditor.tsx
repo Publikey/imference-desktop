@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Check,
+  Download,
   Cloud,
   Cpu,
   ChevronDown,
@@ -133,6 +134,24 @@ export function ToolEditor({
   // A run refused before it started (empty mask, a click-to-select error).
   const [formError, setFormError] = useState<ToolError | null>(null);
   const [hasMask, setHasMask] = useState(false);
+  // "Download model": a local run never starts a weights download by itself
+  // (same rule as the Create panel); the button fetches them explicitly.
+  const [weightsDl, setWeightsDl] = useState<{ percent: number; error?: string } | null>(null);
+  useEffect(
+    () =>
+      api.onToolWeights((p) => {
+        if (p.toolId !== currentId) return;
+        if (!p.done) {
+          setWeightsDl({ percent: p.percent });
+          return;
+        }
+        setWeightsDl(p.error ? { percent: 0, error: p.error } : null);
+        void refreshTools().catch(() => {});
+      }),
+    [currentId]
+  );
+  useEffect(() => setWeightsDl(null), [currentId]);
+
   // "Added to Activity" after a run (the result lands in the gallery).
   const [queuedNote, setQueuedNote] = useState<string | null>(null);
   useEffect(() => {
@@ -251,6 +270,11 @@ export function ToolEditor({
       ? { ...tool, priceCredits: pickedEditModel.cost, priceIsModel: false }
       : tool;
   const instructionMissing = isInstruct && !String(params.instruction ?? "").trim();
+  // A local run whose model is not on disk yet: "Download model" first.
+  const downloadMb = tool ? missingWeightsMb(tool, params) : 0;
+  const needsDownload = !!tool && !effectiveCloud && !isWeb && downloadMb > 0;
+  // The button says what it does ("Remove background"), not "Run".
+  const actionLabel = tool ? t(`tools.action.${tool.id}`, { defaultValue: t("tools.run") }) : t("tools.run");
 
   const run = (forceRunOn?: ToolsMode) => {
     if (!tool || !sourceInput) return;
@@ -441,18 +465,53 @@ export function ToolEditor({
 
               <footer className="flex items-center gap-2 border-t p-3">
                 <div className="flex-1 space-y-1.5">
-                  <Button
-                    className="w-full"
-                    disabled={!srcData || tool.badge === "unavailable" || (isMaskTool && !hasMask) || instructionMissing}
-                    onClick={() => void run()}
-                  >
-                    <Play className="size-3.5" />
-                    {effectiveCloud
-                      ? t("tools.runCloud", {
-                          price: formatToolPrice(t, (priced ?? tool).priceCredits, rail, (priced ?? tool).priceIsModel),
-                        })
-                      : t("tools.run")}
-                  </Button>
+                  {needsDownload ? (
+                    weightsDl && !weightsDl.error ? (
+                      <div className="space-y-1.5">
+                        <ProgressBar percent={weightsDl.percent || null} />
+                        <div className="flex items-center gap-2">
+                          <p className="text-muted-foreground flex-1 text-[11px]">
+                            {t("tools.downloading", { percent: weightsDl.percent, mb: Math.round(downloadMb) })}
+                          </p>
+                          <Button size="sm" variant="ghost" onClick={() => void api.cancelToolWeights()}>
+                            {t("common.cancel")}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <Button
+                          className="w-full"
+                          onClick={() => {
+                            setWeightsDl({ percent: 0 });
+                            void api.downloadToolWeights(tool.id, params).catch((e: unknown) =>
+                              setWeightsDl({ percent: 0, error: e instanceof Error ? e.message : String(e) })
+                            );
+                          }}
+                        >
+                          <Download className="size-3.5" />
+                          {t("tools.downloadModel", { mb: Math.max(1, Math.round(downloadMb)) })}
+                        </Button>
+                        {weightsDl?.error && (
+                          <p className="text-destructive text-[11px] break-words">{weightsDl.error}</p>
+                        )}
+                      </>
+                    )
+                  ) : (
+                    <Button
+                      className="w-full"
+                      disabled={!srcData || tool.badge === "unavailable" || (isMaskTool && !hasMask) || instructionMissing}
+                      onClick={() => void run()}
+                    >
+                      <Play className="size-3.5" />
+                      {effectiveCloud
+                        ? t("tools.actionCloud", {
+                            action: actionLabel,
+                            price: formatToolPrice(t, (priced ?? tool).priceCredits, rail, (priced ?? tool).priceIsModel),
+                          })
+                        : actionLabel}
+                    </Button>
+                  )}
                   {queuedNote && (
                     <p className="flex items-center justify-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
                       <Check className="size-3.5" /> {t("tools.queued")}

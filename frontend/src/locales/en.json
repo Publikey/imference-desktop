@@ -695,6 +695,10 @@
     "unknownFamily": "Unknown family"
   },
   "tools": {
+    "action": {"instruct-edit": "Edit", "upscale": "Upscale", "vary": "Make a variation", "remove-background": "Remove background", "erase-object": "Erase", "inpaint": "Inpaint", "outpaint": "Expand", "restore-faces": "Restore faces", "describe": "Describe", "resize": "Resize", "crop": "Crop", "convert": "Convert", "strip-metadata": "Strip metadata", "video-trim": "Trim", "video-convert": "Convert", "interpolate": "Smooth motion", "video-concat": "Join"},
+    "actionCloud": "{{action}} in the cloud · {{price}}",
+    "downloadModel": "Download model (~{{mb}} MB)",
+    "downloading": "Downloading the model… {{percent}}% of ~{{mb}} MB",
     "queued": "Added to Activity: the result will be saved to the gallery",
     "gen": {"model": "Model", "sameModel": "The model this image was made with.", "otherModelCloud": "This image was made with {{source}}, which the cloud does not run: using the selected cloud model.", "selectedCloud": "The selected cloud model.", "noCloudModel": "No cloud model selected: pick one in Create > Cloud.", "otherModelLocal": "This image was made with {{source}}, not with the model loaded on this computer.", "loadedModel": "The model loaded on this computer.", "loadSource": "Load {{name}} (the image's model)", "editLoaded": "{{name}} is loaded on this computer: it edits from instructions and cannot vary or repaint an image. Switch back to an image model, or run in the cloud.", "noLocalModel": "No model loaded on this computer: load one in Create > Local, or run in the cloud."},
     "pickTool": "Tool",

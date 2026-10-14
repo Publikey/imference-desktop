@@ -247,6 +247,18 @@ const raw = {
   switchBackFromEditModel: (() => Call.ByName("main.App.SwitchBackFromEditModel")) as () => Promise<void>,
   onToolProgress: (cb: (p: ToolProgress) => void): (() => void) =>
     Events.On("tools:progress", (e) => cb(e.data as ToolProgress)),
+  downloadToolWeights: ((toolId: string, params: Record<string, unknown>) =>
+    Call.ByName("main.App.DownloadToolWeights", toolId, params)) as (
+    toolId: string,
+    params: Record<string, unknown>
+  ) => Promise<void>,
+  cancelToolWeights: (() => Call.ByName("main.App.CancelToolWeights")) as () => Promise<void>,
+  onToolWeights: (
+    cb: (p: { toolId: string; percent: number; done: boolean; error?: string; cancelled?: boolean }) => void
+  ): (() => void) =>
+    Events.On("tools:weights", (e) =>
+      cb(e.data as { toolId: string; percent: number; done: boolean; error?: string; cancelled?: boolean })
+    ),
 
   // Wallet (x402 mode)
   getWalletInfo: GetWalletInfo as () => Promise<WalletInfo>,
@@ -302,6 +314,7 @@ const NO_WRAP = new Set([
   "onModelCacheChanged",
   "onSettingsChanged",
   "onToolProgress",
+  "onToolWeights",
 ]);
 
 function wrap<K extends keyof typeof raw>(key: K, fn: (typeof raw)[K]): (typeof raw)[K] {

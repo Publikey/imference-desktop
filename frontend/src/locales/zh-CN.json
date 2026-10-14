@@ -685,6 +685,10 @@
     "unknownFamily": "未知系列"
   },
   "tools": {
+    "action": {"instruct-edit": "编辑", "upscale": "放大", "vary": "生成变体", "remove-background": "移除背景", "erase-object": "擦除", "inpaint": "重绘", "outpaint": "扩展", "restore-faces": "修复人脸", "describe": "描述", "resize": "调整尺寸", "crop": "裁剪", "convert": "转换", "strip-metadata": "清除元数据", "video-trim": "剪辑", "video-convert": "转换", "interpolate": "补帧", "video-concat": "拼接"},
+    "actionCloud": "在云端{{action}} · {{price}}",
+    "downloadModel": "下载模型（约 {{mb}} MB）",
+    "downloading": "正在下载模型… {{percent}}%，共约 {{mb}} MB",
     "queued": "已加入“活动”：结果将保存到图库",
     "gen": {"model": "模型", "sameModel": "生成这张图片所用的模型。", "otherModelCloud": "这张图片由 {{source}} 生成，云端不提供该模型：将使用所选的云端模型。", "selectedCloud": "所选的云端模型。", "noCloudModel": "尚未选择云端模型：请在“创建 > 云端”中选择。", "otherModelLocal": "这张图片由 {{source}} 生成，而非本机当前加载的模型。", "loadedModel": "本机当前加载的模型。", "loadSource": "加载 {{name}}（该图片的模型）", "editLoaded": "本机当前加载的是 {{name}}：它按指令编辑图片，无法生成变体或重绘。请切换回图像模型，或在云端运行。", "noLocalModel": "本机未加载模型：请在“创建 > 本地”中加载，或在云端运行。"},
     "pickTool": "工具",

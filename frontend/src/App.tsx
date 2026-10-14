@@ -1881,7 +1881,18 @@ export default function App() {
                             className="flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-200"
                           >
                             <Wand2 className="mt-0.5 size-4 shrink-0" />
-                            <p>{t("hint.editModelLong")}</p>
+                            <div className="space-y-2">
+                              <p>{t("hint.editModelLong")}</p>
+                              {mode === "local" && settings?.previousLocalModel && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => void api.switchBackFromEditModel().catch(() => {})}
+                                >
+                                  {t("tools.instruct.switchBack", { name: settings.previousLocalModel })}
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         )}
                         <PrimaryAction action={primary} contextHint={contextHint} mode={mode} />

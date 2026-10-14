@@ -31,6 +31,7 @@ import (
 	"imference-desktop-go/internal/cloud"
 	"imference-desktop-go/internal/gpu"
 	"imference-desktop-go/internal/imagesink"
+	"imference-desktop-go/internal/modelcache"
 	"imference-desktop-go/internal/sidecar"
 	"imference-desktop-go/internal/tools"
 	"imference-desktop-go/internal/types"
@@ -923,6 +924,13 @@ type EditModelsInfo struct {
 	Local *types.ModelInfo `json:"local,omitempty"`
 	// CloudError is set when the catalog could not be fetched (offline).
 	CloudError string `json:"cloudError,omitempty"`
+	// LocalCandidate is the edit model "Use on this computer" switches to:
+	// the catalog's locally runnable edit model, else the built-in entry.
+	LocalCandidate *types.ModelInfo `json:"localCandidate,omitempty"`
+	// LocalCandidateCached: its weights are already downloaded (no 13 GB wait).
+	LocalCandidateCached bool `json:"localCandidateCached"`
+	// Previous is the model to switch back to after a SwitchToEditModel.
+	Previous *types.ModelInfo `json:"previous,omitempty"`
 }
 
 // ListEditModels returns the instruction-edit models for the dialog.
@@ -940,7 +948,65 @@ func (a *App) ListEditModels() EditModelsInfo {
 		info.Cloud = cloud.EditModels(models)
 	}
 	info.DefaultCloud = editDefaultFrom(info.Cloud, s)
+	info.LocalCandidate = a.localEditCandidate()
+	if c := info.LocalCandidate; c != nil {
+		if dir, derr := modelsDir(); derr == nil {
+			if fi, serr := os.Stat(filepath.Join(dir, modelcache.FileName(c.ModelCode, c.ModelURL))); serr == nil {
+				info.LocalCandidateCached = fi.Size() >= a.reuseFloor(modelcache.FileName(c.ModelCode, c.ModelURL))
+			}
+		}
+	}
+	if s.PreviousLocalModel != "" && info.Local != nil {
+		if m, perr := a.localCatalogModel(s.PreviousLocalModel); perr == nil {
+			info.Previous = m
+		}
+	}
 	return info
+}
+
+// localEditCandidate is the edit model to run locally: the catalog's first
+// locally runnable edit model, else the built-in GGUF entry.
+func (a *App) localEditCandidate() *types.ModelInfo {
+	if models, err := a.cloud.ListModels(a.ctx, true); err == nil {
+		for _, m := range cloud.EditModels(models) {
+			mm := m
+			return &mm
+		}
+	}
+	m := cloud.BuiltinEditModel()
+	return &m
+}
+
+// SwitchToEditModel makes the edit model the local model (downloading it the
+// first time, like SelectLocalModel — progress on "model:progress") and
+// remembers the model it replaces, for SwitchBackFromEditModel.
+func (a *App) SwitchToEditModel() error {
+	c := a.localEditCandidate()
+	s := a.settings.Get()
+	if s.LocalModel != nil && !cloud.IsEditBackend(s.LocalModel.BackendType) && s.LocalModel.LocalPath == "" {
+		s.PreviousLocalModel = s.LocalModel.ModelCode
+		if _, err := a.settings.Save(s); err != nil {
+			return err
+		}
+	}
+	a.bus.Info("tools", "switch to edit model", map[string]any{"model": c.ModelCode, "previous": s.PreviousLocalModel})
+	return a.SelectLocalModel(c.ModelCode)
+}
+
+// SwitchBackFromEditModel restores the model that was loaded before
+// SwitchToEditModel (a restart from the cache: its weights were kept).
+func (a *App) SwitchBackFromEditModel() error {
+	s := a.settings.Get()
+	prev := s.PreviousLocalModel
+	if prev == "" {
+		return fmt.Errorf("no previous model to switch back to")
+	}
+	s.PreviousLocalModel = ""
+	if _, err := a.settings.Save(s); err != nil {
+		return err
+	}
+	a.bus.Info("tools", "switch back from edit model", map[string]any{"model": prev})
+	return a.SelectLocalModel(prev)
 }
 
 // editDefaultFrom picks the default cloud edit model: the selected cloud

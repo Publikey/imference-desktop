@@ -27,6 +27,10 @@ type Settings struct {
 	// imference catalog and downloaded to SDXLPath). Nil until the user picks
 	// one. Its config drives local generation defaults — see App.GenerateLocal.
 	LocalModel *ModelInfo `json:"localModel,omitempty"`
+	// PreviousLocalModel is the model code that was loaded before the user
+	// switched to a local edit model from the "Edit with instructions" dialog
+	// (App.SwitchToEditModel), so App.SwitchBackFromEditModel can restore it.
+	PreviousLocalModel string `json:"previousLocalModel,omitempty"`
 	// EngineRuntime holds host-machine tuning for the engine (device, VAE mode,
 	// offload, model-residency caps, WAN quantization). Applied as env vars when
 	// the sidecar starts. NOT generation params — those live in the generation UI.

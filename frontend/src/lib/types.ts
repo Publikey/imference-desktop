@@ -16,6 +16,8 @@ export type AppSettings = {
   walletAddress: string;
   /** Currently-selected local model (downloaded to sdxlPath). Null until chosen. */
   localModel?: ModelInfo | null;
+  /** Model code loaded before switching to an edit model (App.SwitchToEditModel). */
+  previousLocalModel?: string;
   /** Host-machine tuning for the engine (device, VAE mode, offload, residency caps, WAN quant). */
   engineRuntime?: EngineRuntimeSettings;
   /** Full catalog entry for the selected cloud model (cloudModel holds its code).
@@ -703,6 +705,12 @@ export type EditModelsInfo = {
   /** The loaded local model when it is an edit model. */
   local?: ModelInfo | null;
   cloudError?: string;
+  /** The edit model "Use on this computer" switches to (catalog row, else built-in). */
+  localCandidate?: ModelInfo | null;
+  /** Its weights are already downloaded. */
+  localCandidateCached?: boolean;
+  /** The model to switch back to after switching to the edit model. */
+  previous?: ModelInfo | null;
 };
 
 export type LocalApiInfo = {

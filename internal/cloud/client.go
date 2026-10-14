@@ -402,6 +402,28 @@ const EditBackend = "qwenimage-edit"
 // user picked none (and the catalog lists no other edit model first).
 const DefaultEditModel = "qwen-image-edit-2511"
 
+// BuiltinEditModelURL is the GGUF lite build of DefaultEditModel on the CDN
+// (unsloth Q4_K_M; the engine adds the Lightning LoRA and the NF4 encoder).
+const BuiltinEditModelURL = "https://gen-models.ml-cnd-gen.cc/qwen-image-edit/qwen-image-edit-2511-Q4_K_M.gguf"
+
+// BuiltinEditModel is the local entry for DefaultEditModel when the catalog
+// has no locally runnable edit model yet, so "Edit with instructions" can
+// always offer to run on this computer. A catalog row (im_local + model_url)
+// takes precedence.
+func BuiltinEditModel() types.ModelInfo {
+	steps, stepsMin, stepsMax := 4, 1, 80
+	cfg, cfgMin, cfgMax := 1.0, 0.0, 10.0
+	return types.ModelInfo{
+		ModelCode: DefaultEditModel, Name: "Qwen-Image-Edit 2511",
+		ShortDescription: "Edit an image with plain-language instructions.",
+		ModelURL:         BuiltinEditModelURL,
+		StepsDefault:     &steps, StepsMin: &stepsMin, StepsMax: &stepsMax,
+		CfgDefault: &cfg, CfgMin: &cfgMin, CfgMax: &cfgMax,
+		BackendType: EditBackend, BaseModel: DefaultBaseModel(EditBackend),
+		CanLocal: true, ModelType: "image",
+	}
+}
+
 // IsEditBackend reports whether a normalized backend is an instruction-edit one.
 func IsEditBackend(backend string) bool { return backend == EditBackend }
 

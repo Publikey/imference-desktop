@@ -60,9 +60,11 @@ import {
   useTools,
 } from "@/lib/tools";
 import { cn } from "@/lib/utils";
+import { isWeb } from "@/lib/target";
 import type {
   EditModelsInfo,
   GenerationMeta,
+  InstallProgress,
   SavedImage,
   ToolError,
   ToolInfo,
@@ -135,6 +137,7 @@ export function ToolDialog({
   const [copied, setCopied] = useState(false);
   const [refs, setRefs] = useState<RefImage[]>([]);
   const [editModels, setEditModels] = useState<EditModelsInfo | null>(null);
+  const [editModelsRev, setEditModelsRev] = useState(0);
   const jobRef = useRef<string>("");
   const maskRef = useRef<MaskEditorHandle>(null);
 
@@ -222,7 +225,7 @@ export function ToolDialog({
     return () => {
       alive = false;
     };
-  }, [open, isInstruct, tool?.badge]);
+  }, [open, isInstruct, tool?.badge, editModelsRev]);
   // Its cloud model defaults to the catalog's default edit model.
   useEffect(() => {
     if (!isInstruct || !editModels?.defaultCloud) return;
@@ -420,6 +423,7 @@ export function ToolDialog({
                         onSubmit={() => {
                           if (!instructionMissing && srcData && tool.badge !== "unavailable") void run();
                         }}
+                        onModelsChanged={isWeb ? undefined : () => setEditModelsRev((r) => r + 1)}
                       />
                     )}
                     <ParamsForm
@@ -922,6 +926,7 @@ function InstructEditForm({
   rail,
   disabled,
   onSubmit,
+  onModelsChanged,
 }: {
   tool: ToolInfo;
   params: Record<string, unknown>;
@@ -933,6 +938,8 @@ function InstructEditForm({
   rail: string;
   disabled?: boolean;
   onSubmit: () => void;
+  /** Desktop only: re-read the edit models after a local model switch. */
+  onModelsChanged?: () => void;
 }) {
   const { t } = useTranslation();
   const [advanced, setAdvanced] = useState(false);
@@ -1089,9 +1096,10 @@ function InstructEditForm({
             <span className="text-muted-foreground"> · {t("tools.instruct.onThisComputer")}</span>
           </p>
         )}
-        {tool.badge === "cloud" && (
+        {tool.badge === "cloud" && !onModelsChanged && (
           <p className="text-muted-foreground text-[11px] leading-snug">{t("tools.instruct.localHint")}</p>
         )}
+        {onModelsChanged && <EditModelSwitch models={models} disabled={disabled} onChanged={onModelsChanged} />}
       </div>
 
       <label className="flex items-center gap-2 text-sm">
@@ -1306,6 +1314,91 @@ function OutpaintFrame({ src, params }: { src: string; params: Record<string, un
       <span className="text-muted-foreground text-[11px] tabular-nums">
         {dims.w}×{dims.h} → {W}×{H}
       </span>
+    </div>
+  );
+}
+
+/** "Edit on this computer": swap the local model to the edit model (download
+ *  the first time, progress from "model:progress") and back. Desktop only. */
+function EditModelSwitch({
+  models,
+  disabled,
+  onChanged,
+}: {
+  models: EditModelsInfo | null;
+  disabled?: boolean;
+  onChanged: () => void;
+}) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<InstallProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!busy) return;
+    return api.onModelProgress((p) => {
+      setProgress(p);
+      if (p.done || p.phase === "done" || p.phase === "error" || p.phase === "cancelled") {
+        setBusy(false);
+        if (p.phase === "error") setError(p.error ?? "error");
+        onChanged();
+      }
+    });
+  }, [busy, onChanged]);
+
+  const start = (fn: () => Promise<void>) => {
+    setError(null);
+    setProgress(null);
+    setBusy(true);
+    fn().catch((e) => {
+      setBusy(false);
+      setError(String((e as Error)?.message ?? e));
+    });
+  };
+
+  const candidate = models?.localCandidate;
+  const local = models?.local;
+  if (!models || (!local && !candidate)) return null;
+
+  return (
+    <div className="bg-muted/40 mt-1 space-y-2 rounded-lg border p-2.5">
+      {local ? (
+        models.previous && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={disabled || busy}
+            onClick={() => start(api.switchBackFromEditModel)}
+          >
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Cpu className="size-3.5" />}
+            {t("tools.instruct.switchBack", { name: models.previous.name || models.previous.modelCode })}
+          </Button>
+        )
+      ) : (
+        candidate && (
+          <>
+            <p className="text-xs font-medium">{t("tools.instruct.switchTitle")}</p>
+            <p className="text-muted-foreground text-[11px] leading-snug">
+              {t("tools.instruct.switchText", { name: candidate.name || candidate.modelCode })}
+              {!models.localCandidateCached && <> {t("tools.instruct.switchDownload")}</>}
+            </p>
+            <Button size="sm" className="w-full" disabled={disabled || busy} onClick={() => start(api.switchToEditModel)}>
+              {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Cpu className="size-3.5" />}
+              {busy ? t("tools.instruct.switching") : t("tools.instruct.switchButton")}
+            </Button>
+          </>
+        )
+      )}
+      {busy && progress && (
+        <div className="space-y-1">
+          <ProgressBar percent={progress.percentEstimate || null} />
+          <p className="text-muted-foreground truncate text-[11px]">
+            {progress.messageKey ? t(progress.messageKey, progress.messageArgs ?? {}) : progress.message}
+          </p>
+        </div>
+      )}
+      {error && <p className="text-destructive text-[11px]">{t("tools.instruct.switchFailed", { error })}</p>}
     </div>
   );
 }

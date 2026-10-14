@@ -1281,6 +1281,12 @@ func (a *App) localCatalogModel(modelCode string) (*types.ModelInfo, error) {
 			return &models[i], nil
 		}
 	}
+	// No locally runnable catalog row for the default edit model yet: the
+	// built-in entry (its GGUF lite build on the CDN) stands in.
+	if modelCode == cloud.DefaultEditModel {
+		m := cloud.BuiltinEditModel()
+		return &m, nil
+	}
 	return nil, fmt.Errorf("model %q not found in catalog (or it's cloud-only)", modelCode)
 }
 

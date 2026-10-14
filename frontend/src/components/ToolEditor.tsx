@@ -14,6 +14,7 @@
 // Closing releases the tools' warm models.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   AlertTriangle,
   ArrowRight,
@@ -591,6 +592,12 @@ function ParamField({
   const { t } = useTranslation();
   const valueLabel = (v: string | number) => t(`tools.values.${String(v)}`, { defaultValue: String(v) });
   const id = `tp-${toolId}-${spec.name}`;
+  // An optional number with no default: "Auto" = leave it to the tool. The
+  // chip shows it is on, brings it back after the slider was touched, and a
+  // line says what auto does.
+  const optional = (spec.type === "int" || spec.type === "float") && spec.default === undefined && !spec.required;
+  const autoOn = optional && (value === undefined || value === null || value === "");
+  const autoMeans = optional ? autoExplanation(t, toolId, spec) : "";
   let control: React.ReactNode;
   switch (spec.type) {
     case "enum": {
@@ -639,6 +646,7 @@ function ParamField({
     case "int":
     case "float": {
       const bounded = spec.min !== undefined && spec.max !== undefined && spec.max - spec.min <= 100000;
+      const isAuto = optional && (value === undefined || value === null || value === "");
       const step = spec.type === "int" ? 1 : (spec.max ?? 1) - (spec.min ?? 0) <= 2 ? 0.05 : 0.1;
       const num = value === undefined || value === null ? "" : String(value);
       control = (
@@ -652,7 +660,7 @@ function ParamField({
               value={num === "" ? Number(spec.default ?? spec.min) : Number(num)}
               onChange={(e) => onChange(coerceParam(spec, e.target.value))}
               disabled={disabled}
-              className="min-w-0 flex-1 accent-[var(--brand-to)]"
+              className={cn("min-w-0 flex-1 accent-[var(--brand-to)]", isAuto && "opacity-40")}
             />
           )}
           <Input
@@ -697,13 +705,44 @@ function ParamField({
   }
   return (
     <div className="grid gap-1.5">
-      <label htmlFor={id} className="text-xs font-medium">
-        {label}
-      </label>
+      <div className="flex items-center gap-2">
+        <label htmlFor={id} className="flex-1 text-xs font-medium">
+          {label}
+        </label>
+        {optional && (
+          <button
+            type="button"
+            aria-pressed={autoOn}
+            disabled={disabled}
+            onClick={() => onChange(undefined)}
+            title={autoMeans}
+            className={cn(
+              "rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors",
+              autoOn
+                ? "border-primary/40 bg-primary/10 text-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            )}
+          >
+            {t("tools.autoChip")}
+          </button>
+        )}
+      </div>
       {control}
+      {autoOn && autoMeans && <p className="text-muted-foreground text-[11px] leading-snug">{autoMeans}</p>}
       {hint && <p className="text-muted-foreground text-[11px] leading-snug">{hint}</p>}
     </div>
   );
+}
+
+/** What "Auto" does for an optional number: a per-tool or per-param text,
+ *  else the manifest's "(default: …)". */
+function autoExplanation(t: TFunction, toolId: string, spec: ToolParamSpec): string {
+  const own = t(`tools.autoMeans.${toolId}.${spec.name}`, { defaultValue: "" });
+  if (own) return own;
+  const byName = t(`tools.autoMeans.${spec.name}`, { defaultValue: "" });
+  if (byName && typeof byName === "string" && !byName.startsWith("tools.")) return byName;
+  const m = /\(default:\s*([^)]*)\)/i.exec(spec.description ?? "");
+  return m ? t("tools.autoDefault", { what: m[1] }) : "";
 }
 
 function RunOnPicker({

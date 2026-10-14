@@ -695,6 +695,9 @@
     "unknownFamily": "Unknown family"
   },
   "tools": {
+    "autoChip": "Auto",
+    "autoMeans": {"seed": "Auto: a new random seed on every run.", "steps": "Auto: the model's own recipe.", "guidance": "Auto: the model's own recipe.", "max_kb": "Auto: no file-size limit.", "fps": "Auto: keeps the source frame rate.", "end": "Auto: up to the end of the video.", "remove-background": {"threshold": "Auto: soft edges, each pixel's transparency follows the model's confidence (best for hair and fur)."}, "resize": {"width": "Auto: follows the height (or the scale), keeping the proportions.", "height": "Auto: follows the width (or the scale), keeping the proportions.", "scale": "Auto: used only when width and height are both empty."}, "video-convert": {"width": "Auto: keeps the source size.", "fps": "Auto: keeps the source frame rate (15 for a GIF)."}, "video-concat": {"fps": "Auto: the first clip's frame rate."}},
+    "autoDefault": "Auto: {{what}}.",
     "action": {"instruct-edit": "Edit", "upscale": "Upscale", "vary": "Make a variation", "remove-background": "Remove background", "erase-object": "Erase", "inpaint": "Inpaint", "outpaint": "Expand", "restore-faces": "Restore faces", "describe": "Describe", "resize": "Resize", "crop": "Crop", "convert": "Convert", "strip-metadata": "Strip metadata", "video-trim": "Trim", "video-convert": "Convert", "interpolate": "Smooth motion", "video-concat": "Join"},
     "actionCloud": "{{action}} in the cloud · {{price}}",
     "downloadModel": "Download model (~{{mb}} MB)",

@@ -685,6 +685,9 @@
     "unknownFamily": "未知系列"
   },
   "tools": {
+    "autoChip": "自动",
+    "autoMeans": {"seed": "自动：每次运行使用新的随机种子。", "steps": "自动：使用模型自身的推荐设置。", "guidance": "自动：使用模型自身的推荐设置。", "max_kb": "自动：不限制文件大小。", "fps": "自动：保持原视频帧率。", "end": "自动：直到视频结尾。", "remove-background": {"threshold": "自动：柔和边缘，每个像素的透明度取决于模型的置信度（适合头发和毛发）。"}, "resize": {"width": "自动：按高度（或缩放比例）等比计算。", "height": "自动：按宽度（或缩放比例）等比计算。", "scale": "自动：仅在宽和高都为空时使用。"}, "video-convert": {"width": "自动：保持原尺寸。", "fps": "自动：保持原帧率（GIF 为 15）。"}, "video-concat": {"fps": "自动：使用第一个片段的帧率。"}},
+    "autoDefault": "自动：{{what}}。",
     "action": {"instruct-edit": "编辑", "upscale": "放大", "vary": "生成变体", "remove-background": "移除背景", "erase-object": "擦除", "inpaint": "重绘", "outpaint": "扩展", "restore-faces": "修复人脸", "describe": "描述", "resize": "调整尺寸", "crop": "裁剪", "convert": "转换", "strip-metadata": "清除元数据", "video-trim": "剪辑", "video-convert": "转换", "interpolate": "补帧", "video-concat": "拼接"},
     "actionCloud": "在云端{{action}} · {{price}}",
     "downloadModel": "下载模型（约 {{mb}} MB）",

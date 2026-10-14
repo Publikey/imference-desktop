@@ -277,8 +277,8 @@ func describeGPU(g gpu.Info) types.InstallProgress {
 // onnxRuntimePackage picks the onnxruntime wheel for the editing tools' ONNX
 // models (upscale, background removal, eraser, click-to-select, restore faces):
 //
-//   - NVIDIA on Windows/Linux: onnxruntime-gpu (CUDA 12 build, matches the
-//     cu124 torch the torch phase installs);
+//   - NVIDIA on Windows/Linux: onnxruntime-gpu, pinned to a CUDA 12 build
+//     (OnnxRuntimeGPUVersion) that matches the cu124 torch the torch phase installs;
 //   - any other GPU on Windows: onnxruntime-directml (AMD / Intel via DirectX 12);
 //   - everything else (macOS, Linux AMD/none): plain onnxruntime (CPU; the
 //     engine's [tools] extra already installed it).
@@ -299,6 +299,20 @@ func onnxRuntimePackage(goos string, v gpu.Vendor) string {
 	}
 }
 
+// OnnxRuntimeGPUVersion pins onnxruntime-gpu to a CUDA 12 build. Newer
+// releases on PyPI are built for CUDA 13: next to the cu124 torch they cannot
+// load cuBLAS/cuDNN and the CUDA provider silently falls back to CPU
+// (validated: 1.23.2 runs on CUDA with torch's DLLs, 1.31 does not).
+const OnnxRuntimeGPUVersion = "1.23.2"
+
+// onnxRuntimeSpec is the pip requirement for an onnxRuntimePackage result.
+func onnxRuntimeSpec(pkg string) string {
+	if pkg == "onnxruntime-gpu" {
+		return pkg + "==" + OnnxRuntimeGPUVersion
+	}
+	return pkg
+}
+
 // installOnnxRuntime swaps the CPU onnxruntime pulled by the [tools] extra for
 // the GPU flavor. Best-effort: a failure leaves (or restores) the CPU wheel,
 // the tools still work — slower — so it never fails the install.
@@ -311,7 +325,7 @@ func (i *Installer) installOnnxRuntime(ctx context.Context, venvPython string, g
 		map[string]string{"pkg": pkg}))
 	i.bus.Info("installer", "onnxruntime phase start", map[string]any{"pkg": pkg})
 	_ = i.runPip(ctx, venvPython, "onnxruntime", emit, "uninstall", "-y", "onnxruntime", "onnxruntime-gpu", "onnxruntime-directml")
-	if err := i.runPip(ctx, venvPython, "onnxruntime", emit, "install", "--upgrade", pkg); err != nil {
+	if err := i.runPip(ctx, venvPython, "onnxruntime", emit, "install", "--upgrade", onnxRuntimeSpec(pkg)); err != nil {
 		i.bus.Warn("installer", pkg+" install failed; editing tools fall back to CPU", map[string]any{"err": err.Error()})
 		_ = i.runPip(ctx, venvPython, "onnxruntime", emit, "install", "onnxruntime")
 		emit(prog("onnxruntime", pkg+" install failed (non-fatal: tools run on CPU)", "install.onnxRuntimeFailed",

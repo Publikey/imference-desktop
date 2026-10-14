@@ -59,6 +59,13 @@ func TestOnnxRuntimePackage(t *testing.T) {
 			t.Errorf("onnxRuntimePackage(%s, %q) = %s, want %s", c.goos, c.vendor, got, c.want)
 		}
 	}
+	// The GPU wheel is pinned (CUDA 12 build); the others follow PyPI.
+	if got := onnxRuntimeSpec("onnxruntime-gpu"); got != "onnxruntime-gpu=="+OnnxRuntimeGPUVersion {
+		t.Errorf("onnxRuntimeSpec(gpu) = %s", got)
+	}
+	if got := onnxRuntimeSpec("onnxruntime-directml"); got != "onnxruntime-directml" {
+		t.Errorf("onnxRuntimeSpec(directml) = %s", got)
+	}
 }
 
 func TestEngineTarballReachable(t *testing.T) {

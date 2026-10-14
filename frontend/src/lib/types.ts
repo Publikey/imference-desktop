@@ -650,6 +650,9 @@ export type ToolInfo = {
   credits: number;
   cloudAvailable: boolean;
   weightsMb: number;
+  /** Weight files: the param value each one is fetched for, and whether it is
+   *  already downloaded (the download note only counts the missing ones). */
+  weights?: { sizeMb: number; when?: Record<string, unknown>; cached: boolean }[];
   /** This machine's badge + the device a local run would use. */
   badge: ToolBadge;
   device?: string;

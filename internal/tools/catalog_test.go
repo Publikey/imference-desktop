@@ -137,3 +137,21 @@ func TestToolJSONIsCamelCase(t *testing.T) {
 		}
 	}
 }
+
+func TestCatalogWeightFilesPerVariant(t *testing.T) {
+	c, err := Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rb, _ := c.Get("remove-background")
+	byModel := map[string]WeightFile{}
+	for _, w := range rb.Weights {
+		byModel[w.When["model"].(string)] = w
+	}
+	if len(byModel) != 3 || byModel["u2netp"].SizeMB > 10 || byModel["birefnet-lite"].Path == "" {
+		t.Fatalf("remove-background weights %+v", rb.Weights)
+	}
+	if rs, _ := c.Get("resize"); len(rs.Weights) != 0 {
+		t.Fatalf("resize has weights %+v", rs.Weights)
+	}
+}

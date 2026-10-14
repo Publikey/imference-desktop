@@ -65,7 +65,7 @@ import { CommandPalette, modLabel, type Command } from "@/components/CommandPale
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { EditEmpty, ToolEditor, defaultToolFor, type ToolSource } from "@/components/ToolEditor";
 import { ToolMenuList } from "@/components/ToolBits";
-import { isEditModel } from "@/lib/tools";
+import { isEditModel, refreshTools } from "@/lib/tools";
 import { api } from "@/lib/wails-bridge";
 import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/theme";
@@ -1396,6 +1396,8 @@ export default function App() {
           const first = res.outputs.find((o) => o.savedName && o.type !== "text");
           const preview = first?.savedName ? await api.getSavedImage(first.savedName).catch(() => undefined) : undefined;
           settle((j) => ({ status: "done", mode, tool: { ...j.tool!, result: res, preview, stage: undefined } }));
+          // Its weights are on disk now: the panels stop announcing the download.
+          if (mode === "local") void refreshTools().catch(() => {});
           if (saved.length) setToolOutputs((o) => [...o, ...saved]);
         });
     },

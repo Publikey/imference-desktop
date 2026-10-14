@@ -219,6 +219,19 @@ func toolsEnv(ts types.ToolsSettings) []string {
 	return env
 }
 
+// toolsCacheDirInUse is where the tools sidecar keeps its weights: the
+// TOOLS_MODEL_CACHE override when set, else toolsModelsDir ("" if unknown).
+func toolsCacheDirInUse() string {
+	if v := strings.TrimSpace(os.Getenv("TOOLS_MODEL_CACHE")); v != "" {
+		return v
+	}
+	d, err := toolsModelsDir()
+	if err != nil {
+		return ""
+	}
+	return d
+}
+
 // toolsModelsDir caches the tools' small ONNX weights (2–500 MB each).
 func toolsModelsDir() (string, error) {
 	cache, err := os.UserCacheDir()
@@ -311,8 +324,23 @@ func (a *App) ListTools() ([]ToolInfo, error) {
 	}
 	h := a.toolsHost()
 	s := a.settings.Get()
+	cacheDir := toolsCacheDirInUse()
 	out := make([]ToolInfo, 0, len(a.toolsCat.Tools))
 	for _, t := range a.toolsCat.Tools {
+		// Which weights are already downloaded ("First run downloads ~N MB"
+		// then only counts the chosen variant's missing files).
+		if len(t.Weights) > 0 {
+			ws := make([]tools.WeightFile, len(t.Weights))
+			for i, w := range t.Weights {
+				ws[i] = w
+				if cacheDir != "" && w.Path != "" {
+					if st, err := os.Stat(filepath.Join(cacheDir, filepath.FromSlash(w.Path))); err == nil && st.Size() > 0 {
+						ws[i].Cached = true
+					}
+				}
+			}
+			t.Weights = ws
+		}
 		info := ToolInfo{Tool: t, Assessment: tools.Assess(t, h), PriceCredits: t.Credits}
 		if t.IsGeneration() {
 			info.PriceIsModel = true

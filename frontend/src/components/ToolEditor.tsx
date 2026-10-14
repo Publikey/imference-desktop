@@ -422,7 +422,7 @@ export function ToolEditor({
                       <GenModelBox models={genModels} cloud onChanged={() => {}} />
                     )}
                     <RunOnPicker tool={priced ?? tool} value={runOn} onChange={setRunOn} rail={rail} />
-                    <WhereNotice tool={priced ?? tool} cloud={effectiveCloud} rail={rail} />
+                    <WhereNotice tool={priced ?? tool} cloud={effectiveCloud} rail={rail} params={params} />
                 </>
 
                 {phase === "error" && error && (
@@ -690,8 +690,29 @@ function RunOnPicker({
   );
 }
 
-function WhereNotice({ tool, cloud, rail }: { tool: ToolInfo; cloud: boolean; rail: string }) {
+/** MB a local run still has to download: the weights of the chosen variant
+ *  (their "when" matches the params) that are not cached yet. */
+function missingWeightsMb(tool: ToolInfo, params: Record<string, unknown>): number {
+  if (!tool.weights) return tool.weightsMb;
+  return tool.weights
+    .filter((w) => !w.cached)
+    .filter((w) => Object.entries(w.when ?? {}).every(([k, v]) => String(params[k] ?? "") === String(v)))
+    .reduce((n, w) => n + w.sizeMb, 0);
+}
+
+function WhereNotice({
+  tool,
+  cloud,
+  rail,
+  params,
+}: {
+  tool: ToolInfo;
+  cloud: boolean;
+  rail: string;
+  params: Record<string, unknown>;
+}) {
   const { t } = useTranslation();
+  const downloadMb = missingWeightsMb(tool, params);
   if (cloud) {
     return (
       <div className="flex gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs leading-relaxed text-sky-800 dark:text-sky-200">
@@ -714,8 +735,8 @@ function WhereNotice({ tool, cloud, rail }: { tool: ToolInfo; cloud: boolean; ra
         <p className="text-muted-foreground">
           {tool.badge === "local_slow" ? t("tools.localSlowBody") : t("tools.localBody")}
         </p>
-        {tool.weightsMb > 0 && (
-          <p className="text-muted-foreground">{t("tools.weightsNote", { mb: Math.round(tool.weightsMb) })}</p>
+        {downloadMb > 0 && (
+          <p className="text-muted-foreground">{t("tools.weightsNote", { mb: Math.max(1, Math.round(downloadMb)) })}</p>
         )}
       </div>
     </div>

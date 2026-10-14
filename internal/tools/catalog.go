@@ -46,6 +46,17 @@ type Tool struct {
 	Credits        float64      `json:"credits"` // 0 on generation tools = the price of the model
 	CloudAvailable bool         `json:"cloudAvailable"`
 	WeightsMB      float64      `json:"weightsMb"`
+	// Weights are the tool's weight files: which param value fetches each one
+	// and whether it is already in the local cache (App.ListTools sets Cached).
+	Weights []WeightFile `json:"weights"`
+}
+
+// WeightFile is one weight of a tool (the engine export's weight_files).
+type WeightFile struct {
+	Path   string         `json:"-"`
+	SizeMB float64        `json:"sizeMb"`
+	When   map[string]any `json:"when,omitempty"`
+	Cached bool           `json:"cached"`
 }
 
 type InputSpec struct {
@@ -139,6 +150,11 @@ type wireTool struct {
 	Available      *bool   `json:"available"`
 	CloudAvailable bool    `json:"cloud_available"`
 	WeightsMB      float64 `json:"weights_mb"`
+	WeightFiles    []struct {
+		Path   string         `json:"path"`
+		SizeMB float64        `json:"size_mb"`
+		When   map[string]any `json:"when"`
+	} `json:"weight_files"`
 }
 
 type wireInput struct {
@@ -210,6 +226,10 @@ func ParseCatalog(data []byte) (*Catalog, error) {
 		}
 		if w.Runtimes.CloudQueue != nil {
 			t.Runtimes.CloudQueue = *w.Runtimes.CloudQueue
+		}
+		t.Weights = []WeightFile{}
+		for _, wf := range w.WeightFiles {
+			t.Weights = append(t.Weights, WeightFile{Path: wf.Path, SizeMB: wf.SizeMB, When: wf.When})
 		}
 		if t.Runtimes.Local == nil {
 			t.Runtimes.Local = []string{}

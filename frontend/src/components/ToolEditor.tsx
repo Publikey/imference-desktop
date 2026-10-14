@@ -303,8 +303,8 @@ export function ToolEditor({
           {pickable.length > 1 && (
             <Select
               size="sm"
-              value={isMaskTool ? "erase-object" : currentId}
-              onChange={(v) => v && !(isMaskTool && v === "erase-object") && setCurrentId(v)}
+              value={currentId}
+              onChange={(v) => v && setCurrentId(v)}
               aria-label={t("tools.pickTool")}
               className="max-w-[11rem]"
             >
@@ -314,17 +314,6 @@ export function ToolEditor({
                 </option>
               ))}
             </Select>
-          )}
-          {isMaskTool && (
-            <Segmented<string>
-              size="sm"
-              value={currentId}
-              onChange={setCurrentId}
-              items={MASK_TOOLS.map((id) => ({
-                value: id,
-                label: t(id === "inpaint" ? "tools.mask.repaint" : "tools.mask.erase"),
-              }))}
-            />
           )}
           <button
             type="button"

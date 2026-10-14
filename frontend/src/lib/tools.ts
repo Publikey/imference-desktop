@@ -23,7 +23,8 @@ export const EDIT_TOOL_IDS = [
   "upscale",
   "vary",
   "remove-background",
-  "erase-object", // "Erase / Repaint": brush or click-to-select (segment), then erase or repaint (inpaint)
+  "erase-object", // Magic eraser: brush or click-to-select (segment) mask
+  "inpaint", // Inpaint: the same mask, repainted from a prompt
   "outpaint",
   "restore-faces",
   "describe",

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"strings"
 	"testing"
 
 	"imference-desktop-go/internal/gpu"
@@ -19,6 +20,15 @@ func tool(t *testing.T, id string) Tool {
 	return tl
 }
 
+// localOnly is a shipped tool with its cloud runtime taken away: every tool
+// in the catalog has one today, but a tool without (e.g. an unverified
+// license) must still route correctly.
+func localOnly(t *testing.T, id string) Tool {
+	tl := tool(t, id)
+	tl.CloudAvailable = false
+	return tl
+}
+
 func TestAssessTable(t *testing.T) {
 	nvidia := gpu.Info{Vendor: gpu.VendorNVIDIA, Name: "RTX", VRAMGiB: 12}
 	cpuProbe := &Probe{Providers: []string{"CPUExecutionProvider"}, FFmpeg: true, RAMGB: 16}
@@ -34,7 +44,7 @@ func TestAssessTable(t *testing.T) {
 		reason string
 	}{
 		{"no engine -> cloud", "upscale", Host{GOOS: "linux"}, BadgeCloud, "", "engine_not_installed"},
-		{"no engine, local-only tool -> unavailable", "restore-faces", Host{GOOS: "linux"}, BadgeUnavailable, "", "engine_not_installed"},
+		{"no engine, local-only tool -> unavailable", "restore-faces/local-only", Host{GOOS: "linux"}, BadgeUnavailable, "", "engine_not_installed"},
 		{"guess: nvidia -> cuda", "upscale", Host{GOOS: "windows", GPU: nvidia, EngineInstalled: true}, BadgeLocal, "cuda", ""},
 		{"guess: windows amd -> directml", "upscale", Host{GOOS: "windows", GPU: gpu.Info{Vendor: gpu.VendorAMD}, EngineInstalled: true}, BadgeLocal, "directml", ""},
 		{"guess: mac -> cpu slow for upscale", "upscale", Host{GOOS: "darwin", GPU: gpu.Info{Vendor: gpu.VendorApple}, EngineInstalled: true}, BadgeLocalSlow, "cpu", ""},
@@ -68,7 +78,11 @@ func TestAssessTable(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			a := Assess(tool(t, c.tool), c.host)
+			tl := tool
+			if id, ok := strings.CutSuffix(c.tool, "/local-only"); ok {
+				c.tool, tl = id, localOnly
+			}
+			a := Assess(tl(t, c.tool), c.host)
 			if a.Badge != c.badge || a.Device != c.device || a.Reason != c.reason {
 				t.Fatalf("Assess(%s) = %+v, want badge=%s device=%s reason=%s", c.tool, a, c.badge, c.device, c.reason)
 			}
@@ -110,7 +124,7 @@ func TestAssessMinVRAMFallsBackToCPU(t *testing.T) {
 
 func TestDecideRouting(t *testing.T) {
 	up := tool(t, "upscale")
-	rf := tool(t, "restore-faces") // no cloud runtime (license not verified)
+	rf := localOnly(t, "restore-faces")
 	local := Assessment{Badge: BadgeLocal, Device: "cuda"}
 	slow := Assessment{Badge: BadgeLocalSlow, Device: "cpu"}
 	cloud := Assessment{Badge: BadgeCloud, Reason: "engine_not_installed"}

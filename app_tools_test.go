@@ -183,7 +183,13 @@ func TestRunToolErrorsAndCloudOffer(t *testing.T) {
 	if res.Error == nil || res.Error.Code != tools.CodeUnsupportedRuntime || res.Error.CloudRetry == nil {
 		t.Fatalf("no engine, local: %+v", res.Error)
 	}
-	// A local-only tool gets no offer.
+	// A local-only tool gets no offer (every shipped tool has a cloud runtime
+	// today: take restore-faces' away for the case).
+	for i := range a.toolsCat.Tools {
+		if a.toolsCat.Tools[i].ID == "restore-faces" {
+			a.toolsCat.Tools[i].CloudAvailable = false
+		}
+	}
 	res = a.runTool(context.Background(), ToolRunRequest{ToolID: "restore-faces", RunOn: "local", Inputs: in})
 	if res.Error == nil || res.Error.CloudRetry != nil {
 		t.Fatalf("restore-faces: %+v", res.Error)

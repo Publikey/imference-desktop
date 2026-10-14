@@ -221,7 +221,7 @@
         "verified": true
       },
       "available": true,
-      "weights_mb": 465.0,
+      "weights_mb": 468.6,
       "cloud_available": true
     },
     {
@@ -526,7 +526,7 @@
         "verified": true
       },
       "available": true,
-      "weights_mb": 21.0,
+      "weights_mb": 21.5,
       "cloud_available": true
     },
     {
@@ -699,7 +699,7 @@
         "verified": true
       },
       "available": true,
-      "weights_mb": 389.6,
+      "weights_mb": 407.2,
       "cloud_available": true
     },
     {
@@ -845,12 +845,13 @@
       },
       "license": {
         "spdx": "Apache-2.0",
-        "source": "https://github.com/TencentARC/GFPGAN/blob/master/LICENSE (StyleGAN2 parts: check)",
-        "verified": false
+        "source": "https://github.com/TencentARC/GFPGAN/blob/master/LICENSE (StyleGAN2 parts: NVIDIA Source Code License; DFDNet parts: CC BY-NC-SA 4.0; ONNX from facefusion-assets, no license)",
+        "verified": false,
+        "cloud_override": "2026-10-14: owner accepted the license risk and enabled the cloud runtime"
       },
       "available": true,
-      "weights_mb": 340.3,
-      "cloud_available": false
+      "weights_mb": 340.5,
+      "cloud_available": true
     },
     {
       "id": "segment",
@@ -911,7 +912,7 @@
         "verified": true
       },
       "available": true,
-      "weights_mb": 44.0,
+      "weights_mb": 44.7,
       "cloud_available": true
     },
     {

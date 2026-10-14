@@ -685,6 +685,7 @@
     "unknownFamily": "未知系列"
   },
   "tools": {
+    "queued": "已加入“活动”：结果将保存到图库",
     "gen": {"model": "模型", "sameModel": "生成这张图片所用的模型。", "otherModelCloud": "这张图片由 {{source}} 生成，云端不提供该模型：将使用所选的云端模型。", "selectedCloud": "所选的云端模型。", "noCloudModel": "尚未选择云端模型：请在“创建 > 云端”中选择。", "otherModelLocal": "这张图片由 {{source}} 生成，而非本机当前加载的模型。", "loadedModel": "本机当前加载的模型。", "loadSource": "加载 {{name}}（该图片的模型）", "editLoaded": "本机当前加载的是 {{name}}：它按指令编辑图片，无法生成变体或重绘。请切换回图像模型，或在云端运行。", "noLocalModel": "本机未加载模型：请在“创建 > 本地”中加载，或在云端运行。"},
     "pickTool": "工具",
     "empty": { "title": "尚无可编辑的内容", "hint": "将图库中的图片拖到这里，在图库图片上选择“编辑”，或打开一个文件。", "openFile": "打开文件…", "showGallery": "显示图库" },

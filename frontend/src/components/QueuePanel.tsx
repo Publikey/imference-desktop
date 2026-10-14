@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, Check, Clock, Cloud, Cpu, Loader2, Sparkles, Square, X } from "lucide-react";
+import { AlertCircle, Check, Clock, Cloud, Copy, Cpu, Loader2, Sparkles, Square, X } from "lucide-react";
 import { ProgressBar } from "@/components/ui/progress";
 import { HoverPopover } from "@/components/ui/hover-popover";
 import { cn } from "@/lib/utils";
@@ -117,7 +117,10 @@ function QueueRow({
   const thumb = isTool ? job.tool?.preview : job.image?.imageBase64;
   const toolPct = isTool && job.tool?.fraction ? job.tool.fraction * 100 : null;
 
-  const statusLine = isTool && running
+  const toolText = isTool ? job.tool?.result?.outputs.find((o) => o.type === "text" && o.text)?.text : undefined;
+  const statusLine = isTool && job.status === "done" && toolText
+    ? toolText
+    : isTool && running
     ? t(`tools.stage.${KNOWN_STAGES.has(job.tool?.stage ?? "") ? job.tool!.stage : "running"}`)
     : queued
     ? position && position > 1
@@ -201,7 +204,7 @@ function QueueRow({
             <ModeIcon className="size-3 shrink-0" />
             {/* Engine and cloud errors run long and are the one thing worth
                 reading in full — reveal what the truncation cut off. */}
-            <HoverPopover content={job.status === "error" ? job.error ?? "" : ""} className="truncate">
+            <HoverPopover content={job.status === "error" ? job.error ?? "" : toolText ?? ""} className="truncate">
               {job.status === "error" ? job.error : statusLine}
             </HoverPopover>
             {running && elapsed && (
@@ -241,6 +244,18 @@ function QueueRow({
             </button>
           ) : null
         ) : (
+          <>
+          {toolText && (
+            <button
+              type="button"
+              onClick={() => void navigator.clipboard?.writeText(toolText).catch(() => {})}
+              aria-label={t("common.copy")}
+              title={t("common.copy")}
+              className="text-muted-foreground/60 hover:text-foreground -mt-0.5 rounded p-1 transition-colors"
+            >
+              <Copy className="size-3.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onDismiss(job.id)}
@@ -250,6 +265,7 @@ function QueueRow({
           >
             <X className="size-3.5" />
           </button>
+          </>
         )}
       </div>
 

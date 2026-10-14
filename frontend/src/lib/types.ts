@@ -511,6 +511,8 @@ export type ToolJobInfo = {
   preview?: string;
   /** The gallery file the tool ran on (re-open it in the editor). */
   sourceName?: string | null;
+  /** The run to dispatch (a local run waits in the tool queue). */
+  request?: ToolRunRequest;
 };
 
 export type SidecarStatus =

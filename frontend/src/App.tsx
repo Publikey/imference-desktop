@@ -1271,6 +1271,7 @@ export default function App() {
       // A tool run: cancel it (the tools sidecar / cloud poll stop; nothing to reload).
       if (job.kind === "tool") {
         if (job.status === "running") void api.cancelTool(job.id).catch(() => {});
+        else if (job.status === "queued") dismissJob(job.id);
         return;
       }
       if (job.status === "queued") {
@@ -1352,19 +1353,15 @@ export default function App() {
     []
   );
 
-  // A tool run is an Activity job: it starts right away (tools never wait in
-  // the generation queue), runs while the user keeps working, and settles here.
-  const runToolJob = useCallback(
-    (req: ToolRunRequest, label: string, sourceName: string | null) => {
-      const now = Date.now();
-      setJobs((js) => [
-        {
-          id: req.jobId, kind: "tool", mode: req.runOn === "cloud" ? "cloud" : "local", prompt: label,
-          status: "running", progress: null, queuedAt: now, startedAt: now,
-          tool: { toolId: req.toolId, sourceName, stage: "starting" },
-        },
-        ...js,
-      ]);
+  // A tool run is an Activity job, like a generation: cloud runs start at
+  // once (in parallel), local runs wait in their own queue and run one at a
+  // time (one engine). The result lands in the gallery; the Edit panel never
+  // waits for it.
+  const execToolJob = useCallback(
+    (req: ToolRunRequest, label: string) => {
+      setJobs((js) =>
+        js.map((j) => (j.id === req.jobId ? { ...j, status: "running", startedAt: Date.now() } : j))
+      );
       const settle = (patch: (j: Job) => Partial<Job>) =>
         setJobs((js) => js.map((j) => (j.id === req.jobId ? { ...j, ...patch(j), endedAt: Date.now() } : j)));
       void api
@@ -1395,6 +1392,45 @@ export default function App() {
     },
     [toast, t]
   );
+
+  const runToolJob = useCallback(
+    (req: ToolRunRequest, label: string, sourceName: string | null) => {
+      const now = Date.now();
+      const cloud = req.runOn === "cloud";
+      setJobs((js) => [
+        {
+          id: req.jobId, kind: "tool", mode: cloud ? "cloud" : "local", prompt: label,
+          status: "queued", progress: null, queuedAt: now,
+          tool: { toolId: req.toolId, sourceName, request: req },
+        },
+        ...js,
+      ]);
+      if (cloud) {
+        startedToolsRef.current.add(req.jobId);
+        execToolJob(req, label);
+      }
+    },
+    [execToolJob]
+  );
+
+  // Local tool queue: start the oldest waiting local run when none is running.
+  // startedToolsRef guards against starting one twice before its "running"
+  // status is rendered.
+  const startedToolsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const live = (j: Job) => j.kind === "tool" && j.mode === "local" && !j.hidden;
+    if (jobs.some((j) => live(j) && j.status === "running")) return;
+    let next: Job | undefined;
+    for (let i = jobs.length - 1; i >= 0; i--) {
+      if (live(jobs[i]) && jobs[i].status === "queued") {
+        next = jobs[i];
+        break;
+      }
+    }
+    if (!next?.tool?.request || startedToolsRef.current.has(next.id)) return;
+    startedToolsRef.current.add(next.id);
+    execToolJob(next.tool.request, next.prompt);
+  }, [jobs, execToolJob]);
 
   // --- Gallery → composer bridges ------------------------------------------
   // Send an image into the img2img source and switch to local (img2img is
@@ -2040,8 +2076,6 @@ export default function App() {
                     jobs={jobs}
                     onClose={() => setEditTarget(null)}
                     onRunJob={runToolJob}
-                    onOpenImage={(src) => setLightbox({ src, meta: null })}
-                    onUseAsSource={useAsImg2img}
                   />
                 ) : (
                   <EditEmpty

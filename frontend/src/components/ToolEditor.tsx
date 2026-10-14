@@ -19,20 +19,15 @@ import {
   ArrowRight,
   Check,
   Cloud,
-  Copy,
   Cpu,
   ChevronDown,
   FolderOpen,
   ImagePlus,
-  ImageIcon,
   Images,
   Loader2,
-  Maximize2,
   Play,
   ShieldAlert,
   X,
-  Square,
-  SplitSquareHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +43,6 @@ import {
   EDIT_TOOL_IDS,
   HIDDEN_PARAMS,
   INSTRUCT_EDIT_ID,
-  KNOWN_STAGES,
   UTILITY_TOOL_IDS,
   VIDEO_TOOL_IDS,
   coerceParam,
@@ -72,7 +66,6 @@ import type {
   ToolParamSpec,
   Job,
   ToolRunRequest,
-  ToolRunResult,
   ToolsMode,
 } from "@/lib/types";
 
@@ -110,8 +103,6 @@ export function ToolEditor({
   jobs,
   onClose,
   onRunJob,
-  onOpenImage,
-  onUseAsSource,
 }: {
   toolId: string;
   source: ToolSource;
@@ -122,9 +113,6 @@ export function ToolEditor({
   onClose: () => void;
   /** Start a run as an Activity job (App.runToolJob). */
   onRunJob: (req: ToolRunRequest, label: string, sourceName: string | null) => void;
-  /** Open an output in the viewer. */
-  onOpenImage: (src: string) => void;
-  onUseAsSource: (getSrc: () => Promise<string>) => void;
 }) {
   const open = true;
   const { t } = useTranslation();
@@ -141,15 +129,16 @@ export function ToolEditor({
   // run the tool, else Cloud. A click here overrides it for this tool.
   const [runPref, setRunPref] = useState<ToolsMode>("auto");
   const [runPick, setRunPick] = useState<"local" | "cloud" | null>(null);
-  // The last run started here, and whether the panel shows it (else the form:
-  // "Keep editing" goes back to the form while that job runs on).
-  const [lastJobId, setLastJobId] = useState<string>("");
-  const [showJob, setShowJob] = useState(false);
   // A run refused before it started (empty mask, a click-to-select error).
   const [formError, setFormError] = useState<ToolError | null>(null);
-  const [showBefore, setShowBefore] = useState(false);
   const [hasMask, setHasMask] = useState(false);
-  const [copied, setCopied] = useState(false);
+  // "Added to Activity" after a run (the result lands in the gallery).
+  const [queuedNote, setQueuedNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!queuedNote) return;
+    const id = window.setTimeout(() => setQueuedNote(null), 4000);
+    return () => window.clearTimeout(id);
+  }, [queuedNote]);
   const [refs, setRefs] = useState<RefImage[]>([]);
   const [editModels, setEditModels] = useState<EditModelsInfo | null>(null);
   const [editModelsRev, setEditModelsRev] = useState(0);
@@ -157,30 +146,8 @@ export function ToolEditor({
   const [genModels, setGenModels] = useState<GenToolModels | null>(null);
   const [genRev, setGenRev] = useState(0);
   const maskRef = useRef<MaskEditorHandle>(null);
-  const job = lastJobId ? jobs.find((j) => j.id === lastJobId) : undefined;
-  const result: ToolRunResult | null = (showJob && job?.tool?.result) || null;
-  const resultSrc = (showJob && job?.status === "done" && job.tool?.preview) || null;
-  const progress = job?.tool?.stage ? { stage: job.tool.stage, fraction: job.tool.fraction ?? 0 } : null;
-  const jobError: ToolError | null =
-    job?.status === "error"
-      ? (job.tool?.result?.error ?? { code: "internal", message: job.error ?? "" })
-      : null;
-  const phase: Phase = showJob && job
-    ? job.status === "done"
-      ? "done"
-      : job.status === "error"
-        ? "error"
-        : "running"
-    : formError
-      ? "error"
-      : "form";
-  const error = showJob && jobError ? jobError : formError;
-  const setPhase = (p: Phase) => {
-    if (p === "form") {
-      setShowJob(false);
-      setFormError(null);
-    }
-  };
+  const phase: Phase = formError ? "error" : "form";
+  const error = formError;
 
   // Learn the real runtime once (starts the tools sidecar when installed).
   useEffect(() => {
@@ -223,9 +190,7 @@ export function ToolEditor({
     if (!tool) return;
     setParams(defaultParams(tool));
     setRunPick(null);
-    setShowJob(false);
     setFormError(null);
-    setShowBefore(false);
     setRefs([]);
     // Switching eraser <-> repaint keeps the painted mask (same editor).
     setHasMask(maskRef.current ? !maskRef.current.isEmpty() : false);
@@ -304,32 +269,9 @@ export function ToolEditor({
     const instruction = isInstruct ? String(params.instruction ?? "").trim() : "";
     const label = toolName(t, tool) + (instruction ? ` · ${instruction}` : "");
     setFormError(null);
-    setLastJobId(jobId);
-    setShowJob(true);
     onRunJob({ jobId, toolId: tool.id, inputs, params, runOn: forceRunOn ?? runOn }, label, src.name);
+    setQueuedNote(label);
   };
-
-  const cancel = () => {
-    if (lastJobId) void api.cancelTool(lastJobId);
-  };
-
-  const firstSaved = result?.outputs.find((o) => o.savedName);
-  const textOut = result?.outputs.find((o) => o.type === "text" && o.text);
-
-  // Chain: run another tool on the result.
-  const chainTo = (id: string) => {
-    if (!firstSaved?.savedName) return;
-    const name = firstSaved.savedName;
-    setSrc({ name, kind: firstSaved.type === "video" ? "video" : "image", getSrc: () => api.getSavedImage(name) });
-    setCurrentId(id);
-  };
-  const chainable = useMemo(() => {
-    const vid = firstSaved?.type === "video";
-    const ids: readonly string[] = vid ? VIDEO_TOOL_IDS : [...EDIT_TOOL_IDS, ...UTILITY_TOOL_IDS];
-    return ids
-      .map((id) => toolById(tools, id))
-      .filter((x): x is ToolInfo => !!x && x.badge !== "unavailable" && x.id !== "video-concat");
-  }, [tools, firstSaved?.type]);
 
   // The tools the header picker offers for this source (image or video).
   const srcIsVideo = src.kind === "video" || isVideo(srcData);
@@ -341,7 +283,6 @@ export function ToolEditor({
     [tools, srcIsVideo]
   );
 
-  const stageLabel = (st: string) => t(`tools.stage.${KNOWN_STAGES.has(st) ? st : "running"}`);
 
   return (
     <div className="@container flex flex-col overflow-hidden rounded-xl border">
@@ -358,7 +299,7 @@ export function ToolEditor({
               {tool ? t(`tools.desc.${tool.id}`, { defaultValue: tool.description }) : ""}
             </p>
           </div>
-          {pickable.length > 1 && phase !== "running" && (
+          {pickable.length > 1 && (
             <Select
               size="sm"
               value={currentId}
@@ -373,7 +314,7 @@ export function ToolEditor({
               ))}
             </Select>
           )}
-          {isMaskTool && phase !== "done" && (
+          {isMaskTool && (
             <Segmented<string>
               size="sm"
               value={currentId}
@@ -403,14 +344,7 @@ export function ToolEditor({
           <div className="grid min-h-0 flex-1 gap-0 overflow-hidden @3xl:grid-cols-[1fr_300px]">
             {/* Left: the image / mask editor / result. */}
             <div className="bg-muted/30 relative flex min-h-[280px] items-center justify-center overflow-auto p-4">
-              {phase === "done" && (resultSrc || textOut) ? (
-                <ResultView
-                  before={srcData}
-                  after={resultSrc}
-                  text={textOut?.text}
-                  showBefore={showBefore}
-                />
-              ) : !srcData ? (
+              {!srcData ? (
                 <Loader2 className="text-muted-foreground size-6 animate-spin" />
               ) : isMaskTool ? (
                 <div className="w-full">
@@ -427,7 +361,6 @@ export function ToolEditor({
                       // run-on picker is the way to send selections to the cloud.
                       setFormError({ ...e, cloudRetry: undefined });
                     }}
-                    disabled={phase === "running"}
                   />
                 </div>
               ) : currentId === "outpaint" ? (
@@ -437,16 +370,12 @@ export function ToolEditor({
               ) : (
                 <img src={srcData} alt="" className="max-h-[60vh] max-w-full rounded-lg object-contain shadow" />
               )}
-              {phase === "running" && !isMaskTool && (
-                <div className="absolute inset-0 bg-black/20" />
-              )}
             </div>
 
-            {/* Right: form, where it runs, progress, result actions. */}
+            {/* Right: the form and where it runs. A run goes to Activity; its result to the gallery. */}
             <div className="flex min-h-0 flex-col border-t @3xl:border-t-0 @3xl:border-l">
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-                {phase !== "done" && (
-                  <>
+                <>
                     {currentId === "outpaint" && (
                       <OutpaintSides params={params} onChange={(k, v) => setParams((p) => ({ ...p, [k]: v }))} />
                     )}
@@ -467,7 +396,6 @@ export function ToolEditor({
                         models={editModels}
                         cloud={effectiveCloud}
                         rail={rail}
-                        disabled={phase === "running"}
                         onSubmit={() => {
                           if (!instructionMissing && srcData && tool.badge !== "unavailable") void run();
                         }}
@@ -486,36 +414,20 @@ export function ToolEditor({
                           return next;
                         })
                       }
-                      disabled={phase === "running"}
                     />
                     {isGenTool && !isWeb && (
                       <GenModelBox
                         models={genModels}
                         cloud={effectiveCloud}
-                        disabled={phase === "running"}
                         onChanged={() => setGenRev((r) => r + 1)}
                       />
                     )}
                     {isGenTool && isWeb && genModels?.cloud && (
-                      <GenModelBox models={genModels} cloud disabled={phase === "running"} onChanged={() => {}} />
+                      <GenModelBox models={genModels} cloud onChanged={() => {}} />
                     )}
                     <RunOnPicker tool={priced ?? tool} value={runOn} onChange={setRunOn} rail={rail} />
                     <WhereNotice tool={priced ?? tool} cloud={effectiveCloud} rail={rail} />
-                  </>
-                )}
-
-                {phase === "running" && (
-                  <div className="space-y-2 rounded-xl border p-3">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <Loader2 className="size-4 animate-spin" />
-                      {stageLabel(progress?.stage ?? "starting")}
-                    </div>
-                    <ProgressBar
-                      percent={progress && progress.fraction > 0 ? progress.fraction * 100 : null}
-                    />
-                    <p className="text-muted-foreground text-[11px] leading-snug">{t("tools.runsInActivity")}</p>
-                  </div>
-                )}
+                </>
 
                 {phase === "error" && error && (
                   <ErrorPanel
@@ -529,115 +441,12 @@ export function ToolEditor({
                     }}
                   />
                 )}
-
-                {phase === "done" && result && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                      <Check className="size-4" />
-                      {firstSaved ? t("tools.savedToGallery") : t("tools.done")}
-                    </div>
-                    <p className="text-muted-foreground text-xs">
-                      {t(result.ranOn === "cloud" ? "tools.ranCloud" : "tools.ranLocal", {
-                        seconds: (result.durationMs / 1000).toFixed(1),
-                      })}
-                      {result.ranOn === "cloud" && result.credits
-                        ? " · " + formatToolPrice(t, result.credits, rail)
-                        : ""}
-                    </p>
-                    {textOut?.text && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => {
-                          void navigator.clipboard?.writeText(textOut.text ?? "").catch(() => {});
-                          setCopied(true);
-                          window.setTimeout(() => setCopied(false), 1500);
-                        }}
-                      >
-                        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                        {t("tools.copyText")}
-                      </Button>
-                    )}
-                    {firstSaved?.savedName && (
-                      <div className="grid gap-1.5">
-                        {resultSrc && firstSaved.type !== "video" && (
-                          <Button variant="outline" size="sm" onClick={() => setShowBefore((b) => !b)}>
-                            <SplitSquareHorizontal className="size-3.5" />
-                            {showBefore ? t("tools.showingBefore") : t("tools.beforeAfter")}
-                          </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={!resultSrc}
-                          onClick={() => resultSrc && onOpenImage(resultSrc)}
-                        >
-                          <Maximize2 className="size-3.5" /> {t("tools.open")}
-                        </Button>
-                        {firstSaved.type !== "video" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const n = firstSaved.savedName!;
-                              onUseAsSource(() => api.getSavedImage(n));
-                            }}
-                          >
-                            <ImageIcon className="size-3.5" /> {t("tools.useAsSource")}
-                          </Button>
-                        )}
-                        {firstSaved.path && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => void api.revealInFolder(firstSaved.path!).catch(() => {})}
-                          >
-                            <FolderOpen className="size-3.5" /> {t("tools.reveal")}
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                    {firstSaved?.savedName && chainable.length > 0 && (
-                      <div className="grid gap-1.5 border-t pt-3">
-                        <span className="text-muted-foreground text-xs font-medium">{t("tools.chain")}</span>
-                        <Select size="sm" fullWidth value="" onChange={(v) => v && chainTo(v)} aria-label={t("tools.chain")}>
-                          <option value="">{t("tools.chainPick")}</option>
-                          {chainable.map((x) => (
-                            <option key={x.id} value={x.id}>
-                              {toolName(t, x)}
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
               <footer className="flex items-center gap-2 border-t p-3">
-                {phase === "running" ? (
-                  <>
-                    <Button variant="outline" className="flex-1" onClick={cancel}>
-                      <Square className="size-3.5" /> {t("common.cancel")}
-                    </Button>
-                    {/* The run goes on in Activity: back to the form meanwhile. */}
-                    <Button variant="outline" className="flex-1" onClick={() => setPhase("form")}>
-                      {t("tools.keepEditing")}
-                    </Button>
-                  </>
-                ) : phase === "done" ? (
-                  <>
-                    <Button variant="outline" className="flex-1" onClick={() => setPhase("form")}>
-                      {t("tools.again")}
-                    </Button>
-                    <Button className="flex-1" onClick={close}>
-                      {t("common.done")}
-                    </Button>
-                  </>
-                ) : (
+                <div className="flex-1 space-y-1.5">
                   <Button
-                    className="flex-1"
+                    className="w-full"
                     disabled={!srcData || tool.badge === "unavailable" || (isMaskTool && !hasMask) || instructionMissing}
                     onClick={() => void run()}
                   >
@@ -648,7 +457,12 @@ export function ToolEditor({
                         })
                       : t("tools.run")}
                   </Button>
-                )}
+                  {queuedNote && (
+                    <p className="flex items-center justify-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
+                      <Check className="size-3.5" /> {t("tools.queued")}
+                    </p>
+                  )}
+                </div>
               </footer>
             </div>
           </div>
@@ -658,39 +472,6 @@ export function ToolEditor({
 }
 
 // ------------------------------------------------------------------------
-
-function ResultView({
-  before,
-  after,
-  text,
-  showBefore,
-}: {
-  before: string | null;
-  after: string | null;
-  text?: string;
-  showBefore: boolean;
-}) {
-  if (text && !after) {
-    return (
-      <div className="flex w-full flex-col items-center gap-3">
-        {before && <img src={before} alt="" className="max-h-[36vh] max-w-full rounded-lg object-contain" />}
-        <p className="bg-background w-full max-w-xl rounded-xl border p-3 text-sm leading-relaxed select-text">{text}</p>
-      </div>
-    );
-  }
-  const shown = showBefore ? before : after;
-  if (!shown) return null;
-  if (isVideo(shown)) {
-    return <video src={shown} controls autoPlay loop className="max-h-[60vh] max-w-full rounded-lg" />;
-  }
-  return (
-    <img
-      src={shown}
-      alt=""
-      className="checkerboard max-h-[60vh] max-w-full rounded-lg object-contain shadow"
-    />
-  );
-}
 
 function ParamsForm({
   tool,

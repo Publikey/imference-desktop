@@ -11,7 +11,7 @@
 // select -> erase / repaint never leaves the image.
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Brush, Eraser, Loader2, MousePointerClick, Trash2, Undo2 } from "lucide-react";
+import { Brush, Loader2, MousePointerClick, Trash2, Undo2 } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
 import { loadImage, newToolJobId } from "@/lib/tools";
 import { Segmented } from "@/components/ui/segmented";
@@ -25,6 +25,8 @@ export type MaskEditorHandle = {
   clear: () => void;
 };
 
+// "eraser" is kept for callers' compatibility and behaves as "brush": the
+// brush erases with the right button or Shift held.
 export type MaskMode = "brush" | "eraser" | "select";
 
 const MASK_RGB: [number, number, number] = [236, 72, 153]; // brand pink
@@ -56,13 +58,18 @@ export function MaskEditor({
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
-  const [mode, setMode] = useState<MaskMode>(initialMode);
+  const [mode, setMode] = useState<MaskMode>(initialMode === "eraser" ? "brush" : initialMode);
+  // Shift held while hovering: the brush ring shows it would erase.
+  const [shiftHeld, setShiftHeld] = useState(false);
   const [brush, setBrush] = useState(24);
   const [selecting, setSelecting] = useState(false);
   const [cursor, setCursor] = useState<{ x: number; y: number; d: number } | null>(null);
   const undoRef = useRef<ImageData[]>([]);
   const [undoCount, setUndoCount] = useState(0);
   const drawingRef = useRef<{ x: number; y: number } | null>(null);
+  // The current stroke erases (right button or Shift) instead of painting.
+  const erasingRef = useRef(false);
+  const [erasing, setErasing] = useState(false);
 
   // Natural size of the image -> the mask's resolution.
   useEffect(() => {
@@ -163,7 +170,7 @@ export function MaskEditor({
   const stroke = (from: { x: number; y: number }, to: { x: number; y: number }) => {
     const g = ctx();
     if (!g) return;
-    g.globalCompositeOperation = mode === "eraser" ? "destination-out" : "source-over";
+    g.globalCompositeOperation = erasingRef.current ? "destination-out" : "source-over";
     g.strokeStyle = `rgb(${MASK_RGB.join(",")})`;
     g.fillStyle = g.strokeStyle;
     g.lineCap = "round";
@@ -226,10 +233,14 @@ export function MaskEditor({
   const onPointerDown = (e: React.PointerEvent) => {
     if (disabled || !size) return;
     const p = toMask(e);
+    const subtract = e.button === 2 || e.shiftKey || e.altKey;
     if (mode === "select") {
-      if (!selecting) void selectAt(p.x, p.y, e.shiftKey || e.altKey);
+      if (!selecting) void selectAt(p.x, p.y, subtract);
       return;
     }
+    if (e.button !== 0 && e.button !== 2) return;
+    erasingRef.current = subtract;
+    setErasing(subtract);
     (e.target as Element).setPointerCapture?.(e.pointerId);
     snapshot();
     drawingRef.current = p;
@@ -238,6 +249,7 @@ export function MaskEditor({
   const onPointerMove = (e: React.PointerEvent) => {
     if (!size) return;
     const p = toMask(e);
+    setShiftHeld(e.shiftKey || e.altKey);
     const r = canvasRef.current!.getBoundingClientRect();
     setCursor({ x: e.clientX - r.left, y: e.clientY - r.top, d: brush * p.scale });
     if (drawingRef.current) {
@@ -248,6 +260,8 @@ export function MaskEditor({
   const onPointerUp = () => {
     if (drawingRef.current) {
       drawingRef.current = null;
+      erasingRef.current = false;
+      setErasing(false);
       changed();
     }
   };
@@ -263,7 +277,6 @@ export function MaskEditor({
           onChange={setMode}
           items={[
             { value: "brush", label: t("tools.mask.brush"), icon: <Brush className="size-3.5" /> },
-            { value: "eraser", label: t("tools.mask.eraser"), icon: <Eraser className="size-3.5" /> },
             { value: "select", label: t("tools.mask.select"), icon: <MousePointerClick className="size-3.5" /> },
           ]}
         />
@@ -307,7 +320,9 @@ export function MaskEditor({
           </button>
         </div>
       </div>
-      {mode === "select" && <p className="text-muted-foreground text-xs">{t("tools.mask.selectHint")}</p>}
+      <p className="text-muted-foreground text-xs">
+        {t(mode === "select" ? "tools.mask.selectHint" : "tools.mask.brushHint")}
+      </p>
       <div className="relative mx-auto w-fit max-w-full">
         <img src={src} alt="" draggable={false} className="block max-h-[52vh] max-w-full rounded-lg select-none" />
         {size && (
@@ -316,6 +331,7 @@ export function MaskEditor({
             width={size.w}
             height={size.h}
             onPointerDown={onPointerDown}
+            onContextMenu={(e) => e.preventDefault()}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
@@ -331,7 +347,10 @@ export function MaskEditor({
         )}
         {cursor && mode !== "select" && (
           <div
-            className="pointer-events-none absolute rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
+            className={cn(
+              "pointer-events-none absolute rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]",
+              (erasing || shiftHeld) && "border-dashed"
+            )}
             style={{ left: cursor.x - cursor.d / 2, top: cursor.y - cursor.d / 2, width: cursor.d, height: cursor.d }}
           />
         )}

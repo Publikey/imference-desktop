@@ -770,13 +770,14 @@
       "edit_model_loaded": "本机当前加载的是编辑模型（Qwen-Image-Edit）：无法生成变体或重绘。请切换回图像模型，或在云端运行。"
     },
     "mask": {
+      "brushHint": "涂抹要处理的区域。右键或按住 Shift 拖动可擦除蒙版。",
       "brush": "画笔",
       "eraser": "橡皮擦",
       "select": "点击选取",
       "size": "大小",
       "undo": "撤销",
       "clear": "清空",
-      "selectHint": "点击物体即可选取；按住 Shift 点击可从选区中移除。",
+      "selectHint": "点击物体即可选取。右键或按住 Shift 点击可从选区中移除。",
       "selecting": "正在选取…",
       "empty": "请先涂抹或选取区域。"
     },

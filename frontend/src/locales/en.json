@@ -781,13 +781,14 @@
       "edit_model_loaded": "The model loaded on this computer is an edit model (Qwen-Image-Edit): it cannot vary or repaint an image. Switch back to an image model, or run in the cloud."
     },
     "mask": {
+      "brushHint": "Paint the area. Right-click or Shift-drag erases the mask.",
       "brush": "Brush",
       "eraser": "Eraser",
       "select": "Click to select",
       "size": "Size",
       "undo": "Undo",
       "clear": "Clear",
-      "selectHint": "Click an object to select it; Shift-click removes from the selection.",
+      "selectHint": "Click an object to select it. Right-click or Shift-click removes it from the selection.",
       "selecting": "Selecting…",
       "empty": "Paint or select the area first."
     },

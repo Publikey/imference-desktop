@@ -262,19 +262,23 @@ func TestCloudToolParamsModelChoice(t *testing.T) {
 	}{
 		{map[string]any{"model": "explicit"}, cloudSrc, s, "explicit"},
 		{map[string]any{}, cloudSrc, s, "from-image"},
-		{map[string]any{}, localSrc, s, "selected"},
+		{map[string]any{}, localSrc, s, "selected"}, // the cloud does not run local-model
 		{map[string]any{"model": "local"}, nil, s, "selected"},
 		{map[string]any{}, localSrc, types.Settings{}, "local-model"},
 		{map[string]any{}, nil, types.Settings{}, nil},
 	}
 	for i, c := range cases {
-		got := cloudToolParams(vary, c.params, c.src, c.s, "")["model"]
+		got := cloudToolParams(vary, c.params, c.src, c.s, "", nil)["model"]
 		if got != c.want {
 			t.Errorf("case %d: model = %v, want %v", i, got, c.want)
 		}
 	}
-	if p := cloudToolParams(up, map[string]any{"scale": 2}, cloudSrc, s, ""); p["model"] != nil {
+	if p := cloudToolParams(up, map[string]any{"scale": 2}, cloudSrc, s, "", nil); p["model"] != nil {
 		t.Errorf("non-generation tool got a model: %v", p)
+	}
+	// A local image whose model the cloud also runs: vary keeps that model.
+	if got := cloudToolParams(vary, map[string]any{}, localSrc, s, "", func(c string) bool { return c == "local-model" })["model"]; got != "local-model" {
+		t.Errorf("local source in the cloud catalog: model = %v", got)
 	}
 }
 

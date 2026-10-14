@@ -232,7 +232,7 @@ func Decide(mode string, t Tool, a Assessment) (Route, *Error) {
 		if a.Badge.IsLocal() {
 			return RouteLocal, nil
 		}
-		return "", &Error{Code: CodeUnsupportedRuntime, Message: "this tool cannot run on this computer (" + a.Reason + ")"}
+		return "", &Error{Code: CodeUnsupportedRuntime, Reason: a.Reason, Message: "this tool cannot run on this computer (" + a.Reason + ")"}
 	case ModeCloud:
 		if t.CloudAvailable {
 			return RouteCloud, nil
@@ -245,6 +245,6 @@ func Decide(mode string, t Tool, a Assessment) (Route, *Error) {
 		if t.CloudAvailable {
 			return RouteCloud, nil
 		}
-		return "", &Error{Code: CodeUnsupportedRuntime, Message: "this tool cannot run here or in the cloud (" + a.Reason + ")"}
+		return "", &Error{Code: CodeUnsupportedRuntime, Reason: a.Reason, Message: "this tool cannot run here or in the cloud (" + a.Reason + ")"}
 	}
 }

@@ -695,6 +695,7 @@
     "unknownFamily": "Unknown family"
   },
   "tools": {
+    "gen": {"model": "Model", "sameModel": "The model this image was made with.", "otherModelCloud": "This image was made with {{source}}, which the cloud does not run: using the selected cloud model.", "selectedCloud": "The selected cloud model.", "noCloudModel": "No cloud model selected: pick one in Create > Cloud.", "otherModelLocal": "This image was made with {{source}}, not with the model loaded on this computer.", "loadedModel": "The model loaded on this computer.", "loadSource": "Load {{name}} (the image's model)", "editLoaded": "{{name}} is loaded on this computer: it edits from instructions and cannot vary or repaint an image. Switch back to an image model, or run in the cloud.", "noLocalModel": "No model loaded on this computer: load one in Create > Local, or run in the cloud."},
     "pickTool": "Tool",
     "empty": { "title": "Nothing to edit yet", "hint": "Drag an image here from the gallery, choose Edit on a gallery image, or open a file.", "openFile": "Open a file…", "showGallery": "Show the gallery" },
     "keepEditing": "Keep editing",
@@ -776,7 +777,7 @@
       "generation_on_cpu": "The local engine runs on the CPU — too slow for this tool.",
       "no_device": "No compatible runtime on this computer.",
       "no_edit_model": "Load an edit model (e.g. Qwen-Image-Edit 2511) as the local model to run it on this computer.",
-      "edit_model_loaded": "The loaded local model is an edit model: use Edit with instructions, or load an image model."
+      "edit_model_loaded": "The model loaded on this computer is an edit model (Qwen-Image-Edit): it cannot vary or repaint an image. Switch back to an image model, or run in the cloud."
     },
     "mask": {
       "brush": "Brush",
@@ -902,7 +903,7 @@
     },
     "desc": {
       "upscale": "Upscale 2× or 4× with sharp details (Real-ESRGAN).",
-      "vary": "A variation of the image with a generation model.",
+      "vary": "A new take on this image with the same composition, made by the model that created it. Subtle stays close, Strong changes more.",
       "remove-background": "Cut out the subject: transparent PNG, mask, or solid color.",
       "erase-object": "Paint over an object to remove it.",
       "segment": "Click an object to select it.",

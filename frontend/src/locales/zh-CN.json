@@ -685,6 +685,7 @@
     "unknownFamily": "未知系列"
   },
   "tools": {
+    "gen": {"model": "模型", "sameModel": "生成这张图片所用的模型。", "otherModelCloud": "这张图片由 {{source}} 生成，云端不提供该模型：将使用所选的云端模型。", "selectedCloud": "所选的云端模型。", "noCloudModel": "尚未选择云端模型：请在“创建 > 云端”中选择。", "otherModelLocal": "这张图片由 {{source}} 生成，而非本机当前加载的模型。", "loadedModel": "本机当前加载的模型。", "loadSource": "加载 {{name}}（该图片的模型）", "editLoaded": "本机当前加载的是 {{name}}：它按指令编辑图片，无法生成变体或重绘。请切换回图像模型，或在云端运行。", "noLocalModel": "本机未加载模型：请在“创建 > 本地”中加载，或在云端运行。"},
     "pickTool": "工具",
     "empty": { "title": "尚无可编辑的内容", "hint": "将图库中的图片拖到这里，在图库图片上选择“编辑”，或打开一个文件。", "openFile": "打开文件…", "showGallery": "显示图库" },
     "keepEditing": "继续编辑",
@@ -765,7 +766,7 @@
       "generation_on_cpu": "本地引擎运行在 CPU 上，对此工具来说太慢。",
       "no_device": "本机没有兼容的运行时。",
       "no_edit_model": "将编辑模型（如 Qwen-Image-Edit 2511）设为本地模型，即可在本机运行。",
-      "edit_model_loaded": "当前加载的本地模型是编辑模型：请使用“指令编辑”，或加载图像生成模型。"
+      "edit_model_loaded": "本机当前加载的是编辑模型（Qwen-Image-Edit）：无法生成变体或重绘。请切换回图像模型，或在云端运行。"
     },
     "mask": {
       "brush": "画笔",
@@ -890,7 +891,7 @@
     },
     "desc": {
       "upscale": "以 2× 或 4× 放大，细节清晰（Real-ESRGAN）。",
-      "vary": "用生成模型制作图片的变体。",
+      "vary": "保持相同构图，用生成这张图片的模型重新演绎。“轻微”更接近原图，“强烈”变化更大。",
       "remove-background": "抠出主体：透明 PNG、蒙版或纯色背景。",
       "erase-object": "涂抹物体即可将其移除。",
       "segment": "点击物体即可选取。",

@@ -536,7 +536,7 @@ func (a *App) runTool(parent context.Context, req ToolRunRequest) (res ToolRunRe
 		}
 	} else {
 		res.RanOn = "cloud"
-		cloudParams := cloudToolParams(t, params, sourceMeta, s, a.editDefaultModel())
+		cloudParams := cloudToolParams(t, params, sourceMeta, s, a.editDefaultModel(), a.cloudHasModel)
 		outs, res.Credits, terr = a.runToolCloud(ctx, req.JobID, t, inputs, cloudParams, outDir)
 		if terr != nil {
 			if job.cancelled.Load() {
@@ -765,11 +765,12 @@ func toolParams(t tools.Tool, in map[string]any, source *types.GenerationMeta) m
 }
 
 // cloudToolParams fills the model of a cloud generation tool: an explicit
-// choice wins; else the source image's model when it was made in the cloud;
-// else the selected cloud model; else the source's model. instruct-edit only
-// takes an edit model: the selected cloud model when it is one, else
-// editDefault (see editDefaultFrom).
-func cloudToolParams(t tools.Tool, params map[string]any, source *types.GenerationMeta, s types.Settings, editDefault string) map[string]any {
+// choice wins; else the model the source image was made with, when the cloud
+// runs it (made in the cloud, or a local model the cloud catalog also lists:
+// cloudHas); else the selected cloud model; else the source's model.
+// instruct-edit only takes an edit model: the selected cloud model when it is
+// one, else editDefault (see editDefaultFrom).
+func cloudToolParams(t tools.Tool, params map[string]any, source *types.GenerationMeta, s types.Settings, editDefault string, cloudHas func(string) bool) map[string]any {
 	if !t.IsGeneration() {
 		return params
 	}
@@ -794,6 +795,8 @@ func cloudToolParams(t tools.Tool, params map[string]any, source *types.Generati
 	switch {
 	case source != nil && source.Source == "cloud" && source.ModelCode != "":
 		out["model"] = source.ModelCode
+	case source != nil && source.ModelCode != "" && cloudHas != nil && cloudHas(source.ModelCode):
+		out["model"] = source.ModelCode
 	case s.CloudModel != "":
 		out["model"] = s.CloudModel
 	case source != nil && source.ModelCode != "":
@@ -804,13 +807,86 @@ func cloudToolParams(t tools.Tool, params map[string]any, source *types.Generati
 	return out
 }
 
+// cloudHasModel: the cached cloud catalog runs this model code (no network).
+func (a *App) cloudHasModel(code string) bool {
+	for _, m := range a.cloud.CachedCloudModels() {
+		if m.ModelCode == code {
+			return true
+		}
+	}
+	return false
+}
+
+// GenToolModels tells the Edit panel which model a generation tool (vary,
+// inpaint, outpaint) would use, so it can say so and offer the fixes.
+type GenToolModels struct {
+	// SourceModel / SourceModelName: what the image was made with ("" unknown).
+	SourceModel     string `json:"sourceModel"`
+	SourceModelName string `json:"sourceModelName"`
+	// Cloud is the model a cloud run uses by default (the source's when the
+	// cloud runs it, else the selected cloud model).
+	Cloud *types.ModelInfo `json:"cloud,omitempty"`
+	// Local is the model loaded on this computer (nil: none / web).
+	Local *types.ModelInfo `json:"local,omitempty"`
+	// LocalIsSource: the loaded model is the one the image was made with.
+	LocalIsSource bool `json:"localIsSource"`
+	// SourceLocal: the source's model can be loaded on this computer (offer it).
+	SourceLocal *types.ModelInfo `json:"sourceLocal,omitempty"`
+	// Previous: an edit model is loaded; this is the model to switch back to.
+	Previous *types.ModelInfo `json:"previous,omitempty"`
+}
+
+// ToolGenModels resolves GenToolModels for tool toolID on a gallery item
+// (sourceName; meta for an unsaved / client-gallery source).
+func (a *App) ToolGenModels(toolID, sourceName string, meta *types.GenerationMeta) GenToolModels {
+	out := GenToolModels{}
+	if sourceName != "" && !strings.ContainsAny(sourceName, `/\`) {
+		if m := readSidecar(filepath.Join(a.outputDir(), sourceName)); m != nil {
+			meta = m
+		}
+	}
+	if meta != nil {
+		out.SourceModel, out.SourceModelName = meta.ModelCode, meta.ModelName
+	}
+	s := a.settings.Get()
+	if a.toolsCat != nil {
+		if t, ok := a.toolsCat.Get(toolID); ok && t.IsGeneration() {
+			cp := cloudToolParams(t, map[string]any{}, meta, s, a.editDefaultModel(), a.cloudHasModel)
+			if code, _ := cp["model"].(string); code != "" {
+				if m, err := a.cloudCatalogModel(code); err == nil {
+					out.Cloud = m
+				}
+			}
+		}
+	}
+	if a.cloudOnly {
+		return out
+	}
+	if lm := s.LocalModel; lm != nil {
+		l := *lm
+		out.Local = &l
+		out.LocalIsSource = out.SourceModel != "" && l.ModelCode == out.SourceModel
+		if cloud.IsEditBackend(l.BackendType) && s.PreviousLocalModel != "" {
+			if m, err := a.localCatalogModel(s.PreviousLocalModel); err == nil {
+				out.Previous = m
+			}
+		}
+	}
+	if out.SourceModel != "" && !out.LocalIsSource {
+		if m, err := a.localCatalogModel(out.SourceModel); err == nil {
+			out.SourceLocal = m
+		}
+	}
+	return out
+}
+
 // cloudOffer prices a cloud re-run for the "run in the cloud?" prompt.
 func (a *App) cloudOffer(t tools.Tool, params map[string]any, source *types.GenerationMeta) *tools.CloudOffer {
 	s := a.settings.Get()
 	credits := t.Credits
 	if t.IsGeneration() {
 		credits = 0
-		cp := cloudToolParams(t, params, source, s, a.editDefaultModel())
+		cp := cloudToolParams(t, params, source, s, a.editDefaultModel(), a.cloudHasModel)
 		code, _ := cp["model"].(string)
 		switch {
 		case s.CloudModelInfo != nil && s.CloudModelInfo.ModelCode == code:

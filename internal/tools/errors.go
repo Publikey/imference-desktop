@@ -25,9 +25,12 @@ const (
 // result (not as a rejected promise) so the UI can key off Code and offer the
 // cloud — with its price — when CloudRetry is set. Never a silent fallback.
 type Error struct {
-	Code       string      `json:"code"`
-	Message    string      `json:"message"`
-	Field      string      `json:"field,omitempty"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Field   string `json:"field,omitempty"`
+	// Reason is the badge reason behind an unsupported_runtime (e.g.
+	// edit_model_loaded): the UI explains it and offers the fix.
+	Reason     string      `json:"reason,omitempty"`
 	CloudRetry *CloudOffer `json:"cloudRetry,omitempty"`
 }
 

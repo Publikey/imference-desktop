@@ -27,7 +27,7 @@ var webAllow = map[string]bool{
 	"ListSavedImages": true, "GalleryFacets": true, "DeleteSavedImage": true, "GetSavedImage": true,
 	"GetLogs": true, "ClearLogs": true, "LogFromFrontend": true,
 	"ListCloudLoras": true, "ListCatalogLoras": true,
-	"ListTools": true, "GetToolsSettings": true, "CancelTool": true, "RunTool": true, "ListEditModels": true,
+	"ListTools": true, "GetToolsSettings": true, "CancelTool": true, "RunTool": true, "ListEditModels": true, "ToolGenModels": true,
 	"TakeClientGalleryOutbox": true,
 }
 

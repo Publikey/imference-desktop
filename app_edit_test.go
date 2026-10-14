@@ -92,7 +92,7 @@ func TestCloudToolParamsInstructEdit(t *testing.T) {
 		{map[string]any{}, selEdit, "other-edit", "qwen-image-edit-2509"},
 	}
 	for i, c := range cases {
-		if got := cloudToolParams(ie, c.params, cloudSrc, c.s, c.editDefault)["model"]; got != c.want {
+		if got := cloudToolParams(ie, c.params, cloudSrc, c.s, c.editDefault, nil)["model"]; got != c.want {
 			t.Errorf("case %d: model = %v, want %s", i, got, c.want)
 		}
 	}

@@ -665,7 +665,21 @@ export type ToolError = {
   code: string;
   message: string;
   field?: string;
+  /** The badge reason behind an unsupported_runtime (e.g. edit_model_loaded). */
+  reason?: string;
   cloudRetry?: ToolCloudOffer;
+};
+
+/** Which model a generation tool (vary, inpaint, outpaint) would use
+ *  (App.ToolGenModels). */
+export type GenToolModels = {
+  sourceModel: string;
+  sourceModelName: string;
+  cloud?: ModelInfo | null;
+  local?: ModelInfo | null;
+  localIsSource: boolean;
+  sourceLocal?: ModelInfo | null;
+  previous?: ModelInfo | null;
 };
 
 export type ToolRunRequest = {

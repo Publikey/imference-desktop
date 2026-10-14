@@ -62,8 +62,10 @@ import { cn } from "@/lib/utils";
 import { isWeb } from "@/lib/target";
 import type {
   EditModelsInfo,
+  GenToolModels,
   GenerationMeta,
   InstallProgress,
+  ModelInfo,
   SavedImage,
   ToolError,
   ToolInfo,
@@ -147,6 +149,9 @@ export function ToolEditor({
   const [refs, setRefs] = useState<RefImage[]>([]);
   const [editModels, setEditModels] = useState<EditModelsInfo | null>(null);
   const [editModelsRev, setEditModelsRev] = useState(0);
+  // Vary / inpaint / outpaint: the model a run would use (local and cloud).
+  const [genModels, setGenModels] = useState<GenToolModels | null>(null);
+  const [genRev, setGenRev] = useState(0);
   const maskRef = useRef<MaskEditorHandle>(null);
   const job = lastJobId ? jobs.find((j) => j.id === lastJobId) : undefined;
   const result: ToolRunResult | null = (showJob && job?.tool?.result) || null;
@@ -247,6 +252,19 @@ export function ToolEditor({
       alive = false;
     };
   }, [open, isInstruct, tool?.badge, editModelsRev]);
+  const isGenTool = GEN_TOOL_IDS.has(currentId);
+  useEffect(() => {
+    if (!isGenTool) return;
+    let alive = true;
+    void api
+      .toolGenModels(currentId, src.name, src.meta ?? null)
+      .then((m) => alive && setGenModels(m))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [isGenTool, currentId, src.name, src.meta, tool?.badge, genRev]);
+
   // Its cloud model defaults to the catalog's default edit model.
   useEffect(() => {
     if (!isInstruct || !editModels?.defaultCloud) return;
@@ -462,6 +480,17 @@ export function ToolEditor({
                       }
                       disabled={phase === "running"}
                     />
+                    {isGenTool && !isWeb && (
+                      <GenModelBox
+                        models={genModels}
+                        cloud={effectiveCloud}
+                        disabled={phase === "running"}
+                        onChanged={() => setGenRev((r) => r + 1)}
+                      />
+                    )}
+                    {isGenTool && isWeb && genModels?.cloud && (
+                      <GenModelBox models={genModels} cloud disabled={phase === "running"} onChanged={() => {}} />
+                    )}
                     <RunOnPicker tool={priced ?? tool} value={runOn} onChange={setRunOn} rail={rail} />
                     <WhereNotice tool={priced ?? tool} cloud={effectiveCloud} rail={rail} />
                   </>
@@ -483,6 +512,8 @@ export function ToolEditor({
                 {phase === "error" && error && (
                   <ErrorPanel
                     error={error}
+                    previous={isGenTool ? genModels?.previous : undefined}
+                    onSwitched={() => setGenRev((r) => r + 1)}
                     rail={rail}
                     onCloud={() => {
                       setRunOn("cloud");
@@ -907,17 +938,36 @@ function WhereNotice({ tool, cloud, rail }: { tool: ToolInfo; cloud: boolean; ra
   );
 }
 
-function ErrorPanel({ error, rail, onCloud }: { error: ToolError; rail: string; onCloud: () => void }) {
+function ErrorPanel({
+  error,
+  rail,
+  onCloud,
+  previous,
+  onSwitched,
+}: {
+  error: ToolError;
+  rail: string;
+  onCloud: () => void;
+  /** The model to switch back to when an edit model blocks the run. */
+  previous?: ModelInfo | null;
+  onSwitched?: () => void;
+}) {
   const { t } = useTranslation();
+  const sw = useModelSwitch(onSwitched ?? (() => {}));
+  // A known reason reads as a sentence, not as a code in parentheses.
+  const why = error.reason ? t(`tools.reason.${error.reason}`, { defaultValue: "" }) : "";
   return (
     <div className="border-destructive/25 bg-destructive/5 space-y-2 rounded-xl border p-3 text-xs">
       <div className="text-destructive flex items-start gap-2">
         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
         <div>
           <p className="font-medium">{t(`tools.errors.${error.code}`, { defaultValue: t("tools.errors.internal") })}</p>
-          <p className="text-destructive/80 mt-0.5 break-words">{error.message}</p>
+          <p className="text-destructive/80 mt-0.5 break-words">{why || error.message}</p>
         </div>
       </div>
+      {error.reason === "edit_model_loaded" && previous && (
+        <SwitchBackButton sw={sw} previous={previous} />
+      )}
       {error.cloudRetry && (
         <div className="space-y-2 rounded-lg border border-sky-500/30 bg-sky-500/10 p-2.5 text-sky-800 dark:text-sky-200">
           <p>{t("tools.cloudRetryBody")}</p>
@@ -1505,6 +1555,149 @@ export function EditEmpty({
           e.target.value = "";
         }}
       />
+    </div>
+  );
+}
+
+const GEN_TOOL_IDS = new Set(["vary", "inpaint", "outpaint"]);
+
+/** Swap the local model (download/load progress from "model:progress"). */
+function useModelSwitch(onDone: () => void) {
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<InstallProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+  useEffect(() => {
+    if (!busy) return;
+    return api.onModelProgress((p) => {
+      setProgress(p);
+      if (p.done || p.phase === "done" || p.phase === "error" || p.phase === "cancelled") {
+        setBusy(false);
+        if (p.phase === "error") setError(p.error ?? "error");
+        doneRef.current();
+      }
+    });
+  }, [busy]);
+  const start = (fn: () => Promise<void>) => {
+    setError(null);
+    setProgress(null);
+    setBusy(true);
+    fn().catch((e) => {
+      setBusy(false);
+      setError(String((e as Error)?.message ?? e));
+    });
+  };
+  return { busy, progress, error, start };
+}
+
+function SwitchProgress({ sw }: { sw: ReturnType<typeof useModelSwitch> }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {sw.busy && sw.progress && (
+        <div className="space-y-1">
+          <ProgressBar percent={sw.progress.percentEstimate || null} />
+          <p className="text-muted-foreground truncate text-[11px]">
+            {sw.progress.messageKey ? t(sw.progress.messageKey, sw.progress.messageArgs ?? {}) : sw.progress.message}
+          </p>
+        </div>
+      )}
+      {sw.error && <p className="text-destructive text-[11px]">{t("tools.instruct.switchFailed", { error: sw.error })}</p>}
+    </>
+  );
+}
+
+function SwitchBackButton({ sw, previous }: { sw: ReturnType<typeof useModelSwitch>; previous: ModelInfo }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-1.5">
+      <Button size="sm" variant="outline" className="w-full" disabled={sw.busy} onClick={() => sw.start(api.switchBackFromEditModel)}>
+        {sw.busy ? <Loader2 className="size-3.5 animate-spin" /> : <Cpu className="size-3.5" />}
+        {t("tools.instruct.switchBack", { name: previous.name || previous.modelCode })}
+      </Button>
+      <SwitchProgress sw={sw} />
+    </div>
+  );
+}
+
+/** Vary / inpaint / outpaint: which model the run uses, why, and the fixes
+ *  (load the image's own model, switch back from an edit model). */
+function GenModelBox({
+  models,
+  cloud,
+  disabled,
+  onChanged,
+}: {
+  models: GenToolModels | null;
+  cloud: boolean;
+  disabled?: boolean;
+  onChanged: () => void;
+}) {
+  const { t } = useTranslation();
+  const sw = useModelSwitch(onChanged);
+  if (!models) return null;
+  const source = models.sourceModelName || models.sourceModel;
+  const local = models.local;
+  const editLoaded = !!local && local.backendType === "qwenimage-edit";
+  const name = (m?: ModelInfo | null) => (m ? m.name || m.modelCode : "");
+
+  return (
+    <div className="space-y-2 rounded-xl border p-3 text-xs">
+      <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">{t("tools.gen.model")}</p>
+      {cloud ? (
+        models.cloud ? (
+          <>
+            <p className="flex items-center gap-1.5 font-medium">
+              <Cloud className="size-3.5 shrink-0" /> {name(models.cloud)}
+            </p>
+            <p className="text-muted-foreground leading-snug">
+              {source && models.cloud.modelCode === models.sourceModel
+                ? t("tools.gen.sameModel")
+                : source
+                  ? t("tools.gen.otherModelCloud", { source })
+                  : t("tools.gen.selectedCloud")}
+            </p>
+          </>
+        ) : (
+          <p className="text-muted-foreground">{t("tools.gen.noCloudModel")}</p>
+        )
+      ) : editLoaded ? (
+        <>
+          <p className="leading-snug text-amber-700 dark:text-amber-300">{t("tools.gen.editLoaded", { name: name(local) })}</p>
+          {models.previous && <SwitchBackButton sw={sw} previous={models.previous} />}
+        </>
+      ) : local ? (
+        <>
+          <p className="flex items-center gap-1.5 font-medium">
+            <Cpu className="size-3.5 shrink-0" /> {name(local)}
+          </p>
+          <p className="text-muted-foreground leading-snug">
+            {models.localIsSource
+              ? t("tools.gen.sameModel")
+              : source
+                ? t("tools.gen.otherModelLocal", { source })
+                : t("tools.gen.loadedModel")}
+          </p>
+          {!models.localIsSource && models.sourceLocal && (
+            <div className="space-y-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                disabled={disabled || sw.busy}
+                onClick={() => sw.start(() => api.selectLocalModel(models.sourceLocal!.modelCode))}
+              >
+                {sw.busy ? <Loader2 className="size-3.5 animate-spin" /> : <Cpu className="size-3.5" />}
+                {t("tools.gen.loadSource", { name: name(models.sourceLocal) })}
+              </Button>
+              <SwitchProgress sw={sw} />
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="text-muted-foreground">{t("tools.gen.noLocalModel")}</p>
+      )}
     </div>
   );
 }

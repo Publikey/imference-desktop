@@ -77,3 +77,49 @@ func TestBuiltinEditModelStandsInForTheCatalog(t *testing.T) {
 		t.Fatalf("info %+v", info)
 	}
 }
+
+// ToolGenModels: the loaded model vs the image's own, and the way back from an
+// edit model (no tools catalog here: the cloud side is left empty).
+func TestToolGenModels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "format") {
+			_, _ = w.Write([]byte(`{"formats": []}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"models": []}`))
+	}))
+	defer srv.Close()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", home)
+	t.Setenv("LOCALAPPDATA", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	store, err := settings.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus := logbus.New()
+	c := cloud.New(bus)
+	c.SetBaseURL(srv.URL)
+	a := &App{settings: store, bus: bus, ctx: context.Background(), cloud: c}
+
+	s := store.Get()
+	s.LocalModel = &types.ModelInfo{ModelCode: "sdxl-a", Name: "SDXL A", BackendType: "sdxl"}
+	_, _ = store.Save(s)
+	m := a.ToolGenModels("vary", "", &types.GenerationMeta{ModelCode: "sdxl-a", ModelName: "SDXL A"})
+	if !m.LocalIsSource || m.SourceModelName != "SDXL A" || m.Previous != nil {
+		t.Fatalf("same model: %+v", m)
+	}
+	m = a.ToolGenModels("vary", "", &types.GenerationMeta{ModelCode: "other"})
+	if m.LocalIsSource || m.SourceLocal != nil {
+		t.Fatalf("other model (not in the local catalog): %+v", m)
+	}
+	// An edit model loaded, switched to from a model the catalog resolves.
+	s.LocalModel = &types.ModelInfo{ModelCode: cloud.DefaultEditModel, BackendType: cloud.EditBackend}
+	s.PreviousLocalModel = cloud.DefaultEditModel // resolvable here (built-in entry)
+	_, _ = store.Save(s)
+	if m := a.ToolGenModels("vary", "", nil); m.Previous == nil || m.Local == nil {
+		t.Fatalf("edit model loaded: %+v", m)
+	}
+}

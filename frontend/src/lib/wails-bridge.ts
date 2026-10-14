@@ -77,6 +77,8 @@ import type {
   ComponentsProgress,
   ToolInfo,
   EditModelsInfo,
+  GenToolModels,
+  GenerationMeta,
   ToolRunRequest,
   ToolRunResult,
   ToolProgress,
@@ -236,6 +238,12 @@ const raw = {
   // Instruction-edit models (cloud catalog + the loaded local edit model).
   listEditModels: (() => Call.ByName("main.App.ListEditModels")) as () => Promise<EditModelsInfo>,
   switchToEditModel: (() => Call.ByName("main.App.SwitchToEditModel")) as () => Promise<void>,
+  toolGenModels: ((toolId: string, sourceName: string | null, meta: GenerationMeta | null) =>
+    Call.ByName("main.App.ToolGenModels", toolId, sourceName ?? "", meta ?? null)) as (
+    toolId: string,
+    sourceName: string | null,
+    meta: GenerationMeta | null
+  ) => Promise<GenToolModels>,
   switchBackFromEditModel: (() => Call.ByName("main.App.SwitchBackFromEditModel")) as () => Promise<void>,
   onToolProgress: (cb: (p: ToolProgress) => void): (() => void) =>
     Events.On("tools:progress", (e) => cb(e.data as ToolProgress)),

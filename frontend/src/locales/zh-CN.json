@@ -222,6 +222,10 @@
     "dropHere": "拖放到此处作为参考图"
   },
   "panels": {
+    "toggleGroup": "面板",
+    "show": "显示{{name}}",
+    "hide": "隐藏{{name}}",
+    "lastVisible": "至少保留一个可见面板",
     "edit": "编辑",
     "create": "创作",
     "queue": "任务",
@@ -681,6 +685,8 @@
     "unknownFamily": "未知系列"
   },
   "tools": {
+    "pickTool": "工具",
+    "empty": { "title": "尚无可编辑的内容", "hint": "将图库中的图片拖到这里，在图库图片上选择“编辑”，或打开一个文件。", "openFile": "打开文件…", "showGallery": "显示图库" },
     "keepEditing": "继续编辑",
     "runsInActivity": "在“活动”中运行：可继续操作或关闭此面板，结果会保存到图库。",
     "edit": "编辑",

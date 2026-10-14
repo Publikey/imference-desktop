@@ -225,6 +225,10 @@
     "dropHere": "Drop to use as image reference"
   },
   "panels": {
+    "toggleGroup": "Panels",
+    "show": "Show {{name}}",
+    "hide": "Hide {{name}}",
+    "lastVisible": "At least one panel stays visible",
     "edit": "Edit",
     "create": "Create",
     "queue": "Activity",
@@ -691,6 +695,8 @@
     "unknownFamily": "Unknown family"
   },
   "tools": {
+    "pickTool": "Tool",
+    "empty": { "title": "Nothing to edit yet", "hint": "Drag an image here from the gallery, choose Edit on a gallery image, or open a file.", "openFile": "Open a file…", "showGallery": "Show the gallery" },
     "keepEditing": "Keep editing",
     "runsInActivity": "Runs in Activity: keep working, close this panel, the result lands in the gallery.",
     "edit": "Edit",

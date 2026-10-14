@@ -58,11 +58,12 @@ import { CloudLoraCard, LORA_BACKENDS, LoraCard, loraFits } from "@/components/L
 import { PaymentBar } from "@/components/PaymentBar";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
-import { PanelBoard, hidePanel, restorePanel, usePanelLayout } from "@/components/PanelBoard";
+import { PanelBoard, restoreHidden, usePanelLayout, visibleColumns, type PanelId } from "@/components/PanelBoard";
+import { PANEL_ORDER, PanelIcon, PanelToggles } from "@/components/PanelToggles";
 import { ActivityDock } from "@/components/ActivityDock";
 import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
-import { ToolEditor, type ToolSource } from "@/components/ToolEditor";
+import { EditEmpty, ToolEditor, defaultToolFor, type ToolSource } from "@/components/ToolEditor";
 import { ToolMenuList } from "@/components/ToolBits";
 import { isEditModel } from "@/lib/tools";
 import { api } from "@/lib/wails-bridge";
@@ -490,7 +491,27 @@ export default function App() {
   // not settings.walletAddress). Drives cloud gating in x402 mode.
   const [walletConfigured, setWalletConfigured] = useState(false);
   // Panel arrangement (Create / Activity / Gallery) — drag-reorderable, persisted.
-  const { columns: panelColumns, collapsed: panelCollapsed, widths: panelWidths, setColumns: setPanelColumns, toggleCollapsed: togglePanelCollapsed, setWidths: setPanelWidths } = usePanelLayout();
+  const {
+    columns: panelColumns, collapsed: panelCollapsed, widths: panelWidths, hidden: panelHidden,
+    setColumns: setPanelColumns, toggleCollapsed: togglePanelCollapsed, setWidths: setPanelWidths,
+    setPanelHidden,
+  } = usePanelLayout();
+  const togglePanel = useCallback(
+    (id: PanelId) => setPanelHidden(id, !panelHidden[id]),
+    [setPanelHidden, panelHidden]
+  );
+  // Cmd/Ctrl+1..3 shows / hides Create, Edit, Gallery (same as the header switches).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+      const p = PANEL_ORDER.find((x) => x.key === e.key);
+      if (!p) return;
+      e.preventDefault();
+      togglePanel(p.id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [togglePanel]);
   // Fullscreen viewer — shared by the gallery and the Activity panel.
   const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
   // Command palette (⌘K) + the model-picker open state it drives (lifted here so
@@ -1309,9 +1330,11 @@ export default function App() {
   } | null>(null);
   const [toolOutputs, setToolOutputs] = useState<string[]>([]);
   const openEditor = useCallback(
-    (toolId: string, source: ToolSource, maskMode?: "select") =>
-      setEditTarget({ toolId, source, maskMode, key: Date.now() }),
-    []
+    (toolId: string, source: ToolSource, maskMode?: "select") => {
+      setEditTarget({ toolId, source, maskMode, key: Date.now() });
+      setPanelHidden("edit", false);
+    },
+    [setPanelHidden]
   );
 
   // Tool stages ("tools:progress") onto their Activity rows.
@@ -1432,6 +1455,7 @@ export default function App() {
   // Create panel = img2img drop target. Highlighted (dropActive) both by a native
   // OS-file drag over it and by an in-app pointer image-drag (startImageDrag).
   const [dropActive, setDropActive] = useState(false);
+  const [editDropActive, setEditDropActive] = useState(false);
   // The in-app pointer image-drag ghost (a gallery tile following the cursor).
   const [imageDrag, setImageDrag] = useState<{ src: string | null; x: number; y: number } | null>(null);
 
@@ -1463,28 +1487,35 @@ export default function App() {
   // over it, the tile becomes the img2img source. pointerup always fires, so this
   // is reliable in WKWebView (unlike native drop).
   const startImageDrag = useCallback(
-    (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null) => {
+    (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null, name?: string | null) => {
       const sx = e.clientX, sy = e.clientY;
       const overCreate = (x: number, y: number) =>
         !!document.elementFromPoint(x, y)?.closest(".create-surface");
+      // The empty Edit panel takes a dropped tile too (opens it in the editor).
+      const overEdit = (x: number, y: number) =>
+        !!document.elementFromPoint(x, y)?.closest(".edit-drop-surface");
       beginPointerDrag(e, {
         onStart: () => setImageDrag({ src: previewSrc, x: sx, y: sy }),
         onMove: (x, y) => {
           setImageDrag((d) => (d ? { ...d, x, y } : d));
           setDropActive(overCreate(x, y));
+          setEditDropActive(overEdit(x, y));
         },
         onEnd: (x, y, moved) => {
           if (!moved) return;
           suppressTileClick = true;
           window.setTimeout(() => { suppressTileClick = false; }, 0);
           const drop = overCreate(x, y);
+          const toEdit = overEdit(x, y);
           setImageDrag(null);
           setDropActive(false);
+          setEditDropActive(false);
           if (drop) void useAsImg2img(getSrc);
+          else if (toEdit) openEditor(defaultToolFor("image"), { name: name ?? null, kind: "image", getSrc });
         },
       });
     },
-    [useAsImg2img]
+    [useAsImg2img, openEditor]
   );
 
   // Primary button: in local mode it only asks for a click of its own when the
@@ -1696,6 +1727,15 @@ export default function App() {
       })
     );
 
+    for (const p of PANEL_ORDER) {
+      const name = t(`panels.${p.id}`);
+      cmds.push({
+        id: `panel-${p.id}`, group: gApp,
+        label: t(panelHidden[p.id] ? "panels.show" : "panels.hide", { name }),
+        icon: <PanelIcon id={p.id} />, keywords: "panel view layout toggle",
+        shortcut: [modLabel, p.key], run: () => togglePanel(p.id),
+      });
+    }
     cmds.push({ id: "settings", group: gApp, label: t("palette.settings"), icon: <Settings />, keywords: "preferences", run: () => openSettings() });
     cmds.push({ id: "logs", group: gApp, label: t("palette.logs"), icon: <ScrollText />, keywords: "console debug", run: () => setLogsOpen((o) => !o) });
     cmds.push({ id: "shortcuts", group: gApp, label: t("shortcuts.title"), icon: <Keyboard />, keywords: "keyboard keys help", run: () => setShortcutsOpen(true) });
@@ -1704,7 +1744,7 @@ export default function App() {
   }, [
     t, canGenerate, primary, mode, engineInstalled, sidecar.state, settings?.localModel,
     installEngine, stopEngine, startEngine,
-    hasFinished, clearFinished, openSettings,
+    hasFinished, clearFinished, openSettings, panelHidden, togglePanel,
   ]);
 
   return (
@@ -1729,6 +1769,8 @@ export default function App() {
         onToggleLogs={() => setLogsOpen((o) => !o)}
         onOpenSettings={() => openSettings()}
         onOpenPalette={() => setPaletteOpen(true)}
+        panelHidden={panelHidden}
+        onTogglePanel={togglePanel}
       />
 
       {updateInfo?.updateAvailable && updateInfo.latestVersion && (
@@ -1742,10 +1784,8 @@ export default function App() {
             side on desktop, stacked (in the same order) on narrow windows. */}
         <div className="mx-auto w-full max-w-[110rem] px-6 pt-5 pb-16">
           <PanelBoard
-            columns={editTarget ? panelColumns : hidePanel(panelColumns, "edit")}
-            onColumnsChange={(next) =>
-              setPanelColumns(editTarget ? next : restorePanel(next, panelColumns, "edit"))
-            }
+            columns={visibleColumns(panelColumns, panelHidden)}
+            onColumnsChange={(next) => setPanelColumns(restoreHidden(next, panelColumns, panelHidden))}
             collapsed={panelCollapsed}
             onToggleCollapsed={togglePanelCollapsed}
             widths={panelWidths}
@@ -2003,7 +2043,14 @@ export default function App() {
                     onOpenImage={(src) => setLightbox({ src, meta: null })}
                     onUseAsSource={useAsImg2img}
                   />
-                ) : null,
+                ) : (
+                  <EditEmpty
+                    dropActive={editDropActive}
+                    galleryHidden={!!panelHidden.gallery}
+                    onShowGallery={() => setPanelHidden("gallery", false)}
+                    onOpen={(src) => openEditor(defaultToolFor(src.kind), src)}
+                  />
+                ),
               },
               gallery: {
                 title: t("panels.gallery"),
@@ -2121,6 +2168,8 @@ function Header({
   onToggleLogs,
   onOpenSettings,
   onOpenPalette,
+  panelHidden,
+  onTogglePanel,
 }: {
   appVersion: string;
   sidecar: SidecarStatus;
@@ -2135,6 +2184,8 @@ function Header({
   onToggleLogs: () => void;
   onOpenSettings: () => void;
   onOpenPalette: () => void;
+  panelHidden: Partial<Record<PanelId, boolean>>;
+  onTogglePanel: (id: PanelId) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -2160,6 +2211,8 @@ function Header({
           />
         </div>
       </div>
+      {/* Panel switches: Create / Edit / Gallery on or off. */}
+      <PanelToggles hidden={panelHidden} onToggle={onTogglePanel} modLabel={modLabel} />
       <div className="flex items-center gap-1.5">
         {/* Command palette launcher — discoverable entry point for ⌘K. */}
         <button
@@ -3360,7 +3413,7 @@ type GalleryShared = {
   isSelected: (name: string) => boolean;
   tileClick: (e: React.MouseEvent, name: string | null, index: number) => void;
   toggle: (name: string | null, index: number) => void;
-  startImageDrag: (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null) => void;
+  startImageDrag: (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null, name?: string | null) => void;
   /**
    * The one tile allowed to play sound, by file name (null = the whole grid is
    * muted). Video tiles autoplay muted and looping, so without a single owner an
@@ -3386,7 +3439,7 @@ function Gallery({
   /** Gallery files written by tool runs (Activity jobs): pulled into the grid. */
   toolOutputs: string[];
   onUseAsSource: (getSrc: () => Promise<string>) => void;
-  onImageDragStart: (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null) => void;
+  onImageDragStart: (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null, name?: string | null) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
   onHideJob: (id: string) => void;
   /** Open an item in the Edit panel. */
@@ -4131,7 +4184,7 @@ function SavedTile({
       // tile. Videos can't seed img2img → no drag affordance for them.
       onPointerDown={(e) => {
         if (image.kind === "video" || isVideoSrc(srcRef.current)) return;
-        shared.startImageDrag(e, ensureSrc, srcRef.current);
+        shared.startImageDrag(e, ensureSrc, srcRef.current, image.name);
       }}
       className={cn(
         "rise-in group bg-muted/40 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1 transition-shadow duration-200 hover:shadow-lg",

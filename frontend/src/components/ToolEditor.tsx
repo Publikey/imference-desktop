@@ -305,6 +305,16 @@ export function ToolEditor({
       .filter((x): x is ToolInfo => !!x && x.badge !== "unavailable" && x.id !== "video-concat");
   }, [tools, firstSaved?.type]);
 
+  // The tools the header picker offers for this source (image or video).
+  const srcIsVideo = src.kind === "video" || isVideo(srcData);
+  const pickable = useMemo(
+    () =>
+      (srcIsVideo ? VIDEO_TOOL_IDS : ([...EDIT_TOOL_IDS, ...UTILITY_TOOL_IDS] as readonly string[]))
+        .map((id) => toolById(tools, id))
+        .filter((x): x is ToolInfo => !!x && x.id !== "video-concat"),
+    [tools, srcIsVideo]
+  );
+
   const stageLabel = (st: string) => t(`tools.stage.${KNOWN_STAGES.has(st) ? st : "running"}`);
 
   return (
@@ -322,6 +332,21 @@ export function ToolEditor({
               {tool ? t(`tools.desc.${tool.id}`, { defaultValue: tool.description }) : ""}
             </p>
           </div>
+          {pickable.length > 1 && phase !== "running" && (
+            <Select
+              size="sm"
+              value={currentId}
+              onChange={(v) => v && setCurrentId(v)}
+              aria-label={t("tools.pickTool")}
+              className="max-w-[11rem]"
+            >
+              {pickable.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {toolName(t, x)}
+                </option>
+              ))}
+            </Select>
+          )}
           {isMaskTool && phase !== "done" && (
             <Segmented<string>
               size="sm"
@@ -1399,6 +1424,87 @@ function EditModelSwitch({
         </div>
       )}
       {error && <p className="text-destructive text-[11px]">{t("tools.instruct.switchFailed", { error })}</p>}
+    </div>
+  );
+}
+
+/** The tool a fresh source opens on in the Edit panel. */
+export function defaultToolFor(kind?: string): string {
+  return kind === "video" ? "video-trim" : INSTRUCT_EDIT_ID;
+}
+
+/** The Edit panel with nothing open: drop a gallery tile or a file, or pick
+ *  one. The panel is a drop target (.edit-drop-surface) for gallery drags. */
+export function EditEmpty({
+  dropActive,
+  galleryHidden,
+  onShowGallery,
+  onOpen,
+}: {
+  dropActive: boolean;
+  galleryHidden: boolean;
+  onShowGallery: () => void;
+  onOpen: (src: ToolSource) => void;
+}) {
+  const { t } = useTranslation();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  const openFile = (f: File | undefined) => {
+    if (!f || !(f.type.startsWith("image/") || f.type.startsWith("video/"))) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result ?? "");
+      if (!url.startsWith("data:")) return;
+      onOpen({ name: null, kind: f.type.startsWith("video/") ? "video" : "image", getSrc: async () => url });
+    };
+    reader.readAsDataURL(f);
+  };
+  return (
+    <div
+      className={cn(
+        "edit-drop-surface border-border/70 flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-6 text-center transition-colors",
+        (dropActive || over) && "border-primary bg-primary/5"
+      )}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          setOver(true);
+        }
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        openFile(e.dataTransfer.files?.[0]);
+      }}
+    >
+      <span className="brand-surface flex size-11 items-center justify-center rounded-2xl text-white">
+        <ImagePlus className="size-5" />
+      </span>
+      <div className="space-y-1">
+        <p className="text-sm font-medium">{t("tools.empty.title")}</p>
+        <p className="text-muted-foreground max-w-xs text-xs leading-relaxed">{t("tools.empty.hint")}</p>
+      </div>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
+          <FolderOpen className="size-3.5" /> {t("tools.empty.openFile")}
+        </Button>
+        {galleryHidden && (
+          <Button size="sm" variant="outline" onClick={onShowGallery}>
+            <Images className="size-3.5" /> {t("tools.empty.showGallery")}
+          </Button>
+        )}
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,video/mp4,video/webm"
+        className="hidden"
+        onChange={(e) => {
+          openFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }

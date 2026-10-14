@@ -15,9 +15,9 @@ import { beginPointerDrag } from "@/lib/pointer-drag";
 export type PanelId = "create" | "edit" | "gallery";
 export type PanelColumns = PanelId[][];
 
-// "edit" (the image editor) only shows while an image is being edited: the
-// App filters it out of the columns it passes otherwise, but its slot is kept
-// in the persisted arrangement so it reopens where the user last put it.
+// Every panel can be switched off from the header (PanelToggles); a hidden
+// panel keeps its slot in the persisted arrangement so it comes back where the
+// user last put it. Default: Create + Gallery shown, Edit off.
 const ALL_PANELS: PanelId[] = ["create", "edit", "gallery"];
 const DEFAULT_COLUMNS: PanelColumns = [["create"], ["edit"], ["gallery"]];
 // v3: Activity left the panel system (it's a floating dock now). Older keys are
@@ -34,7 +34,11 @@ type PersistedLayout = {
   collapsed: Partial<Record<PanelId, boolean>>;
   /** Per-panel manual width override in px (drag-to-resize). */
   widths: Partial<Record<PanelId, number>>;
+  /** Panels switched off from the header (at least one always stays on). */
+  hidden: Partial<Record<PanelId, boolean>>;
 };
+
+const DEFAULT_HIDDEN: Partial<Record<PanelId, boolean>> = { edit: true };
 
 // A stored layout is valid only if its columns are a partition of the exact
 // known panel set (no dupes, none missing) — guards against stale/renamed keys.
@@ -64,6 +68,20 @@ export function hidePanel(cols: PanelColumns, id: PanelId): PanelColumns {
   return cols.map((c) => c.filter((x) => x !== id)).filter((c) => c.length > 0);
 }
 
+/** The columns to render: the arrangement minus the hidden panels. */
+export function visibleColumns(cols: PanelColumns, hidden: Partial<Record<PanelId, boolean>>): PanelColumns {
+  return ALL_PANELS.filter((id) => hidden[id]).reduce((c, id) => hidePanel(c, id), cols);
+}
+
+/** Fold an arrangement edited with panels hidden back into the full one. */
+export function restoreHidden(
+  next: PanelColumns,
+  prev: PanelColumns,
+  hidden: Partial<Record<PanelId, boolean>>
+): PanelColumns {
+  return ALL_PANELS.filter((id) => hidden[id]).reduce((c, id) => restorePanel(c, prev, id), next);
+}
+
 /** Put a hidden panel back into an arrangement edited while it was hidden: at
  *  its previous position in `prev` (own column, or under the same neighbour). */
 export function restorePanel(next: PanelColumns, prev: PanelColumns, id: PanelId): PanelColumns {
@@ -90,12 +108,12 @@ function loadLayout(): PersistedLayout {
     if (raw) {
       const p = JSON.parse(raw) as Partial<PersistedLayout>;
       const columns = validColumns(p.columns) ? (p.columns as PanelColumns) : withEditPanel(p.columns) ?? DEFAULT_COLUMNS;
-      return { columns, collapsed: p.collapsed ?? {}, widths: p.widths ?? {} };
+      return { columns, collapsed: p.collapsed ?? {}, widths: p.widths ?? {}, hidden: p.hidden ?? DEFAULT_HIDDEN };
     }
   } catch {
     // corrupted storage → defaults
   }
-  return { columns: DEFAULT_COLUMNS, collapsed: {}, widths: {} };
+  return { columns: DEFAULT_COLUMNS, collapsed: {}, widths: {}, hidden: DEFAULT_HIDDEN };
 }
 
 /** Panel arrangement state (2D columns), persisted to localStorage. */
@@ -124,13 +142,26 @@ export function usePanelLayout() {
     []
   );
 
+  // Show / hide a panel; hiding the last visible one is refused.
+  const setPanelHidden = useCallback(
+    (id: PanelId, hide: boolean) =>
+      setLayout((l) => {
+        if (!!l.hidden[id] === hide) return l;
+        if (hide && ALL_PANELS.filter((x) => x !== id && !l.hidden[x]).length === 0) return l;
+        return { ...l, hidden: { ...l.hidden, [id]: hide } };
+      }),
+    []
+  );
+
   return {
     columns: layout.columns,
     collapsed: layout.collapsed,
     widths: layout.widths,
+    hidden: layout.hidden,
     setColumns,
     toggleCollapsed,
     setWidths,
+    setPanelHidden,
   };
 }
 

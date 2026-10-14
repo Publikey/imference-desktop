@@ -23,15 +23,14 @@ export const EDIT_TOOL_IDS = [
   "upscale",
   "vary",
   "remove-background",
-  "erase-object",
-  "segment",
+  "erase-object", // "Erase / Repaint": brush or click-to-select (segment), then erase or repaint (inpaint)
   "outpaint",
   "restore-faces",
   "describe",
 ] as const;
 
 /** Image utilities, behind "More tools…". */
-export const UTILITY_TOOL_IDS = ["inpaint", "resize", "crop", "convert", "strip-metadata"] as const;
+export const UTILITY_TOOL_IDS = ["resize", "crop", "convert", "strip-metadata"] as const;
 
 /** Tools offered on a video item. */
 export const VIDEO_TOOL_IDS = ["video-trim", "video-convert", "interpolate", "video-concat"] as const;
@@ -46,6 +45,8 @@ export const HIDDEN_PARAMS: Record<string, Set<string>> = {
   inpaint: new Set(["model"]),
   outpaint: new Set(["model", "left", "right", "top", "bottom"]),
   segment: new Set(["points"]),
+  // Driven by the mouse (CropFrame).
+  crop: new Set(["x", "y", "width", "height", "aspect"]),
   // Its own form (InstructEditForm): instruction on top, references, advanced.
   "instruct-edit": new Set(["model", "instruction", "negative_prompt", "steps", "guidance", "keep_size", "seed"]),
 };

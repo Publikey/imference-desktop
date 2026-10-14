@@ -1334,6 +1334,15 @@ export default function App() {
     (toolId: string, source: ToolSource, maskMode?: "select") => {
       setEditTarget({ toolId, source, maskMode, key: Date.now() });
       setPanelHidden("edit", false);
+      // Bring the Edit panel into view (it may be off-screen on a narrow
+      // window, or just shown) and flash it so the eye lands on it.
+      window.setTimeout(() => {
+        const el = document.querySelector<HTMLElement>('[data-panel-id="edit"]');
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+        el.classList.add("ring-2", "ring-primary/60", "rounded-2xl");
+        window.setTimeout(() => el.classList.remove("ring-2", "ring-primary/60", "rounded-2xl"), 900);
+      }, 60);
     },
     [setPanelHidden]
   );

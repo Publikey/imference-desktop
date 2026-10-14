@@ -37,6 +37,7 @@ import { Select } from "@/components/ui/select";
 import { Segmented } from "@/components/ui/segmented";
 import { ProgressBar } from "@/components/ui/progress";
 import { MaskEditor, type MaskEditorHandle, type MaskMode } from "@/components/MaskEditor";
+import { CropFrame } from "@/components/CropFrame";
 import { ToolBadgeChip, ToolIcon, formatToolPrice, toolName, usePaymentRail } from "@/components/ToolBits";
 import { api } from "@/lib/wails-bridge";
 import {
@@ -302,8 +303,8 @@ export function ToolEditor({
           {pickable.length > 1 && (
             <Select
               size="sm"
-              value={currentId}
-              onChange={(v) => v && setCurrentId(v)}
+              value={isMaskTool ? "erase-object" : currentId}
+              onChange={(v) => v && !(isMaskTool && v === "erase-object") && setCurrentId(v)}
               aria-label={t("tools.pickTool")}
               className="max-w-[11rem]"
             >
@@ -321,7 +322,7 @@ export function ToolEditor({
               onChange={setCurrentId}
               items={MASK_TOOLS.map((id) => ({
                 value: id,
-                label: tool ? toolName(t, toolById(tools, id) ?? { id, name: id }) : id,
+                label: t(id === "inpaint" ? "tools.mask.repaint" : "tools.mask.erase"),
               }))}
             />
           )}
@@ -363,6 +364,12 @@ export function ToolEditor({
                     }}
                   />
                 </div>
+              ) : currentId === "crop" ? (
+                <CropFrame
+                  src={srcData}
+                  params={params}
+                  onChange={(r) => setParams((p) => ({ ...p, ...r, aspect: undefined }))}
+                />
               ) : currentId === "outpaint" ? (
                 <OutpaintFrame src={srcData} params={params} />
               ) : isVideo(srcData) ? (

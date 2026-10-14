@@ -78,10 +78,10 @@ type ToolRunOutput struct {
 	Text      string `json:"text,omitempty"`
 	DataURL   string `json:"dataUrl,omitempty"` // NoSave runs, and every output with a client gallery
 	// Meta is the sidecar metadata for a client-gallery save (web).
-	Meta *types.GenerationMeta `json:"meta,omitempty"`
-	Width     int    `json:"width,omitempty"`
-	Height    int    `json:"height,omitempty"`
-	Seed      int    `json:"seed,omitempty"`
+	Meta   *types.GenerationMeta `json:"meta,omitempty"`
+	Width  int                   `json:"width,omitempty"`
+	Height int                   `json:"height,omitempty"`
+	Seed   int                   `json:"seed,omitempty"`
 }
 
 // ToolRunResult is RunTool's answer. A failure is reported in Error (typed,
@@ -422,7 +422,12 @@ func (a *App) RunTool(req ToolRunRequest) (ToolRunResult, error) {
 		req.RunOn = tools.ModeCloud
 		for name, vals := range req.Inputs {
 			for _, v := range vals {
-				if filepath.IsAbs(strings.TrimSpace(v)) || strings.Contains(v, "..") {
+				v = strings.TrimSpace(v)
+				if strings.HasPrefix(v, "data:") {
+					continue
+				}
+				// Any separator, not just IsAbs: "/etc/passwd" is not absolute on Windows.
+				if filepath.IsAbs(v) || filepath.VolumeName(v) != "" || strings.ContainsAny(v, `/\`) || strings.Contains(v, "..") {
 					return ToolRunResult{JobID: req.JobID, ToolID: req.ToolID, Outputs: []ToolRunOutput{},
 						Error: &tools.Error{Code: tools.CodeInvalidInput, Message: "input " + name + ": file paths are not accepted on the web", Field: name}}, nil
 				}

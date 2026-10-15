@@ -60,13 +60,14 @@ import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
 import { PanelBoard, restoreHidden, usePanelLayout, visibleColumns, type PanelId } from "@/components/PanelBoard";
 import { PANEL_ORDER, PanelIcon, PanelToggles } from "@/components/PanelToggles";
-import { EngineBar, EnginePanel } from "@/components/EnginePanel";
+import { EnginePanel } from "@/components/EnginePanel";
 import { ActivityDock } from "@/components/ActivityDock";
 import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { EditEmpty, ToolEditor, defaultToolFor, type ToolSource } from "@/components/ToolEditor";
 import { ToolMenuList } from "@/components/ToolBits";
 import { isEditModel, refreshTools } from "@/lib/tools";
+import { scrollRootOf } from "@/lib/engines";
 import { api } from "@/lib/wails-bridge";
 import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/theme";
@@ -497,24 +498,6 @@ export default function App() {
     setColumns: setPanelColumns, toggleCollapsed: togglePanelCollapsed, setWidths: setPanelWidths,
     setPanelHidden,
   } = usePanelLayout();
-  // Engine surface as a panel or a bar (see engineSurfaceHidden).
-  const [engineDisplay, setEngineDisplayState] = useState<"panel" | "bar">(() => {
-    try {
-      return localStorage.getItem("imference.engineDisplay") === "bar" ? "bar" : "panel";
-    } catch {
-      return "panel";
-    }
-  });
-  const setEngineDisplay = useCallback((d: "panel" | "bar") => {
-    setEngineDisplayState(d);
-    try {
-      localStorage.setItem("imference.engineDisplay", d);
-    } catch {
-      // storage unavailable: the choice lasts this session
-    }
-  }, []);
-  // The board never shows the Engine column while it is a bar.
-  const boardHidden = engineDisplay === "bar" ? { ...panelHidden, engine: true } : panelHidden;
   const togglePanel = useCallback(
     (id: PanelId) => setPanelHidden(id, !panelHidden[id]),
     [setPanelHidden, panelHidden]
@@ -1816,10 +1799,8 @@ export default function App() {
   // The engine block — Local/Cloud, payment, model, local readiness, a held
   // model switch. One element, shown in the Create panel today; the Engine
   // panel / bar take it over (see the Engine surface).
-  // The Engine surface owns the engine block — as a panel (a column) or as a
-  // bar under the header (engineDisplay, a per-machine preference to try
-  // both); the Engine switch / Ctrl+4 shows or hides it either way. Create
-  // shows the block only while the surface is off.
+  // The Engine panel owns the engine block; Create shows it only while the
+  // panel is off (so it is never out of reach).
   const engineSurfaceHidden = !!panelHidden.engine;
   const engineBlock = (
     <>
@@ -1934,18 +1915,6 @@ export default function App() {
         onTogglePanel={togglePanel}
       />
 
-      {engineDisplay === "bar" && !panelHidden.engine && (
-        <EngineBar
-          engineBlock={engineBlock}
-          mode={mode}
-          onModeChange={setMode}
-          sidecar={sidecar}
-          localModel={settings?.localModel}
-          cloudModel={settings?.cloudModelInfo}
-          loraCount={mode === "local" ? activeLoras.length : activeCloudLoras.length}
-          onShowAsPanel={() => setEngineDisplay("panel")}
-        />
-      )}
 
       {updateInfo?.updateAvailable && updateInfo.latestVersion && (
         <div className="relative z-10 mx-auto w-full max-w-[110rem] px-6 pt-4">
@@ -1953,13 +1922,13 @@ export default function App() {
         </div>
       )}
 
-      <main className="relative z-10 flex-1 overflow-y-auto">
+      <main className="relative z-10 min-h-0 flex-1 overflow-y-auto xl:overflow-hidden">
         {/* Three drag-reorderable panels — Create / Activity / Gallery — side by
             side on desktop, stacked (in the same order) on narrow windows. */}
-        <div className="mx-auto w-full max-w-[110rem] px-6 pt-5 pb-16">
+        <div className="mx-auto w-full max-w-[110rem] px-6 pt-5 pb-16 xl:flex xl:h-full xl:flex-col xl:pb-0">
           <PanelBoard
-            columns={visibleColumns(panelColumns, boardHidden)}
-            onColumnsChange={(next) => setPanelColumns(restoreHidden(next, panelColumns, boardHidden))}
+            columns={visibleColumns(panelColumns, panelHidden)}
+            onColumnsChange={(next) => setPanelColumns(restoreHidden(next, panelColumns, panelHidden))}
             collapsed={panelCollapsed}
             onToggleCollapsed={togglePanelCollapsed}
             widths={panelWidths}
@@ -1970,10 +1939,9 @@ export default function App() {
                 icon: <Wand2 />,
                 width: 25,
                 content: (
-                  // Mode-tinted, self-scrolling surface: the panel is felt in
-                  // the active mode's accent and, on desktop, scrolls internally
-                  // so a long open Parameters section stays reachable while the
-                  // column is sticky.
+                  // Mode-tinted surface: the panel is felt in the active mode's
+                  // accent. Its column scrolls (PanelBoard), so a long open
+                  // Parameters section stays reachable.
                   <div
                     className={cn(
                       // max-h leaves a bottom gap: the surface starts ~118px down
@@ -1983,7 +1951,7 @@ export default function App() {
                       // scrollbar-gutter:stable reserves the scrollbar its own lane
                       // beyond the right padding, so it never clips the cards'
                       // rounded corners (Windows/WebView2 shows a wide scrollbar).
-                      "create-surface relative flex flex-col gap-4 p-3 pb-4 xl:max-h-[calc(100vh-9rem)] xl:overflow-y-auto xl:overflow-x-hidden xl:[scrollbar-gutter:stable]",
+                      "create-surface relative flex flex-col gap-4 p-3 pb-4",
                       dropActive && "create-drop-active"
                     )}
                     data-mode={mode}
@@ -2125,15 +2093,6 @@ export default function App() {
                 title: t("panels.engine"),
                 icon: <PanelIcon id="engine" />,
                 width: 22,
-                actions: (
-                  <button
-                    type="button"
-                    onClick={() => setEngineDisplay("bar")}
-                    className="text-muted-foreground hover:text-foreground text-[11px] font-medium"
-                  >
-                    {t("engine.asBar")}
-                  </button>
-                ),
                 content: (
                   <EnginePanel
                     engineBlock={engineBlock}
@@ -3669,7 +3628,7 @@ function Gallery({
       (e) => {
         if (e[0]?.isIntersecting) loadMore();
       },
-      { rootMargin: "800px" }
+      { root: scrollRootOf(el), rootMargin: "800px" }
     );
     io.observe(el);
     return () => io.disconnect();
@@ -4245,7 +4204,7 @@ function SavedTile({
           void api.getSavedImage(image.name).then(setSrc).catch(() => {});
         }
       },
-      { rootMargin: "400px" }
+      { root: scrollRootOf(el), rootMargin: "400px" }
     );
     const release = new IntersectionObserver(
       ([e]) => {
@@ -4253,7 +4212,7 @@ function SavedTile({
         // it keeps playing off screen on purpose.
         if (!e?.isIntersecting && srcRef.current && !audibleRef.current) setSrc(null);
       },
-      { rootMargin: "1200px" }
+      { root: scrollRootOf(el), rootMargin: "1200px" }
     );
     const visible = new IntersectionObserver(([e]) => setOnScreen(!!e?.isIntersecting));
 

@@ -373,19 +373,22 @@ export function PanelBoard({
   );
 
   return (
-    <div className="flex w-full flex-col gap-6 xl:flex-row xl:items-start xl:gap-2">
+    // Desktop: the board fills the window height and every column scrolls on
+    // its own (the wheel moves the column under the cursor, like an editor's
+    // side panels); stacked on narrow windows, the page scrolls.
+    <div className="flex w-full flex-col gap-6 xl:h-full xl:min-h-0 xl:flex-row xl:items-stretch xl:gap-2">
       {columns.map((col, ci) => {
         const grow = col.some((id) => panels[id].grow);
         const rail = col.length === 1 && !!collapsed[col[0]] && !!panels[col[0]].collapsible;
         // A collapsed rail keeps its fixed slim width; otherwise the manual /
         // default width drives the column via a CSS var (only applied at xl).
         const columnClass = cn(
-          "flex flex-col gap-4",
+          "flex flex-col gap-4 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain xl:pb-6 xl:[scrollbar-gutter:stable]",
           grow
             ? "min-w-0 xl:flex-1"
             : rail
-              ? "mx-auto xl:mx-0 xl:sticky xl:top-4 xl:w-12 xl:shrink-0"
-              : "mx-auto w-full max-w-2xl xl:mx-0 xl:max-w-none xl:w-[var(--col-w)] xl:shrink-0 xl:sticky xl:top-4"
+              ? "mx-auto xl:mx-0 xl:w-12 xl:shrink-0"
+              : "mx-auto w-full max-w-2xl xl:mx-0 xl:max-w-none xl:w-[var(--col-w)] xl:shrink-0"
         );
         const style =
           grow || rail
@@ -396,7 +399,7 @@ export function PanelBoard({
         // dragend) mid-drag.
         return (
           <Fragment key={ci}>
-            <div className={columnClass} style={style}>
+            <div className={columnClass} style={style} data-scroll-root>
               {col.map((id) => (
                 <Panel
                   key={id}

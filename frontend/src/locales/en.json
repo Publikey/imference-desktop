@@ -697,16 +697,72 @@
   },
   "tools": {
     "autoChip": "Auto",
-    "autoMeans": {"seed": "Auto: a new random seed on every run.", "steps": "Auto: the model's own recipe.", "guidance": "Auto: the model's own recipe.", "max_kb": "Auto: no file-size limit.", "fps": "Auto: keeps the source frame rate.", "end": "Auto: up to the end of the video.", "remove-background": {"threshold": "Auto: soft edges, each pixel's transparency follows the model's confidence (best for hair and fur)."}, "resize": {"width": "Auto: follows the height (or the scale), keeping the proportions.", "height": "Auto: follows the width (or the scale), keeping the proportions.", "scale": "Auto: used only when width and height are both empty."}, "video-convert": {"width": "Auto: keeps the source size.", "fps": "Auto: keeps the source frame rate (15 for a GIF)."}, "video-concat": {"fps": "Auto: the first clip's frame rate."}},
+    "autoMeans": {
+      "seed": "Auto: a new random seed on every run.",
+      "steps": "Auto: the model's own recipe.",
+      "guidance": "Auto: the model's own recipe.",
+      "max_kb": "Auto: no file-size limit.",
+      "fps": "Auto: keeps the source frame rate.",
+      "end": "Auto: up to the end of the video.",
+      "remove-background": {
+        "threshold": "Auto: soft edges, each pixel's transparency follows the model's confidence (best for hair and fur)."
+      },
+      "resize": {
+        "width": "Auto: follows the height (or the scale), keeping the proportions.",
+        "height": "Auto: follows the width (or the scale), keeping the proportions.",
+        "scale": "Auto: used only when width and height are both empty."
+      },
+      "video-convert": {
+        "width": "Auto: keeps the source size.",
+        "fps": "Auto: keeps the source frame rate (15 for a GIF)."
+      },
+      "video-concat": {
+        "fps": "Auto: the first clip's frame rate."
+      }
+    },
     "autoDefault": "Auto: {{what}}.",
-    "action": {"instruct-edit": "Edit", "upscale": "Upscale", "vary": "Make a variation", "remove-background": "Remove background", "erase-object": "Erase", "inpaint": "Inpaint", "outpaint": "Expand", "restore-faces": "Restore faces", "describe": "Describe", "resize": "Resize", "crop": "Crop", "convert": "Convert", "strip-metadata": "Strip metadata", "video-trim": "Trim", "video-convert": "Convert", "interpolate": "Smooth motion", "video-concat": "Join"},
+    "action": {
+      "instruct-edit": "Edit",
+      "upscale": "Upscale",
+      "vary": "Make a variation",
+      "remove-background": "Remove background",
+      "erase-object": "Erase",
+      "inpaint": "Inpaint",
+      "outpaint": "Expand",
+      "restore-faces": "Restore faces",
+      "describe": "Describe",
+      "resize": "Resize",
+      "crop": "Crop",
+      "convert": "Convert",
+      "strip-metadata": "Strip metadata",
+      "video-trim": "Trim",
+      "video-convert": "Convert",
+      "interpolate": "Smooth motion",
+      "video-concat": "Join"
+    },
     "actionCloud": "{{action}} in the cloud · {{price}}",
     "downloadModel": "Download model (~{{mb}} MB)",
     "downloading": "Downloading the model… {{percent}}% of ~{{mb}} MB",
     "queued": "Added to Activity: the result will be saved to the gallery",
-    "gen": {"model": "Model", "sameModel": "The model this image was made with.", "otherModelCloud": "This image was made with {{source}}, which the cloud does not run: using the selected cloud model.", "selectedCloud": "The selected cloud model.", "noCloudModel": "No cloud model selected: pick one in Create > Cloud.", "otherModelLocal": "This image was made with {{source}}, not with the model loaded on this computer.", "loadedModel": "The model loaded on this computer.", "loadSource": "Load {{name}} (the image's model)", "editLoaded": "{{name}} is loaded on this computer: it edits from instructions and cannot vary or repaint an image. Switch back to an image model, or run in the cloud.", "noLocalModel": "No model loaded on this computer: load one in Create > Local, or run in the cloud."},
+    "gen": {
+      "model": "Model",
+      "sameModel": "The model this image was made with.",
+      "otherModelCloud": "This image was made with {{source}}, which the cloud does not run: using the selected cloud model.",
+      "selectedCloud": "The selected cloud model.",
+      "noCloudModel": "No cloud model selected: pick one in Create > Cloud.",
+      "otherModelLocal": "This image was made with {{source}}, not with the model loaded on this computer.",
+      "loadedModel": "The model loaded on this computer.",
+      "loadSource": "Load {{name}} (the image's model)",
+      "editLoaded": "{{name}} is loaded on this computer: it edits from instructions and cannot vary or repaint an image. Switch back to an image model, or run in the cloud.",
+      "noLocalModel": "No model loaded on this computer: load one in Create > Local, or run in the cloud."
+    },
     "pickTool": "Tool",
-    "empty": { "title": "Nothing to edit yet", "hint": "Drag an image here from the gallery, choose Edit on a gallery image, or open a file.", "openFile": "Open a file…", "showGallery": "Show the gallery" },
+    "empty": {
+      "title": "Nothing to edit yet",
+      "hint": "Drag an image here from the gallery, choose Edit on a gallery image, or open a file.",
+      "openFile": "Open a file…",
+      "showGallery": "Show the gallery"
+    },
     "keepEditing": "Keep editing",
     "runsInActivity": "Runs in Activity: keep working, close this panel, the result lands in the gallery.",
     "edit": "Edit",
@@ -800,7 +856,9 @@
       "selecting": "Selecting…",
       "empty": "Paint or select the area first."
     },
-    "crop": { "free": "Free" },
+    "crop": {
+      "free": "Free"
+    },
     "outpaint": {
       "title": "Expand by (pixels)",
       "left": "Left",
@@ -976,5 +1034,25 @@
       "bannerText": "Your gallery folder needs your permission again to be read."
     }
   },
-  "engine": {"changeModel": "Change the model", "cloudShort": "Runs on imference.com", "asPanel": "Show as a panel", "asBar": "Show as a bar", "details": "Details", "collapse": "Close", "machine": "This computer", "noGpu": "No GPU detected", "vram": "{{gb}} GB of VRAM", "generation": "Generation model", "noModel": "No model loaded", "loras_one": "{{count}} LoRA active", "loras_other": "{{count}} LoRAs active", "device": "Running on {{device}}", "tools": "Tool models", "toolsIdle": "None loaded right now.", "toolsOff": "Not running (starts with the first local tool).", "toolsTotal": "{{size}} loaded", "release": "Release", "cloudNote": "Cloud mode: everything runs on imference.com, nothing is loaded on this computer.", "state": {"idle": "Stopped", "starting": "Loading…", "ready": "Ready", "error": "Error"}}
+  "engine": {
+    "machine": "This computer",
+    "noGpu": "No GPU detected",
+    "vram": "{{gb}} GB of VRAM",
+    "generation": "Generation model",
+    "noModel": "No model loaded",
+    "loras_one": "{{count}} LoRA active",
+    "loras_other": "{{count}} LoRAs active",
+    "device": "Running on {{device}}",
+    "tools": "Tool models",
+    "toolsTotal": "{{size}} loaded",
+    "release": "Release",
+    "cloudNote": "Cloud mode: everything runs on imference.com, nothing is loaded on this computer.",
+    "state": {
+      "idle": "Stopped",
+      "starting": "Loading…",
+      "ready": "Ready",
+      "error": "Error"
+    },
+    "engineName": "Engine: {{engine}}"
+  }
 }

@@ -221,6 +221,22 @@
     background-color: color-mix(in oklch, var(--cloud-from) 7%, transparent);
     border-color: color-mix(in oklch, var(--cloud-from) 16%, transparent);
   }
+  /* The same mode-tinted outline for the other mode-bound panels (Engine). */
+  .mode-surface {
+    border: 1px solid transparent;
+    border-radius: 1.5rem;
+    transition:
+      background-color 0.35s var(--ease-out-expo),
+      border-color 0.35s var(--ease-out-expo);
+  }
+  .mode-surface[data-mode="local"] {
+    background-color: color-mix(in oklch, var(--brand-from) 5%, transparent);
+    border-color: color-mix(in oklch, var(--brand-from) 12%, transparent);
+  }
+  .mode-surface[data-mode="cloud"] {
+    background-color: color-mix(in oklch, var(--cloud-from) 7%, transparent);
+    border-color: color-mix(in oklch, var(--cloud-from) 16%, transparent);
+  }
   /* The run capsule — the Create panel's terminal action, floating over the
      cards it scrolls above. It should read as a layer ON TOP of the panel
      rather than one more card in it, without shouting: the loud element is the

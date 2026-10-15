@@ -687,16 +687,72 @@
   },
   "tools": {
     "autoChip": "自动",
-    "autoMeans": {"seed": "自动：每次运行使用新的随机种子。", "steps": "自动：使用模型自身的推荐设置。", "guidance": "自动：使用模型自身的推荐设置。", "max_kb": "自动：不限制文件大小。", "fps": "自动：保持原视频帧率。", "end": "自动：直到视频结尾。", "remove-background": {"threshold": "自动：柔和边缘，每个像素的透明度取决于模型的置信度（适合头发和毛发）。"}, "resize": {"width": "自动：按高度（或缩放比例）等比计算。", "height": "自动：按宽度（或缩放比例）等比计算。", "scale": "自动：仅在宽和高都为空时使用。"}, "video-convert": {"width": "自动：保持原尺寸。", "fps": "自动：保持原帧率（GIF 为 15）。"}, "video-concat": {"fps": "自动：使用第一个片段的帧率。"}},
+    "autoMeans": {
+      "seed": "自动：每次运行使用新的随机种子。",
+      "steps": "自动：使用模型自身的推荐设置。",
+      "guidance": "自动：使用模型自身的推荐设置。",
+      "max_kb": "自动：不限制文件大小。",
+      "fps": "自动：保持原视频帧率。",
+      "end": "自动：直到视频结尾。",
+      "remove-background": {
+        "threshold": "自动：柔和边缘，每个像素的透明度取决于模型的置信度（适合头发和毛发）。"
+      },
+      "resize": {
+        "width": "自动：按高度（或缩放比例）等比计算。",
+        "height": "自动：按宽度（或缩放比例）等比计算。",
+        "scale": "自动：仅在宽和高都为空时使用。"
+      },
+      "video-convert": {
+        "width": "自动：保持原尺寸。",
+        "fps": "自动：保持原帧率（GIF 为 15）。"
+      },
+      "video-concat": {
+        "fps": "自动：使用第一个片段的帧率。"
+      }
+    },
     "autoDefault": "自动：{{what}}。",
-    "action": {"instruct-edit": "编辑", "upscale": "放大", "vary": "生成变体", "remove-background": "移除背景", "erase-object": "擦除", "inpaint": "重绘", "outpaint": "扩展", "restore-faces": "修复人脸", "describe": "描述", "resize": "调整尺寸", "crop": "裁剪", "convert": "转换", "strip-metadata": "清除元数据", "video-trim": "剪辑", "video-convert": "转换", "interpolate": "补帧", "video-concat": "拼接"},
+    "action": {
+      "instruct-edit": "编辑",
+      "upscale": "放大",
+      "vary": "生成变体",
+      "remove-background": "移除背景",
+      "erase-object": "擦除",
+      "inpaint": "重绘",
+      "outpaint": "扩展",
+      "restore-faces": "修复人脸",
+      "describe": "描述",
+      "resize": "调整尺寸",
+      "crop": "裁剪",
+      "convert": "转换",
+      "strip-metadata": "清除元数据",
+      "video-trim": "剪辑",
+      "video-convert": "转换",
+      "interpolate": "补帧",
+      "video-concat": "拼接"
+    },
     "actionCloud": "在云端{{action}} · {{price}}",
     "downloadModel": "下载模型（约 {{mb}} MB）",
     "downloading": "正在下载模型… {{percent}}%，共约 {{mb}} MB",
     "queued": "已加入“活动”：结果将保存到图库",
-    "gen": {"model": "模型", "sameModel": "生成这张图片所用的模型。", "otherModelCloud": "这张图片由 {{source}} 生成，云端不提供该模型：将使用所选的云端模型。", "selectedCloud": "所选的云端模型。", "noCloudModel": "尚未选择云端模型：请在“创建 > 云端”中选择。", "otherModelLocal": "这张图片由 {{source}} 生成，而非本机当前加载的模型。", "loadedModel": "本机当前加载的模型。", "loadSource": "加载 {{name}}（该图片的模型）", "editLoaded": "本机当前加载的是 {{name}}：它按指令编辑图片，无法生成变体或重绘。请切换回图像模型，或在云端运行。", "noLocalModel": "本机未加载模型：请在“创建 > 本地”中加载，或在云端运行。"},
+    "gen": {
+      "model": "模型",
+      "sameModel": "生成这张图片所用的模型。",
+      "otherModelCloud": "这张图片由 {{source}} 生成，云端不提供该模型：将使用所选的云端模型。",
+      "selectedCloud": "所选的云端模型。",
+      "noCloudModel": "尚未选择云端模型：请在“创建 > 云端”中选择。",
+      "otherModelLocal": "这张图片由 {{source}} 生成，而非本机当前加载的模型。",
+      "loadedModel": "本机当前加载的模型。",
+      "loadSource": "加载 {{name}}（该图片的模型）",
+      "editLoaded": "本机当前加载的是 {{name}}：它按指令编辑图片，无法生成变体或重绘。请切换回图像模型，或在云端运行。",
+      "noLocalModel": "本机未加载模型：请在“创建 > 本地”中加载，或在云端运行。"
+    },
     "pickTool": "工具",
-    "empty": { "title": "尚无可编辑的内容", "hint": "将图库中的图片拖到这里，在图库图片上选择“编辑”，或打开一个文件。", "openFile": "打开文件…", "showGallery": "显示图库" },
+    "empty": {
+      "title": "尚无可编辑的内容",
+      "hint": "将图库中的图片拖到这里，在图库图片上选择“编辑”，或打开一个文件。",
+      "openFile": "打开文件…",
+      "showGallery": "显示图库"
+    },
     "keepEditing": "继续编辑",
     "runsInActivity": "在“活动”中运行：可继续操作或关闭此面板，结果会保存到图库。",
     "edit": "编辑",
@@ -789,7 +845,9 @@
       "selecting": "正在选取…",
       "empty": "请先涂抹或选取区域。"
     },
-    "crop": { "free": "自由" },
+    "crop": {
+      "free": "自由"
+    },
     "outpaint": {
       "title": "扩展（像素）",
       "left": "左",
@@ -964,5 +1022,25 @@
       "bannerText": "你的图库文件夹需要再次授权才能读取。"
     }
   },
-  "engine": {"changeModel": "更换模型", "cloudShort": "在 imference.com 上运行", "asPanel": "以面板显示", "asBar": "以横栏显示", "details": "详情", "collapse": "收起", "machine": "本机", "noGpu": "未检测到显卡", "vram": "{{gb}} GB 显存", "generation": "生成模型", "noModel": "未加载模型", "loras_one": "已启用 {{count}} 个 LoRA", "loras_other": "已启用 {{count}} 个 LoRA", "device": "运行于 {{device}}", "tools": "工具模型", "toolsIdle": "当前未加载。", "toolsOff": "未运行（首次使用本地工具时启动）。", "toolsTotal": "已加载 {{size}}", "release": "释放", "cloudNote": "云端模式：全部在 imference.com 上运行，本机不加载任何模型。", "state": {"idle": "已停止", "starting": "加载中…", "ready": "就绪", "error": "错误"}}
+  "engine": {
+    "machine": "本机",
+    "noGpu": "未检测到显卡",
+    "vram": "{{gb}} GB 显存",
+    "generation": "生成模型",
+    "noModel": "未加载模型",
+    "loras_one": "已启用 {{count}} 个 LoRA",
+    "loras_other": "已启用 {{count}} 个 LoRA",
+    "device": "运行于 {{device}}",
+    "tools": "工具模型",
+    "toolsTotal": "已加载 {{size}}",
+    "release": "释放",
+    "cloudNote": "云端模式：全部在 imference.com 上运行，本机不加载任何模型。",
+    "state": {
+      "idle": "已停止",
+      "starting": "加载中…",
+      "ready": "就绪",
+      "error": "错误"
+    },
+    "engineName": "引擎：{{engine}}"
+  }
 }

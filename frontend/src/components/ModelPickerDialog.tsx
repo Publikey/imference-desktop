@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ENGINE_LABEL } from "@/lib/engines";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Check, FileBox, PackageOpen, Plus, Search, Sparkles, Trash2 } from "lucide-react";
@@ -16,18 +17,7 @@ import type { ModelInfo, PaymentMode } from "@/lib/types";
 // entries without a catalog family (user checkpoints). Keys are the normalized
 // BackendType (cloud.normalizeEngine). Family names are proper nouns (not
 // translated); only "Cloud API" goes through i18n.
-const TYPE_LABEL: Record<string, string> = {
-  sdxl: "SDXL",
-  sd15: "SD 1.5",
-  zimage: "Z-Image",
-  flux: "FLUX",
-  chroma: "Chroma",
-  qwenimage: "Qwen-Image",
-  // Instruction editing only (Edit > Edit with instructions), no text-to-image.
-  "qwenimage-edit": "Qwen-Image-Edit",
-  anima: "Anima",
-  wan: "WAN Video",
-};
+const TYPE_LABEL: Record<string, string> = ENGINE_LABEL;
 const TYPE_ORDER = ["sdxl", "sd15", "zimage", "flux", "chroma", "qwenimage", "qwenimage-edit", "anima", "wan"];
 // Family groups sort after every local backend, and the nameless bucket last.
 const FAMILY_RANK_BASE = TYPE_ORDER.length;

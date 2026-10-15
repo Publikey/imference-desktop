@@ -90,6 +90,11 @@ type RefImage = { input: string; preview: string; label: string };
 
 const MASK_TOOLS = ["erase-object", "inpaint"] as const;
 
+// The settings column of the side-by-side layout.
+const SETTINGS_W_KEY = "imference.editSettingsW";
+const SETTINGS_W_DEFAULT = 400;
+const SETTINGS_W_MIN = 280;
+
 function isVideo(src: string | null | undefined): boolean {
   return !!src && src.startsWith("data:video/");
 }
@@ -170,6 +175,48 @@ export function ToolEditor({
   const [genModels, setGenModels] = useState<GenToolModels | null>(null);
   const [genRev, setGenRev] = useState(0);
   const maskRef = useRef<MaskEditorHandle>(null);
+  // Width of the settings column (side-by-side layout), resizable, remembered.
+  const splitRef = useRef<HTMLDivElement>(null);
+  const [settingsW, setSettingsW] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem(SETTINGS_W_KEY));
+      return v >= SETTINGS_W_MIN ? v : SETTINGS_W_DEFAULT;
+    } catch {
+      return SETTINGS_W_DEFAULT;
+    }
+  });
+  const saveSettingsW = (w: number) => {
+    setSettingsW(w);
+    try {
+      localStorage.setItem(SETTINGS_W_KEY, String(Math.round(w)));
+    } catch {
+      // storage unavailable: lasts this session
+    }
+  };
+  const startSettingsResize = (e: React.PointerEvent) => {
+    const box = splitRef.current?.getBoundingClientRect();
+    if (!box) return;
+    e.preventDefault();
+    const x0 = e.clientX;
+    const w0 = settingsW;
+    let w = w0;
+    const onMove = (ev: PointerEvent) => {
+      // Dragging left widens the settings; the image keeps at least 240 px.
+      w = Math.min(Math.max(SETTINGS_W_MIN, w0 - (ev.clientX - x0)), Math.max(SETTINGS_W_MIN, box.width - 240));
+      setSettingsW(w);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      saveSettingsW(w);
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
   const phase: Phase = formError ? "error" : "form";
   const error = formError;
 
@@ -418,7 +465,11 @@ export function ToolEditor({
             <Loader2 className="size-4 animate-spin" /> {t("tools.loading")}
           </div>
         ) : (
-          <div className="grid min-h-0 flex-1 gap-0 overflow-hidden @3xl:grid-cols-[1fr_300px]">
+          <div
+            ref={splitRef}
+            className="grid min-h-0 flex-1 gap-0 overflow-hidden @3xl:grid-cols-[minmax(0,1fr)_auto_var(--settings-w)]"
+            style={{ "--settings-w": `${settingsW}px` } as React.CSSProperties}
+          >
             {/* Left: the image / mask editor / result. */}
             <div className="bg-muted/30 relative flex min-h-[280px] items-center justify-center overflow-auto p-4">
               {!srcData ? (
@@ -455,8 +506,21 @@ export function ToolEditor({
               )}
             </div>
 
+            {/* Drag to share the width between the image and the settings
+                (side-by-side layout only); double-click resets it. */}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t("tools.resizeSettings")}
+              title={t("tools.resizeSettings")}
+              onPointerDown={startSettingsResize}
+              onDoubleClick={() => saveSettingsW(SETTINGS_W_DEFAULT)}
+              className="group hidden w-2 cursor-col-resize items-center justify-center border-l @3xl:flex"
+            >
+              <span className="bg-border group-hover:bg-primary/60 h-12 w-0.5 rounded-full transition-colors" />
+            </div>
             {/* Right: the form and where it runs. A run goes to Activity; its result to the gallery. */}
-            <div className="flex min-h-0 flex-col border-t @3xl:border-t-0 @3xl:border-l">
+            <div className="flex min-h-0 flex-col border-t @3xl:border-t-0">
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
                 <>
                     {currentId === "outpaint" && (

@@ -1031,7 +1031,8 @@
       "confirm": "Load it",
       "nothing": "nothing"
     },
-    "cloudOnce": "Run this one in the cloud · {{price}}"
+    "cloudOnce": "Run this one in the cloud · {{price}}",
+    "resizeSettings": "Drag to resize the settings (double-click resets)"
   },
   "web": {
     "signOut": "Sign out",

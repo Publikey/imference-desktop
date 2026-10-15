@@ -1019,7 +1019,8 @@
       "confirm": "加载",
       "nothing": "无"
     },
-    "cloudOnce": "仅此一次在云端运行 · {{price}}"
+    "cloudOnce": "仅此一次在云端运行 · {{price}}",
+    "resizeSettings": "拖动以调整设置栏宽度（双击恢复）"
   },
   "web": {
     "signOut": "退出登录",

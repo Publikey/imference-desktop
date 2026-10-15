@@ -60,7 +60,7 @@ import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
 import { PanelBoard, restoreHidden, usePanelLayout, visibleColumns, type PanelId } from "@/components/PanelBoard";
 import { PANEL_ORDER, PanelIcon, PanelToggles } from "@/components/PanelToggles";
-import { EnginePanel } from "@/components/EnginePanel";
+import { EngineBar, EnginePanel } from "@/components/EnginePanel";
 import { ActivityDock } from "@/components/ActivityDock";
 import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
@@ -497,6 +497,24 @@ export default function App() {
     setColumns: setPanelColumns, toggleCollapsed: togglePanelCollapsed, setWidths: setPanelWidths,
     setPanelHidden,
   } = usePanelLayout();
+  // Engine surface as a panel or a bar (see engineSurfaceHidden).
+  const [engineDisplay, setEngineDisplayState] = useState<"panel" | "bar">(() => {
+    try {
+      return localStorage.getItem("imference.engineDisplay") === "bar" ? "bar" : "panel";
+    } catch {
+      return "panel";
+    }
+  });
+  const setEngineDisplay = useCallback((d: "panel" | "bar") => {
+    setEngineDisplayState(d);
+    try {
+      localStorage.setItem("imference.engineDisplay", d);
+    } catch {
+      // storage unavailable: the choice lasts this session
+    }
+  }, []);
+  // The board never shows the Engine column while it is a bar.
+  const boardHidden = engineDisplay === "bar" ? { ...panelHidden, engine: true } : panelHidden;
   const togglePanel = useCallback(
     (id: PanelId) => setPanelHidden(id, !panelHidden[id]),
     [setPanelHidden, panelHidden]
@@ -1798,8 +1816,10 @@ export default function App() {
   // The engine block — Local/Cloud, payment, model, local readiness, a held
   // model switch. One element, shown in the Create panel today; the Engine
   // panel / bar take it over (see the Engine surface).
-  // The Engine surface (panel; the bar comes next) owns the engine block;
-  // Create shows it only while that surface is off.
+  // The Engine surface owns the engine block — as a panel (a column) or as a
+  // bar under the header (engineDisplay, a per-machine preference to try
+  // both); the Engine switch / Ctrl+4 shows or hides it either way. Create
+  // shows the block only while the surface is off.
   const engineSurfaceHidden = !!panelHidden.engine;
   const engineBlock = (
     <>
@@ -1914,6 +1934,19 @@ export default function App() {
         onTogglePanel={togglePanel}
       />
 
+      {engineDisplay === "bar" && !panelHidden.engine && (
+        <EngineBar
+          engineBlock={engineBlock}
+          mode={mode}
+          onModeChange={setMode}
+          sidecar={sidecar}
+          localModel={settings?.localModel}
+          cloudModel={settings?.cloudModelInfo}
+          loraCount={mode === "local" ? activeLoras.length : activeCloudLoras.length}
+          onShowAsPanel={() => setEngineDisplay("panel")}
+        />
+      )}
+
       {updateInfo?.updateAvailable && updateInfo.latestVersion && (
         <div className="relative z-10 mx-auto w-full max-w-[110rem] px-6 pt-4">
           <UpdateBanner info={updateInfo} onDismiss={dismissUpdate} />
@@ -1925,8 +1958,8 @@ export default function App() {
             side on desktop, stacked (in the same order) on narrow windows. */}
         <div className="mx-auto w-full max-w-[110rem] px-6 pt-5 pb-16">
           <PanelBoard
-            columns={visibleColumns(panelColumns, panelHidden)}
-            onColumnsChange={(next) => setPanelColumns(restoreHidden(next, panelColumns, panelHidden))}
+            columns={visibleColumns(panelColumns, boardHidden)}
+            onColumnsChange={(next) => setPanelColumns(restoreHidden(next, panelColumns, boardHidden))}
             collapsed={panelCollapsed}
             onToggleCollapsed={togglePanelCollapsed}
             widths={panelWidths}
@@ -2092,6 +2125,15 @@ export default function App() {
                 title: t("panels.engine"),
                 icon: <PanelIcon id="engine" />,
                 width: 22,
+                actions: (
+                  <button
+                    type="button"
+                    onClick={() => setEngineDisplay("bar")}
+                    className="text-muted-foreground hover:text-foreground text-[11px] font-medium"
+                  >
+                    {t("engine.asBar")}
+                  </button>
+                ),
                 content: (
                   <EnginePanel
                     engineBlock={engineBlock}

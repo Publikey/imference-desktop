@@ -897,16 +897,7 @@ func (a *App) applyLocalModelConfig(req *types.GenerationRequest) {
 // models (those with downloadable weights). Public endpoint — works without an
 // API key, so the picker is usable on first run.
 func (a *App) ListLocalModels() ([]types.ModelInfo, error) {
-	models, err := a.cloud.ListModels(a.ctx, true)
-	if err != nil {
-		return models, err
-	}
-	// The built-in edit model (until the catalog lists a local one) belongs in
-	// the list: it can be the loaded model, and picking it is how to load it.
-	if len(cloud.EditModels(models)) == 0 {
-		models = append(models, cloud.BuiltinEditModel())
-	}
-	return models, nil
+	return a.cloud.ListModels(a.ctx, true)
 }
 
 // ListCloudModels returns the full imference catalog (cloud can run any model

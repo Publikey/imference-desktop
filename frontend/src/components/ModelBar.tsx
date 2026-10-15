@@ -243,7 +243,10 @@ export function ModelBar({
         onOpenChange={onPickerOpenChange}
         mode={mode}
         paymentMode={settings?.paymentMode === "x402" ? "x402" : "bearer"}
-        catalog={isCloud ? cloudModels : localModels}
+        // Edit models are loaded from Edit > Edit with instructions, not picked
+        // here: they cannot generate from a prompt (the card still shows one
+        // when it is the engine's model).
+        catalog={isCloud ? cloudModels : localModels.filter((m) => m.backendType !== "qwenimage-edit")}
         customModels={customModels}
         activeCode={activeCode}
         cachedCodes={cachedCodes}

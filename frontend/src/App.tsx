@@ -2801,7 +2801,7 @@ function PrimaryAction({
               <Sparkles className="size-4 shrink-0" />
             )}
             {action.label}
-            {action.kind === "generate" && (
+            {action.kind === "generate" && !action.disabled && (
               <kbd className="run-kbd hidden shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex">
                 <CornerDownLeft className="size-2.5" />
               </kbd>

@@ -329,9 +329,6 @@
     opacity: 1;
     color: var(--muted-foreground);
   }
-  .btn-run:disabled .run-kbd {
-    display: none;
-  }
   /* An image is being dragged over the panel (drop → img2img). */
   .create-drop-active {
     border-color: color-mix(in oklch, var(--brand-from) 55%, transparent) !important;

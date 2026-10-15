@@ -1794,6 +1794,96 @@ export default function App() {
     hasFinished, clearFinished, openSettings, panelHidden, togglePanel,
   ]);
 
+  // The engine block — Local/Cloud, payment, model, local readiness, a held
+  // model switch. One element, shown in the Create panel today; the Engine
+  // panel / bar take it over (see the Engine surface).
+  const engineBlock = (
+    <>
+      {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
+      {!isWeb && (
+        <ModeToggle
+          mode={mode}
+          onModeChange={setMode}
+          localReady={localReady}
+          cloudReady={cloudReady}
+        />
+      )}
+
+      {/* 1b. Payment — cloud only: pick x402 or API key, deep-link to config. */}
+      {!firstRun && !isWeb && mode === "cloud" && (
+        <PaymentBar
+          settings={settings}
+          onModeChange={setPaymentMode}
+          onConfigure={openSettings}
+        />
+      )}
+
+      {/* 2. Model */}
+      {!firstRun && (
+        <ModelBar
+          mode={mode}
+          settings={settings}
+          onModelSwitched={handleSettingsSaved}
+          pendingLocalModel={pendingLocalModel}
+          onSelectLocal={setPendingLocalModel}
+          cachedCodes={cachedCodes}
+          downloading={downloading}
+          onAddCustom={addCustomModel}
+          onSelectCustom={selectCustomModel}
+          onRemoveCustom={removeCustomModel}
+          pickerOpen={modelPickerOpen}
+          onPickerOpenChange={setModelPickerOpen}
+        />
+      )}
+
+      {/* 2b. Local readiness — the ONE preflight panel: weights,
+          shared components, engine. Every action that used to be
+          scattered (header start, under-model download, Generate
+          hijacked into a downloader) lives here. */}
+      {!firstRun && mode === "local" && (
+        <LocalReadinessCard
+          model={pendingLocalModel}
+          engineInstalled={engineInstalled}
+          installing={installing}
+          sidecar={sidecar}
+          onInstallEngine={installEngine}
+          onStartEngine={startEngine}
+          onStopEngine={stopEngine}
+          weightsCached={localCached}
+          weightsDownloading={downloading}
+          weightsIsLoad={activationIsLoad}
+          weightsProgress={dlProgress}
+          onDownloadWeights={downloadLocalModel}
+          onCancelWeights={cancelDownload}
+          componentsReadiness={compReadiness}
+          componentsProgress={compProgress}
+          componentsDownloading={compDownloading}
+          componentsChecking={compChecking}
+          componentsError={compError}
+          onDownloadComponents={downloadComponents}
+        />
+      )}
+
+      {/* Held model switch: shown while the local queue drains, so
+          the user knows their pick applies after the current runs. */}
+      {!firstRun && pendingSwitch && (
+        <div className="border-primary/30 bg-primary/5 text-foreground/80 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs">
+          <Clock className="text-primary size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">
+            {t("modelBar.switchQueued", { name: pendingSwitch.label })}
+          </span>
+          <button
+            type="button"
+            onClick={cancelPendingSwitch}
+            className="text-muted-foreground/70 hover:text-destructive shrink-0 font-medium transition-colors"
+          >
+            {t("common.cancel")}
+          </button>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
       <div className="aurora" aria-hidden="true">
@@ -1871,88 +1961,7 @@ export default function App() {
                         <span className="text-foreground text-sm font-semibold">{t("refImage.dropHere")}</span>
                       </div>
                     )}
-                    {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
-                    {!isWeb && (
-                      <ModeToggle
-                        mode={mode}
-                        onModeChange={setMode}
-                        localReady={localReady}
-                        cloudReady={cloudReady}
-                      />
-                    )}
-
-                    {/* 1b. Payment — cloud only: pick x402 or API key, deep-link to config. */}
-                    {!firstRun && !isWeb && mode === "cloud" && (
-                      <PaymentBar
-                        settings={settings}
-                        onModeChange={setPaymentMode}
-                        onConfigure={openSettings}
-                      />
-                    )}
-
-                    {/* 2. Model */}
-                    {!firstRun && (
-                      <ModelBar
-                        mode={mode}
-                        settings={settings}
-                        onModelSwitched={handleSettingsSaved}
-                        pendingLocalModel={pendingLocalModel}
-                        onSelectLocal={setPendingLocalModel}
-                        cachedCodes={cachedCodes}
-                        downloading={downloading}
-                        onAddCustom={addCustomModel}
-                        onSelectCustom={selectCustomModel}
-                        onRemoveCustom={removeCustomModel}
-                        pickerOpen={modelPickerOpen}
-                        onPickerOpenChange={setModelPickerOpen}
-                      />
-                    )}
-
-                    {/* 2b. Local readiness — the ONE preflight panel: weights,
-                        shared components, engine. Every action that used to be
-                        scattered (header start, under-model download, Generate
-                        hijacked into a downloader) lives here. */}
-                    {!firstRun && mode === "local" && (
-                      <LocalReadinessCard
-                        model={pendingLocalModel}
-                        engineInstalled={engineInstalled}
-                        installing={installing}
-                        sidecar={sidecar}
-                        onInstallEngine={installEngine}
-                        onStartEngine={startEngine}
-                        onStopEngine={stopEngine}
-                        weightsCached={localCached}
-                        weightsDownloading={downloading}
-                        weightsIsLoad={activationIsLoad}
-                        weightsProgress={dlProgress}
-                        onDownloadWeights={downloadLocalModel}
-                        onCancelWeights={cancelDownload}
-                        componentsReadiness={compReadiness}
-                        componentsProgress={compProgress}
-                        componentsDownloading={compDownloading}
-                        componentsChecking={compChecking}
-                        componentsError={compError}
-                        onDownloadComponents={downloadComponents}
-                      />
-                    )}
-
-                    {/* Held model switch: shown while the local queue drains, so
-                        the user knows their pick applies after the current runs. */}
-                    {!firstRun && pendingSwitch && (
-                      <div className="border-primary/30 bg-primary/5 text-foreground/80 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs">
-                        <Clock className="text-primary size-3.5 shrink-0" />
-                        <span className="min-w-0 flex-1 truncate">
-                          {t("modelBar.switchQueued", { name: pendingSwitch.label })}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={cancelPendingSwitch}
-                          className="text-muted-foreground/70 hover:text-destructive shrink-0 font-medium transition-colors"
-                        >
-                          {t("common.cancel")}
-                        </button>
-                      </div>
-                    )}
+                    {engineBlock}
 
                     {firstRun ? (
                       /* First run: a guided setup replaces the (non-functional)

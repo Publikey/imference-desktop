@@ -1004,6 +1004,19 @@ export default function App() {
   // only run through Edit > Edit with instructions. Generate stays disabled and
   // the Create panel says where to go instead of failing in the engine.
   const editModelActive = isEditModel(activeModel);
+  // The model "Switch back" restores, by name (settings keeps its code).
+  const [previousModelName, setPreviousModelName] = useState("");
+  useEffect(() => {
+    if (!editModelActive || !settings?.previousLocalModel) return;
+    let alive = true;
+    void api
+      .listEditModels()
+      .then((m) => alive && setPreviousModelName(m.previous?.name ?? ""))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [editModelActive, settings?.previousLocalModel]);
   const canGenerate =
     (mode === "cloud" ? cloudReady : localCanRun) && !!prompt.trim() && !editModelActive;
 
@@ -1973,6 +1986,28 @@ export default function App() {
                     {/* The engine block lives in the Engine surface when it is shown. */}
                     {engineSurfaceHidden && engineBlock}
 
+                    {/* An edit model is loaded: say so first, it blocks Generate. */}
+                    {editModelActive && (
+                      <div
+                        role="note"
+                        className="flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-200"
+                      >
+                        <Wand2 className="mt-0.5 size-4 shrink-0" />
+                        <div className="space-y-2">
+                          <p>{t("hint.editModelLong")}</p>
+                          {mode === "local" && settings?.previousLocalModel && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => void api.switchBackFromEditModel().catch(() => {})}
+                            >
+                              {t("tools.instruct.switchBack", { name: previousModelName || settings.previousLocalModel })}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {firstRun ? (
                       /* First run: a guided setup replaces the (non-functional)
                          composer until the engine is installed or cloud is set up. */
@@ -2067,26 +2102,6 @@ export default function App() {
 
                         {/* 6. The run button — last in the panel, but pinned to
                             the bottom of the viewport so it never scrolls away. */}
-                        {editModelActive && (
-                          <div
-                            role="note"
-                            className="flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-200"
-                          >
-                            <Wand2 className="mt-0.5 size-4 shrink-0" />
-                            <div className="space-y-2">
-                              <p>{t("hint.editModelLong")}</p>
-                              {mode === "local" && settings?.previousLocalModel && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => void api.switchBackFromEditModel().catch(() => {})}
-                                >
-                                  {t("tools.instruct.switchBack", { name: settings.previousLocalModel })}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        )}
                         <PrimaryAction action={primary} contextHint={contextHint} mode={mode} />
                       </>
                     )}

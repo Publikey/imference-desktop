@@ -144,13 +144,8 @@ export function ToolMenuRow({
       <span className={cn("shrink-0", dark ? "text-white/70" : "text-muted-foreground")}>
         <ToolIcon id={tool.id} />
       </span>
+      {/* Where it runs and its price belong to the Edit panel, not the menu. */}
       <span className="min-w-0 flex-1 truncate">{toolName(t, tool)}</span>
-      {tool.badge === "cloud" && (
-        <span className={cn("text-[10px] tabular-nums", dark ? "text-white/60" : "text-muted-foreground")}>
-          {formatToolPrice(t, tool.priceCredits, rail, tool.priceIsModel)}
-        </span>
-      )}
-      <ToolBadgeChip badge={tool.badge} />
     </button>
   );
 }

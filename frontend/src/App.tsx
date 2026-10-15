@@ -1838,6 +1838,10 @@ export default function App() {
           onRemoveCustom={removeCustomModel}
           pickerOpen={modelPickerOpen}
           onPickerOpenChange={setModelPickerOpen}
+          engineModel={settings?.localModel}
+          engineState={sidecar.state}
+          selectionCached={localCached}
+          onLoadNow={() => activateLocalModel(true)}
         />
       )}
 

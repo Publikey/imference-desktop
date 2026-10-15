@@ -359,7 +359,13 @@
     "downloadComponents": "下载组件",
     "componentsDownloading": "组件 {{index}}/{{total}} — {{file}}",
     "localHelp": "在本机 GPU 上运行。权重只需下载一次，之后生成免费且私密。",
-    "cloudHelp": "在 imference 的 GPU 上运行。无需下载；每次生成按积分或 USDC 计费。"
+    "cloudHelp": "在 imference 的 GPU 上运行。无需下载；每次生成按积分或 USDC 计费。",
+    "loaded": "已加载到引擎",
+    "loadedWhenStarted": "引擎的模型（随引擎启动）",
+    "notLoadedHolds": "已选择，尚未加载：引擎当前为 {{name}}。生成时会自动加载。",
+    "notLoaded": "已选择，尚未加载。生成时会自动加载。",
+    "downloadBelow": "请先在下方“本地设置”中下载。",
+    "loadNow": "立即加载"
   },
   "modelPicker": {
     "cloudTitle": "云端模型",
@@ -1026,7 +1032,7 @@
     "machine": "本机",
     "noGpu": "未检测到显卡",
     "vram": "{{gb}} GB 显存",
-    "generation": "生成模型",
+    "generation": "引擎中",
     "noModel": "未加载模型",
     "loras_one": "已启用 {{count}} 个 LoRA",
     "loras_other": "已启用 {{count}} 个 LoRA",

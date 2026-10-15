@@ -365,7 +365,13 @@
     "downloadComponents": "Download components",
     "componentsDownloading": "Components {{index}}/{{total}} — {{file}}",
     "localHelp": "Runs on your machine's GPU. The weights are downloaded once, then generations are free and private.",
-    "cloudHelp": "Runs on imference's GPUs. Nothing to download; each generation is billed in credits or USDC."
+    "cloudHelp": "Runs on imference's GPUs. Nothing to download; each generation is billed in credits or USDC.",
+    "loaded": "Loaded in the engine",
+    "loadedWhenStarted": "The engine's model (starts with the engine)",
+    "notLoadedHolds": "Selected, not loaded: the engine holds {{name}}. It loads when you generate.",
+    "notLoaded": "Selected, not loaded yet. It loads when you generate.",
+    "downloadBelow": "Download it in Local setup below first.",
+    "loadNow": "Load now"
   },
   "modelPicker": {
     "cloudTitle": "Cloud models",
@@ -1038,7 +1044,7 @@
     "machine": "This computer",
     "noGpu": "No GPU detected",
     "vram": "{{gb}} GB of VRAM",
-    "generation": "Generation model",
+    "generation": "In the engine",
     "noModel": "No model loaded",
     "loras_one": "{{count}} LoRA active",
     "loras_other": "{{count}} LoRAs active",

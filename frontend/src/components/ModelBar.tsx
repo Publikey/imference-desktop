@@ -37,6 +37,12 @@ type Props = {
   // keyboard shortcuts) can open it too, not just the trigger button.
   pickerOpen: boolean;
   onPickerOpenChange: (open: boolean) => void;
+  // Local mode: the model the engine actually holds (settings.localModel), so
+  // the card can say whether the selection is loaded, and load it on demand.
+  engineModel?: ModelInfo | null;
+  engineState?: string;
+  selectionCached?: boolean;
+  onLoadNow?: () => void;
 };
 
 // ModelBar — the single model selector for the whole app. Shows the active
@@ -59,6 +65,10 @@ export function ModelBar({
   onRemoveCustom,
   pickerOpen,
   onPickerOpenChange,
+  engineModel,
+  engineState,
+  selectionCached,
+  onLoadNow,
 }: Props) {
   const { t } = useTranslation();
   const [localModels, setLocalModels] = useState<ModelInfo[]>([]);
@@ -97,7 +107,11 @@ export function ModelBar({
   const activeCode = isCloud
     ? settings?.cloudModel || null
     : pendingLocalModel?.modelCode ?? null;
-  const selected = allModels.find((m) => m.modelCode === activeCode) ?? null;
+  const selected =
+    allModels.find((m) => m.modelCode === activeCode) ?? (!isCloud ? pendingLocalModel ?? null : null);
+  // Selected vs loaded: picking a local model only selects it (it loads on
+  // Generate, or with "Load now"); say which one the engine holds.
+  const loadedHere = !isCloud && !!selected && engineModel?.modelCode === selected.modelCode;
   // A local download must not block the CLOUD picker — switching mode should let
   // you pick a cloud model even while a local model is still downloading.
   const busy = switching || (downloading && !isCloud);
@@ -189,6 +203,34 @@ export function ModelBar({
           </button>
         )}
       </div>
+
+      {!isCloud && selected && !loading && !listError && (
+        loadedHere ? (
+          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+            <span className="size-1.5 rounded-full bg-emerald-500" />
+            {engineState === "ready" ? t("modelBar.loaded") : t("modelBar.loadedWhenStarted")}
+          </p>
+        ) : (
+          <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-800 dark:text-amber-200">
+            <span className="min-w-0 flex-1">
+              {engineModel
+                ? t("modelBar.notLoadedHolds", { name: engineModel.name || engineModel.modelCode })
+                : t("modelBar.notLoaded")}
+              {!selectionCached && <> {t("modelBar.downloadBelow")}</>}
+            </span>
+            {selectionCached && onLoadNow && (
+              <button
+                type="button"
+                disabled={busy || downloading}
+                onClick={onLoadNow}
+                className="shrink-0 rounded-md border border-amber-500/40 px-2 py-0.5 font-medium hover:bg-amber-500/15 disabled:opacity-50"
+              >
+                {t("modelBar.loadNow")}
+              </button>
+            )}
+          </div>
+        )
+      )}
 
       {/* Download progress / components state moved to the LocalReadinessCard —
           only the custom-activation error still belongs to the selector. */}

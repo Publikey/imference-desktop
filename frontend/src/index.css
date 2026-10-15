@@ -312,20 +312,25 @@
     transform: translateY(1px) scale(0.97);
     transition-duration: 0.04s;
   }
-  /* Disabled: opaque and readable — a quiet surface tinted by the mode with a
-     dashed outline (nothing to run yet), never a faded gradient. */
+  /* Disabled: clearly inert but still readable — a flat grey slab sunk into
+     the panel (inset shadow, no colour, no outline, no lift), muted text. The
+     hint line stays legible: it says what's missing. */
   .btn-run:disabled {
     opacity: 1;
     cursor: not-allowed;
     background-image: none;
-    background-color: color-mix(in oklch, var(--card) 88%, var(--run-from) 12%);
-    color: var(--muted-foreground);
-    border: 1.5px dashed color-mix(in oklch, var(--run-from) 45%, transparent);
-    box-shadow: none;
+    background-color: var(--muted);
+    color: color-mix(in oklch, var(--muted-foreground) 75%, transparent);
+    border: none;
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.12);
     filter: none;
   }
   .btn-run:disabled .run-hint {
     opacity: 1;
+    color: var(--muted-foreground);
+  }
+  .btn-run:disabled .run-kbd {
+    display: none;
   }
   /* An image is being dragged over the panel (drop → img2img). */
   .create-drop-active {

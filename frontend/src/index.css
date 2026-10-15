@@ -312,24 +312,14 @@
     transform: translateY(1px) scale(0.97);
     transition-duration: 0.04s;
   }
-  /* Disabled: a see-through ghost of the button — the mode colour at low
-     strength, no gradient, no shadow, no lift — so it reads as "not yet". The
-     text keeps the mode colour at full opacity (readable), and the cursor says
-     "not allowed" on hover. The hint line says what's missing. */
+  /* Disabled: the active look (same gradient, same text), just see-through —
+     no shadow, no lift — and a "not allowed" cursor on hover. */
   .btn-run:disabled {
-    opacity: 1;
+    opacity: 0.5;
     cursor: not-allowed;
-    background-image: none;
-    background-color: color-mix(in oklch, var(--run-from) 16%, transparent);
-    color: color-mix(in oklch, var(--run-from) 55%, var(--muted-foreground));
-    border: none;
     box-shadow: none;
-    filter: saturate(0.6);
+    filter: none;
     transform: none;
-  }
-  .btn-run:disabled .run-hint {
-    opacity: 1;
-    color: var(--muted-foreground);
   }
   /* An image is being dragged over the panel (drop → img2img). */
   .create-drop-active {

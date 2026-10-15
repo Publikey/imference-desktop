@@ -2786,7 +2786,7 @@ function PrimaryAction({
           data-launch="generate"
           data-mode={mode}
           className={cn(
-            "btn-run relative flex h-auto min-h-14 w-full disabled:opacity-100 disabled:pointer-events-auto flex-col gap-0.5 overflow-hidden whitespace-normal rounded-2xl px-5 py-2.5 font-semibold",
+            "btn-run relative flex h-auto min-h-14 w-full disabled:opacity-50 disabled:pointer-events-auto flex-col gap-0.5 overflow-hidden whitespace-normal rounded-2xl px-5 py-2.5 font-semibold",
             burst > 0 && "btn-launch"
           )}
           key={`gen-${burst}`}

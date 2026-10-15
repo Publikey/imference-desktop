@@ -41,7 +41,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { ProgressBar } from "@/components/ui/progress";
 import { MaskEditor, type MaskEditorHandle, type MaskMode } from "@/components/MaskEditor";
 import { CropFrame } from "@/components/CropFrame";
-import { ToolBadgeChip, ToolIcon, formatToolPrice, toolName, usePaymentRail } from "@/components/ToolBits";
+import { ToolIcon, formatToolPrice, toolName, usePaymentRail } from "@/components/ToolBits";
 import { api } from "@/lib/wails-bridge";
 import {
   EDIT_TOOL_IDS,
@@ -374,7 +374,7 @@ export function ToolEditor({
 
 
   return (
-    <div className="@container mode-surface flex flex-col overflow-hidden" data-mode={mode}>
+    <div className="tool-editor @container mode-surface flex flex-col overflow-hidden" data-mode={mode}>
         <header className="flex items-center gap-3 border-b px-3 py-2.5">
           <span className="brand-surface flex size-8 items-center justify-center rounded-xl text-white">
             <ToolIcon id={currentId} className="size-4" />
@@ -382,7 +382,6 @@ export function ToolEditor({
           <div className="min-w-0 flex-1">
             <h3 className="flex items-center gap-2 text-sm font-semibold">
               {tool ? toolName(t, tool) : currentId}
-              {tool && <ToolBadgeChip badge={tool.badge} />}
             </h3>
             <p className="text-muted-foreground truncate text-xs">
               {tool ? t(`tools.desc.${tool.id}`, { defaultValue: tool.description }) : ""}
@@ -521,7 +520,9 @@ export function ToolEditor({
               </div>
 
               <footer className="flex items-center gap-2 border-t p-3">
-                <div className="flex-1 space-y-1.5">
+                {/* Long labels ("Load X (replaces Y in the engine)") wrap
+                    instead of running out of the panel. */}
+                <div className="min-w-0 flex-1 space-y-1.5 [&_button]:h-auto [&_button]:min-h-9 [&_button]:whitespace-normal [&_button]:py-2 [&_button]:leading-snug">
                   {localSwap ? (
                     <div className="space-y-1.5">
                       <Button className="w-full" disabled={swapping} onClick={() => void doSwap()}>

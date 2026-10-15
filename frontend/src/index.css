@@ -575,6 +575,53 @@
   overflow: hidden;
   pointer-events: none;
 }
+/* Edit panel: a wide button wraps a long label ("Load X (replaces Y in the
+   engine)", "Run this one in the cloud · 4 credits") instead of overflowing. */
+.tool-editor button.w-full,
+.tool-editor button.flex-1 {
+  height: auto;
+  min-height: 2.25rem;
+  white-space: normal;
+  padding-block: 0.5rem;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+/* ---- The global mode, felt across the window ------------------------------
+   Local keeps the brand aurora (blue); Cloud turns it cyan. A faint wash over
+   the whole window and a thin frame in the mode's colour complete it: subtle,
+   but visible wherever the eye is. */
+.app-frame {
+  transition: box-shadow 0.5s var(--ease-out-expo);
+}
+.app-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transition: background 0.5s var(--ease-out-expo);
+}
+.app-frame[data-mode="local"] {
+  box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--brand-from) 45%, transparent);
+}
+.app-frame[data-mode="local"]::after {
+  background: linear-gradient(180deg, color-mix(in oklch, var(--brand-from) 5%, transparent), transparent 40%);
+}
+.app-frame[data-mode="cloud"] {
+  box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--cloud-from) 50%, transparent);
+}
+.app-frame[data-mode="cloud"]::after {
+  background: linear-gradient(180deg, color-mix(in oklch, var(--cloud-from) 7%, transparent), transparent 40%);
+}
+.aurora[data-mode="cloud"] .aurora-blob-1 {
+  background: radial-gradient(circle, color-mix(in oklch, var(--cloud-from) 60%, transparent), transparent 70%);
+}
+.aurora[data-mode="cloud"] .aurora-blob-2 {
+  background: radial-gradient(circle, color-mix(in oklch, var(--cloud-to) 58%, transparent), transparent 70%);
+}
+.aurora[data-mode="cloud"] .aurora-blob-3 {
+  background: radial-gradient(circle, color-mix(in oklch, var(--cloud-from) 40%, var(--cloud-to)), transparent 70%);
+}
 .aurora-blob {
   position: absolute;
   border-radius: 9999px;

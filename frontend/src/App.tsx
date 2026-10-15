@@ -1913,8 +1913,10 @@ export default function App() {
   );
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden">
-      <div className="aurora" aria-hidden="true">
+    // The whole window takes the global mode's tint (app-frame + aurora):
+    // you should never need to look at the switch to know where a run goes.
+    <div className="app-frame relative flex h-full flex-col overflow-hidden" data-mode={mode}>
+      <div className="aurora" aria-hidden="true" data-mode={mode}>
         <span className="aurora-blob aurora-blob-1" />
         <span className="aurora-blob aurora-blob-2" />
         <span className="aurora-blob aurora-blob-3" />

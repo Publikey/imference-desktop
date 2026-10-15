@@ -2755,20 +2755,16 @@ function Composer({
   );
 }
 
-// PrimaryAction — the run button plus its one-line context hint, as a bar that
-// STICKS to the bottom of whatever is scrolling it. It used to sit inside the
-// composer, which pushed it out of reach as soon as the panel grew (reference
-// images, parameters, a long negative prompt): the whole point of the panel is
-// to end in a click, so the click follows the user.
+// PrimaryAction — the run bar: the panel's footer, pinned to the bottom of
+// whatever scrolls the Create surface (the column on xl, the window below), so
+// the click always follows the user however long the panel grows.
 //
-// Two scrollports, one rule. On xl the Create surface scrolls internally, so the
-// bar pins to the bottom of the panel; below xl the page scrolls, so it pins to
-// the bottom of the window. Either way it's the last child, so it never covers
-// anything. z-30 keeps it under the Activity dock (z-40), and the reserved lane
-// below xl keeps the button out of that dock's corner on stacked layouts.
-//
-// It also carries its own surface (.run-capsule, mode-tinted like the panel it
-// floats over) so it doesn't read as one more card in the stack — see index.css.
+// It spans the surface edge to edge (negative margins eat the surface padding)
+// and closes its rounded bottom: a footer, not something floating over the
+// cards. A hairline + soft upward shadow in the mode's colour separate it from
+// the content scrolling under it. The button itself takes the mode's colour
+// (Local blue / Cloud cyan), like the comet it launches and the Activity
+// widget. Below xl, the right lane stays free for the Activity dock (z-40).
 function PrimaryAction({
   action,
   contextHint,
@@ -2780,49 +2776,46 @@ function PrimaryAction({
 }) {
   const burst = useLaunchBurst("generate");
   return (
-    <div className="sticky bottom-1 z-30 flex justify-end max-xl:pr-36">
-      {/* Content-sized and right-aligned, so it reads as one floating capsule
-          rather than a docked toolbar spanning the panel. */}
-      <div
-        data-mode={mode}
-        className="run-capsule flex max-w-full items-center gap-3 rounded-full border py-1.5 pl-4 pr-1.5 backdrop-blur"
+    <div
+      data-mode={mode}
+      className="run-bar sticky bottom-0 z-30 -mx-3 -mb-4 mt-1 flex flex-wrap items-center justify-end gap-x-3 gap-y-2 rounded-b-[1.5rem] border-t px-4 py-3 backdrop-blur-xl max-xl:pr-36"
+    >
+      <span
+        className="text-muted-foreground min-w-[8rem] flex-1 truncate text-xs"
+        title={contextHint}
       >
-        <span
-          className="text-muted-foreground/80 hidden min-w-0 max-w-[15rem] truncate text-[11px] sm:block"
-          title={contextHint}
-        >
-          {contextHint}
-        </span>
-        <span className="relative shrink-0 rounded-full" data-mode={mode}>
+        {contextHint}
+      </span>
+      <span className="relative shrink-0 rounded-xl" data-mode={mode}>
         <LaunchBurst burst={burst} />
         <Button
           size="lg"
           onClick={action.onClick}
           disabled={action.disabled}
           data-launch="generate"
+          data-mode={mode}
           className={cn(
-            "btn-brand relative h-11 shrink-0 overflow-hidden rounded-full px-6 text-[15px] font-semibold disabled:opacity-40 disabled:saturate-0",
+            "btn-run relative h-auto min-h-11 min-w-[10rem] overflow-hidden rounded-xl px-5 py-2 text-[15px] font-semibold whitespace-normal disabled:opacity-40 disabled:saturate-0",
             burst > 0 && "btn-launch"
           )}
           key={`gen-${burst}`}
         >
           {burst > 0 && <span aria-hidden className="launch-shine pointer-events-none absolute inset-0" />}
           {action.busy ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-4 shrink-0 animate-spin" />
           ) : action.kind === "download" ? (
-            <Download className="size-4" />
+            <Download className="size-4 shrink-0" />
           ) : (
-            <Sparkles className="size-4" />
+            <Sparkles className="size-4 shrink-0" />
           )}
           {action.label}
           {action.kind === "generate" && (
-            <kbd className="ml-1 hidden items-center gap-0.5 rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex">
+            <kbd className="ml-auto hidden shrink-0 items-center gap-0.5 rounded-md bg-white/20 px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex">
               <CornerDownLeft className="size-2.5" />
             </kbd>
           )}
         </Button>
-        </span>
-      </div>
+      </span>
     </div>
   );
 }

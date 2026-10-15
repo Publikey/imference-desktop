@@ -274,23 +274,52 @@
      separates from the cards behind it), and a hairline of that accent instead
      of the neutral card border. The inset top highlight catches light on the
      upper edge, which is what sells "floating" at a glance. */
-  .run-capsule {
-    background-color: color-mix(in oklch, var(--card) 93%, var(--brand-from) 7%);
-    border-color: color-mix(in oklch, var(--brand-from) 26%, transparent);
-    /* Highlight only, no drop shadow: the tint and the accent hairline carry the
-       separation on their own, and a cast shadow made the capsule sit heavier
-       than everything it floats over. */
-    box-shadow: inset 0 1px 0 0 color-mix(in oklch, white 10%, transparent);
+  .run-bar {
+    --run: var(--brand-from);
+    background-color: color-mix(in oklch, var(--card) 82%, var(--run) 6%);
+    border-color: color-mix(in oklch, var(--run) 28%, transparent);
+    box-shadow: 0 -10px 28px -18px color-mix(in oklch, var(--run) 55%, rgb(0 0 0 / 0.4));
     transition:
       background-color 0.35s var(--ease-out-expo),
       border-color 0.35s var(--ease-out-expo);
   }
-  .run-capsule[data-mode="cloud"] {
-    background-color: color-mix(in oklch, var(--card) 93%, var(--cloud-from) 7%);
-    border-color: color-mix(in oklch, var(--cloud-from) 30%, transparent);
+  .run-bar[data-mode="cloud"] {
+    --run: var(--cloud-from);
+  }
+  /* The run button in the mode's colour. Cloud's cyan is deepened so white
+     text keeps its contrast. */
+  .btn-run {
+    --run-from: var(--brand-from);
+    --run-to: color-mix(in oklch, var(--brand-to) 80%, var(--brand-from));
+    background-image: linear-gradient(135deg, var(--run-from), var(--run-to));
+    color: white;
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.18),
+      0 8px 22px -10px color-mix(in oklch, var(--run-from) 80%, transparent);
+    transition:
+      filter 0.15s ease,
+      box-shadow 0.2s ease,
+      transform 0.14s var(--ease-spring);
+  }
+  .btn-run[data-mode="cloud"] {
+    --run-from: color-mix(in oklch, var(--cloud-from) 72%, black);
+    --run-to: color-mix(in oklch, var(--cloud-to) 72%, black);
+  }
+  .btn-run:hover:not(:disabled) {
+    filter: brightness(1.1) saturate(1.08);
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.22),
+      0 14px 32px -10px color-mix(in oklch, var(--run-from) 90%, transparent);
+    transform: translateY(-1px);
+  }
+  .btn-run:active:not(:disabled) {
+    filter: brightness(0.94);
+    box-shadow: 0 2px 8px -6px color-mix(in oklch, var(--run-from) 70%, transparent);
+    transform: translateY(1px) scale(0.97);
+    transition-duration: 0.04s;
   }
   @media (prefers-reduced-motion: reduce) {
-    .run-capsule {
+    .run-bar {
       transition: none;
     }
   }

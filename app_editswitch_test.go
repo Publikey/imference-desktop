@@ -73,7 +73,8 @@ func TestBuiltinEditModelStandsInForTheCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	info := a.ListEditModels()
-	if info.Local == nil || info.LocalCandidate == nil || info.Previous != nil {
+	if info.Local == nil || info.LocalCandidate == nil || info.Previous != nil || info.Engine == nil ||
+		info.Engine.ModelCode != cloud.DefaultEditModel {
 		t.Fatalf("info %+v", info)
 	}
 }

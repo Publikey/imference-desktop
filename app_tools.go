@@ -1035,15 +1035,20 @@ type EditModelsInfo struct {
 	LocalCandidateCached bool `json:"localCandidateCached"`
 	// Previous is the model to switch back to after a SwitchToEditModel.
 	Previous *types.ModelInfo `json:"previous,omitempty"`
+	// Engine is the local model the engine holds now (what a swap replaces).
+	Engine *types.ModelInfo `json:"engine,omitempty"`
 }
 
 // ListEditModels returns the instruction-edit models for the dialog.
 func (a *App) ListEditModels() EditModelsInfo {
 	info := EditModelsInfo{Cloud: []types.ModelInfo{}}
 	s := a.settings.Get()
-	if m := s.LocalModel; m != nil && cloud.IsEditBackend(m.BackendType) {
+	if m := s.LocalModel; m != nil {
 		lm := *m
-		info.Local = &lm
+		info.Engine = &lm
+		if cloud.IsEditBackend(m.BackendType) {
+			info.Local = &lm
+		}
 	}
 	models, err := a.cloud.ListModels(a.ctx, false)
 	if err != nil {

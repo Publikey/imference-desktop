@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -106,6 +107,8 @@ export function ToolEditor({
   jobs,
   onClose,
   onRunJob,
+  mode,
+  onEngineActivity,
 }: {
   toolId: string;
   source: ToolSource;
@@ -116,6 +119,11 @@ export function ToolEditor({
   onClose: () => void;
   /** Start a run as an Activity job (App.runToolJob). */
   onRunJob: (req: ToolRunRequest, label: string, sourceName: string | null) => void;
+  /** The app's global mode: a run goes there (a one-off cloud run is the
+   *  only exception, offered when this machine cannot run the tool). */
+  mode: "local" | "cloud";
+  /** Bring the Engine panel forward (a model swap is happening there). */
+  onEngineActivity: () => void;
 }) {
   const open = true;
   const { t } = useTranslation();
@@ -127,11 +135,6 @@ export function ToolEditor({
 
   const [srcData, setSrcData] = useState<string | null>(null);
   const [params, setParams] = useState<Record<string, unknown>>({});
-  // Where a run goes: Local or Cloud, nothing in between. Preselected from the
-  // Settings preference; "Automatic" there picks Local when this machine can
-  // run the tool, else Cloud. A click here overrides it for this tool.
-  const [runPref, setRunPref] = useState<ToolsMode>("auto");
-  const [runPick, setRunPick] = useState<"local" | "cloud" | null>(null);
   // A run refused before it started (empty mask, a click-to-select error).
   const [formError, setFormError] = useState<ToolError | null>(null);
   const [hasMask, setHasMask] = useState(false);
@@ -175,14 +178,6 @@ export function ToolEditor({
     if (open) void refreshTools(true);
   }, [open]);
 
-  // Default run-on = the global setting.
-  useEffect(() => {
-    if (!open) return;
-    void api
-      .getToolsSettings()
-      .then((s) => setRunPref((s.mode as ToolsMode) || "auto"))
-      .catch(() => {});
-  }, [open]);
 
   // Reset when the dialog is (re)opened on another item/tool.
   useEffect(() => {
@@ -210,7 +205,6 @@ export function ToolEditor({
   useEffect(() => {
     if (!tool) return;
     setParams(defaultParams(tool));
-    setRunPick(null);
     setFormError(null);
     setRefs([]);
     // Switching eraser <-> repaint keeps the painted mask (same editor).
@@ -227,10 +221,10 @@ export function ToolEditor({
 
   const isMaskTool = (MASK_TOOLS as readonly string[]).includes(currentId);
   const isInstruct = currentId === INSTRUCT_EDIT_ID;
-  const localOk = !!tool && (tool.badge === "local" || tool.badge === "local_slow");
-  const runOn: "local" | "cloud" = runPick ?? (runPref === "auto" ? (localOk || !tool?.cloudAvailable ? "local" : "cloud") : runPref);
-  const setRunOn = (v: ToolsMode) => setRunPick(v === "cloud" ? "cloud" : "local");
+  // Runs follow the app's mode (the Engine panel); the panel has no switch.
+  const runOn: "local" | "cloud" = mode;
   const effectiveCloud = !!tool && runOn === "cloud";
+  const confirm = useConfirm();
   const sourceInput = src.name ?? srcData ?? "";
 
   // Edit with instructions: the edit models (cloud catalog + the loaded local
@@ -271,6 +265,75 @@ export function ToolEditor({
       ? { ...tool, priceCredits: pickedEditModel.cost, priceIsModel: false }
       : tool;
   const instructionMissing = isInstruct && !String(params.instruction ?? "").trim();
+  // Local mode, a different generation model needed: load it (replacing the
+  // engine's model, after a confirmation), never silently.
+  const [swapping, setSwapping] = useState(false);
+  const engineModelName = (m?: { name?: string; modelCode?: string } | null) => (m ? m.name || m.modelCode || "" : "");
+  const localSwap: { load: string; replaces: string; run: () => Promise<void> } | null = (() => {
+    if (!tool || effectiveCloud || isWeb) return null;
+    if (isInstruct && editModels && !editModels.local && editModels.localCandidate) {
+      return {
+        load: engineModelName(editModels.localCandidate),
+        replaces: engineModelName(editModels.engine) || t("tools.swap.nothing"),
+        run: api.switchToEditModel,
+      };
+    }
+    if (isGenTool && tool.reason === "edit_model_loaded" && genModels?.previous) {
+      return {
+        load: engineModelName(genModels.previous),
+        replaces: engineModelName(genModels.local),
+        run: api.switchBackFromEditModel,
+      };
+    }
+    return null;
+  })();
+  const doSwap = async () => {
+    if (!localSwap) return;
+    const ok = await confirm({
+      title: t("tools.swap.confirmTitle", { model: localSwap.load }),
+      description: t("tools.swap.confirmBody", { model: localSwap.load, current: localSwap.replaces }),
+      confirmLabel: t("tools.swap.confirm"),
+      cancelLabel: t("common.cancel"),
+    });
+    if (!ok) return;
+    setSwapping(true);
+    onEngineActivity();
+    try {
+      await localSwap.run();
+    } catch {
+      // the Engine panel shows the failure (model:progress error)
+    }
+  };
+  // The swap ends when the engine has the new model: the tool list refreshes.
+  useEffect(() => {
+    if (!swapping) return;
+    return api.onModelProgress((p) => {
+      if (p.done || p.phase === "done" || p.phase === "error" || p.phase === "cancelled") {
+        setSwapping(false);
+        setEditModelsRev((r) => r + 1);
+        setGenRev((r) => r + 1);
+        void refreshTools(true).catch(() => {});
+      }
+    });
+  }, [swapping]);
+  // Local mode and this machine cannot run the tool (no model loaded, engine
+  // stopped, no GPU…): say why; a one-off cloud run is the way out.
+  const localOk2 = !!tool && (tool.badge === "local" || tool.badge === "local_slow");
+  const localBlocked = !!tool && !effectiveCloud && !localSwap && !localOk2;
+  const cloudOnce =
+    tool && !effectiveCloud && tool.cloudAvailable ? (
+      <Button
+        variant="outline"
+        className="w-full"
+        disabled={!srcData || (isMaskTool && !hasMask) || instructionMissing}
+        onClick={() => void run("cloud")}
+      >
+        <Cloud className="size-3.5" />
+        {t("tools.cloudOnce", {
+          price: formatToolPrice(t, (priced ?? tool).priceCredits, rail, (priced ?? tool).priceIsModel),
+        })}
+      </Button>
+    ) : null;
   // A local run whose model is not on disk yet: "Download model" first.
   const downloadMb = tool ? missingWeightsMb(tool, params) : 0;
   const needsDownload = !!tool && !effectiveCloud && !isWeb && downloadMb > 0;
@@ -311,7 +374,7 @@ export function ToolEditor({
 
 
   return (
-    <div className="@container flex flex-col overflow-hidden rounded-xl border">
+    <div className="@container mode-surface flex flex-col overflow-hidden" data-mode={mode}>
         <header className="flex items-center gap-3 border-b px-3 py-2.5">
           <span className="brand-surface flex size-8 items-center justify-center rounded-xl text-white">
             <ToolIcon id={currentId} className="size-4" />
@@ -420,7 +483,6 @@ export function ToolEditor({
                         onSubmit={() => {
                           if (!instructionMissing && srcData && tool.badge !== "unavailable") void run();
                         }}
-                        onModelsChanged={isWeb ? undefined : () => setEditModelsRev((r) => r + 1)}
                       />
                     )}
                     <ParamsForm
@@ -446,27 +508,36 @@ export function ToolEditor({
                     {isGenTool && isWeb && genModels?.cloud && (
                       <GenModelBox models={genModels} cloud onChanged={() => {}} />
                     )}
-                    <RunOnPicker tool={priced ?? tool} value={runOn} onChange={setRunOn} rail={rail} />
                     <WhereNotice tool={priced ?? tool} cloud={effectiveCloud} rail={rail} params={params} />
                 </>
 
                 {phase === "error" && error && (
                   <ErrorPanel
                     error={error}
-                    previous={isGenTool ? genModels?.previous : undefined}
-                    onSwitched={() => setGenRev((r) => r + 1)}
                     rail={rail}
-                    onCloud={() => {
-                      setRunOn("cloud");
-                      void run("cloud");
-                    }}
+                    onCloud={() => void run("cloud")}
                   />
                 )}
               </div>
 
               <footer className="flex items-center gap-2 border-t p-3">
                 <div className="flex-1 space-y-1.5">
-                  {needsDownload ? (
+                  {localSwap ? (
+                    <div className="space-y-1.5">
+                      <Button className="w-full" disabled={swapping} onClick={() => void doSwap()}>
+                        {swapping ? <Loader2 className="size-3.5 animate-spin" /> : <Cpu className="size-3.5" />}
+                        {t("tools.swap.button", { model: localSwap.load, current: localSwap.replaces })}
+                      </Button>
+                      {cloudOnce}
+                    </div>
+                  ) : localBlocked ? (
+                    <div className="space-y-1.5">
+                      <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+                        {t(`tools.reason.${tool.reason ?? "no_device"}`, { defaultValue: t("tools.reason.no_device") })}
+                      </p>
+                      {cloudOnce}
+                    </div>
+                  ) : needsDownload ? (
                     weightsDl && !weightsDl.error ? (
                       <div className="space-y-1.5">
                         <ProgressBar percent={weightsDl.percent || null} />
@@ -745,48 +816,6 @@ function autoExplanation(t: TFunction, toolId: string, spec: ToolParamSpec): str
   return m ? t("tools.autoDefault", { what: m[1] }) : "";
 }
 
-function RunOnPicker({
-  tool,
-  value,
-  onChange,
-  rail,
-}: {
-  tool: ToolInfo;
-  value: ToolsMode;
-  onChange: (v: ToolsMode) => void;
-  rail: string;
-}) {
-  const { t } = useTranslation();
-  const localOk = tool.badge === "local" || tool.badge === "local_slow";
-  return (
-    <div className="grid gap-1.5 border-t pt-3">
-      <span className="text-xs font-medium">{t("tools.runOn")}</span>
-      <Segmented<ToolsMode>
-        size="sm"
-        className="w-full"
-        value={value}
-        onChange={onChange}
-        items={[
-          { value: "local", label: t("tools.mode.local"), icon: <Cpu className="size-3" /> },
-          { value: "cloud", label: t("tools.mode.cloud"), icon: <Cloud className="size-3" /> },
-        ]}
-      />
-      {value === "local" && !localOk && (
-        <p className="text-[11px] leading-snug text-amber-600 dark:text-amber-400">
-          {t(`tools.reason.${tool.reason ?? "no_device"}`, { defaultValue: t("tools.reason.no_device") })}
-        </p>
-      )}
-      {value === "cloud" && !tool.cloudAvailable && (
-        <p className="text-[11px] leading-snug text-amber-600 dark:text-amber-400">{t("tools.noCloud")}</p>
-      )}
-      {value !== "local" && tool.cloudAvailable && (
-        <p className="text-muted-foreground text-[11px]">
-          {t("tools.cloudPrice", { price: formatToolPrice(t, tool.priceCredits, rail, tool.priceIsModel) })}
-        </p>
-      )}
-    </div>
-  );
-}
 
 /** MB a local run still has to download: the weights of the chosen variant
  *  (their "when" matches the params) that are not cached yet. */
@@ -845,18 +874,12 @@ function ErrorPanel({
   error,
   rail,
   onCloud,
-  previous,
-  onSwitched,
 }: {
   error: ToolError;
   rail: string;
   onCloud: () => void;
-  /** The model to switch back to when an edit model blocks the run. */
-  previous?: ModelInfo | null;
-  onSwitched?: () => void;
 }) {
   const { t } = useTranslation();
-  const sw = useModelSwitch(onSwitched ?? (() => {}));
   // A known reason reads as a sentence, not as a code in parentheses.
   const why = error.reason ? t(`tools.reason.${error.reason}`, { defaultValue: "" }) : "";
   return (
@@ -868,9 +891,7 @@ function ErrorPanel({
           <p className="text-destructive/80 mt-0.5 break-words">{why || error.message}</p>
         </div>
       </div>
-      {error.reason === "edit_model_loaded" && previous && (
-        <SwitchBackButton sw={sw} previous={previous} />
-      )}
+
       {error.cloudRetry && (
         <div className="space-y-2 rounded-lg border border-sky-500/30 bg-sky-500/10 p-2.5 text-sky-800 dark:text-sky-200">
           <p>{t("tools.cloudRetryBody")}</p>
@@ -1070,14 +1091,16 @@ function InstructEditForm({
           )
         ) : (
           <p className="text-xs">
-            {models?.local?.name ?? models?.local?.modelCode ?? t("tools.instruct.localModel")}
-            <span className="text-muted-foreground"> · {t("tools.instruct.onThisComputer")}</span>
+            {models?.local?.name ??
+              models?.localCandidate?.name ??
+              models?.local?.modelCode ??
+              t("tools.instruct.localModel")}
+            <span className="text-muted-foreground">
+              {" · "}
+              {models?.local ? t("tools.instruct.onThisComputer") : t("tools.instruct.notLoaded")}
+            </span>
           </p>
         )}
-        {tool.badge === "cloud" && !onModelsChanged && (
-          <p className="text-muted-foreground text-[11px] leading-snug">{t("tools.instruct.localHint")}</p>
-        )}
-        {onModelsChanged && <EditModelSwitch models={models} disabled={disabled} onChanged={onModelsChanged} />}
       </div>
 
       <label className="flex items-center gap-2 text-sm">
@@ -1296,90 +1319,6 @@ function OutpaintFrame({ src, params }: { src: string; params: Record<string, un
   );
 }
 
-/** "Edit on this computer": swap the local model to the edit model (download
- *  the first time, progress from "model:progress") and back. Desktop only. */
-function EditModelSwitch({
-  models,
-  disabled,
-  onChanged,
-}: {
-  models: EditModelsInfo | null;
-  disabled?: boolean;
-  onChanged: () => void;
-}) {
-  const { t } = useTranslation();
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<InstallProgress | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!busy) return;
-    return api.onModelProgress((p) => {
-      setProgress(p);
-      if (p.done || p.phase === "done" || p.phase === "error" || p.phase === "cancelled") {
-        setBusy(false);
-        if (p.phase === "error") setError(p.error ?? "error");
-        onChanged();
-      }
-    });
-  }, [busy, onChanged]);
-
-  const start = (fn: () => Promise<void>) => {
-    setError(null);
-    setProgress(null);
-    setBusy(true);
-    fn().catch((e) => {
-      setBusy(false);
-      setError(String((e as Error)?.message ?? e));
-    });
-  };
-
-  const candidate = models?.localCandidate;
-  const local = models?.local;
-  if (!models || (!local && !candidate)) return null;
-
-  return (
-    <div className="bg-muted/40 mt-1 space-y-2 rounded-lg border p-2.5">
-      {local ? (
-        models.previous && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            disabled={disabled || busy}
-            onClick={() => start(api.switchBackFromEditModel)}
-          >
-            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Cpu className="size-3.5" />}
-            {t("tools.instruct.switchBack", { name: models.previous.name || models.previous.modelCode })}
-          </Button>
-        )
-      ) : (
-        candidate && (
-          <>
-            <p className="text-xs font-medium">{t("tools.instruct.switchTitle")}</p>
-            <p className="text-muted-foreground text-[11px] leading-snug">
-              {t("tools.instruct.switchText", { name: candidate.name || candidate.modelCode })}
-              {!models.localCandidateCached && <> {t("tools.instruct.switchDownload")}</>}
-            </p>
-            <Button size="sm" className="w-full" disabled={disabled || busy} onClick={() => start(api.switchToEditModel)}>
-              {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Cpu className="size-3.5" />}
-              {busy ? t("tools.instruct.switching") : t("tools.instruct.switchButton")}
-            </Button>
-          </>
-        )
-      )}
-      {busy && progress && (
-        <div className="space-y-1">
-          <ProgressBar percent={progress.percentEstimate || null} />
-          <p className="text-muted-foreground truncate text-[11px]">
-            {progress.messageKey ? t(progress.messageKey, progress.messageArgs ?? {}) : progress.message}
-          </p>
-        </div>
-      )}
-      {error && <p className="text-destructive text-[11px]">{t("tools.instruct.switchFailed", { error })}</p>}
-    </div>
-  );
-}
 
 /** The tool a fresh source opens on in the Edit panel. */
 export function defaultToolFor(kind?: string): string {
@@ -1511,18 +1450,6 @@ function SwitchProgress({ sw }: { sw: ReturnType<typeof useModelSwitch> }) {
   );
 }
 
-function SwitchBackButton({ sw, previous }: { sw: ReturnType<typeof useModelSwitch>; previous: ModelInfo }) {
-  const { t } = useTranslation();
-  return (
-    <div className="space-y-1.5">
-      <Button size="sm" variant="outline" className="w-full" disabled={sw.busy} onClick={() => sw.start(api.switchBackFromEditModel)}>
-        {sw.busy ? <Loader2 className="size-3.5 animate-spin" /> : <Cpu className="size-3.5" />}
-        {t("tools.instruct.switchBack", { name: previous.name || previous.modelCode })}
-      </Button>
-      <SwitchProgress sw={sw} />
-    </div>
-  );
-}
 
 /** Vary / inpaint / outpaint: which model the run uses, why, and the fixes
  *  (load the image's own model, switch back from an edit model). */
@@ -1568,7 +1495,6 @@ function GenModelBox({
       ) : editLoaded ? (
         <>
           <p className="leading-snug text-amber-700 dark:text-amber-300">{t("tools.gen.editLoaded", { name: name(local) })}</p>
-          {models.previous && <SwitchBackButton sw={sw} previous={models.previous} />}
         </>
       ) : local ? (
         <>

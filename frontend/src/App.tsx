@@ -1345,21 +1345,27 @@ export default function App() {
     key: number;
   } | null>(null);
   const [toolOutputs, setToolOutputs] = useState<string[]>([]);
+  // Show a panel, bring it into view and flash it so the eye lands on it.
+  const flashPanel = useCallback(
+    (id: PanelId) => {
+      setPanelHidden(id, false);
+      window.setTimeout(() => {
+        const el = document.querySelector<HTMLElement>(`[data-panel-id="${id}"]`);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+        el.classList.add("ring-2", "ring-primary/60", "rounded-2xl");
+        window.setTimeout(() => el.classList.remove("ring-2", "ring-primary/60", "rounded-2xl"), 1200);
+      }, 60);
+    },
+    [setPanelHidden]
+  );
   const openEditor = useCallback(
     (toolId: string, source: ToolSource, maskMode?: "select") => {
       setEditTarget({ toolId, source, maskMode, key: Date.now() });
       setPanelHidden("edit", false);
-      // Bring the Edit panel into view (it may be off-screen on a narrow
-      // window, or just shown) and flash it so the eye lands on it.
-      window.setTimeout(() => {
-        const el = document.querySelector<HTMLElement>('[data-panel-id="edit"]');
-        if (!el) return;
-        el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-        el.classList.add("ring-2", "ring-primary/60", "rounded-2xl");
-        window.setTimeout(() => el.classList.remove("ring-2", "ring-primary/60", "rounded-2xl"), 900);
-      }, 60);
+      flashPanel("edit");
     },
-    [setPanelHidden]
+    [setPanelHidden, flashPanel]
   );
 
   // Tool stages ("tools:progress") onto their Activity rows.
@@ -2139,6 +2145,8 @@ export default function App() {
                     jobs={jobs}
                     onClose={() => setEditTarget(null)}
                     onRunJob={runToolJob}
+                    mode={mode}
+                    onEngineActivity={() => flashPanel("engine")}
                   />
                 ) : (
                   <EditEmpty

@@ -1008,8 +1008,17 @@
       "switchFailed": "无法切换：{{error}}",
       "advanced": "高级",
       "galleryEmpty": "图库中还没有图片。",
-      "more": "更多"
-    }
+      "more": "更多",
+      "notLoaded": "运行时加载"
+    },
+    "swap": {
+      "button": "加载 {{model}}（替换引擎中的 {{current}}）",
+      "confirmTitle": "加载 {{model}}？",
+      "confirmBody": "{{model}} 将替换本地引擎中的 {{current}}。加载需要一点时间；完成后可在“引擎”面板或模型列表中切换回来。",
+      "confirm": "加载",
+      "nothing": "无"
+    },
+    "cloudOnce": "仅此一次在云端运行 · {{price}}"
   },
   "web": {
     "signOut": "退出登录",

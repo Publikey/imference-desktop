@@ -757,6 +757,8 @@ export type EditModelsInfo = {
   localCandidateCached?: boolean;
   /** The model to switch back to after switching to the edit model. */
   previous?: ModelInfo | null;
+  /** The local model the engine holds now (what a swap replaces). */
+  engine?: ModelInfo | null;
 };
 
 export type LocalApiInfo = {

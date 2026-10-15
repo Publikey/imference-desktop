@@ -1020,8 +1020,17 @@
       "switchFailed": "Could not switch: {{error}}",
       "advanced": "Advanced",
       "galleryEmpty": "No images in the gallery yet.",
-      "more": "More"
-    }
+      "more": "More",
+      "notLoaded": "loads when you run it"
+    },
+    "swap": {
+      "button": "Load {{model}} (replaces {{current}} in the engine)",
+      "confirmTitle": "Load {{model}}?",
+      "confirmBody": "{{model}} replaces {{current}} in the local engine. Loading takes a moment; switch back from the Engine panel or the model list when you are done.",
+      "confirm": "Load it",
+      "nothing": "nothing"
+    },
+    "cloudOnce": "Run this one in the cloud · {{price}}"
   },
   "web": {
     "signOut": "Sign out",

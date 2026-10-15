@@ -4,13 +4,12 @@
 // the Go side applies the change (SaveSettings).
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot, Cloud, Cpu, Sparkles } from "lucide-react";
+import { Bot } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Segmented } from "@/components/ui/segmented";
 import { Checkbox } from "@/components/ui/checkbox";
 import { api } from "@/lib/wails-bridge";
-import type { AppSettings, LocalApiInfo, ToolsMode, ToolsSettings } from "@/lib/types";
+import type { AppSettings, LocalApiInfo, ToolsSettings } from "@/lib/types";
 
 export function ToolsSection({
   draft,
@@ -23,7 +22,6 @@ export function ToolsSection({
   const ts: ToolsSettings = draft.tools ?? {};
   const set = (patch: Partial<ToolsSettings>) =>
     setDraft((d) => ({ ...d, tools: { ...(d.tools ?? {}), ...patch } }));
-  const mode: ToolsMode = ts.mode ?? "auto";
 
   // The API state follows the toggle after the auto-save lands.
   const [info, setInfo] = useState<LocalApiInfo | null>(null);
@@ -36,19 +34,7 @@ export function ToolsSection({
 
   return (
     <div className="space-y-4">
-      <div className="bg-card grid gap-2 rounded-2xl border p-4 shadow-sm">
-        <Label className="text-xs">{t("tools.settings.mode")}</Label>
-        <Segmented<ToolsMode>
-          value={mode}
-          onChange={(m) => set({ mode: m })}
-          items={[
-            { value: "auto", label: t("tools.settings.modeAuto"), icon: <Sparkles className="size-3.5" /> },
-            { value: "local", label: t("tools.settings.modeLocal"), icon: <Cpu className="size-3.5" /> },
-            { value: "cloud", label: t("tools.settings.modeCloud"), icon: <Cloud className="size-3.5" /> },
-          ]}
-        />
-        <p className="text-muted-foreground text-xs leading-relaxed">{t(`tools.settings.modeHint_${mode}`)}</p>
-      </div>
+      {/* Where tools run follows the app's global mode (Engine panel). */}
 
       <div className="bg-card grid gap-4 rounded-2xl border p-4 shadow-sm sm:grid-cols-2">
         <div className="grid gap-2">

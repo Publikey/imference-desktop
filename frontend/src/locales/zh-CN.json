@@ -80,19 +80,7 @@
     "theme": "主题：{{mode}}",
     "language": "语言：{{lang}}",
     "settings": "打开设置",
-    "logs": "切换日志",
-    "runLayout": "生成按钮：{{name}}",
-    "runColor": "生成按钮颜色：{{name}}",
-    "runLayouts": {
-      "wide": "全宽",
-      "card": "浮动卡片",
-      "bar": "底栏"
-    },
-    "runColors": {
-      "mode": "模式（本地蓝 / 云端青）",
-      "brand": "品牌渐变",
-      "neutral": "中性"
-    }
+    "logs": "切换日志"
   },
   "composer": {
     "qualityTags": "质量标签",

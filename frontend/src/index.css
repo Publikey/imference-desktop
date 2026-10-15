@@ -274,18 +274,6 @@
      separates from the cards behind it), and a hairline of that accent instead
      of the neutral card border. The inset top highlight catches light on the
      upper edge, which is what sells "floating" at a glance. */
-  .run-bar {
-    --run: var(--brand-from);
-    background-color: color-mix(in oklch, var(--card) 82%, var(--run) 6%);
-    border-color: color-mix(in oklch, var(--run) 28%, transparent);
-    box-shadow: 0 -10px 28px -18px color-mix(in oklch, var(--run) 55%, rgb(0 0 0 / 0.4));
-    transition:
-      background-color 0.35s var(--ease-out-expo),
-      border-color 0.35s var(--ease-out-expo);
-  }
-  .run-bar[data-mode="cloud"] {
-    --run: var(--cloud-from);
-  }
   /* The run button in the mode's colour. Cloud's cyan is deepened so white
      text keeps its contrast. */
   .btn-run {
@@ -301,29 +289,15 @@
       box-shadow 0.2s ease,
       transform 0.14s var(--ease-spring);
   }
-  .btn-run[data-color="mode"][data-mode="cloud"] {
+  .btn-run[data-mode="cloud"] {
     --run-from: color-mix(in oklch, var(--cloud-from) 72%, black);
     --run-to: color-mix(in oklch, var(--cloud-to) 72%, black);
-  }
-  .btn-run[data-color="brand"] {
-    --run-from: var(--brand-from);
-    --run-to: var(--brand-to);
-  }
-  .btn-run[data-color="neutral"] {
-    --run-from: var(--foreground);
-    --run-to: color-mix(in oklch, var(--foreground) 82%, var(--background));
-    color: var(--background);
   }
   .btn-run .run-kbd {
     background-color: color-mix(in oklch, currentColor 18%, transparent);
   }
   .btn-run .run-hint {
     opacity: 0.78;
-  }
-  .run-card {
-    box-shadow:
-      0 1px 2px rgb(0 0 0 / 0.05),
-      0 14px 34px -14px rgb(0 0 0 / 0.32);
   }
   .btn-run:hover:not(:disabled) {
     filter: brightness(1.1) saturate(1.08);
@@ -338,10 +312,20 @@
     transform: translateY(1px) scale(0.97);
     transition-duration: 0.04s;
   }
-  @media (prefers-reduced-motion: reduce) {
-    .run-bar {
-      transition: none;
-    }
+  /* Disabled: opaque and readable — a quiet surface tinted by the mode with a
+     dashed outline (nothing to run yet), never a faded gradient. */
+  .btn-run:disabled {
+    opacity: 1;
+    cursor: not-allowed;
+    background-image: none;
+    background-color: color-mix(in oklch, var(--card) 88%, var(--run-from) 12%);
+    color: var(--muted-foreground);
+    border: 1.5px dashed color-mix(in oklch, var(--run-from) 45%, transparent);
+    box-shadow: none;
+    filter: none;
+  }
+  .btn-run:disabled .run-hint {
+    opacity: 1;
   }
   /* An image is being dragged over the panel (drop → img2img). */
   .create-drop-active {

@@ -522,15 +522,6 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
-  // The Generate button's look (on trial: layout × colour, via the palette).
-  const [runStyle, setRunStyleState] = useState<RunStyle>(readRunStyle);
-  const setRunStyle = useCallback((patch: Partial<RunStyle>) => {
-    setRunStyleState((cur) => {
-      const next = { ...cur, ...patch };
-      writeRunStyle(next);
-      return next;
-    });
-  }, []);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
 
   // Per-step progress is a single global stream (the sidecar runs local jobs
@@ -1804,21 +1795,6 @@ export default function App() {
       })
     );
 
-    for (const l of RUN_LAYOUTS)
-      cmds.push({
-        id: `run-layout-${l}`, group: gAppearance,
-        label: `${t("palette.runLayout", { name: t(`palette.runLayouts.${l}`) })}${runStyle.layout === l ? " ✓" : ""}`,
-        icon: <Sparkles />, keywords: "generate button style layout bouton",
-        run: () => setRunStyle({ layout: l }),
-      });
-    for (const c of RUN_COLORS)
-      cmds.push({
-        id: `run-color-${c}`, group: gAppearance,
-        label: `${t("palette.runColor", { name: t(`palette.runColors.${c}`) })}${runStyle.color === c ? " ✓" : ""}`,
-        icon: <Sparkles />, keywords: "generate button colour color couleur",
-        run: () => setRunStyle({ color: c }),
-      });
-
     for (const p of PANEL_ORDER) {
       const name = t(`panels.${p.id}`);
       cmds.push({
@@ -1836,7 +1812,7 @@ export default function App() {
   }, [
     t, canGenerate, primary, mode, engineInstalled, sidecar.state, settings?.localModel,
     installEngine, stopEngine, startEngine,
-    hasFinished, clearFinished, openSettings, panelHidden, togglePanel, runStyle, setRunStyle,
+    hasFinished, clearFinished, openSettings, panelHidden, togglePanel
   ]);
 
   // The engine block — Local/Cloud, payment, model, local readiness, a held
@@ -2138,7 +2114,7 @@ export default function App() {
 
                         {/* 6. The run button — last in the panel, but pinned to
                             the bottom of the viewport so it never scrolls away. */}
-                        <PrimaryAction action={primary} contextHint={contextHint} mode={mode} runStyle={runStyle} />
+                        <PrimaryAction action={primary} contextHint={contextHint} mode={mode} />
                       </>
                     )}
                   </div>
@@ -2779,137 +2755,63 @@ function Composer({
   );
 }
 
-// PrimaryAction — the run button and its one-line context hint, pinned to the
-// bottom of whatever scrolls the Create surface (the column on xl, the window
-// below), so the click always follows the user however long the panel grows.
-// Below xl, the right lane stays free for the Activity dock (z-40).
-//
-// Three layouts are on trial (palette: "Generate button…"), with three colours:
-//   wide — one big full-width button, the hint as its second line;
-//   card — a floating card as wide as the cards above, hint left, button right;
-//   bar  — a footer spanning the surface edge to edge.
-// Colours: the mode's (Local blue / Cloud deep cyan), the brand gradient, or
-// neutral (foreground on background).
-type RunLayout = "wide" | "card" | "bar";
-type RunColor = "mode" | "brand" | "neutral";
-type RunStyle = { layout: RunLayout; color: RunColor };
-const RUN_STYLE_KEY = "imference.runStyle";
-const RUN_LAYOUTS: RunLayout[] = ["wide", "card", "bar"];
-const RUN_COLORS: RunColor[] = ["mode", "brand", "neutral"];
-function readRunStyle(): RunStyle {
-  try {
-    const v = JSON.parse(localStorage.getItem(RUN_STYLE_KEY) ?? "null") as Partial<RunStyle> | null;
-    return {
-      layout: RUN_LAYOUTS.includes(v?.layout as RunLayout) ? (v!.layout as RunLayout) : "wide",
-      color: RUN_COLORS.includes(v?.color as RunColor) ? (v!.color as RunColor) : "brand",
-    };
-  } catch {
-    return { layout: "wide", color: "brand" };
-  }
-}
-function writeRunStyle(v: RunStyle) {
-  try {
-    localStorage.setItem(RUN_STYLE_KEY, JSON.stringify(v));
-  } catch {
-    /* per-viewer convenience only */
-  }
-}
-
+// PrimaryAction — one big full-width run button, pinned to the bottom of
+// whatever scrolls the Create surface (the column on xl, the window below), so
+// the click always follows the user however long the panel grows. The context
+// hint (model · format · price) is its second line. It takes the mode's colour
+// (Local blue / Cloud deep cyan), like the comet it launches and the Activity
+// widget. Disabled, it stays opaque and readable: a quiet mode-tinted surface
+// with a dashed outline instead of a faded gradient. Below xl, the right lane
+// stays free for the Activity dock (z-40).
 function PrimaryAction({
   action,
   contextHint,
   mode,
-  runStyle,
 }: {
   action: ComposerAction;
   contextHint: string;
   mode: Mode;
-  runStyle: RunStyle;
 }) {
   const burst = useLaunchBurst("generate");
-  const { layout, color } = runStyle;
-  const wide = layout === "wide";
-  const icon = action.busy ? (
-    <Loader2 className="size-4 shrink-0 animate-spin" />
-  ) : action.kind === "download" ? (
-    <Download className="size-4 shrink-0" />
-  ) : (
-    <Sparkles className="size-4 shrink-0" />
-  );
-  const kbd = action.kind === "generate" && (
-    <kbd className="run-kbd hidden shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex">
-      <CornerDownLeft className="size-2.5" />
-    </kbd>
-  );
-  const button = (
-    <span className={cn("relative rounded-2xl", wide ? "block w-full" : "shrink-0")} data-mode={mode}>
-      <LaunchBurst burst={burst} />
-      <Button
-        size="lg"
-        onClick={action.onClick}
-        disabled={action.disabled}
-        data-launch="generate"
-        data-mode={mode}
-        data-color={color}
-        title={wide ? undefined : contextHint}
-        className={cn(
-          "btn-run relative h-auto overflow-hidden whitespace-normal font-semibold disabled:opacity-40 disabled:saturate-0",
-          wide
-            ? "flex min-h-14 w-full flex-col gap-0.5 rounded-2xl px-5 py-2.5"
-            : "min-h-11 min-w-[9.5rem] rounded-xl px-5 py-2 text-[15px]",
-          burst > 0 && "btn-launch"
-        )}
-        key={`gen-${burst}`}
-      >
-        {burst > 0 && <span aria-hidden className="launch-shine pointer-events-none absolute inset-0" />}
-        {wide ? (
-          <>
-            <span className="flex items-center gap-2 text-base">
-              {icon}
-              {action.label}
-              {kbd}
-            </span>
-            <span className="run-hint max-w-full truncate text-[11px] font-medium" title={contextHint}>
-              {contextHint}
-            </span>
-          </>
-        ) : (
-          <>
-            {icon}
+  return (
+    <div className="sticky bottom-2 z-30 max-xl:pr-36">
+      <span className="relative block w-full rounded-2xl" data-mode={mode}>
+        <LaunchBurst burst={burst} />
+        <Button
+          size="lg"
+          onClick={action.onClick}
+          disabled={action.disabled}
+          data-launch="generate"
+          data-mode={mode}
+          className={cn(
+            "btn-run relative flex h-auto min-h-14 w-full disabled:opacity-100 flex-col gap-0.5 overflow-hidden whitespace-normal rounded-2xl px-5 py-2.5 font-semibold",
+            burst > 0 && "btn-launch"
+          )}
+          key={`gen-${burst}`}
+        >
+          {burst > 0 && <span aria-hidden className="launch-shine pointer-events-none absolute inset-0" />}
+          <span className="flex items-center gap-2 text-base">
+            {action.busy ? (
+              <Loader2 className="size-4 shrink-0 animate-spin" />
+            ) : action.kind === "download" ? (
+              <Download className="size-4 shrink-0" />
+            ) : (
+              <Sparkles className="size-4 shrink-0" />
+            )}
             {action.label}
-            {kbd}
-          </>
-        )}
-      </Button>
-    </span>
-  );
-
-  if (layout === "bar") {
-    return (
-      <div
-        data-mode={mode}
-        className="run-bar sticky bottom-0 z-30 -mx-3 -mb-4 mt-1 flex flex-wrap items-center justify-end gap-x-3 gap-y-2 rounded-b-[1.5rem] border-t px-4 py-3 backdrop-blur-xl max-xl:pr-36"
-      >
-        <span className="text-muted-foreground min-w-[8rem] flex-1 truncate text-xs" title={contextHint}>
-          {contextHint}
-        </span>
-        {button}
-      </div>
-    );
-  }
-  if (layout === "card") {
-    return (
-      <div className="sticky bottom-2 z-30 max-xl:pr-36">
-        <div className="bg-card/95 run-card flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border p-3 backdrop-blur-xl">
-          <span className="text-muted-foreground line-clamp-2 min-w-[8rem] flex-1 text-xs leading-snug" title={contextHint}>
+            {action.kind === "generate" && (
+              <kbd className="run-kbd hidden shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex">
+                <CornerDownLeft className="size-2.5" />
+              </kbd>
+            )}
+          </span>
+          <span className="run-hint max-w-full truncate text-[11px] font-medium" title={contextHint}>
             {contextHint}
           </span>
-          {button}
-        </div>
-      </div>
-    );
-  }
-  return <div className="sticky bottom-2 z-30 max-xl:pr-36">{button}</div>;
+        </Button>
+      </span>
+    </div>
+  );
 }
 
 // FormatSelector — the image aspect (square / portrait / landscape …), pulled

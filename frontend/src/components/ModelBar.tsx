@@ -205,7 +205,13 @@ export function ModelBar({
       </div>
 
       {!isCloud && selected && !loading && !listError && (
-        loadedHere ? (
+        downloading || engineState === "starting" ? (
+          // A model is being loaded into the engine (a swap, a Load now…).
+          <p className="text-primary mt-2 flex items-center gap-1.5 text-[11px]">
+            <Loader2 className="size-3 animate-spin" />
+            {t("modelBar.loading")}
+          </p>
+        ) : loadedHere ? (
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300">
             <span className="size-1.5 rounded-full bg-emerald-500" />
             {engineState === "ready" ? t("modelBar.loaded") : t("modelBar.loadedWhenStarted")}

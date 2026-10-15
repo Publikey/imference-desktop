@@ -151,7 +151,7 @@ export function LocalReadinessCard({
   }
 
   return (
-    <section className="bg-card grid gap-2.5 rounded-2xl border px-4 py-3 text-xs shadow-sm">
+    <section className="bg-card grid min-w-0 gap-2.5 overflow-hidden rounded-2xl border px-4 py-3 text-xs shadow-sm">
       <div className="flex items-center justify-between">
         <ComposerCardHeader title={t("readiness.title")} help={t("readiness.help")} />
         <div className="flex items-center gap-2">
@@ -309,7 +309,9 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-7 items-center gap-2.5">
+    // Wraps on a narrow panel: the status (text + progress bar) moves under the
+    // label instead of running past the card's edge.
+    <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
       <span
         className={cn(
           "flex size-5 shrink-0 items-center justify-center rounded-full border",
@@ -328,8 +330,8 @@ function Row({
           <Download className="size-3 opacity-60" />
         )}
       </span>
-      <span className="w-40 shrink-0 font-medium">{label}</span>
-      <div className="min-w-0 flex-1">
+      <span className="w-36 shrink-0 font-medium">{label}</span>
+      <div className="min-w-[9rem] flex-1 basis-[9rem]">
         {ok && !children ? (
           <span className="text-muted-foreground">{okText}</span>
         ) : (

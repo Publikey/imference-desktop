@@ -226,7 +226,7 @@ func TestRunToolCloudRoute(t *testing.T) {
 	_, _ = a.settings.Save(s)
 
 	res := a.runTool(context.Background(), ToolRunRequest{ToolID: "vary", RunOn: "cloud",
-		Inputs: map[string][]string{"image": {"src.png"}}, Params: map[string]any{"strength": "strong"}})
+		Inputs: map[string][]string{"image": {"src.png"}}, Params: map[string]any{"strength": 0.65}})
 	if res.Error != nil {
 		t.Fatal(res.Error)
 	}

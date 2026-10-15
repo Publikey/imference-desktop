@@ -367,8 +367,11 @@ export function ToolEditor({
   // stopped, no GPU…): say why; a one-off cloud run is the way out.
   const localOk2 = !!tool && (tool.badge === "local" || tool.badge === "local_slow");
   const localBlocked = !!tool && !effectiveCloud && !localSwap && !localOk2;
+  // Offered only when there is no local way (localBlocked), and only with a
+  // known price: an unpriced generation tool means the cloud lacks the model.
+  const cloudPriceKnown = !!priced && !(priced.priceIsModel && !priced.priceCredits);
   const cloudOnce =
-    tool && !effectiveCloud && tool.cloudAvailable ? (
+    tool && !effectiveCloud && tool.cloudAvailable && cloudPriceKnown ? (
       <Button
         variant="outline"
         className="w-full"
@@ -593,7 +596,6 @@ export function ToolEditor({
                         {swapping ? <Loader2 className="size-3.5 animate-spin" /> : <Cpu className="size-3.5" />}
                         {t("tools.swap.button", { model: localSwap.load, current: localSwap.replaces })}
                       </Button>
-                      {cloudOnce}
                     </div>
                   ) : localBlocked ? (
                     <div className="space-y-1.5">
@@ -785,7 +787,10 @@ function ParamField({
       const isAuto = optional && (value === undefined || value === null || value === "");
       const step = spec.type === "int" ? 1 : (spec.max ?? 1) - (spec.min ?? 0) <= 2 ? 0.05 : 0.1;
       const num = value === undefined || value === null ? "" : String(value);
+      const lowEnd = t(`tools.sliderEnds.${toolId}.${spec.name}.low`, { defaultValue: "" });
+      const highEnd = t(`tools.sliderEnds.${toolId}.${spec.name}.high`, { defaultValue: "" });
       control = (
+        <div className="grid gap-1">
         <div className="flex items-center gap-2">
           {bounded && (
             <input
@@ -811,6 +816,14 @@ function ParamField({
             disabled={disabled}
             className={cn("h-8 text-xs", bounded ? "w-20" : "w-full")}
           />
+        </div>
+        {bounded && (lowEnd || highEnd) && (
+          // What the two ends mean ("Close to the image" … "More different").
+          <div className="text-muted-foreground mr-22 flex justify-between text-[10px]">
+            <span>{lowEnd}</span>
+            <span>{highEnd}</span>
+          </div>
+        )}
         </div>
       );
       break;
@@ -842,7 +855,7 @@ function ParamField({
   return (
     <div className="grid gap-1.5">
       <div className="flex items-center gap-2">
-        <label htmlFor={id} className="flex-1 text-xs font-medium">
+        <label htmlFor={id} className="flex-1 text-xs font-medium" title={hint || undefined}>
           {label}
         </label>
         {optional && (

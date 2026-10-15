@@ -368,7 +368,8 @@
     "notLoadedHolds": "已选择，尚未加载：引擎当前为 {{name}}。生成时会自动加载。",
     "notLoaded": "已选择，尚未加载。生成时会自动加载。",
     "downloadBelow": "请先在下方“本地设置”中下载。",
-    "loadNow": "立即加载"
+    "loadNow": "立即加载",
+    "loading": "正在将模型加载到引擎…"
   },
   "modelPicker": {
     "cloudTitle": "云端模型",
@@ -921,8 +922,6 @@
       "guidance": "引导强度"
     },
     "values": {
-      "subtle": "轻微",
-      "strong": "强烈",
       "short": "简短",
       "detailed": "详细",
       "more_detailed": "非常详细",
@@ -1020,7 +1019,26 @@
       "nothing": "无"
     },
     "cloudOnce": "仅此一次在云端运行 · {{price}}",
-    "resizeSettings": "拖动以调整设置栏宽度（双击恢复）"
+    "resizeSettings": "拖动以调整设置栏宽度（双击恢复）",
+    "sliderEnds": {
+      "vary": {
+        "strength": {
+          "low": "贴近原图",
+          "high": "变化更大"
+        }
+      },
+      "inpaint": {
+        "strength": {
+          "low": "保留更多原内容",
+          "high": "自由重绘"
+        }
+      }
+    },
+    "paramHints": {
+      "vary": {
+        "strength": "变体与原图的差异程度：低值保留构图和细节，高值改动更多。"
+      }
+    }
   },
   "web": {
     "signOut": "退出登录",

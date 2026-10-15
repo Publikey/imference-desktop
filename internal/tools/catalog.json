@@ -1165,12 +1165,11 @@
           "max_length": 2000
         },
         "strength": {
-          "type": "enum",
-          "default": "subtle",
-          "values": [
-            "subtle",
-            "strong"
-          ]
+          "type": "float",
+          "default": 0.35,
+          "description": "How far the variation may move away from the image: low keeps the composition and details close, high reinvents more of it.",
+          "min": 0.1,
+          "max": 0.9
         },
         "seed": {
           "type": "int",

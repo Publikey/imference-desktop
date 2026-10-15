@@ -374,7 +374,8 @@
     "notLoadedHolds": "Selected, not loaded: the engine holds {{name}}. It loads when you generate.",
     "notLoaded": "Selected, not loaded yet. It loads when you generate.",
     "downloadBelow": "Download it in Local setup below first.",
-    "loadNow": "Load now"
+    "loadNow": "Load now",
+    "loading": "Loading a model into the engine…"
   },
   "modelPicker": {
     "cloudTitle": "Cloud models",
@@ -932,8 +933,6 @@
       "guidance": "Guidance"
     },
     "values": {
-      "subtle": "Subtle",
-      "strong": "Strong",
       "short": "Short",
       "detailed": "Detailed",
       "more_detailed": "Very detailed",
@@ -1032,7 +1031,26 @@
       "nothing": "nothing"
     },
     "cloudOnce": "Run this one in the cloud · {{price}}",
-    "resizeSettings": "Drag to resize the settings (double-click resets)"
+    "resizeSettings": "Drag to resize the settings (double-click resets)",
+    "sliderEnds": {
+      "vary": {
+        "strength": {
+          "low": "Close to the image",
+          "high": "More different"
+        }
+      },
+      "inpaint": {
+        "strength": {
+          "low": "Keeps more of the area",
+          "high": "Repaints freely"
+        }
+      }
+    },
+    "paramHints": {
+      "vary": {
+        "strength": "How far the variation moves away from the image: low keeps the composition and details, high reinvents more."
+      }
+    }
   },
   "web": {
     "signOut": "Sign out",

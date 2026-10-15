@@ -21,6 +21,7 @@ Ops:
   release  {"op": "release"}                           -> {"ok", "released": n}
   catalog  {"op": "catalog"}                           -> {"ok", "catalog": export()}
   probe    {"op": "probe"}                             -> {"ok", "providers", "ffmpeg", "torch_device", "ram_gb", "engine_version"}
+  status   {"op": "status"}                            -> {"ok", "loaded": [{"name", "bytes", "runtime"}]}
 
 Outputs are always written to files under output_dir; nothing image-sized ever
 travels over stdout (the Go reader caps a line at 4 MB).
@@ -196,6 +197,11 @@ def handle(payload: dict, ctx: dict) -> dict:
             return {"ok": True, "catalog": catalog.export()}
         if op == "probe":
             return probe()
+        if op == "status":
+            from imference_engine import tools as _tools
+
+            loaded = _tools.loaded() if hasattr(_tools, "loaded") else []
+            return {"ok": True, "loaded": loaded}
         return _error("invalid_input", f"unknown op {op!r}")
     except Exception as e:  # never let a bug surface as a bare traceback
         logger.exception("tools op %s crashed", op)

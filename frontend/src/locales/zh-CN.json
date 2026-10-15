@@ -222,6 +222,7 @@
     "dropHere": "拖放到此处作为参考图"
   },
   "panels": {
+    "engine": "引擎",
     "toggleGroup": "面板",
     "show": "显示{{name}}",
     "hide": "隐藏{{name}}",
@@ -962,5 +963,6 @@
       "privacy": "你的图片从不保存在我们的服务器上：生成结果交给你的浏览器并保存在这里，云端副本会在 24 小时内过期。",
       "bannerText": "你的图库文件夹需要再次授权才能读取。"
     }
-  }
+  },
+  "engine": {"machine": "本机", "noGpu": "未检测到显卡", "vram": "{{gb}} GB 显存", "generation": "生成模型", "noModel": "未加载模型", "loras_one": "已启用 {{count}} 个 LoRA", "loras_other": "已启用 {{count}} 个 LoRA", "device": "运行于 {{device}}", "tools": "工具模型", "toolsIdle": "当前未加载。", "toolsOff": "未运行（首次使用本地工具时启动）。", "toolsTotal": "已加载 {{size}}", "release": "释放", "cloudNote": "云端模式：全部在 imference.com 上运行，本机不加载任何模型。", "state": {"idle": "已停止", "starting": "加载中…", "ready": "就绪", "error": "错误"}}
 }

@@ -1,23 +1,24 @@
 import { useTranslation } from "react-i18next";
-import { Brush, Images, Wand2 } from "lucide-react";
+import { Brush, Images, Server, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PanelId } from "@/components/PanelBoard";
 
 // ---------------------------------------------------------------------------
 // PanelToggles — the header's show/hide switches for the main window's panels
-// (Create, Edit, Gallery), in their own always-visible group like the panel
-// toggles of Figma / VS Code. ⌘/Ctrl+1..3 does the same; the last visible
-// panel cannot be switched off.
+// (Engine, Create, Edit, Gallery), in their own always-visible group like the
+// panel toggles of Figma / VS Code. ⌘/Ctrl+1..4 does the same; the last
+// visible panel cannot be switched off.
 // ---------------------------------------------------------------------------
 
 export const PANEL_ORDER: { id: PanelId; key: string }[] = [
+  { id: "engine", key: "4" },
   { id: "create", key: "1" },
   { id: "edit", key: "2" },
   { id: "gallery", key: "3" },
 ];
 
 export function PanelIcon({ id, className }: { id: PanelId; className?: string }) {
-  const Icon = id === "create" ? Wand2 : id === "edit" ? Brush : Images;
+  const Icon = id === "create" ? Wand2 : id === "edit" ? Brush : id === "engine" ? Server : Images;
   return <Icon className={className} />;
 }
 

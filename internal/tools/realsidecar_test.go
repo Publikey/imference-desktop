@@ -104,4 +104,15 @@ func TestRealToolsSidecar(t *testing.T) {
 		t.Fatalf("remove-background output %+v", o)
 	}
 	t.Logf("remove-background on %s in %d ms", res.Runtime, res.DurationMs)
+	// The Engine panel's view of it: one warm session, gone after Release.
+	warm, busy, lerr := m2.Loaded(context.Background())
+	if lerr != nil || busy || len(warm) != 1 || warm[0].Bytes == 0 {
+		t.Fatalf("Loaded = %+v busy=%v err=%v", warm, busy, lerr)
+	}
+	if err := m2.Release(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if warm, _, _ := m2.Loaded(context.Background()); len(warm) != 0 {
+		t.Fatalf("after Release: %+v", warm)
+	}
 }

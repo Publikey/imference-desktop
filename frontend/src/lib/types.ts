@@ -515,6 +515,16 @@ export type ToolJobInfo = {
   request?: ToolRunRequest;
 };
 
+/** App.EngineStatus: the GPU and what the tools sidecar keeps warm. */
+export type EngineStatusInfo = {
+  gpuName: string;
+  gpuVendor: string;
+  vramGiB: number;
+  toolsUp: boolean;
+  toolsBusy: boolean;
+  toolsWarm: { name: string; bytes: number; runtime: string }[] | null;
+};
+
 export type SidecarStatus =
   | { state: "idle" }
   | { state: "starting"; port: number }

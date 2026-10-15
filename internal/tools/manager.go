@@ -331,6 +331,45 @@ func (m *Manager) Release(ctx context.Context) error {
 	return err
 }
 
+// WarmModel is one model the tools sidecar keeps loaded (Engine panel).
+type WarmModel struct {
+	Name    string `json:"name"`
+	Bytes   int64  `json:"bytes"`
+	Runtime string `json:"runtime"`
+}
+
+// Loaded lists the warm models. It never starts the sidecar and never waits
+// for a run: busy is true while a run holds it (the caller keeps its last
+// list).
+func (m *Manager) Loaded(ctx context.Context) (models []WarmModel, busy bool, err error) {
+	m.mu.Lock()
+	p := m.proc
+	m.mu.Unlock()
+	if p == nil || !p.alive() {
+		return []WarmModel{}, false, nil
+	}
+	tctx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+	defer cancel()
+	if aerr := m.acquire(tctx); aerr != nil {
+		return nil, true, nil
+	}
+	defer m.releaseSlot()
+	raw, serr := p.send(ctx, map[string]any{"op": "status"})
+	if serr != nil {
+		return nil, false, serr
+	}
+	var out struct {
+		Loaded []WarmModel `json:"loaded"`
+	}
+	if jerr := json.Unmarshal(raw, &out); jerr != nil {
+		return nil, false, jerr
+	}
+	if out.Loaded == nil {
+		out.Loaded = []WarmModel{}
+	}
+	return out.Loaded, false, nil
+}
+
 // ProbeNow starts the sidecar if needed and returns a fresh probe.
 func (m *Manager) ProbeNow(ctx context.Context) (*Probe, error) {
 	if err := m.acquire(ctx); err != nil {

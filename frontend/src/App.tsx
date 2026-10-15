@@ -60,6 +60,7 @@ import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { LogPanel } from "@/components/LogPanel";
 import { PanelBoard, restoreHidden, usePanelLayout, visibleColumns, type PanelId } from "@/components/PanelBoard";
 import { PANEL_ORDER, PanelIcon, PanelToggles } from "@/components/PanelToggles";
+import { EnginePanel } from "@/components/EnginePanel";
 import { ActivityDock } from "@/components/ActivityDock";
 import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
@@ -1797,6 +1798,9 @@ export default function App() {
   // The engine block — Local/Cloud, payment, model, local readiness, a held
   // model switch. One element, shown in the Create panel today; the Engine
   // panel / bar take it over (see the Engine surface).
+  // The Engine surface (panel; the bar comes next) owns the engine block;
+  // Create shows it only while that surface is off.
+  const engineSurfaceHidden = !!panelHidden.engine;
   const engineBlock = (
     <>
       {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
@@ -1961,7 +1965,8 @@ export default function App() {
                         <span className="text-foreground text-sm font-semibold">{t("refImage.dropHere")}</span>
                       </div>
                     )}
-                    {engineBlock}
+                    {/* The engine block lives in the Engine surface when it is shown. */}
+                    {engineSurfaceHidden && engineBlock}
 
                     {firstRun ? (
                       /* First run: a guided setup replaces the (non-functional)
@@ -2081,6 +2086,20 @@ export default function App() {
                       </>
                     )}
                   </div>
+                ),
+              },
+              engine: {
+                title: t("panels.engine"),
+                icon: <PanelIcon id="engine" />,
+                width: 22,
+                content: (
+                  <EnginePanel
+                    engineBlock={engineBlock}
+                    mode={mode}
+                    sidecar={sidecar}
+                    localModel={settings?.localModel}
+                    loraCount={mode === "local" ? activeLoras.length : activeCloudLoras.length}
+                  />
                 ),
               },
               edit: {

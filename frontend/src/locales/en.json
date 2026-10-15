@@ -225,6 +225,7 @@
     "dropHere": "Drop to use as image reference"
   },
   "panels": {
+    "engine": "Engine",
     "toggleGroup": "Panels",
     "show": "Show {{name}}",
     "hide": "Hide {{name}}",
@@ -974,5 +975,6 @@
       "privacy": "Your images are never stored on our servers: a result is uploaded by the generator, handed to your browser, saved here, and the cloud copy expires within 24 hours.",
       "bannerText": "Your gallery folder needs your permission again to be read."
     }
-  }
+  },
+  "engine": {"machine": "This computer", "noGpu": "No GPU detected", "vram": "{{gb}} GB of VRAM", "generation": "Generation model", "noModel": "No model loaded", "loras_one": "{{count}} LoRA active", "loras_other": "{{count}} LoRAs active", "device": "Running on {{device}}", "tools": "Tool models", "toolsIdle": "None loaded right now.", "toolsOff": "Not running (starts with the first local tool).", "toolsTotal": "{{size}} loaded", "release": "Release", "cloudNote": "Cloud mode: everything runs on imference.com, nothing is loaded on this computer.", "state": {"idle": "Stopped", "starting": "Loading…", "ready": "Ready", "error": "Error"}}
 }

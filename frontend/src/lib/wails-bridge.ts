@@ -77,6 +77,7 @@ import type {
   ComponentsProgress,
   ToolInfo,
   EditModelsInfo,
+  EngineStatusInfo,
   GenToolModels,
   GenerationMeta,
   ToolRunRequest,
@@ -230,6 +231,7 @@ const raw = {
   ) => Promise<ToolRunResult>,
   cancelTool: ((jobId: string) => Call.ByName("main.App.CancelTool", jobId)) as (jobId: string) => Promise<void>,
   releaseTools: (() => Call.ByName("main.App.ReleaseTools")) as () => Promise<void>,
+  engineStatus: (() => Call.ByName("main.App.EngineStatus")) as () => Promise<EngineStatusInfo>,
   getToolsSettings: (() => Call.ByName("main.App.GetToolsSettings")) as () => Promise<ToolsSettings>,
   setToolsSettings: ((ts: ToolsSettings) => Call.ByName("main.App.SetToolsSettings", ts)) as (
     ts: ToolsSettings

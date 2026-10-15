@@ -12,10 +12,10 @@ import (
 
 func TestEngineTarballPinsToolsRelease(t *testing.T) {
 	t.Setenv(EngineSourceEnvVar, "")
-	if got := PinnedEngineVersion(); got != "0.5.0.dev4" {
-		t.Fatalf("PinnedEngineVersion = %q, want 0.5.0.dev4", got)
+	if got := PinnedEngineVersion(); got != "0.5.0.dev5" {
+		t.Fatalf("PinnedEngineVersion = %q, want 0.5.0.dev5", got)
 	}
-	if !strings.Contains(EngineTarball, "/tags/v0.5.0.dev4.tar.gz") {
+	if !strings.Contains(EngineTarball, "/tags/v0.5.0.dev5.tar.gz") {
 		t.Fatalf("EngineTarball must stay a tag pin, got %s", EngineTarball)
 	}
 	for _, extra := range []string{"sdxl", "krea2", "tools"} {
@@ -94,7 +94,7 @@ func TestEngineTarballReachable(t *testing.T) {
 func TestPinnedVersionRegexPreReleases(t *testing.T) {
 	for url, want := range map[string]string{
 		"x @ https://h/archive/refs/tags/v0.4.5.tar.gz":      "0.4.5",
-		"x @ https://h/archive/refs/tags/v0.5.0.dev4.tar.gz": "0.5.0.dev4",
+		"x @ https://h/archive/refs/tags/v0.5.0.dev5.tar.gz": "0.5.0.dev5",
 		"x @ https://h/archive/refs/tags/v0.5.0rc2.tar.gz":   "0.5.0rc2",
 	} {
 		m := pinnedEngineVersionRe.FindStringSubmatch(url)

@@ -62,6 +62,7 @@ import { PanelBoard, restoreHidden, usePanelLayout, visibleColumns, type PanelId
 import { PANEL_ORDER, PanelIcon, PanelToggles } from "@/components/PanelToggles";
 import { EnginePanel } from "@/components/EnginePanel";
 import { ActivityDock } from "@/components/ActivityDock";
+import { LaunchBurst, useLaunchBurst } from "@/components/LaunchBurst";
 import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { EditEmpty, ToolEditor, defaultToolFor, type ToolSource } from "@/components/ToolEditor";
@@ -2777,6 +2778,7 @@ function PrimaryAction({
   contextHint: string;
   mode: Mode;
 }) {
+  const burst = useLaunchBurst("generate");
   return (
     <div className="sticky bottom-1 z-30 flex justify-end max-xl:pr-36">
       {/* Content-sized and right-aligned, so it reads as one floating capsule
@@ -2791,12 +2793,20 @@ function PrimaryAction({
         >
           {contextHint}
         </span>
+        <span className="relative shrink-0 rounded-full" data-mode={mode}>
+        <LaunchBurst burst={burst} />
         <Button
           size="lg"
           onClick={action.onClick}
           disabled={action.disabled}
-          className="btn-brand h-11 shrink-0 rounded-full px-6 text-[15px] font-semibold disabled:opacity-40 disabled:saturate-0"
+          data-launch="generate"
+          className={cn(
+            "btn-brand relative h-11 shrink-0 overflow-hidden rounded-full px-6 text-[15px] font-semibold disabled:opacity-40 disabled:saturate-0",
+            burst > 0 && "btn-launch"
+          )}
+          key={`gen-${burst}`}
         >
+          {burst > 0 && <span aria-hidden className="launch-shine pointer-events-none absolute inset-0" />}
           {action.busy ? (
             <Loader2 className="size-4 animate-spin" />
           ) : action.kind === "download" ? (
@@ -2811,6 +2821,7 @@ function PrimaryAction({
             </kbd>
           )}
         </Button>
+        </span>
       </div>
     </div>
   );

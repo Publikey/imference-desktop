@@ -467,6 +467,161 @@
     }
   }
 
+  /* ---- Launch → Activity, one gesture ----------------------------------
+     A launch plays on the button (push + shine + two rings), a comet flies to
+     the Activity widget, and the widget lands it: colour flash, big bounce,
+     double halo and a "+N". While runs are in flight the widget breathes. */
+  .btn-launch {
+    animation: btn-launch 0.6s var(--ease-spring);
+  }
+  @keyframes btn-launch {
+    0% {
+      transform: scale(1);
+    }
+    18% {
+      transform: scale(0.9);
+      filter: brightness(1.35);
+    }
+    50% {
+      transform: scale(1.07);
+    }
+    100% {
+      transform: scale(1);
+      filter: none;
+    }
+  }
+  .launch-shine {
+    background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.55) 50%, transparent 70%);
+    transform: translateX(-120%);
+    animation: launch-shine 0.7s var(--ease-out-expo) forwards;
+  }
+  @keyframes launch-shine {
+    to {
+      transform: translateX(120%);
+    }
+  }
+  .launch-ring {
+    --launch-color: var(--brand-from);
+    border: 2px solid var(--launch-color);
+    opacity: 0;
+    animation: launch-ring 0.75s var(--ease-out-expo) forwards;
+  }
+  [data-mode="cloud"] > .launch-ring {
+    --launch-color: var(--cloud-from);
+  }
+  .launch-ring-late {
+    animation-delay: 0.12s;
+  }
+  @keyframes launch-ring {
+    0% {
+      opacity: 0.9;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.35, 1.9);
+    }
+  }
+  .launch-orb {
+    position: fixed;
+    z-index: 90;
+    width: 18px;
+    height: 18px;
+    margin: -9px 0 0 -9px;
+    border-radius: 9999px;
+    pointer-events: none;
+    background: radial-gradient(circle at 35% 35%, white, var(--orb) 55%);
+    box-shadow:
+      0 0 12px 3px var(--orb),
+      0 0 28px 8px color-mix(in oklch, var(--orb) 45%, transparent);
+  }
+  .launch-orb-trail {
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+    filter: opacity(0.55);
+  }
+  .launch-orb-tail {
+    width: 8px;
+    height: 8px;
+    margin: -4px 0 0 -4px;
+    filter: opacity(0.3);
+  }
+  .dock-arrive {
+    animation: dock-arrive 0.75s var(--ease-spring);
+  }
+  @keyframes dock-arrive {
+    0% {
+      transform: scale(1);
+    }
+    25% {
+      transform: scale(1.22) rotate(-2deg);
+    }
+    50% {
+      transform: scale(0.95) rotate(1deg);
+    }
+    75% {
+      transform: scale(1.05);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  .dock-flash {
+    background: var(--dock-ring, var(--brand-from));
+    opacity: 0;
+    animation: dock-flash 0.9s var(--ease-out-expo);
+  }
+  @keyframes dock-flash {
+    0% {
+      opacity: 0.6;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  .dock-ring-late {
+    animation-delay: 0.18s;
+    opacity: 0;
+  }
+  .dock-plus {
+    background: var(--dock-ring, var(--brand-from));
+    transform: translateX(-50%);
+    animation: dock-plus 1.05s var(--ease-out-expo) forwards;
+  }
+  @keyframes dock-plus {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, 8px) scale(0.6);
+    }
+    25% {
+      opacity: 1;
+      transform: translate(-50%, -10px) scale(1.15);
+    }
+    70% {
+      opacity: 1;
+      transform: translate(-50%, -18px) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -30px) scale(0.9);
+    }
+  }
+  .dock-busy {
+    animation: dock-busy 1.8s ease-in-out infinite;
+  }
+  @keyframes dock-busy {
+    0%,
+    100% {
+      box-shadow: 0 10px 30px -10px color-mix(in oklch, var(--brand-to) 60%, transparent);
+    }
+    50% {
+      box-shadow:
+        0 10px 30px -6px color-mix(in oklch, var(--brand-to) 85%, transparent),
+        0 0 0 4px color-mix(in oklch, var(--brand-from) 30%, transparent);
+    }
+  }
+
   /* Finish notices: a card popping out of the Activity widget (grows from its
      right edge), then a countdown bar that pauses while hovered. */
   .notice-pop {
@@ -565,6 +720,20 @@
     }
     .notice-pop {
       animation: none;
+    }
+    .btn-launch,
+    .launch-shine,
+    .launch-ring,
+    .dock-arrive,
+    .dock-busy,
+    .dock-plus {
+      animation: none;
+      opacity: 0;
+    }
+    .btn-launch,
+    .dock-arrive,
+    .dock-busy {
+      opacity: 1;
     }
     .notice-timer {
       animation: notice-timer 7s linear forwards;

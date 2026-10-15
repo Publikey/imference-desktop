@@ -58,6 +58,7 @@ import {
 } from "@/lib/tools";
 import { cn } from "@/lib/utils";
 import { isWeb } from "@/lib/target";
+import { LaunchBurst, useLaunchBurst } from "@/components/LaunchBurst";
 import type {
   EditModelsInfo,
   GenToolModels,
@@ -388,6 +389,7 @@ export function ToolEditor({
   const downloadMb = tool ? missingWeightsMb(tool, params) : 0;
   const needsDownload = !!tool && !effectiveCloud && !isWeb && downloadMb > 0;
   // The button says what it does ("Remove background"), not "Run".
+  const runBurst = useLaunchBurst("tool");
   const actionLabel = tool ? t(`tools.action.${tool.id}`, { defaultValue: t("tools.run") }) : t("tools.run");
 
   const run = (forceRunOn?: ToolsMode) => {
@@ -637,11 +639,16 @@ export function ToolEditor({
                       </>
                     )
                   ) : (
+                    <span className="relative block rounded-md" data-mode={mode}>
+                    <LaunchBurst burst={runBurst} />
                     <Button
-                      className="w-full"
+                      className={cn("relative w-full overflow-hidden", runBurst > 0 && "btn-launch")}
+                      key={`run-${runBurst}`}
+                      data-launch="tool"
                       disabled={!srcData || tool.badge === "unavailable" || (isMaskTool && !hasMask) || instructionMissing}
                       onClick={() => void run()}
                     >
+                      {runBurst > 0 && <span aria-hidden className="launch-shine pointer-events-none absolute inset-0" />}
                       <Play className="size-3.5" />
                       {effectiveCloud
                         ? t("tools.actionCloud", {
@@ -650,6 +657,7 @@ export function ToolEditor({
                           })
                         : actionLabel}
                     </Button>
+                    </span>
                   )}
                   {queuedNote && (
                     <p className="flex items-center justify-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">

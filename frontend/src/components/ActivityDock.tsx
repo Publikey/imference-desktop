@@ -6,17 +6,18 @@ import { ToolIcon } from "@/components/ToolBits";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { flyToActivity } from "@/lib/launchFlight";
 import type { GenerationMeta, Job } from "@/lib/types";
 
 type LightboxItem = { src: string; meta?: GenerationMeta | null };
 
-// Which discrete event just happened, driving the attention pulse + halo tint.
+// Which discrete event just happened, driving the attention pulse + its colour.
+// A start is tinted by the mode the run went to (Local blue / Cloud cyan).
 type PulseKind = "start" | "done" | "error";
-const RING_COLOR: Record<PulseKind, string> = {
-  start: "var(--brand-from)",
-  done: "#22c55e",
-  error: "var(--destructive)",
-};
+type Pulse = { kind: PulseKind; id: number; color: string; plus?: number };
+const MODE_COLOR = { local: "var(--brand-from)", cloud: "var(--cloud-from)" } as const;
+const DONE_COLOR = "#22c55e";
+const ERROR_COLOR = "var(--destructive)";
 
 // ActivityDock — a persistent bottom-right widget summarising in-flight
 // generations (cloud/local counts), plus an overlay with the full Activity list.
@@ -55,23 +56,27 @@ export function ActivityDock({
   const hasFinished = doneCount + errors > 0;
   const busy = active.length > 0;
 
-  // Detect state transitions (a run added, finished, or failed) and fire a pulse.
-  // `pulseId` only ever increments, so keying the pill on it replays the CSS
-  // animation cleanly on every event, including two of the same kind in a row.
-  const prev = useRef({ active: 0, done: 0, error: 0 });
-  const [pulse, setPulse] = useState<{ kind: PulseKind; id: number } | null>(null);
+  // Attention pulses. The pill is keyed on the pulse id (it only ever
+  // increments), so its CSS animations replay on every event, including two of
+  // the same kind in a row. A start comes from a launch comet landing (below);
+  // done / error from the counts.
+  const pillRef = useRef<HTMLSpanElement>(null);
+  const [pulse, setPulse] = useState<Pulse | null>(null);
+  const pulseTimer = useRef<number | undefined>(undefined);
+  const plusRef = useRef({ n: 0, at: 0 });
+  const firePulse = (kind: PulseKind, color: string, plus?: number) => {
+    setPulse((cur) => ({ kind, color, plus, id: (cur?.id ?? 0) + 1 }));
+    window.clearTimeout(pulseTimer.current);
+    pulseTimer.current = window.setTimeout(() => setPulse(null), 1100);
+  };
+  useEffect(() => () => window.clearTimeout(pulseTimer.current), []);
+  const prev = useRef({ done: 0, error: 0 });
   useEffect(() => {
     const p = prev.current;
-    let kind: PulseKind | null = null;
-    if (errors > p.error) kind = "error";
-    else if (doneCount > p.done) kind = "done";
-    else if (active.length > p.active) kind = "start";
-    prev.current = { active: active.length, done: doneCount, error: errors };
-    if (!kind) return;
-    setPulse((cur) => ({ kind: kind!, id: (cur?.id ?? 0) + 1 }));
-    const to = window.setTimeout(() => setPulse(null), 750);
-    return () => window.clearTimeout(to);
-  }, [active.length, doneCount, errors]);
+    prev.current = { done: doneCount, error: errors };
+    if (errors > p.error) firePulse("error", ERROR_COLOR);
+    else if (doneCount > p.done) firePulse("done", DONE_COLOR);
+  }, [doneCount, errors]);
 
   // Finish notices: each run that ends (generation, tool) pops a small card out
   // of the widget for a few seconds — the gallery may be hidden or off-screen,
@@ -85,6 +90,21 @@ export function ActivityDock({
     seen.current = new Map(jobs.map((j) => [j.id, j.status]));
     // First render: rows rehydrated at launch are history, not news.
     if (!before) return;
+    // Runs just launched fly from their button into the widget; each landing
+    // pops the pill in the run's mode colour with a "+N" (N = landings in a row).
+    jobs
+      .filter((j) => !before.has(j.id) && !j.hidden && (j.status === "queued" || j.status === "running"))
+      .slice(0, 4)
+      .forEach((j, i) => {
+        const color = MODE_COLOR[j.mode];
+        flyToActivity(j.kind === "tool" ? "tool" : "generate", pillRef.current, color, i * 120, () => {
+          const now = Date.now();
+          const pr = plusRef.current;
+          pr.n = now - pr.at < 1200 ? pr.n + 1 : 1;
+          pr.at = now;
+          firePulse("start", color, pr.n);
+        });
+      });
     const ended = jobs.filter((j) => {
       if (j.hidden || (j.status !== "done" && j.status !== "error")) return false;
       const was = before.get(j.id);
@@ -193,23 +213,45 @@ export function ActivityDock({
             The halo and the pill are siblings, so their keys are namespaced —
             the bare pulse id on both made every pulse a duplicate-key warning. */}
         {pulse && (
-          <span
-            key={`halo-${pulse.id}`}
-            aria-hidden
-            className="dock-ring pointer-events-none absolute inset-0 rounded-2xl"
-            style={{ "--dock-ring": RING_COLOR[pulse.kind] } as CSSProperties}
-          />
+          <>
+            <span
+              key={`halo-${pulse.id}`}
+              aria-hidden
+              className="dock-ring pointer-events-none absolute inset-0 rounded-2xl"
+              style={{ "--dock-ring": pulse.color } as CSSProperties}
+            />
+            <span
+              key={`halo2-${pulse.id}`}
+              aria-hidden
+              className="dock-ring dock-ring-late pointer-events-none absolute inset-0 rounded-2xl"
+              style={{ "--dock-ring": pulse.color } as CSSProperties}
+            />
+            {pulse.kind === "start" && pulse.plus ? (
+              <span
+                key={`plus-${pulse.id}`}
+                aria-hidden
+                className="dock-plus pointer-events-none absolute -top-2 left-1/2 rounded-full px-2 py-0.5 text-xs font-bold text-white shadow-lg"
+                style={{ "--dock-ring": pulse.color } as CSSProperties}
+              >
+                +{pulse.plus}
+              </span>
+            ) : null}
+          </>
         )}
         <span
+          ref={pillRef}
           key={`pill-${pulse?.id ?? 0}`}
+          style={pulse ? ({ "--dock-ring": pulse.color } as CSSProperties) : undefined}
           className={cn(
-            "relative flex items-center gap-2.5 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-xl backdrop-blur transition-colors",
+            "relative flex items-center gap-2.5 overflow-hidden rounded-2xl border px-4 py-3 text-sm font-semibold shadow-xl backdrop-blur transition-colors",
             busy
-              ? "brand-surface border-transparent text-white"
+              ? "brand-surface dock-busy border-transparent text-white"
               : "bg-card text-foreground hover:border-[var(--brand-from)]/40",
-            pulse && "dock-pop"
+            pulse && (pulse.kind === "start" ? "dock-arrive" : "dock-pop")
           )}
         >
+          {/* The colour flash: the whole pill lights up in the event's colour. */}
+          {pulse && <span aria-hidden className="dock-flash pointer-events-none absolute inset-0" />}
           {busy ? (
             <Loader2 className="size-5 animate-spin" />
           ) : (

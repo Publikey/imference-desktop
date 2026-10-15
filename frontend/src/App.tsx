@@ -1930,7 +1930,11 @@ export default function App() {
         onOpenPalette={() => setPaletteOpen(true)}
         panelHidden={panelHidden}
         onTogglePanel={togglePanel}
+        mode={mode}
+        onModeChange={setMode}
       />
+      {/* The global mode, as a thin accent under the header. */}
+      <div className="mode-accent relative z-10" data-mode={mode} aria-hidden="true" />
 
 
       {updateInfo?.updateAvailable && updateInfo.latestVersion && (
@@ -2263,6 +2267,8 @@ function Header({
   onOpenPalette,
   panelHidden,
   onTogglePanel,
+  mode,
+  onModeChange,
 }: {
   appVersion: string;
   sidecar: SidecarStatus;
@@ -2279,6 +2285,8 @@ function Header({
   onOpenPalette: () => void;
   panelHidden: Partial<Record<PanelId, boolean>>;
   onTogglePanel: (id: PanelId) => void;
+  mode: Mode;
+  onModeChange: (m: Mode) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -2291,6 +2299,18 @@ function Header({
             {appVersion === "dev" ? "dev" : appVersion ? `v${appVersion}` : ""}
           </span>
         </div>
+        {/* The global mode: where everything runs. A click switches it. */}
+        <button
+          type="button"
+          data-mode={mode}
+          disabled={isWeb}
+          onClick={() => onModeChange(mode === "local" ? "cloud" : "local")}
+          title={t(mode === "local" ? "header.modeLocalTitle" : "header.modeCloudTitle")}
+          className="mode-chip inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold tracking-wide uppercase transition-colors disabled:cursor-default"
+        >
+          {mode === "local" ? <Cpu className="size-3.5" /> : <Cloud className="size-3.5" />}
+          {t(mode === "local" ? "mode.local" : "mode.cloud")}
+        </button>
         <div className={isWeb ? "hidden" : "flex items-center gap-2.5"}>
           <EngineControl
             status={sidecar}

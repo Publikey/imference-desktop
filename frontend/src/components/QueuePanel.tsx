@@ -138,8 +138,10 @@ function QueueRow({
 
   return (
     <li
+      data-mode={job.mode}
       className={cn(
-        "rise-in bg-card group relative rounded-2xl border p-2.5 shadow-sm transition-colors",
+        // The mode the job ran in, as a left edge (Local blue / Cloud cyan).
+        "rise-in bg-card mode-edge group relative rounded-2xl border border-l-[3px] p-2.5 shadow-sm transition-colors",
         job.status === "error" && "border-destructive/30 bg-destructive/5",
         queued && "border-dashed"
       )}

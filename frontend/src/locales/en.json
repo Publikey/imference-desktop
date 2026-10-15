@@ -27,7 +27,9 @@
     "versionTitle": "Imference Desktop version",
     "logsWithErrors": "Logs, {{count}} errors",
     "errors_one": "{{count}} error",
-    "errors_other": "{{count}} errors"
+    "errors_other": "{{count}} errors",
+    "modeLocalTitle": "Local mode: everything runs on this computer. Click to switch to the cloud.",
+    "modeCloudTitle": "Cloud mode: everything runs on imference.com. Click to switch to local."
   },
   "engineControl": {
     "installing": "Installing engine…",

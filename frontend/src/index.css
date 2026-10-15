@@ -221,6 +221,34 @@
     background-color: color-mix(in oklch, var(--cloud-from) 7%, transparent);
     border-color: color-mix(in oklch, var(--cloud-from) 16%, transparent);
   }
+  /* ---- The global mode, visible everywhere -----------------------------
+     Local = the brand blue, Cloud = cyan (the Create surface's accents). */
+  .mode-accent {
+    height: 2px;
+    transition: background 0.35s var(--ease-out-expo);
+  }
+  .mode-accent[data-mode="local"] {
+    background: linear-gradient(90deg, var(--brand-from), var(--brand-to));
+  }
+  .mode-accent[data-mode="cloud"] {
+    background: linear-gradient(90deg, var(--cloud-from), var(--cloud-to));
+  }
+  .mode-chip[data-mode="local"] {
+    color: var(--brand-from);
+    background-color: color-mix(in oklch, var(--brand-from) 14%, transparent);
+    border-color: color-mix(in oklch, var(--brand-from) 35%, transparent);
+  }
+  .mode-chip[data-mode="cloud"] {
+    color: var(--cloud-from);
+    background-color: color-mix(in oklch, var(--cloud-from) 14%, transparent);
+    border-color: color-mix(in oklch, var(--cloud-from) 35%, transparent);
+  }
+  .mode-edge[data-mode="local"] {
+    border-left-color: var(--brand-from);
+  }
+  .mode-edge[data-mode="cloud"] {
+    border-left-color: var(--cloud-from);
+  }
   /* The same mode-tinted outline for the other mode-bound panels (Engine). */
   .mode-surface {
     border: 1px solid transparent;

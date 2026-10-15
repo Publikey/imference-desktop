@@ -312,18 +312,20 @@
     transform: translateY(1px) scale(0.97);
     transition-duration: 0.04s;
   }
-  /* Disabled: clearly inert but still readable — a flat grey slab sunk into
-     the panel (inset shadow, no colour, no outline, no lift), muted text. The
-     hint line stays legible: it says what's missing. */
+  /* Disabled: a see-through ghost of the button — the mode colour at low
+     strength, no gradient, no shadow, no lift — so it reads as "not yet". The
+     text keeps the mode colour at full opacity (readable), and the cursor says
+     "not allowed" on hover. The hint line says what's missing. */
   .btn-run:disabled {
     opacity: 1;
     cursor: not-allowed;
     background-image: none;
-    background-color: var(--muted);
-    color: color-mix(in oklch, var(--muted-foreground) 75%, transparent);
+    background-color: color-mix(in oklch, var(--run-from) 16%, transparent);
+    color: color-mix(in oklch, var(--run-from) 55%, var(--muted-foreground));
     border: none;
-    box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.12);
-    filter: none;
+    box-shadow: none;
+    filter: saturate(0.6);
+    transform: none;
   }
   .btn-run:disabled .run-hint {
     opacity: 1;

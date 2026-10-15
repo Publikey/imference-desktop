@@ -119,7 +119,8 @@
     "preparing": "Preparing {{name}}",
     "usdPerRun": "{{name}} · ${{usd}} / run",
     "editModel": "Edit model: use Edit with instructions",
-    "editModelLong": "This model edits images: it can't generate from a prompt. Open an image in the gallery and use Edit > Edit with instructions, or pick a text-to-image model to generate."
+    "editModelLong": "This model edits images: it can't generate from a prompt. Open an image in the gallery and use Edit > Edit with instructions, or pick a text-to-image model to generate.",
+    "writePrompt": "Write a prompt first"
   },
   "progress": {
     "preparing": "Preparing {{name}}",

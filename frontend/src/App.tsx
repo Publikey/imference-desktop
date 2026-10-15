@@ -121,7 +121,28 @@ type ComposerAction = {
   disabled: boolean;
   busy: boolean;
   kind: "generate" | "download";
+  /** A click (or the shortcut) while disabled: point at what blocks it. */
+  onBlocked?: () => void;
 };
+
+// What keeps Generate disabled, as [data-blocker] targets in the Create /
+// Engine surfaces. A click on the disabled button scrolls to the first one and
+// flashes them all (and focuses the prompt when it's empty).
+type Blocker = "edit-model" | "payment" | "model" | "readiness" | "prompt";
+function flagBlockers(targets: Blocker[]) {
+  let first = true;
+  for (const name of targets) {
+    const el = document.querySelector<HTMLElement>(`[data-blocker="${name}"]`);
+    if (!el) continue;
+    if (first) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    first = false;
+    el.classList.remove("blocker-flash");
+    void el.offsetWidth; // restart the animation
+    el.classList.add("blocker-flash");
+    window.setTimeout(() => el.classList.remove("blocker-flash"), 1700);
+  }
+  if (targets.includes("prompt")) document.getElementById("composer-prompt")?.focus({ preventScroll: !first });
+}
 
 let jobSeq = 0;
 const nextJobId = () => `job-${Date.now()}-${jobSeq++}`;
@@ -1593,6 +1614,7 @@ export default function App() {
   // current.
   // The primary button is ALWAYS Generate now — downloads and engine
   // lifecycle live in the LocalReadinessCard, never behind this label.
+  const contextHintRef = useRef("");
   const primary: ComposerAction = useMemo(() => {
     return {
       // Local runs are enqueued one-at-a-time, so when the queue is already busy
@@ -1628,15 +1650,28 @@ export default function App() {
       disabled: !canGenerate,
       busy: false,
       kind: "generate",
+      onBlocked: () => {
+        const b: Blocker[] = [];
+        if (editModelActive) b.push("edit-model");
+        else if (mode === "cloud") {
+          if (!cloudConfigured) b.push("payment");
+          else if (!settings?.cloudModel) b.push("model");
+        } else if (!localCanRun) {
+          b.push(pendingLocalModel || settings?.localModel ? "readiness" : "model");
+        }
+        if (!prompt.trim()) b.push("prompt");
+        flagBlockers(b);
+        toast.toast(b[0] === "prompt" ? t("hint.writePrompt") : contextHintRef.current);
+      },
     };
-  }, [mode, localNeedsActivation, pendingSwitch, pendingLocalModel, settings?.localModel?.modelCode, activateLocalModel, selectCustomModel, canGenerate, localQueueActive, run, t]);
+  }, [editModelActive, cloudConfigured, settings?.cloudModel, localCanRun, prompt, toast, mode, localNeedsActivation, pendingSwitch, pendingLocalModel, settings?.localModel?.modelCode, activateLocalModel, selectCustomModel, canGenerate, localQueueActive, run, t]);
 
   // Global ⌘/Ctrl+Enter → run the primary action from anywhere in the app, not
   // only when the prompt field has focus. Suppressed while a modal that captures
   // typing is open (palette, settings, model picker, custom-model, lightbox), and
   // preventDefault still swallows the newline when focus IS in the prompt. A ref
   // holds the latest action/guards so the listener subscribes just once.
-  const primaryHotkeyRef = useRef<{ disabled: boolean; onClick: () => void; blocked: boolean }>({
+  const primaryHotkeyRef = useRef<{ disabled: boolean; onClick: () => void; onBlocked?: () => void; blocked: boolean }>({
     disabled: true,
     onClick: () => {},
     blocked: false,
@@ -1644,15 +1679,17 @@ export default function App() {
   primaryHotkeyRef.current = {
     disabled: primary.disabled,
     onClick: primary.onClick,
+    onBlocked: primary.onBlocked,
     blocked: paletteOpen || shortcutsOpen || settingsOpen || modelPickerOpen || !!customModelPath || !!lightbox,
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
         const s = primaryHotkeyRef.current;
-        if (s.blocked || s.disabled) return;
+        if (s.blocked) return;
         e.preventDefault();
-        s.onClick();
+        if (s.disabled) s.onBlocked?.();
+        else s.onClick();
       } else if (e.key === "?" && !primaryHotkeyRef.current.blocked) {
         // Open the shortcuts sheet — but not while typing in a field.
         const el = e.target as HTMLElement | null;
@@ -1697,6 +1734,7 @@ export default function App() {
     if (sidecar.state !== "ready") return t("hint.startEngine");
     return settings?.localModel?.name ?? t("hint.pickModel");
   }, [editModelActive, mode, cloudConfigured, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, componentsBlocked, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, params?.formatCode, params?.durationS, engineInstalled, t]);
+  contextHintRef.current = contextHint;
 
   // Activity-panel derivations: in-flight count (running + queued) for the badge,
   // finished rows for the Clear action, and the done subset the gallery shows as
@@ -1835,15 +1873,18 @@ export default function App() {
 
       {/* 1b. Payment — cloud only: pick x402 or API key, deep-link to config. */}
       {!firstRun && !isWeb && mode === "cloud" && (
-        <PaymentBar
-          settings={settings}
-          onModeChange={setPaymentMode}
-          onConfigure={openSettings}
-        />
+        <div data-blocker="payment" className="rounded-xl">
+          <PaymentBar
+            settings={settings}
+            onModeChange={setPaymentMode}
+            onConfigure={openSettings}
+          />
+        </div>
       )}
 
       {/* 2. Model */}
       {!firstRun && (
+        <div data-blocker="model" className="rounded-2xl">
         <ModelBar
           mode={mode}
           settings={settings}
@@ -1862,6 +1903,7 @@ export default function App() {
           selectionCached={localCached}
           onLoadNow={() => activateLocalModel(true)}
         />
+        </div>
       )}
 
       {/* 2b. Local readiness — the ONE preflight panel: weights,
@@ -1869,6 +1911,7 @@ export default function App() {
           scattered (header start, under-model download, Generate
           hijacked into a downloader) lives here. */}
       {!firstRun && mode === "local" && (
+        <div data-blocker="readiness" className="rounded-2xl">
         <LocalReadinessCard
           model={pendingLocalModel}
           engineInstalled={engineInstalled}
@@ -1890,6 +1933,7 @@ export default function App() {
           componentsError={compError}
           onDownloadComponents={downloadComponents}
         />
+        </div>
       )}
 
       {/* Held model switch: shown while the local queue drains, so
@@ -2002,6 +2046,7 @@ export default function App() {
                     {editModelActive && (
                       <div
                         role="note"
+                        data-blocker="edit-model"
                         className="flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-200"
                       >
                         <Wand2 className="mt-0.5 size-4 shrink-0" />
@@ -2717,6 +2762,7 @@ function Composer({
       {/* The prompt is the hero: the biggest field, the readable size. */}
       <textarea
         id="composer-prompt"
+        data-blocker="prompt"
         ref={promptRef}
         value={prompt}
         onChange={(e) => onPromptChange(e.target.value)}
@@ -2781,12 +2827,14 @@ function PrimaryAction({
         <LaunchBurst burst={burst} />
         <Button
           size="lg"
-          onClick={action.onClick}
-          disabled={action.disabled}
+          // aria-disabled, not disabled: a disabled button gets no click, and
+          // the click is what points at what's missing.
+          onClick={action.disabled ? action.onBlocked : action.onClick}
+          aria-disabled={action.disabled}
           data-launch="generate"
           data-mode={mode}
           className={cn(
-            "btn-run relative flex h-auto min-h-14 w-full disabled:opacity-50 disabled:pointer-events-auto flex-col gap-0.5 overflow-hidden whitespace-normal rounded-2xl px-5 py-2.5 font-semibold",
+            "btn-run relative flex h-auto min-h-14 w-full aria-disabled:opacity-50 flex-col gap-0.5 overflow-hidden whitespace-normal rounded-2xl px-5 py-2.5 font-semibold",
             burst > 0 && "btn-launch"
           )}
           key={`gen-${burst}`}

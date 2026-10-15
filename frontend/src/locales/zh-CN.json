@@ -117,7 +117,8 @@
     "preparing": "正在准备 {{name}}",
     "usdPerRun": "{{name}} · ${{usd}} / 次",
     "editModel": "编辑模型：请使用指令编辑",
-    "editModelLong": "此模型用于编辑图片，不能根据提示词生成。请在图库中打开图片，选择“编辑 > 指令编辑”；或选择文生图模型进行生成。"
+    "editModelLong": "此模型用于编辑图片，不能根据提示词生成。请在图库中打开图片，选择“编辑 > 指令编辑”；或选择文生图模型进行生成。",
+    "writePrompt": "请先输入提示词"
   },
   "progress": {
     "preparing": "正在准备 {{name}}",

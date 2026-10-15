@@ -299,14 +299,14 @@
   .btn-run .run-hint {
     opacity: 0.78;
   }
-  .btn-run:hover:not(:disabled) {
+  .btn-run:hover:not([aria-disabled="true"]) {
     filter: brightness(1.1) saturate(1.08);
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / 0.22),
       0 14px 32px -10px color-mix(in oklch, var(--run-from) 90%, transparent);
     transform: translateY(-1px);
   }
-  .btn-run:active:not(:disabled) {
+  .btn-run:active:not([aria-disabled="true"]) {
     filter: brightness(0.94);
     box-shadow: 0 2px 8px -6px color-mix(in oklch, var(--run-from) 70%, transparent);
     transform: translateY(1px) scale(0.97);
@@ -314,12 +314,55 @@
   }
   /* Disabled: the active look (same gradient, same text), just see-through —
      no shadow, no lift — and a "not allowed" cursor on hover. */
-  .btn-run:disabled {
+  .btn-run[aria-disabled="true"] {
     opacity: 0.5;
     cursor: not-allowed;
     box-shadow: none;
     filter: none;
     transform: none;
+  }
+  /* What blocks Generate, pointed at on a click of the disabled button: a
+     quick shake and two amber ring pulses. */
+  .blocker-flash {
+    animation:
+      blocker-shake 0.4s ease-in-out,
+      blocker-ring 1.6s ease-out;
+  }
+  @keyframes blocker-shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20% {
+      transform: translateX(-5px);
+    }
+    40% {
+      transform: translateX(5px);
+    }
+    60% {
+      transform: translateX(-3px);
+    }
+    80% {
+      transform: translateX(3px);
+    }
+  }
+  @keyframes blocker-ring {
+    0%,
+    50% {
+      box-shadow: 0 0 0 0 rgb(245 158 11 / 0.7);
+    }
+    25%,
+    75% {
+      box-shadow: 0 0 0 4px rgb(245 158 11 / 0.55);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgb(245 158 11 / 0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .blocker-flash {
+      animation: blocker-ring 1.6s ease-out;
+    }
   }
   /* An image is being dragged over the panel (drop → img2img). */
   .create-drop-active {

@@ -208,7 +208,7 @@
           "mps",
           "rocm"
         ],
-        "cloud_queue": "tools-light",
+        "cloud_queue": "tools-gpu",
         "slow_on_cpu": true,
         "min_vram_gb": 0.0,
         "min_ram_gb": 4.0,
@@ -278,7 +278,7 @@
           "rocm",
           "directml"
         ],
-        "cloud_queue": "tools-light",
+        "cloud_queue": "tools-gpu",
         "slow_on_cpu": false,
         "min_vram_gb": 0.0,
         "min_ram_gb": 4.0,
@@ -527,7 +527,7 @@
           "rocm",
           "directml"
         ],
-        "cloud_queue": "tools-light",
+        "cloud_queue": "tools-gpu",
         "slow_on_cpu": true,
         "min_vram_gb": 0.0,
         "min_ram_gb": 4.0,
@@ -707,7 +707,7 @@
           "rocm",
           "directml"
         ],
-        "cloud_queue": "tools-light",
+        "cloud_queue": "tools-gpu",
         "slow_on_cpu": false,
         "min_vram_gb": 0.0,
         "min_ram_gb": 4.0,
@@ -881,7 +881,7 @@
           "rocm",
           "directml"
         ],
-        "cloud_queue": "tools-light",
+        "cloud_queue": "tools-gpu",
         "slow_on_cpu": false,
         "min_vram_gb": 0.0,
         "min_ram_gb": 4.0,
@@ -954,7 +954,7 @@
           "rocm",
           "directml"
         ],
-        "cloud_queue": "tools-light",
+        "cloud_queue": "tools-gpu",
         "slow_on_cpu": false,
         "min_vram_gb": 0.0,
         "min_ram_gb": 2.0,
@@ -1098,7 +1098,7 @@
           "rocm",
           "directml"
         ],
-        "cloud_queue": "tools-light",
+        "cloud_queue": "tools-gpu",
         "slow_on_cpu": true,
         "min_vram_gb": 0.0,
         "min_ram_gb": 4.0,

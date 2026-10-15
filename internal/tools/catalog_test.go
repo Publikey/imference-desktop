@@ -91,7 +91,7 @@ func TestCatalogKeepsManifestOrder(t *testing.T) {
 	if tile.Min == nil || tile.Max == nil || *tile.Max != 1024 {
 		t.Errorf("upscale.tile bounds = %+v", tile)
 	}
-	if !up.Runtimes.SlowOnCPU || up.Runtimes.CloudQueue != "tools-light" || up.Credits != 4 {
+	if !up.Runtimes.SlowOnCPU || up.Runtimes.CloudQueue != "tools-gpu" || up.Credits != 4 {
 		t.Errorf("upscale runtimes/cost = %+v %v", up.Runtimes, up.Credits)
 	}
 	vary, _ := c.Get("vary")

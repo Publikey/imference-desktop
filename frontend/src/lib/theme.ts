@@ -20,9 +20,13 @@ function read(): ThemePref {
 
 let pref: ThemePref = read();
 
+/** Whether the app is dark right now (the preference resolved against the OS). */
+export function isDark(): boolean {
+  return pref === "dark" || (pref === "system" && media.matches);
+}
+
 function apply(): void {
-  const dark = pref === "dark" || (pref === "system" && media.matches);
-  document.documentElement.classList.toggle("dark", dark);
+  document.documentElement.classList.toggle("dark", isDark());
 }
 
 /** Current preference (React: pair with subscribeTheme via useSyncExternalStore). */
@@ -64,6 +68,8 @@ export function setThemePref(p: ThemePref): void {
 export function initTheme(): void {
   apply();
   media.addEventListener("change", () => {
-    if (pref === "system") apply();
+    if (pref !== "system") return;
+    apply();
+    listeners.forEach((l) => l());
   });
 }

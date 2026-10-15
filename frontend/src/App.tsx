@@ -71,7 +71,7 @@ import { isEditModel, refreshTools } from "@/lib/tools";
 import { scrollRootOf } from "@/lib/engines";
 import { api } from "@/lib/wails-bridge";
 import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
-import { subscribeTheme, themePref, setThemePref, type ThemePref } from "@/lib/theme";
+import { isDark, subscribeTheme, setThemePref, type ThemePref } from "@/lib/theme";
 import logoUrl from "./assets/logo.svg";
 import { installLogCapture } from "@/lib/log-capture";
 import { beginPointerDrag } from "@/lib/pointer-drag";
@@ -2432,20 +2432,22 @@ function LanguageToggle() {
 // The choice is persisted (localStorage); "System" follows the OS live. The
 // icon shows the ACTIVE preference and the tooltip names what a click switches
 // TO, so the control reads correctly before and after pressing it.
-const THEME_CYCLE: ThemePref[] = ["system", "light", "dark"];
+// A plain light ⇄ dark switch showing what you see now (sun / moon). The
+// "system" preference (follow the OS) stays in the command palette; a click
+// here always sets the opposite of what's on screen, so it never "does nothing"
+// (cycling through "system" used to show a monitor and change nothing visible).
 function ThemeToggle() {
   const { t } = useTranslation();
-  const pref = useSyncExternalStore(subscribeTheme, themePref, () => "system" as ThemePref);
-  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(pref) + 1) % THEME_CYCLE.length];
-  const Icon = pref === "system" ? Monitor : pref === "light" ? Sun : Moon;
-  const nextLabel = t(`theme.${next}`);
+  const dark = useSyncExternalStore(subscribeTheme, isDark, () => false);
+  const next: ThemePref = dark ? "light" : "dark";
+  const Icon = dark ? Moon : Sun;
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={() => setThemePref(next)}
-      title={t("theme.switchTo", { mode: nextLabel })}
-      aria-label={t("theme.current", { mode: t(`theme.${pref}`) })}
+      title={t("theme.switchTo", { mode: t(`theme.${next}`) })}
+      aria-label={t("theme.switchTo", { mode: t(`theme.${next}`) })}
       className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 rounded-lg"
     >
       <Icon className="size-4" />

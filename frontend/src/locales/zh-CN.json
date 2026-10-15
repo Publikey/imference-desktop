@@ -27,8 +27,9 @@
     "versionTitle": "Imference Desktop 版本",
     "logsWithErrors": "日志，{{count}} 个错误",
     "errors_other": "{{count}} 个错误",
-    "modeLocalTitle": "本地模式：全部在本机运行。点击切换到云端。",
-    "modeCloudTitle": "云端模式：全部在 imference.com 上运行。点击切换到本地。"
+    "modeLocalTitle": "本地：全部在本机运行。",
+    "modeCloudTitle": "云端：全部在 imference.com 上运行。",
+    "modeGroup": "运行位置"
   },
   "engineControl": {
     "installing": "正在安装引擎…",
@@ -41,7 +42,7 @@
     "selectModel": "选择模型",
     "startTitle": "启动本地引擎（加载所选模型）",
     "restart": "重启引擎",
-    "start": "启动引擎"
+    "start": "启动本地引擎"
   },
   "mode": {
     "local": "本地",

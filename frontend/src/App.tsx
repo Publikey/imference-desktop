@@ -2297,29 +2297,49 @@ function Header({
   onModeChange: (m: Mode) => void;
 }) {
   const { t } = useTranslation();
+  // One system for the whole bar: every control is 36px high (h-9) with the
+  // same radius; three zones — where things run (left), which panels are
+  // shown (centre, exactly centred), app utilities as uniform icon buttons
+  // (right).
+  const iconBtn = "text-muted-foreground hover:text-foreground hover:bg-muted relative size-9 rounded-lg";
   return (
-    <header className="bg-background/70 supports-[backdrop-filter]:bg-background/55 sticky top-0 z-10 flex items-center justify-between border-b px-5 py-3 backdrop-blur-xl">
-      <div className="flex items-center gap-2.5">
+    <header className="bg-background/70 supports-[backdrop-filter]:bg-background/55 sticky top-0 z-10 grid h-14 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b px-5 backdrop-blur-xl">
+      <div className="flex min-w-0 items-center gap-3">
         {/* Logo + app version stacked — the version is important operational info. */}
-        <div className="flex flex-col items-center leading-none">
-          <img src={logoUrl} alt="Imference" className="size-8" />
+        <div className="flex shrink-0 flex-col items-center leading-none">
+          <img src={logoUrl} alt="Imference" className="size-7" />
           <span className="text-muted-foreground mt-0.5 text-[10px] tabular-nums" title={t("header.versionTitle")}>
             {appVersion === "dev" ? "dev" : appVersion ? `v${appVersion}` : ""}
           </span>
         </div>
-        {/* The global mode: where everything runs. A click switches it. */}
-        <button
-          type="button"
-          data-mode={mode}
-          disabled={isWeb}
-          onClick={() => onModeChange(mode === "local" ? "cloud" : "local")}
-          title={t(mode === "local" ? "header.modeLocalTitle" : "header.modeCloudTitle")}
-          className="mode-chip inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold tracking-wide uppercase transition-colors disabled:cursor-default"
+        {/* The global mode: where everything runs. */}
+        <div
+          role="radiogroup"
+          aria-label={t("header.modeGroup")}
+          className="bg-muted/50 inline-flex h-9 shrink-0 items-center gap-0.5 rounded-lg border p-0.5"
         >
-          {mode === "local" ? <Cpu className="size-3.5" /> : <Cloud className="size-3.5" />}
-          {t(mode === "local" ? "mode.local" : "mode.cloud")}
-        </button>
-        <div className={isWeb ? "hidden" : "flex items-center gap-2.5"}>
+          {(["local", "cloud"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={mode === m}
+              data-mode={m}
+              disabled={isWeb && m === "local"}
+              onClick={() => onModeChange(m)}
+              title={t(m === "local" ? "header.modeLocalTitle" : "header.modeCloudTitle")}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors disabled:hidden",
+                mode === m ? "mode-chip border" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {m === "local" ? <Cpu className="size-3.5" /> : <Cloud className="size-3.5" />}
+              {t(m === "local" ? "mode.local" : "mode.cloud")}
+            </button>
+          ))}
+        </div>
+        {/* The local engine's status and start / stop: local mode only. */}
+        {!isWeb && mode === "local" && (
           <EngineControl
             status={sidecar}
             engineInstalled={engineInstalled}
@@ -2330,53 +2350,53 @@ function Header({
             onStop={onStopEngine}
             onSelectModel={onSelectModel}
           />
-        </div>
-      </div>
-      {/* Panel switches: Create / Edit / Gallery on or off. */}
-      <PanelToggles hidden={panelHidden} onToggle={onTogglePanel} modLabel={modLabel} />
-      <div className="flex items-center gap-1.5">
-        {/* Command palette launcher — discoverable entry point for ⌘K. */}
-        <button
-          type="button"
-          onClick={onOpenPalette}
-          title={t("palette.title")}
-          aria-label={t("palette.title")}
-          className="text-muted-foreground hover:text-foreground hover:border-primary/40 hidden h-9 items-center gap-2 rounded-md border pl-2.5 pr-2 text-xs transition-colors sm:inline-flex"
-        >
-          <Search className="size-3.5" />
-          <span className="flex items-center gap-0.5">
-            <kbd className="bg-muted rounded px-1 py-0.5 text-[10px] font-medium leading-none">{modLabel}</kbd>
-            <kbd className="bg-muted rounded px-1 py-0.5 text-[10px] font-medium leading-none">K</kbd>
-          </span>
-        </button>
-        {/* Theme — cycles System → Light → Dark, persisted; System follows the OS. */}
-        <ThemeToggle />
-        {/* Language — quick toggle; the Settings section offers "System" too. */}
-        <LanguageToggle />
-        {/* Settings — prominent, labelled entry point. */}
-        <Button variant="outline" size="sm" onClick={onOpenSettings} className="h-9 gap-1.5">
-          <Settings className="size-4" />
-          {t("common.settings")}
-        </Button>
-        {isWeb && (
-          <Button variant="ghost" size="sm" onClick={() => void webSignOut()} className="h-9">
-            {t("web.signOut")}
-          </Button>
         )}
-        {/* Logs — discreet, for debugging; a dot signals errors. */}
+      </div>
+
+      {/* Panel switches: Engine / Create / Edit / Gallery on or off. */}
+      <PanelToggles hidden={panelHidden} onToggle={onTogglePanel} modLabel={modLabel} />
+
+      <div className="flex items-center justify-end gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onOpenPalette}
+          title={`${t("palette.title")} (${modLabel}K)`}
+          aria-label={t("palette.title")}
+          className={iconBtn}
+        >
+          <Search className="size-4" />
+        </Button>
+        <ThemeToggle />
+        <LanguageToggle />
         <Button
           variant="ghost"
           size="icon"
           onClick={onToggleLogs}
           aria-label={errorLogCount > 0 ? t("header.logsWithErrors", { count: errorLogCount }) : t("common.logs")}
           title={errorLogCount > 0 ? t("header.errors", { count: errorLogCount }) : t("common.logs")}
-          className="text-muted-foreground/60 hover:text-foreground relative size-9"
+          className={iconBtn}
         >
           <ScrollText className="size-4" />
           {errorLogCount > 0 && (
-            <span className="bg-destructive ring-background absolute right-1 top-1 size-2 rounded-full ring-2" />
+            <span className="bg-destructive ring-background absolute right-1.5 top-1.5 size-2 rounded-full ring-2" />
           )}
         </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onOpenSettings}
+          title={t("common.settings")}
+          aria-label={t("common.settings")}
+          className={iconBtn}
+        >
+          <Settings className="size-4" />
+        </Button>
+        {isWeb && (
+          <Button variant="ghost" size="sm" onClick={() => void webSignOut()} className="h-9 rounded-lg">
+            {t("web.signOut")}
+          </Button>
+        )}
       </div>
     </header>
   );
@@ -2399,10 +2419,9 @@ function LanguageToggle() {
       // English), so the tooltip stays readable before AND after switching.
       title={next.label}
       aria-label={next.label}
-      className="text-muted-foreground hover:text-foreground h-9 gap-1.5"
+      className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 rounded-lg p-0 text-[11px] font-semibold"
     >
-      <Languages className="size-4" />
-      <span className="text-xs font-medium">{current.short}</span>
+      {current.short}
     </Button>
   );
 }
@@ -2425,7 +2444,7 @@ function ThemeToggle() {
       onClick={() => setThemePref(next)}
       title={t("theme.switchTo", { mode: nextLabel })}
       aria-label={t("theme.current", { mode: t(`theme.${pref}`) })}
-      className="text-muted-foreground hover:text-foreground size-9"
+      className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 rounded-lg"
     >
       <Icon className="size-4" />
     </Button>
@@ -2461,7 +2480,7 @@ function EngineControl({
   // engine moves through install → select → start → running (the left header
   // cluster no longer shifts on every state change).
   const pill =
-    "inline-flex min-w-[7.5rem] items-center justify-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-[color,background-color,border-color] disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex h-9 min-w-[9.5rem] items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-[color,background-color,border-color] disabled:cursor-not-allowed disabled:opacity-50";
 
   if (installing) {
     return (

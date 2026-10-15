@@ -28,8 +28,9 @@
     "logsWithErrors": "Logs, {{count}} errors",
     "errors_one": "{{count}} error",
     "errors_other": "{{count}} errors",
-    "modeLocalTitle": "Local mode: everything runs on this computer. Click to switch to the cloud.",
-    "modeCloudTitle": "Cloud mode: everything runs on imference.com. Click to switch to local."
+    "modeLocalTitle": "Local: everything runs on this computer.",
+    "modeCloudTitle": "Cloud: everything runs on imference.com.",
+    "modeGroup": "Where things run"
   },
   "engineControl": {
     "installing": "Installing engine…",
@@ -42,7 +43,7 @@
     "selectModel": "Select a model",
     "startTitle": "Start the local engine (loads the selected model)",
     "restart": "Restart engine",
-    "start": "Start engine"
+    "start": "Start local engine"
   },
   "mode": {
     "local": "Local",

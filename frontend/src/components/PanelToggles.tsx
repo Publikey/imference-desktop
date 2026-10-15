@@ -37,7 +37,7 @@ export function PanelToggles({
     <div
       role="group"
       aria-label={t("panels.toggleGroup")}
-      className="bg-muted/50 inline-flex items-center gap-0.5 rounded-lg border p-0.5"
+      className="bg-muted/50 inline-flex h-9 items-center gap-0.5 rounded-lg border p-0.5"
     >
       {PANEL_ORDER.map(({ id, key }) => {
         const on = !hidden[id];
@@ -55,10 +55,11 @@ export function PanelToggles({
               ` (${modLabel}${key})`
             }
             className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed",
+              "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed",
+              // Shown = filled (unmistakable), hidden = plain muted text.
               on
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground hover:bg-background/60"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground/70 hover:text-foreground hover:bg-background/70"
             )}
           >
             <PanelIcon id={id} className="size-3.5" />

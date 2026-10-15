@@ -261,7 +261,11 @@
   },
   "activity": {
     "busy_one": "{{count}} 运行中",
-    "busy_other": "{{count}} 运行中"
+    "busy_other": "{{count}} 运行中",
+    "noticeDone": "已完成",
+    "noticeFailed": "失败",
+    "noticeOpen": "点击打开",
+    "noticeShow": "点击在活动中查看"
   },
   "gallery": {
     "deleteConfirm": "{{name}} 将从磁盘中永久删除。",

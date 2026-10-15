@@ -1047,7 +1047,7 @@ export default function App() {
         setJobs((js) =>
           js.map((j) => (j.id === id ? { ...j, status: "error", error: msg, endedAt: Date.now() } : j))
         );
-        toast.error(t("toast.genFailed"));
+        // No toast: the Activity widget pops a finish notice for it.
       });
   }, [toast, t]);
 
@@ -1410,7 +1410,6 @@ export default function App() {
               status: "error", error: res.error!.message, hidden: cancelled || j.hidden, mode,
               tool: { ...j.tool!, result: res, stage: undefined },
             }));
-            if (!cancelled) toast.error(t("toast.toolFailed", { tool: label }));
             return;
           }
           const saved = res.outputs.map((o) => o.savedName).filter((n): n is string => !!n);

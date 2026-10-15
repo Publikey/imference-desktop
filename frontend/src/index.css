@@ -467,6 +467,38 @@
     }
   }
 
+  /* Finish notices: a card popping out of the Activity widget (grows from its
+     right edge), then a countdown bar that pauses while hovered. */
+  .notice-pop {
+    transform-origin: right bottom;
+    animation: notice-pop 0.45s var(--ease-spring) both;
+  }
+  @keyframes notice-pop {
+    from {
+      opacity: 0;
+      transform: translateX(24px) scale(0.6);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+  }
+  .notice-timer {
+    transform-origin: left;
+    animation: notice-timer 7s linear forwards;
+  }
+  .notice-pop:hover .notice-timer {
+    animation-play-state: paused;
+  }
+  @keyframes notice-timer {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+
   /* Shared focus ring for bespoke inputs (dims, seed) that don't use the ui/Input
      component — a soft brand halo so keyboard focus is always visible. */
   .field-focus {
@@ -530,6 +562,12 @@
     }
     .dock-pop {
       animation: none;
+    }
+    .notice-pop {
+      animation: none;
+    }
+    .notice-timer {
+      animation: notice-timer 7s linear forwards;
     }
     .dock-ring {
       animation: none;

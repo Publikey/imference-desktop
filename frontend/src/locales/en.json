@@ -264,7 +264,11 @@
   },
   "activity": {
     "busy_one": "{{count}} running",
-    "busy_other": "{{count}} running"
+    "busy_other": "{{count}} running",
+    "noticeDone": "Finished",
+    "noticeFailed": "Failed",
+    "noticeOpen": "Click to open",
+    "noticeShow": "Click to see it in Activity"
   },
   "gallery": {
     "deleteConfirm": "{{name}} will be permanently removed from disk.",

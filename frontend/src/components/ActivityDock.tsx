@@ -1,7 +1,10 @@
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Activity, Cloud, Cpu, Loader2, RefreshCw, X } from "lucide-react";
+import { Activity, AlertCircle, Check, Cloud, Copy, Cpu, Loader2, RefreshCw, X } from "lucide-react";
 import { QueuePanel } from "@/components/QueuePanel";
+import { ToolIcon } from "@/components/ToolBits";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { GenerationMeta, Job } from "@/lib/types";
 
@@ -69,6 +72,41 @@ export function ActivityDock({
     const to = window.setTimeout(() => setPulse(null), 750);
     return () => window.clearTimeout(to);
   }, [active.length, doneCount, errors]);
+
+  // Finish notices: each run that ends (generation, tool) pops a small card out
+  // of the widget for a few seconds — the gallery may be hidden or off-screen,
+  // so this is the one place a background result is always seen. A click opens
+  // the result: the image (viewer), the text (reader) or, on failure, the list.
+  const seen = useRef<Map<string, Job["status"]> | null>(null);
+  const [notices, setNotices] = useState<string[]>([]);
+  const [textView, setTextView] = useState<{ title: string; text: string } | null>(null);
+  useEffect(() => {
+    const before = seen.current;
+    seen.current = new Map(jobs.map((j) => [j.id, j.status]));
+    // First render: rows rehydrated at launch are history, not news.
+    if (!before) return;
+    const ended = jobs.filter((j) => {
+      if (j.hidden || (j.status !== "done" && j.status !== "error")) return false;
+      const was = before.get(j.id);
+      return was !== "done" && was !== "error";
+    });
+    // The open list already shows it.
+    if (ended.length === 0 || open) return;
+    const ids = ended.map((j) => j.id);
+    setNotices((cur) => [...ids, ...cur.filter((id) => !ids.includes(id))].slice(0, 3));
+  }, [jobs, open]);
+  // Opening the list covers every pending notice.
+  useEffect(() => {
+    if (open) setNotices([]);
+  }, [open]);
+  const dropNotice = (id: string) => setNotices((cur) => cur.filter((n) => n !== id));
+  const openNotice = (job: Job) => {
+    dropNotice(job.id);
+    const r = noticeResult(job);
+    if (r.kind === "image") onOpenImage({ src: r.src, meta: job.image?.meta ?? null });
+    else if (r.kind === "text") setTextView({ title: job.prompt, text: r.text });
+    else setOpen(true);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -140,6 +178,8 @@ export function ActivityDock({
         </>
       )}
 
+      {/* The widget and, to its left, the finish notices popping out of it. */}
+      <div className="pointer-events-none fixed bottom-6 right-6 z-40 flex flex-row-reverse items-end gap-3">
       {/* Persistent widget — a prominent floating pill: brand-tinted with a live
           cloud/local count while runs are in flight, solid card otherwise. */}
       <button
@@ -147,7 +187,7 @@ export function ActivityDock({
         onClick={() => setOpen((o) => !o)}
         aria-label={t("panels.queue")}
         title={busy ? t("activity.busy", { count: active.length }) : t("panels.queue")}
-        className="fixed bottom-6 right-6 z-40 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="pointer-events-auto relative shrink-0 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         {/* One-shot halo behind the pill, keyed so it replays on every event.
             The halo and the pill are siblings, so their keys are namespaced —
@@ -200,6 +240,130 @@ export function ActivityDock({
           )}
         </span>
       </button>
+      {notices.length > 0 && (
+        <div className="flex max-w-[calc(100vw-12rem)] flex-col-reverse items-end gap-2" aria-live="polite">
+          {notices.map((id) => {
+            const job = jobs.find((j) => j.id === id);
+            return job ? (
+              <FinishNotice key={id} job={job} onOpen={() => openNotice(job)} onDismiss={() => dropNotice(id)} />
+            ) : null;
+          })}
+        </div>
+      )}
+      </div>
+
+      {/* A text result (Describe…) in full, with a copy button. */}
+      <Dialog open={!!textView} onOpenChange={(o) => !o && setTextView(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="truncate text-base">{textView?.title}</DialogTitle>
+          </DialogHeader>
+          <p className="bg-muted/40 max-h-[50vh] select-text overflow-y-auto whitespace-pre-wrap rounded-lg border p-3 text-sm leading-relaxed">
+            {textView?.text}
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => void navigator.clipboard?.writeText(textView?.text ?? "").catch(() => {})}
+            >
+              <Copy className="size-4" />
+              {t("common.copy")}
+            </Button>
+            <Button onClick={() => setTextView(null)}>{t("common.close")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
+  );
+}
+
+type NoticeResult = { kind: "image"; src: string } | { kind: "text"; text: string } | { kind: "list" };
+
+/** What a click on a finish notice opens. */
+function noticeResult(job: Job): NoticeResult {
+  if (job.status !== "done") return { kind: "list" };
+  if (job.kind === "tool") {
+    const text = job.tool?.result?.outputs.find((o) => o.type === "text" && o.text)?.text;
+    if (job.tool?.preview) return { kind: "image", src: job.tool.preview };
+    if (text) return { kind: "text", text };
+    return { kind: "list" };
+  }
+  return job.image?.imageBase64 ? { kind: "image", src: job.image.imageBase64 } : { kind: "list" };
+}
+
+/** One finish notice: shown ~7 s (paused while hovered), then gone. The
+ *  countdown is the bar's CSS animation, so hover-pause is just its play state. */
+function FinishNotice({ job, onOpen, onDismiss }: { job: Job; onOpen: () => void; onDismiss: () => void }) {
+  const { t } = useTranslation();
+  const r = noticeResult(job);
+  const failed = job.status === "error";
+  const sub = failed
+    ? job.error || t("queue.failed")
+    : r.kind === "text"
+      ? r.text
+      : t(r.kind === "image" ? "activity.noticeOpen" : "activity.noticeShow");
+  return (
+    <div
+      data-mode={job.mode}
+      className={cn(
+        "notice-pop bg-card mode-edge group pointer-events-auto relative flex w-80 max-w-full items-center gap-2.5 overflow-hidden rounded-2xl border border-l-[3px] p-2 pr-8 shadow-xl",
+        failed && "border-destructive/40"
+      )}
+    >
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2.5 text-left outline-none">
+        {r.kind === "image" ? (
+          r.src.startsWith("data:video/") ? (
+            <video src={r.src} muted loop autoPlay playsInline className="size-12 shrink-0 rounded-lg object-cover" />
+          ) : (
+            <img src={r.src} alt="" className="checkerboard size-12 shrink-0 rounded-lg object-cover" />
+          )
+        ) : (
+          <span
+            className={cn(
+              "flex size-12 shrink-0 items-center justify-center rounded-lg border",
+              failed ? "border-destructive/30 text-destructive" : "bg-muted/50 text-muted-foreground"
+            )}
+          >
+            {failed ? (
+              <AlertCircle className="size-5" />
+            ) : job.kind === "tool" ? (
+              <ToolIcon id={job.tool?.toolId ?? ""} className="size-5" />
+            ) : (
+              <Check className="size-5" />
+            )}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span
+            className={cn(
+              "block text-[11px] font-semibold",
+              failed ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
+            )}
+          >
+            {failed ? t("activity.noticeFailed") : t("activity.noticeDone")}
+          </span>
+          <span className="block truncate text-xs font-medium" title={job.prompt}>
+            {job.prompt}
+          </span>
+          <span className="text-muted-foreground line-clamp-2 text-[11px] leading-snug">{sub}</span>
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label={t("queue.dismiss")}
+        className="text-muted-foreground/60 hover:text-foreground absolute right-1.5 top-1.5 rounded p-0.5"
+      >
+        <X className="size-3.5" />
+      </button>
+      <span
+        aria-hidden
+        onAnimationEnd={onDismiss}
+        className={cn(
+          "notice-timer absolute bottom-0 left-0 h-0.5 w-full",
+          failed ? "bg-destructive/60" : "bg-[var(--brand-from)]/60"
+        )}
+      />
+    </div>
   );
 }

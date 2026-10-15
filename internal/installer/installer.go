@@ -64,9 +64,9 @@ import (
 // the [tools] extra (onnxruntime + imageio-ffmpeg). The onnxruntime flavor that
 // matches the GPU is swapped in by the "onnxruntime" phase (onnxRuntimePackage).
 //
-// Pinned to the staging pre-release v0.5.0.dev3 until v0.5.0 is tagged after
-// validation (PEP 440 pre-release: the installed version reads "0.5.0.dev3").
-const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.0.dev3.tar.gz"
+// Pinned to the staging pre-release v0.5.0.dev4 until v0.5.0 is tagged after
+// validation (PEP 440 pre-release: the installed version reads "0.5.0.dev4").
+const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.0.dev4.tar.gz"
 
 // EngineExtras is the extras list installed with the engine: the eight image
 // backends, the Qwen-Image-Edit GGUF lite build (gguf + bitsandbytes for its
@@ -142,7 +142,7 @@ func EngineTarballReachable(ctx context.Context, client *http.Client) bool {
 
 // pinnedEngineVersionRe pulls the version out of the EngineTarball tag URL
 // (".../tags/v0.3.0.tar.gz" -> "0.3.0"), PEP 440 pre-releases included
-// (".../tags/v0.5.0.dev3.tar.gz" -> "0.5.0.dev3", what importlib reports).
+// (".../tags/v0.5.0.dev4.tar.gz" -> "0.5.0.dev4", what importlib reports).
 var pinnedEngineVersionRe = regexp.MustCompile(`/tags/v?([0-9]+\.[0-9]+\.[0-9]+(?:\.?(?:dev|rc|a|b)[0-9]+)?)\.tar\.gz`)
 
 // PinnedEngineVersion is the imference-engine version the desktop ships with,

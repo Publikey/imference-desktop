@@ -81,7 +81,19 @@
     "theme": "Theme: {{mode}}",
     "language": "Language: {{lang}}",
     "settings": "Open Settings",
-    "logs": "Toggle Logs"
+    "logs": "Toggle Logs",
+    "runLayout": "Generate button: {{name}}",
+    "runColor": "Generate button colour: {{name}}",
+    "runLayouts": {
+      "wide": "full width",
+      "card": "floating card",
+      "bar": "footer bar"
+    },
+    "runColors": {
+      "mode": "mode (Local blue / Cloud cyan)",
+      "brand": "brand gradient",
+      "neutral": "neutral"
+    }
   },
   "composer": {
     "qualityTags": "Quality tags",

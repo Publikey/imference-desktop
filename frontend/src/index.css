@@ -301,9 +301,29 @@
       box-shadow 0.2s ease,
       transform 0.14s var(--ease-spring);
   }
-  .btn-run[data-mode="cloud"] {
+  .btn-run[data-color="mode"][data-mode="cloud"] {
     --run-from: color-mix(in oklch, var(--cloud-from) 72%, black);
     --run-to: color-mix(in oklch, var(--cloud-to) 72%, black);
+  }
+  .btn-run[data-color="brand"] {
+    --run-from: var(--brand-from);
+    --run-to: var(--brand-to);
+  }
+  .btn-run[data-color="neutral"] {
+    --run-from: var(--foreground);
+    --run-to: color-mix(in oklch, var(--foreground) 82%, var(--background));
+    color: var(--background);
+  }
+  .btn-run .run-kbd {
+    background-color: color-mix(in oklch, currentColor 18%, transparent);
+  }
+  .btn-run .run-hint {
+    opacity: 0.78;
+  }
+  .run-card {
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.05),
+      0 14px 34px -14px rgb(0 0 0 / 0.32);
   }
   .btn-run:hover:not(:disabled) {
     filter: brightness(1.1) saturate(1.08);

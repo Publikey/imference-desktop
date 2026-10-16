@@ -115,6 +115,41 @@ type postBody struct {
 	FormatCode string `json:"format_code,omitempty"`
 	// Loras are catalog codes + weights (imference resolves the files).
 	Loras []postLora `json:"loras,omitempty"`
+	// ImgURL is the img2img / image-to-video source: a data: URI of the local
+	// image (the server stores it for the worker) or an https URL.
+	ImgURL string `json:"img_url,omitempty"`
+	// Strength goes with ImgURL on image engine models (nil = server default).
+	Strength *float64 `json:"strength,omitempty"`
+}
+
+// cloudSource is the request's source image as /generate's img_url (a data:
+// URI, or an https URL as is) and its strength (only with a source; the
+// caller zeroes Strength for models without the knob).
+func cloudSource(req types.GenerationRequest) (string, *float64) {
+	src := strings.TrimSpace(req.SourceImage)
+	if src == "" {
+		return "", nil
+	}
+	if !strings.HasPrefix(src, "data:") && !strings.HasPrefix(src, "https://") && !strings.HasPrefix(src, "http://") {
+		src = "data:" + base64ImageType(src) + ";base64," + src
+	}
+	if req.Strength <= 0 {
+		return src, nil
+	}
+	// The API's range is 0.1-1 (the workers' clamp); the slider starts at 0.
+	s := min(max(req.Strength, 0.1), 1)
+	return src, &s
+}
+
+// base64ImageType guesses a raw base64 image's type from its first bytes.
+func base64ImageType(b64 string) string {
+	switch {
+	case strings.HasPrefix(b64, "/9j/"):
+		return "image/jpeg"
+	case strings.HasPrefix(b64, "UklGR"):
+		return "image/webp"
+	}
+	return "image/png"
 }
 
 type postLora struct {
@@ -308,16 +343,10 @@ func refImageSlots(m apiModel, localBackend string) int {
 		}
 	}
 	if localBackend == "" {
-		// TEMPORARY: reference images are a LOCAL-only feature for now. The cloud
-		// request path can carry them (refImagesForCloud below still encodes
-		// req.RefImages), but the round trip isn't validated end to end, so the
-		// desktop must not offer a slot it can't honour — a user would spend
-		// credits on a run that ignored their image.
-		//
-		// To lift this once the cloud path is proven: delete the next line and
-		// the catalog's answer takes over again (`declared`, 0 when the column
-		// is absent). Nothing else is gated on it.
-		return 0
+		// Cloud: the catalog decides (0 when the column is absent), capped at
+		// one — /generate takes a single source image (img_url, sent inline as
+		// a data: URI, see cloudSource).
+		return min(max(declared, 0), 1)
 	}
 	if declared < 0 {
 		declared = 1 // pre-column server: every local model took an img2img source
@@ -1061,6 +1090,7 @@ func (c *Client) postGenerateX402(
 		FormatCode:     req.FormatCode,
 		Loras:          postLoras(req.CloudLoras),
 	}
+	body.ImgURL, body.Strength = cloudSource(req)
 
 	postCtx, cancel := context.WithTimeout(ctx, postTimeout)
 	defer cancel()
@@ -1187,6 +1217,7 @@ func (c *Client) postGenerate(
 		FormatCode:     req.FormatCode,
 		Loras:          postLoras(req.CloudLoras),
 	}
+	body.ImgURL, body.Strength = cloudSource(req)
 	buf, _ := json.Marshal(body)
 
 	postCtx, cancel := context.WithTimeout(ctx, postTimeout)

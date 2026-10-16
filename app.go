@@ -527,6 +527,11 @@ func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult
 		return types.GenerationResult{}, err
 	}
 	normalizeRefImages(&req)
+	// strength is an image-engine knob: the API refuses it on external
+	// (gpt-image) and video models, which take the source image only.
+	if m := s.CloudModelInfo; m == nil || m.External || m.ModelType == "video" {
+		req.Strength = 0
+	}
 	meta := cloudMeta(req, s.CloudModelInfo)
 	rail := cloudRail(s.PaymentMode)
 	jobID := newCloudJobID()

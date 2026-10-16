@@ -2098,6 +2098,7 @@ export default function App() {
                             targetH={refDims.height}
                             strength={strength}
                             onStrengthChange={setStrength}
+                            showStrength={!(mode === "cloud" && (activeModel?.external || activeModel?.modelType === "video"))}
                           />
                         )}
 
@@ -3284,6 +3285,7 @@ function RefImageCard({
   targetH,
   strength,
   onStrengthChange,
+  showStrength = true,
 }: {
   /** How many slots to render (1 or 2). The card isn't mounted at 0. */
   slots: number;
@@ -3295,6 +3297,9 @@ function RefImageCard({
   targetH: number;
   strength: number;
   onStrengthChange: (v: number) => void;
+  /** false: the model takes the image but has no strength knob (cloud
+   *  external / video models), so no slider. */
+  showStrength?: boolean;
 }) {
   const { t } = useTranslation();
   const pair = slots >= 2;
@@ -3373,6 +3378,7 @@ function RefImageCard({
           </div>
 
           {/* Strength only means something once there's an image to denoise from. */}
+          {showStrength && (
           <label className="min-w-0 flex-1 pt-0.5">
             <HoverPopover content={t("refImage.strengthHint")} always className="inline-flex">
               <span className="text-muted-foreground cursor-help text-[11px]">
@@ -3389,6 +3395,7 @@ function RefImageCard({
               className="range mt-1 w-full"
             />
           </label>
+          )}
         </div>
       )}
     </section>

@@ -1,12 +1,16 @@
 package cloud
 
-import "testing"
+import (
+	"testing"
+
+	"imference-desktop-go/internal/types"
+)
 
 func boolp(b bool) *bool { return &b }
 func intp(n int) *int    { return &n }
 
 // Reference-image slots are read against WHERE the model runs. Cloud runs get
-// none at all for now (local-only feature), and locally the catalog's
+// at most one (the catalog decides; /generate takes one source), and locally the catalog's
 // accepts_image_input — which describes the HOSTED endpoint's wiring — decides
 // t2v from i2v but must not retire local img2img, the sidecar's own capability
 // with any checkpoint it can load.
@@ -21,10 +25,10 @@ func TestRefImageSlots(t *testing.T) {
 		{"columns absent, local model keeps img2img", nil, nil, "sdxl", 1},
 		// Cloud is gated off entirely for now — the catalog's answer, whatever it
 		// is, must not put a slot in front of a paying user.
-		{"cloud offers none, columns absent", nil, nil, "", 0},
-		{"cloud offers none, catalog says false", boolp(false), nil, "", 0},
-		{"cloud offers none, catalog says true", boolp(true), nil, "", 0},
-		{"cloud offers none, catalog declares two", boolp(true), intp(2), "", 0},
+		{"cloud: columns absent, none", nil, nil, "", 0},
+		{"cloud: catalog says false, none", boolp(false), nil, "", 0},
+		{"cloud: catalog says true, one", boolp(true), nil, "", 1},
+		{"cloud: /generate takes one source, even if the catalog declares two", boolp(true), intp(2), "", 1},
 		// The regression this guards: the catalog marks most models
 		// accepts_image_input=false because the hosted endpoint takes no init
 		// image, which said nothing about running them locally — and silently
@@ -77,9 +81,9 @@ func TestToModelInfoRefImages(t *testing.T) {
 			true, 1,
 		},
 		{
-			"the same row in the cloud list → none, cloud is gated off",
+			"the same row in the cloud list → one, from the catalog",
 			apiModel{ImLocal: true, ModelURL: "https://cdn/x.safetensors", ImEngine: "sdxl", AcceptsImageInput: boolp(true)},
-			false, 0,
+			false, 1,
 		},
 		{
 			"a cloud-declared-false row still does img2img locally",
@@ -97,9 +101,9 @@ func TestToModelInfoRefImages(t *testing.T) {
 			true, 0,
 		},
 		{
-			"a cloud-only model gets no slot however it's declared",
+			"a cloud-only model gets one slot (/generate takes one source)",
 			apiModel{ImLocal: false, AcceptsImageInput: boolp(true), ImageInputMax: intp(2)},
-			false, 0,
+			false, 1,
 		},
 	}
 	for _, c := range cases {
@@ -144,5 +148,21 @@ func TestToModelInfoHasAudio(t *testing.T) {
 				t.Errorf("HasAudio = %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+func TestCloudSource(t *testing.T) {
+	if u, s := cloudSource(types.GenerationRequest{}); u != "" || s != nil {
+		t.Errorf("no source: %q %v", u, s)
+	}
+	u, s := cloudSource(types.GenerationRequest{SourceImage: "/9j/4AAQ", Strength: 0.4})
+	if u != "data:image/jpeg;base64,/9j/4AAQ" || s == nil || *s != 0.4 {
+		t.Errorf("raw jpeg base64: %q %v", u, s)
+	}
+	if u, s := cloudSource(types.GenerationRequest{SourceImage: "data:image/webp;base64,UklGR"}); u != "data:image/webp;base64,UklGR" || s != nil {
+		t.Errorf("data URI kept, no strength: %q %v", u, s)
+	}
+	if u, _ := cloudSource(types.GenerationRequest{SourceImage: "iVBORw0KGgo"}); u != "data:image/png;base64,iVBORw0KGgo" {
+		t.Errorf("raw png base64: %q", u)
 	}
 }

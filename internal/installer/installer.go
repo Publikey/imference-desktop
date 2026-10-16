@@ -64,9 +64,8 @@ import (
 // the [tools] extra (onnxruntime + imageio-ffmpeg). The onnxruntime flavor that
 // matches the GPU is swapped in by the "onnxruntime" phase (onnxRuntimePackage).
 //
-// Pinned to the staging pre-release v0.5.0.dev5 until v0.5.0 is tagged after
-// validation (PEP 440 pre-release: the installed version reads "0.5.0.dev5").
-const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.0.dev5.tar.gz"
+// Pinned to the imference-engine release v0.5.0.
+const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.0.tar.gz"
 
 // EngineExtras is the extras list installed with the engine: the eight image
 // backends, the Qwen-Image-Edit GGUF lite build (gguf + bitsandbytes for its

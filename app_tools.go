@@ -874,7 +874,7 @@ type GenToolModels struct {
 	// Previous: an edit model is loaded; this is the model to switch back to.
 	Previous *types.ModelInfo `json:"previous,omitempty"`
 	// SourceNoImg2Img: the cloud runs the image's model but not from a source
-	// image (Krea 2), so a cloud run uses another model, or none.
+	// image (Krea 2, gpt-image), so a cloud run uses another model, or none.
 	SourceNoImg2Img bool `json:"sourceNoImg2Img,omitempty"`
 }
 

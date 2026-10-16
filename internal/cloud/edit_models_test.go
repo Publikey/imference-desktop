@@ -68,6 +68,7 @@ func TestEditModels(t *testing.T) {
 		cloudImg2Img(apiModel{ModelType: "image", AcceptsImageInput: &no}, "krea2") ||
 		cloudImg2Img(apiModel{ModelType: "image"}, "krea2") ||
 		!cloudImg2Img(apiModel{ModelType: "image"}, "sdxl") ||
+		cloudImg2Img(apiModel{ModelType: "image", ImEngine: "external", AcceptsImageInput: &yes}, normalizeEngine("external")) ||
 		cloudImg2Img(apiModel{ModelType: "image-edit", AcceptsImageInput: &yes}, "") ||
 		cloudImg2Img(apiModel{ModelType: "video", AcceptsImageInput: &yes}, "wan") {
 		t.Error("cloudImg2Img: accepts_image_input on image models, else the backend")

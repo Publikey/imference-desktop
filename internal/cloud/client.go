@@ -337,11 +337,12 @@ func refImageSlots(m apiModel, localBackend string) int {
 }
 
 // cloudImg2Img: the hosted endpoint runs vary / outpaint with this model.
-// The catalog's accepts_image_input decides (the API refuses the generation
-// tools otherwise); a server that predates the column: every image model but
-// the backends with no img2img (Krea 2).
+// Only an imference engine model (an external one, gpt-image, would ignore
+// the image: the API refuses it); then the catalog's accepts_image_input
+// decides, and a server that predates the column: every image backend but
+// the ones with no img2img (Krea 2).
 func cloudImg2Img(m apiModel, backend string) bool {
-	if mediaKind(m, backend) != "image" {
+	if mediaKind(m, backend) != "image" || !IsImageBackend(backend) {
 		return false
 	}
 	if m.AcceptsImageInput != nil {

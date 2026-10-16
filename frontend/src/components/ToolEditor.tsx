@@ -313,6 +313,9 @@ export function ToolEditor({
       ? { ...tool, priceCredits: pickedEditModel.cost, priceIsModel: false }
       : tool;
   const instructionMissing = isInstruct && !String(params.instruction ?? "").trim();
+  // Vary / outpaint in the cloud with no model that starts from an image
+  // (e.g. a Krea 2 image and a Krea 2 selection): the API would refuse it.
+  const noCloudGenModel = isGenTool && effectiveCloud && !!genModels && !genModels.cloud;
   // Local mode, a different generation model needed: load it (replacing the
   // engine's model, after a confirmation), never silently.
   const [swapping, setSwapping] = useState(false);
@@ -645,7 +648,7 @@ export function ToolEditor({
                       className={cn("relative w-full overflow-hidden", runBurst > 0 && "btn-launch")}
                       key={`run-${runBurst}`}
                       data-launch="tool"
-                      disabled={!srcData || tool.badge === "unavailable" || (isMaskTool && !hasMask) || instructionMissing}
+                      disabled={!srcData || tool.badge === "unavailable" || (isMaskTool && !hasMask) || instructionMissing || noCloudGenModel}
                       onClick={() => void run()}
                     >
                       {runBurst > 0 && <span aria-hidden className="launch-shine pointer-events-none absolute inset-0" />}
@@ -1570,13 +1573,15 @@ function GenModelBox({
             <p className="text-muted-foreground leading-snug">
               {source && models.cloud.modelCode === models.sourceModel
                 ? t("tools.gen.sameModel")
-                : source
-                  ? t("tools.gen.otherModelCloud", { source })
-                  : t("tools.gen.selectedCloud")}
+                : source && models.sourceNoImg2Img
+                  ? t("tools.gen.sourceNoImg2Img", { source })
+                  : source
+                    ? t("tools.gen.otherModelCloud", { source })
+                    : t("tools.gen.selectedCloud")}
             </p>
           </>
         ) : (
-          <p className="text-muted-foreground">{t("tools.gen.noCloudModel")}</p>
+          <p className="text-muted-foreground">{t("tools.gen.noImg2ImgCloudModel")}</p>
         )
       ) : editLoaded ? (
         <>

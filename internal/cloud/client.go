@@ -336,6 +336,20 @@ func refImageSlots(m apiModel, localBackend string) int {
 	return declared
 }
 
+// cloudImg2Img: the hosted endpoint runs vary / outpaint with this model.
+// The catalog's accepts_image_input decides (the API refuses the generation
+// tools otherwise); a server that predates the column: every image model but
+// the backends with no img2img (Krea 2).
+func cloudImg2Img(m apiModel, backend string) bool {
+	if mediaKind(m, backend) != "image" {
+		return false
+	}
+	if m.AcceptsImageInput != nil {
+		return *m.AcceptsImageInput
+	}
+	return backend == "" || SupportsRefImages(backend)
+}
+
 // apiFormat mirrors one im_format row (GET /api/formats).
 type apiFormat struct {
 	ModelCode  string `json:"model_code"`
@@ -606,7 +620,8 @@ func toModelInfo(m apiModel, forLocal bool) types.ModelInfo {
 		CanCloud:          m.ImCloud,
 		// Locally runnable = the same test ListModels applies for the local
 		// catalog: the flag plus downloadable weights and a known backend.
-		RefImages: refImageSlots(m, localBackend(m, backend, forLocal)),
+		RefImages:    refImageSlots(m, localBackend(m, backend, forLocal)),
+		CloudImg2Img: cloudImg2Img(m, backend),
 		ModelType: mediaKind(m, backend),
 		// Straight through: a nil Default is the catalog saying "no duration
 		// control", which the composer reads as "offer nothing".

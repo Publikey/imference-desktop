@@ -277,8 +277,24 @@ func TestCloudToolParamsModelChoice(t *testing.T) {
 		t.Errorf("non-generation tool got a model: %v", p)
 	}
 	// A local image whose model the cloud also runs: vary keeps that model.
-	if got := cloudToolParams(vary, map[string]any{}, localSrc, s, "", func(c string) bool { return c == "local-model" })["model"]; got != "local-model" {
+	if got := cloudToolParams(vary, map[string]any{}, localSrc, s, "", func(c string) *types.ModelInfo {
+		if c == "local-model" {
+			return &types.ModelInfo{ModelCode: c, CloudImg2Img: true}
+		}
+		return nil
+	})["model"]; got != "local-model" {
 		t.Errorf("local source in the cloud catalog: model = %v", got)
+	}
+	// Krea 2 takes no source image in the cloud: never its model.
+	img2img := func(c string) *types.ModelInfo {
+		return &types.ModelInfo{ModelCode: c, CloudImg2Img: c != "krea" && c != "krea-selected"}
+	}
+	krea := &types.GenerationMeta{Source: "cloud", ModelCode: "krea"}
+	if got := cloudToolParams(vary, map[string]any{}, krea, s, "", img2img)["model"]; got != "selected" {
+		t.Errorf("krea2 image: model = %v, want the selected cloud model", got)
+	}
+	if p := cloudToolParams(vary, map[string]any{}, krea, types.Settings{CloudModel: "krea-selected"}, "", img2img); p["model"] != nil {
+		t.Errorf("krea2 image + krea2 selected: model = %v, want none", p["model"])
 	}
 }
 

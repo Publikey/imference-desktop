@@ -695,6 +695,8 @@ export type GenToolModels = {
   localIsSource: boolean;
   sourceLocal?: ModelInfo | null;
   previous?: ModelInfo | null;
+  /** The cloud runs the image's model, but not from a source image (Krea 2). */
+  sourceNoImg2Img?: boolean;
 };
 
 export type ToolRunRequest = {

@@ -564,7 +564,7 @@ func (a *App) runTool(parent context.Context, req ToolRunRequest) (res ToolRunRe
 		}
 	} else {
 		res.RanOn = "cloud"
-		cloudParams := cloudToolParams(t, params, sourceMeta, s, a.editDefaultModel(), a.cloudHasModel)
+		cloudParams := cloudToolParams(t, params, sourceMeta, s, a.editDefaultModel(), a.cloudModel)
 		outs, res.Credits, terr = a.runToolCloud(ctx, req.JobID, t, inputs, cloudParams, outDir)
 		if terr != nil {
 			if job.cancelled.Load() {
@@ -798,7 +798,7 @@ func toolParams(t tools.Tool, in map[string]any, source *types.GenerationMeta) m
 // cloudHas); else the selected cloud model; else the source's model.
 // instruct-edit only takes an edit model: the selected cloud model when it is
 // one, else editDefault (see editDefaultFrom).
-func cloudToolParams(t tools.Tool, params map[string]any, source *types.GenerationMeta, s types.Settings, editDefault string, cloudHas func(string) bool) map[string]any {
+func cloudToolParams(t tools.Tool, params map[string]any, source *types.GenerationMeta, s types.Settings, editDefault string, cloudModel func(string) *types.ModelInfo) map[string]any {
 	if !t.IsGeneration() {
 		return params
 	}
@@ -820,14 +820,24 @@ func cloudToolParams(t tools.Tool, params map[string]any, source *types.Generati
 		}
 		return out
 	}
+	// cloudModel (nil: no catalog to ask) knows which models the cloud runs,
+	// and which of them cannot start from an image (Krea 2): those are skipped,
+	// the API would refuse the run.
+	known := func(code string) *types.ModelInfo {
+		if cloudModel == nil {
+			return nil
+		}
+		return cloudModel(code)
+	}
+	ok := func(code string) bool { m := known(code); return m == nil || m.CloudImg2Img }
 	switch {
-	case source != nil && source.Source == "cloud" && source.ModelCode != "":
+	case source != nil && source.Source == "cloud" && source.ModelCode != "" && ok(source.ModelCode):
 		out["model"] = source.ModelCode
-	case source != nil && source.ModelCode != "" && cloudHas != nil && cloudHas(source.ModelCode):
+	case source != nil && source.ModelCode != "" && known(source.ModelCode) != nil && ok(source.ModelCode):
 		out["model"] = source.ModelCode
-	case s.CloudModel != "":
+	case s.CloudModel != "" && ok(s.CloudModel):
 		out["model"] = s.CloudModel
-	case source != nil && source.ModelCode != "":
+	case source != nil && source.ModelCode != "" && ok(source.ModelCode):
 		out["model"] = source.ModelCode
 	default:
 		delete(out, "model")
@@ -835,14 +845,15 @@ func cloudToolParams(t tools.Tool, params map[string]any, source *types.Generati
 	return out
 }
 
-// cloudHasModel: the cached cloud catalog runs this model code (no network).
-func (a *App) cloudHasModel(code string) bool {
+// cloudModel: the cached cloud catalog's entry for this model code (no
+// network), nil when the cloud does not run it.
+func (a *App) cloudModel(code string) *types.ModelInfo {
 	for _, m := range a.cloud.CachedCloudModels() {
 		if m.ModelCode == code {
-			return true
+			return &m
 		}
 	}
-	return false
+	return nil
 }
 
 // GenToolModels tells the Edit panel which model a generation tool (vary,
@@ -862,6 +873,9 @@ type GenToolModels struct {
 	SourceLocal *types.ModelInfo `json:"sourceLocal,omitempty"`
 	// Previous: an edit model is loaded; this is the model to switch back to.
 	Previous *types.ModelInfo `json:"previous,omitempty"`
+	// SourceNoImg2Img: the cloud runs the image's model but not from a source
+	// image (Krea 2), so a cloud run uses another model, or none.
+	SourceNoImg2Img bool `json:"sourceNoImg2Img,omitempty"`
 }
 
 // ToolGenModels resolves GenToolModels for tool toolID on a gallery item
@@ -879,10 +893,15 @@ func (a *App) ToolGenModels(toolID, sourceName string, meta *types.GenerationMet
 	s := a.settings.Get()
 	if a.toolsCat != nil {
 		if t, ok := a.toolsCat.Get(toolID); ok && t.IsGeneration() {
-			cp := cloudToolParams(t, map[string]any{}, meta, s, a.editDefaultModel(), a.cloudHasModel)
+			cp := cloudToolParams(t, map[string]any{}, meta, s, a.editDefaultModel(), a.cloudModel)
 			if code, _ := cp["model"].(string); code != "" {
 				if m, err := a.cloudCatalogModel(code); err == nil {
 					out.Cloud = m
+				}
+			}
+			if !tools.NeedsEditModel(t) && out.SourceModel != "" {
+				if m := a.cloudModel(out.SourceModel); m != nil && !m.CloudImg2Img {
+					out.SourceNoImg2Img = true
 				}
 			}
 		}
@@ -914,7 +933,7 @@ func (a *App) cloudOffer(t tools.Tool, params map[string]any, source *types.Gene
 	credits := t.Credits
 	if t.IsGeneration() {
 		credits = 0
-		cp := cloudToolParams(t, params, source, s, a.editDefaultModel(), a.cloudHasModel)
+		cp := cloudToolParams(t, params, source, s, a.editDefaultModel(), a.cloudModel)
 		code, _ := cp["model"].(string)
 		switch {
 		case s.CloudModelInfo != nil && s.CloudModelInfo.ModelCode == code:

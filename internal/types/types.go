@@ -304,6 +304,10 @@ type ModelInfo struct {
 	// falls back to 1 for locally-runnable models, preserving the img2img
 	// affordance every local model had before the columns existed.
 	RefImages int `json:"refImages"`
+	// CloudImg2Img: the cloud runs the generation tools (vary, outpaint) with
+	// this model, i.e. its endpoint takes a source image (catalog
+	// accepts_image_input). Krea 2 does not: the API refuses those runs.
+	CloudImg2Img bool `json:"cloudImg2Img,omitempty"`
 	// HasAudio marks a video model whose output carries an audio track
 	// (catalog has_audio). Carried through for the UI to surface; nothing in the
 	// generation path depends on it.

@@ -63,6 +63,15 @@ func TestEditModels(t *testing.T) {
 	if !IsEditModel(&types.ModelInfo{ModelCode: "z", BackendType: "flux", ModelType: EditModelType}) {
 		t.Error("model_type image-edit is an edit model whatever the backend")
 	}
+	yes, no := true, false
+	if !cloudImg2Img(apiModel{ModelType: "image", AcceptsImageInput: &yes}, "zimage") ||
+		cloudImg2Img(apiModel{ModelType: "image", AcceptsImageInput: &no}, "krea2") ||
+		cloudImg2Img(apiModel{ModelType: "image"}, "krea2") ||
+		!cloudImg2Img(apiModel{ModelType: "image"}, "sdxl") ||
+		cloudImg2Img(apiModel{ModelType: "image-edit", AcceptsImageInput: &yes}, "") ||
+		cloudImg2Img(apiModel{ModelType: "video", AcceptsImageInput: &yes}, "wan") {
+		t.Error("cloudImg2Img: accepts_image_input on image models, else the backend")
+	}
 	if mediaKind(apiModel{ModelType: "image-edit"}, "") != EditModelType ||
 		mediaKind(apiModel{ModelType: "image", ImEngine: "qwenimage-edit"}, EditBackend) != EditModelType ||
 		mediaKind(apiModel{ModelType: "image"}, "flux") != "image" {

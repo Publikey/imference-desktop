@@ -203,7 +203,8 @@ type apiModel struct {
 	// column", which refImageSlots must tell apart from an explicit false/0.
 	AcceptsImageInput *bool `json:"accepts_image_input"`
 	// ModelType is what the model produces, straight from the catalog view:
-	// "image" or "video". "" for rows the view hasn't filled in yet.
+	// "image", "video" or "image-edit" (EditModelType). "" for rows the view
+	// hasn't filled in yet.
 	ModelType string `json:"model_type"`
 	// Duration controls (seconds) for video models. A nil Default is the
 	// catalog saying this model has NO duration knob — an image model, or a
@@ -235,11 +236,17 @@ const maxRefImageSlots = 2
 // server's copy of this question, nothing here bills or times out — the worst a
 // wrong guess does is file a card under the wrong chip.
 func mediaKind(m apiModel, backend string) string {
+	// The edit engine cannot generate from a prompt, whatever the row says.
+	if IsEditBackend(backend) {
+		return EditModelType
+	}
 	switch strings.ToLower(strings.TrimSpace(m.ModelType)) {
 	case "video":
 		return "video"
 	case "image":
 		return "image"
+	case EditModelType:
+		return EditModelType
 	}
 	if backend == "wan" || videoFallbackEngines[strings.ToLower(strings.TrimSpace(m.ImEngine))] {
 		return "video"
@@ -398,6 +405,12 @@ var imageBackends = map[string]bool{
 // offload treatment as qwenimage (sidecar.resolveOffload).
 const EditBackend = "qwenimage-edit"
 
+// EditModelType is the catalog model_type of the instruction-edit models
+// (any engine). /api/models leaves them out unless asked (?type=all, which
+// fetchCatalog sends), and the Generate pickers leave them out too: the
+// instruct-edit tool is where they are picked.
+const EditModelType = "image-edit"
+
 // DefaultEditModel is the cloud model the instruct-edit tool uses when the
 // user picked none (and the catalog lists no other edit model first).
 const DefaultEditModel = "qwen-image-edit-2511"
@@ -420,7 +433,7 @@ func BuiltinEditModel() types.ModelInfo {
 		StepsDefault:     &steps, StepsMin: &stepsMin, StepsMax: &stepsMax,
 		CfgDefault: &cfg, CfgMin: &cfgMin, CfgMax: &cfgMax,
 		BackendType: EditBackend, BaseModel: DefaultBaseModel(EditBackend),
-		CanLocal: true, ModelType: "image",
+		CanLocal: true, ModelType: EditModelType,
 	}
 }
 
@@ -428,21 +441,22 @@ func BuiltinEditModel() types.ModelInfo {
 func IsEditBackend(backend string) bool { return backend == EditBackend }
 
 // EditModels filters a catalog list to the instruction-edit models. The
-// backend (im_engine qwenimage-edit) is authoritative when the catalog exposes
-// it on any row; a catalog that doesn't (older server) falls back to a model
-// code / name containing "edit" among the image models.
+// model type (image-edit) or the backend (im_engine qwenimage-edit) is
+// authoritative when the catalog exposes either on any row; a catalog that
+// doesn't (older server) falls back to a model code / name containing "edit"
+// among the image models.
 func EditModels(models []types.ModelInfo) []types.ModelInfo {
 	out := []types.ModelInfo{}
 	exposed := false
 	for _, m := range models {
-		if IsEditBackend(m.BackendType) {
+		if isTypedEdit(m) {
 			exposed = true
 			break
 		}
 	}
 	for _, m := range models {
 		if exposed {
-			if IsEditBackend(m.BackendType) {
+			if isTypedEdit(m) {
 				out = append(out, m)
 			}
 			continue
@@ -463,13 +477,18 @@ func IsEditModel(m *types.ModelInfo) bool {
 	if m == nil {
 		return false
 	}
-	if IsEditBackend(m.BackendType) {
+	if isTypedEdit(*m) {
 		return true
 	}
 	if m.BackendType != "" {
 		return false
 	}
 	return len(EditModels([]types.ModelInfo{*m})) == 1
+}
+
+// isTypedEdit: the catalog says edit, by model type or by backend.
+func isTypedEdit(m types.ModelInfo) bool {
+	return m.ModelType == EditModelType || IsEditBackend(m.BackendType)
 }
 
 // IsImageBackend reports whether name is a normalized image backend the desktop
@@ -726,7 +745,9 @@ func (c *Client) fetchCatalog(ctx context.Context) ([]apiModel, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
 
-	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+"/api/models", nil)
+	// type=all: the edit models too (the API leaves them out by default, for
+	// clients that predate them). An older API ignores the parameter.
+	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+"/api/models?type=all", nil)
 	r.Header.Set("Accept", "application/json")
 
 	resp, err := c.http.Do(r)

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ModelPickerDialog, ModelThumb } from "@/components/ModelPickerDialog";
 import type { AppSettings, ModelInfo } from "@/lib/types";
+import { isEditModel } from "@/lib/tools";
 
 type Mode = "local" | "cloud";
 
@@ -249,10 +250,10 @@ export function ModelBar({
         onOpenChange={onPickerOpenChange}
         mode={mode}
         paymentMode={settings?.paymentMode === "x402" ? "x402" : "bearer"}
-        // Edit models are loaded from Edit > Edit with instructions, not picked
-        // here: they cannot generate from a prompt (the card still shows one
-        // when it is the engine's model).
-        catalog={isCloud ? cloudModels : localModels.filter((m) => m.backendType !== "qwenimage-edit")}
+        // Edit models (model_type image-edit) are picked in Edit > Edit with
+        // instructions, not here: they cannot generate from a prompt (the card
+        // still shows one when it is the engine's model).
+        catalog={(isCloud ? cloudModels : localModels).filter((m) => !isEditModel(m))}
         customModels={customModels}
         activeCode={activeCode}
         cachedCodes={cachedCodes}

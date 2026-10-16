@@ -13,8 +13,11 @@ export const INSTRUCT_EDIT_ID = "instruct-edit";
 
 /** Instruction-edit models only run through "Edit with instructions" — never
  *  text-to-image. Keyed on the backend (same rule as the Go guard). */
-export function isEditModel(m: Pick<ModelInfo, "backendType"> | null | undefined): boolean {
-  return m?.backendType === EDIT_BACKEND;
+/** Catalog model_type of the instruction-edit models (any engine). */
+export const EDIT_MODEL_TYPE = "image-edit";
+
+export function isEditModel(m: Pick<ModelInfo, "backendType" | "modelType"> | null | undefined): boolean {
+  return m?.backendType === EDIT_BACKEND || m?.modelType === EDIT_MODEL_TYPE;
 }
 
 /** The image tools offered first in the gallery's Edit menus, in order. */

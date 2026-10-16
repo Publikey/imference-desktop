@@ -25,7 +25,7 @@ func TestNormalizeEditEngine(t *testing.T) {
 	tr := true
 	mi := toModelInfo(apiModel{ModelCode: "qwen-image-edit-2511", ImEngine: "qwenimage-edit", ImLocal: true,
 		ModelURL: "https://x/m.safetensors", AcceptsImageInput: &tr}, true)
-	if mi.BackendType != EditBackend || mi.RefImages != 0 || mi.ModelType != "image" || mi.BaseModel != "Qwen/Qwen-Image-Edit-2511" {
+	if mi.BackendType != EditBackend || mi.RefImages != 0 || mi.ModelType != EditModelType || mi.BaseModel != "Qwen/Qwen-Image-Edit-2511" {
 		t.Errorf("model info = %+v", mi)
 	}
 }
@@ -50,6 +50,23 @@ func TestEditModels(t *testing.T) {
 	got = EditModels(legacy)
 	if len(got) != 2 || got[0].ModelCode != "qwen-image-edit-2511" || got[1].ModelCode != "x" {
 		t.Fatalf("legacy: %+v", got)
+	}
+	// model_type image-edit wins for any engine, and filters like the backend does.
+	typed := []types.ModelInfo{
+		{ModelCode: "flux-dev", BackendType: "flux", ModelType: "image"},
+		{ModelCode: "future-edit", BackendType: "", ModelType: EditModelType},
+		{ModelCode: "some-edit-ish", ModelType: "image"},
+	}
+	if got = EditModels(typed); len(got) != 1 || got[0].ModelCode != "future-edit" {
+		t.Fatalf("typed: %+v", got)
+	}
+	if !IsEditModel(&types.ModelInfo{ModelCode: "z", BackendType: "flux", ModelType: EditModelType}) {
+		t.Error("model_type image-edit is an edit model whatever the backend")
+	}
+	if mediaKind(apiModel{ModelType: "image-edit"}, "") != EditModelType ||
+		mediaKind(apiModel{ModelType: "image", ImEngine: "qwenimage-edit"}, EditBackend) != EditModelType ||
+		mediaKind(apiModel{ModelType: "image"}, "flux") != "image" {
+		t.Error("mediaKind: image-edit from the type or the edit backend")
 	}
 	if !IsEditModel(&types.ModelInfo{ModelCode: "qwen-image-edit-2511"}) || IsEditModel(&types.ModelInfo{ModelCode: "edit", BackendType: "flux"}) || IsEditModel(nil) {
 		t.Error("IsEditModel")

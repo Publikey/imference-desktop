@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useState } from "react";
+import { ExternalModelWarning } from "@/components/ExternalModelWarning";
 import { ComposerCardHeader } from "@/components/ComposerCard";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
@@ -204,6 +205,8 @@ export function ModelBar({
           </button>
         )}
       </div>
+
+      {isCloud && !loading && !listError && <ExternalModelWarning model={selected} className="mt-2" />}
 
       {!isCloud && selected && !loading && !listError && (
         downloading || engineState === "starting" ? (

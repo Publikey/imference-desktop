@@ -623,6 +623,7 @@ func toModelInfo(m apiModel, forLocal bool) types.ModelInfo {
 		// catalog: the flag plus downloadable weights and a known backend.
 		RefImages:    refImageSlots(m, localBackend(m, backend, forLocal)),
 		CloudImg2Img: cloudImg2Img(m, backend),
+		External:     strings.EqualFold(strings.TrimSpace(m.ImEngine), "external"),
 		ModelType: mediaKind(m, backend),
 		// Straight through: a nil Default is the catalog saying "no duration
 		// control", which the composer reads as "offer nothing".

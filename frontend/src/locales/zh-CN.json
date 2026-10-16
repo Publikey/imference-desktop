@@ -353,6 +353,10 @@
     "engineError": "引擎错误 — 请查看日志",
     "help": "运行该模型前本机需要的内容：模型权重、该系列的共享组件以及本地引擎。"
   },
+  "external": {
+    "title": "外部服务商。",
+    "body": "您的提示词和图像会发送到我们无法控制的第三方服务，并适用其规则：它可能拒绝内容或保留数据。请勿发送个人或敏感内容。"
+  },
   "modelBar": {
     "cloudModel": "云端模型",
     "localModel": "本地模型",
@@ -1077,7 +1081,6 @@
     "tools": "工具模型",
     "toolsTotal": "已加载 {{size}}",
     "release": "释放",
-    "cloudNote": "云端模式：全部在 imference.com 上运行，本机不加载任何模型。",
     "state": {
       "idle": "已停止",
       "starting": "加载中…",

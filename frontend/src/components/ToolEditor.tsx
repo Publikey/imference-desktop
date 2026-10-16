@@ -13,6 +13,7 @@
 // is answered with a priced "Run in the cloud?" proposal — never a silent switch.
 // Closing releases the tools' warm models.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ExternalModelWarning } from "@/components/ExternalModelWarning";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
@@ -915,6 +916,24 @@ function missingWeightsMb(tool: ToolInfo, params: Record<string, unknown>): numb
     .reduce((n, w) => n + w.sizeMb, 0);
 }
 
+const PRIVACY_SEEN_KEY = "imference.notice.cloudPrivacy";
+
+// A per-viewer "don't show again" flag; storage may be unavailable.
+function readFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeFlag(key: string) {
+  try {
+    localStorage.setItem(key, "1");
+  } catch {
+    // storage unavailable: hidden for this session only
+  }
+}
+
 function WhereNotice({
   tool,
   cloud,
@@ -928,17 +947,29 @@ function WhereNotice({
 }) {
   const { t } = useTranslation();
   const downloadMb = missingWeightsMb(tool, params);
+  const [privacySeen, setPrivacySeen] = useState(() => readFlag(PRIVACY_SEEN_KEY));
   if (cloud) {
+    // The price is on the Run button; the privacy note can be dismissed for good.
+    if (privacySeen) return null;
     return (
       <div className="flex gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs leading-relaxed text-sky-800 dark:text-sky-200">
         <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="font-medium">{t("tools.privacyTitle")}</p>
           <p>{t("tools.privacyBody")}</p>
-          <p className="mt-1 font-medium">
-            {t("tools.priceLine", { price: formatToolPrice(t, tool.priceCredits, rail, tool.priceIsModel) })}
-          </p>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            writeFlag(PRIVACY_SEEN_KEY);
+            setPrivacySeen(true);
+          }}
+          className="-mt-1 -mr-1 size-6 shrink-0 rounded-md opacity-70 hover:opacity-100"
+          aria-label={t("common.dismiss")}
+          title={t("common.dismiss")}
+        >
+          <X className="mx-auto size-3.5" />
+        </button>
       </div>
     );
   }
@@ -1175,7 +1206,9 @@ function InstructEditForm({
           ) : (
             <p className="text-muted-foreground text-xs">{modelValue || "qwen-image-edit-2511"}</p>
           )
-        ) : (
+        ) : null}
+        {cloud && <ExternalModelWarning model={cloudModels.find((m) => m.modelCode === modelValue)} />}
+        {cloud ? null : (
           <p className="text-xs">
             {models?.local?.name ??
               models?.localCandidate?.name ??

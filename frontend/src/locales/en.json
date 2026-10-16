@@ -359,6 +359,10 @@
     "engineError": "Engine error — see Logs",
     "help": "What your machine needs before this model can run: its weights, the shared components of its family, and the local engine."
   },
+  "external": {
+    "title": "External provider.",
+    "body": "Your prompt and images are sent to a third-party service we don't control. Its own rules apply: it may refuse content or keep data. Avoid personal or sensitive content."
+  },
   "modelBar": {
     "cloudModel": "Cloud model",
     "localModel": "Local model",
@@ -1089,7 +1093,6 @@
     "tools": "Tool models",
     "toolsTotal": "{{size}} loaded",
     "release": "Release",
-    "cloudNote": "Cloud mode: everything runs on imference.com, nothing is loaded on this computer.",
     "state": {
       "idle": "Stopped",
       "starting": "Loading…",

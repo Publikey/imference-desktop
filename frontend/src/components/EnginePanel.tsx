@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Cloud, Cpu, Loader2, MemoryStick, Wrench } from "lucide-react";
+import { Cpu, Loader2, MemoryStick, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
@@ -162,12 +162,7 @@ export function EnginePanel({
           </section>
           )}
         </>
-      ) : (
-        <section className="flex gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-800 dark:text-sky-200">
-          <Cloud className="mt-0.5 size-4 shrink-0" />
-          <p>{t("engine.cloudNote")}</p>
-        </section>
-      )}
+      ) : null}
     </div>
   );
 }

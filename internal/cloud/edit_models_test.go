@@ -64,6 +64,9 @@ func TestEditModels(t *testing.T) {
 		t.Error("model_type image-edit is an edit model whatever the backend")
 	}
 	yes, no := true, false
+	if mi := toModelInfo(apiModel{ModelCode: "gpt-image-2", ImEngine: " External ", ModelType: "image"}, false); !mi.External {
+		t.Error("im_engine external must set ModelInfo.External")
+	}
 	if !cloudImg2Img(apiModel{ModelType: "image", AcceptsImageInput: &yes}, "zimage") ||
 		cloudImg2Img(apiModel{ModelType: "image", AcceptsImageInput: &no}, "krea2") ||
 		cloudImg2Img(apiModel{ModelType: "image"}, "krea2") ||

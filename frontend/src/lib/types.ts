@@ -225,6 +225,8 @@ export type ModelInfo = {
   /** Display rank of the family — orders the picker's cloud-family groups. */
   familyOrder?: number;
   groupCode?: string;
+  /** Runs at a third-party provider (catalog im_engine "external"). */
+  external?: boolean;
 };
 
 /** One supported resolution/ratio for a model (from im_format). */

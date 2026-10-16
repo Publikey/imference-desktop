@@ -309,6 +309,9 @@ type ModelInfo struct {
 	// accepts_image_input) and runs on an imference engine. Krea 2 and the
 	// external models (gpt-image) do not: the API refuses those runs.
 	CloudImg2Img bool `json:"cloudImg2Img,omitempty"`
+	// External: the model runs at a third-party provider (catalog im_engine
+	// "external", e.g. OpenAI gpt-image): prompts and images leave imference.
+	External bool `json:"external,omitempty"`
 	// HasAudio marks a video model whose output carries an audio track
 	// (catalog has_audio). Carried through for the UI to surface; nothing in the
 	// generation path depends on it.

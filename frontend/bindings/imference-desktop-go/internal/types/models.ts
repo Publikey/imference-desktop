@@ -256,6 +256,19 @@ export interface GenerationMeta {
      * RFC3339
      */
     "createdAt": string;
+
+    /**
+     * Editing-tool outputs (Source "tool"): which tool made the file, with
+     * which params, from which gallery image, and where it ran.
+     */
+    "tool"?: string;
+    "toolParams"?: { [_ in string]?: any } | null;
+    "sourceImage"?: string;
+
+    /**
+     * "local" | "cloud"
+     */
+    "ranOn"?: string;
 }
 
 /**
@@ -561,6 +574,20 @@ export interface ModelInfo {
     "refImages": number;
 
     /**
+     * CloudImg2Img: the cloud runs the generation tools (vary, outpaint) with
+     * this model, i.e. its endpoint takes a source image (catalog
+     * accepts_image_input) and runs on an imference engine. Krea 2 and the
+     * external models (gpt-image) do not: the API refuses those runs.
+     */
+    "cloudImg2Img"?: boolean;
+
+    /**
+     * External: the model runs at a third-party provider (catalog im_engine
+     * "external", e.g. OpenAI gpt-image): prompts and images leave imference.
+     */
+    "external"?: boolean;
+
+    /**
      * HasAudio marks a video model whose output carries an audio track
      * (catalog has_audio). Carried through for the UI to surface; nothing in the
      * generation path depends on it.
@@ -724,6 +751,13 @@ export interface Settings {
     "localModel"?: ModelInfo | null;
 
     /**
+     * PreviousLocalModel is the model code that was loaded before the user
+     * switched to a local edit model from the "Edit with instructions" dialog
+     * (App.SwitchToEditModel), so App.SwitchBackFromEditModel can restore it.
+     */
+    "previousLocalModel"?: string;
+
+    /**
      * EngineRuntime holds host-machine tuning for the engine (device, VAE mode,
      * offload, model-residency caps, WAN quantization). Applied as env vars when
      * the sidecar starts. NOT generation params — those live in the generation UI.
@@ -769,6 +803,11 @@ export interface Settings {
      * download that would eat into it fails before any network call. 0 = default.
      */
     "modelCacheMinFreeBytes"?: number;
+
+    /**
+     * Tools holds the editing-tools preferences.
+     */
+    "tools": ToolsSettings;
 }
 
 /**
@@ -799,6 +838,34 @@ export interface StorageInfo {
     "modelsDir": string;
     "baseCacheDir": string;
     "engineDir": string;
+}
+
+/**
+ * ToolsSettings are the editing-tools preferences.
+ */
+export interface ToolsSettings {
+    /**
+     * Mode is where tools run by default: "auto" (local when this machine can,
+     * else the cloud — the default), "local" (always local) or "cloud".
+     */
+    "mode"?: string;
+
+    /**
+     * LocalAPIDisabled turns off the 127.0.0.1 HTTP API agents use to run
+     * tools locally (enabled by default; the zero value keeps it on).
+     */
+    "localApiDisabled"?: boolean;
+
+    /**
+     * IdleMinutes stops the tools sidecar (releasing its models) after this
+     * many idle minutes. 0 = default (10).
+     */
+    "idleMinutes"?: number;
+
+    /**
+     * Device forces the tools' device (auto | cpu | cuda | directml | rocm | mps).
+     */
+    "device"?: string;
 }
 
 /**

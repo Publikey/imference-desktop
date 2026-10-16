@@ -5,3 +5,15 @@ import * as App from "./app.js";
 export {
     App
 };
+
+export type {
+    ClientGalleryItem,
+    EditModelsInfo,
+    EngineStatusInfo,
+    GenToolModels,
+    LocalAPIInfo,
+    ToolInfo,
+    ToolRunOutput,
+    ToolRunRequest,
+    ToolRunResult
+} from "./models.js";

@@ -26,6 +26,10 @@ import * as logbus$0 from "./internal/logbus/models.js";
 // @ts-ignore: Unused imports
 import * as types$0 from "./internal/types/models.js";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
+
 /**
  * AddLora registers a LoRA file in the library (referenced in place — never
  * copied, never deleted). Its family is read from the safetensors header so
@@ -42,6 +46,22 @@ export function AddLora(path: string): $CancellablePromise<types$0.Settings> {
  */
 export function CancelModelDownload(): $CancellablePromise<void> {
     return $Call.ByID(1920008848);
+}
+
+/**
+ * CancelTool stops a run: the cloud wait is abandoned (the server-side
+ * request may still finish and be charged), a local run is killed with its
+ * sidecar (the generation sidecar reloads its model).
+ */
+export function CancelTool(jobID: string): $CancellablePromise<void> {
+    return $Call.ByID(3196632589, jobID);
+}
+
+/**
+ * CancelToolWeights aborts the running tool weights download, if any.
+ */
+export function CancelToolWeights(): $CancellablePromise<void> {
+    return $Call.ByID(2898303030);
 }
 
 /**
@@ -128,6 +148,15 @@ export function DownloadModelComponents(baseRepo: string, backend: string): $Can
 }
 
 /**
+ * DownloadToolWeights fetches the missing weights of a local run of toolID
+ * with params into the tools cache (progress on "tools:weights"). Returns at
+ * once; the download runs in the background.
+ */
+export function DownloadToolWeights(toolID: string, params: { [_ in string]?: any } | null): $CancellablePromise<void> {
+    return $Call.ByID(2889896004, toolID, params);
+}
+
+/**
  * DropPendingCloudJob forgets a persisted cloud job on the user's request — the
  * manual escape hatch for a row wedged on "Running in the cloud…" (a request_id
  * the server will never resolve). It does NOT cancel anything server-side; the
@@ -136,6 +165,14 @@ export function DownloadModelComponents(baseRepo: string, backend: string): $Can
  */
 export function DropPendingCloudJob(jobID: string): $CancellablePromise<void> {
     return $Call.ByID(2597586911, jobID);
+}
+
+/**
+ * EngineStatus reports the GPU and the tools' warm models. Cheap: no sidecar
+ * start, no wait on a running tool (toolsBusy, toolsWarm nil then).
+ */
+export function EngineStatus(): $CancellablePromise<$models.EngineStatusInfo> {
+    return $Call.ByID(2329647557);
 }
 
 /**
@@ -236,6 +273,13 @@ export function GetFolderSizes(): $CancellablePromise<types$0.FolderSizes> {
 }
 
 /**
+ * GetLocalAPIInfo reports the agents' API state.
+ */
+export function GetLocalAPIInfo(): $CancellablePromise<$models.LocalAPIInfo> {
+    return $Call.ByID(932589826);
+}
+
+/**
  * GetLogs returns the current ring buffer snapshot so the renderer can
  * seed its panel on mount. Subsequent entries arrive via the "log:entry"
  * event.
@@ -267,6 +311,13 @@ export function GetSidecarStatus(): $CancellablePromise<types$0.SidecarStatus> {
  */
 export function GetStorageInfo(): $CancellablePromise<types$0.StorageInfo> {
     return $Call.ByID(3330596760);
+}
+
+/**
+ * GetToolsSettings returns the editing-tools preferences.
+ */
+export function GetToolsSettings(): $CancellablePromise<types$0.ToolsSettings> {
+    return $Call.ByID(2173406235);
 }
 
 /**
@@ -344,6 +395,13 @@ export function ListCloudModels(): $CancellablePromise<types$0.ModelInfo[] | nul
 }
 
 /**
+ * ListEditModels returns the instruction-edit models for the dialog.
+ */
+export function ListEditModels(): $CancellablePromise<$models.EditModelsInfo> {
+    return $Call.ByID(1633525635);
+}
+
+/**
  * ListLocalModels returns the imference catalog filtered to locally-runnable
  * models (those with downloadable weights). Public endpoint — works without an
  * API key, so the picker is usable on first run.
@@ -368,6 +426,13 @@ export function ListPendingCloudJobs(): $CancellablePromise<types$0.PendingCloud
  */
 export function ListSavedImages(offset: number, limit: number, filter: types$0.GalleryFilter): $CancellablePromise<types$0.SavedImage[] | null> {
     return $Call.ByID(2064626354, offset, limit, filter);
+}
+
+/**
+ * ListTools returns the catalog with this machine's badge and cloud price.
+ */
+export function ListTools(): $CancellablePromise<$models.ToolInfo[] | null> {
+    return $Call.ByID(3282129816);
 }
 
 /**
@@ -405,6 +470,15 @@ export function PickModelFile(): $CancellablePromise<string> {
 }
 
 /**
+ * ProbeTools starts the tools sidecar (when the engine is installed) to learn
+ * the real runtime (onnxruntime providers, ffmpeg, RAM), then returns the
+ * refreshed list. Cheap after the first call: the probe is cached per start.
+ */
+export function ProbeTools(): $CancellablePromise<$models.ToolInfo[] | null> {
+    return $Call.ByID(4112743016);
+}
+
+/**
  * PurgeBaseComponentsCache empties model-cache/, the shared text-encoder/VAE
  * tree the Python engine fills from the CDN. Outside the LRU quota on purpose:
  * those files are shared by every checkpoint of a family, so evicting them
@@ -436,6 +510,15 @@ export function RefreshWalletBalance(): $CancellablePromise<string> {
 }
 
 /**
+ * ReleaseTools frees the tools' warm models (ONNX sessions, Florence-2): the
+ * editor/dialog calls it on close so they don't squat RAM next to a
+ * generation model. The process itself stops after the idle timeout.
+ */
+export function ReleaseTools(): $CancellablePromise<void> {
+    return $Call.ByID(470560953);
+}
+
+/**
  * RemoveCustomModel drops a custom checkpoint from the registry (the file on
  * disk is never touched). If it was the active model, the selection is cleared
  * and the engine stopped.
@@ -463,6 +546,14 @@ export function RestartSidecar(): $CancellablePromise<void> {
  */
 export function RevealInFolder(imgPath: string): $CancellablePromise<void> {
     return $Call.ByID(1947324723, imgPath);
+}
+
+/**
+ * RunTool runs one tool (see ToolRunRequest) and saves its outputs to the
+ * gallery. Tool failures come back in ToolRunResult.Error.
+ */
+export function RunTool(req: $models.ToolRunRequest): $CancellablePromise<$models.ToolRunResult> {
+    return $Call.ByID(3411194748, req);
 }
 
 /**
@@ -501,6 +592,14 @@ export function SelectLocalModel(modelCode: string): $CancellablePromise<void> {
 }
 
 /**
+ * SetToolsSettings saves the preferences and applies them (idle timeout,
+ * local API on/off).
+ */
+export function SetToolsSettings(ts: types$0.ToolsSettings): $CancellablePromise<types$0.ToolsSettings> {
+    return $Call.ByID(262164407, ts);
+}
+
+/**
  * StartSidecar boots the local engine on demand (home-screen engine control),
  * loading the currently-selected model. No-op if already starting/ready; errors
  * if the engine isn't installed or no model has been downloaded yet.
@@ -527,6 +626,39 @@ export function StopLocalGeneration(): $CancellablePromise<void> {
  */
 export function StopSidecar(): $CancellablePromise<void> {
     return $Call.ByID(2431020056);
+}
+
+/**
+ * SwitchBackFromEditModel restores the model that was loaded before
+ * SwitchToEditModel (a restart from the cache: its weights were kept).
+ */
+export function SwitchBackFromEditModel(): $CancellablePromise<void> {
+    return $Call.ByID(2809890027);
+}
+
+/**
+ * SwitchToEditModel makes the edit model the local model (downloading it the
+ * first time, like SelectLocalModel — progress on "model:progress") and
+ * remembers the model it replaces, for SwitchBackFromEditModel.
+ */
+export function SwitchToEditModel(): $CancellablePromise<void> {
+    return $Call.ByID(969208265);
+}
+
+/**
+ * TakeClientGalleryOutbox returns and clears the results waiting for the
+ * browser (web build). Always an empty list on the desktop.
+ */
+export function TakeClientGalleryOutbox(): $CancellablePromise<$models.ClientGalleryItem[] | null> {
+    return $Call.ByID(2885756288);
+}
+
+/**
+ * ToolGenModels resolves GenToolModels for tool toolID on a gallery item
+ * (sourceName; meta for an unsaved / client-gallery source).
+ */
+export function ToolGenModels(toolID: string, sourceName: string, meta: types$0.GenerationMeta | null): $CancellablePromise<$models.GenToolModels> {
+    return $Call.ByID(3729842993, toolID, sourceName, meta);
 }
 
 /**

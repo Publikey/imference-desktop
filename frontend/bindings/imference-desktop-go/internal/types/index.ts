@@ -26,6 +26,7 @@ export type {
     Settings,
     SidecarStatus,
     StorageInfo,
+    ToolsSettings,
     UpdateInfo,
     WalletInfo,
     WanRuntimeSettings

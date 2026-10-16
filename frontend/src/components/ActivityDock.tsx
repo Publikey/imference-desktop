@@ -275,12 +275,14 @@ export function ActivityDock({
           ) : (
             <span>{t("panels.queue")}</span>
           )}
-          {errors > 0 && (
-            <span className="bg-destructive ring-card absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold text-white ring-2">
-              {errors}
-            </span>
-          )}
         </span>
+        {/* Outside the pill: its overflow-hidden (for the flash) clipped the
+            badge to a sliver with no number. */}
+        {errors > 0 && (
+          <span className="bg-destructive ring-card absolute -right-1.5 -top-1.5 z-10 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold text-white ring-2">
+            {errors}
+          </span>
+        )}
       </button>
       {notices.length > 0 && (
         <div className="flex max-w-[calc(100vw-12rem)] flex-col-reverse items-end gap-2" aria-live="polite">

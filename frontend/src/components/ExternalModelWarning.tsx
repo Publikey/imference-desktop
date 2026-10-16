@@ -18,7 +18,8 @@ export function ExternalModelWarning({ model, className }: { model?: ModelInfo |
     >
       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
       <p>
-        <span className="font-medium">{t("external.title")}</span> {t("external.body")}
+        <span className="font-medium">{t("external.title", { name: model.name || model.modelCode })}</span>{" "}
+        {t("external.body")}
       </p>
     </div>
   );

@@ -360,7 +360,7 @@
     "help": "What your machine needs before this model can run: its weights, the shared components of its family, and the local engine."
   },
   "external": {
-    "title": "External provider.",
+    "title": "{{name}} uses an external provider.",
     "body": "Your prompt and images are sent to a third-party service we don't control. Its own rules apply: it may refuse content or keep data. Avoid personal or sensitive content."
   },
   "modelBar": {

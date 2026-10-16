@@ -303,95 +303,6 @@
       "cloud_available": true
     },
     {
-      "id": "inpaint",
-      "version": "1.0.0",
-      "name": "Inpaint",
-      "description": "Repaint the masked area from a prompt with a generation model; the rest of the image is kept.",
-      "category": "generation",
-      "mcp_name": "inpaint",
-      "inputs": {
-        "image": {
-          "type": "image",
-          "required": true,
-          "description": "Source image",
-          "max_megapixels": 4,
-          "max_mb": 30
-        },
-        "mask": {
-          "type": "mask",
-          "required": true,
-          "description": "White = area to repaint",
-          "max_megapixels": 4,
-          "max_mb": 30
-        }
-      },
-      "params": {
-        "model": {
-          "type": "string",
-          "description": "Generation model (a catalog model name that accepts an image input).",
-          "max_length": 128,
-          "required": true
-        },
-        "prompt": {
-          "type": "string",
-          "description": "What to paint in the masked area.",
-          "max_length": 4000
-        },
-        "negative_prompt": {
-          "type": "string",
-          "max_length": 2000
-        },
-        "strength": {
-          "type": "float",
-          "default": 0.9,
-          "min": 0.3,
-          "max": 1
-        },
-        "seed": {
-          "type": "int",
-          "description": "Fixed seed for a reproducible result (default: random).",
-          "min": 0,
-          "max": 4294967295
-        },
-        "feather": {
-          "type": "int",
-          "default": 12,
-          "description": "Soft edge of the blend, pixels.",
-          "min": 0,
-          "max": 64
-        }
-      },
-      "outputs": {
-        "image": {
-          "type": "image"
-        }
-      },
-      "runtimes": {
-        "local": [
-          "cuda",
-          "mps",
-          "rocm"
-        ],
-        "cloud_queue": "generation",
-        "slow_on_cpu": false,
-        "min_vram_gb": 0.0,
-        "min_ram_gb": 0.0,
-        "needs_engine": true
-      },
-      "cost": {
-        "credits": 0.0
-      },
-      "license": {
-        "spdx": "model",
-        "source": "license of the selected model",
-        "verified": true
-      },
-      "available": true,
-      "weights_mb": 0,
-      "weight_files": [],
-      "cloud_available": true
-    },
-    {
       "id": "instruct-edit",
       "version": "1.0.0",
       "name": "Edit with instructions",
@@ -449,7 +360,7 @@
         "keep_size": {
           "type": "bool",
           "default": true,
-          "description": "Resize the result back to the input size (the model renders at about 1 MP)."
+          "description": "Resize the result back to the input size (the model works at 0.5 to 1 MP: a small input is rendered at its own size, at least 0.5 MP)."
         },
         "seed": {
           "type": "int",

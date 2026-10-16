@@ -63,7 +63,7 @@ func TestAssessTable(t *testing.T) {
 		{"vary: generation stopped -> cloud", "vary", Host{GOOS: "linux", EngineInstalled: true}, BadgeCloud, "", "generation_not_ready"},
 		{"vary: no img2img -> cloud", "vary", Host{GenerationReady: true, GenerationDevice: "cuda:0"}, BadgeCloud, "", "no_img2img"},
 		{"vary: on cuda -> local", "vary", Host{GenerationReady: true, GenerationImg2Img: true, GenerationDevice: "cuda:0"}, BadgeLocal, "cuda", ""},
-		{"inpaint: on rocm -> local", "inpaint", Host{GenerationReady: true, GenerationImg2Img: true, GenerationDevice: "cuda:0(rocm)"}, BadgeLocal, "rocm", ""},
+		{"outpaint: on rocm -> local", "outpaint", Host{GenerationReady: true, GenerationImg2Img: true, GenerationDevice: "cuda:0(rocm)"}, BadgeLocal, "rocm", ""},
 		{"outpaint: on cpu -> cloud", "outpaint", Host{GenerationReady: true, GenerationImg2Img: true, GenerationDevice: "cpu"}, BadgeCloud, "", "generation_on_cpu"},
 
 		// Instruction editing needs an edit model loaded; the img2img tools refuse one.
@@ -73,7 +73,7 @@ func TestAssessTable(t *testing.T) {
 		{"instruct-edit: sdxl loaded -> cloud", "instruct-edit", Host{GenerationReady: true, GenerationImg2Img: true, GenerationBackend: "sdxl", GenerationDevice: "cuda:0"}, BadgeCloud, "", "no_edit_model"},
 		{"instruct-edit: edit model not ready -> cloud", "instruct-edit", Host{GenerationBackend: "qwenimage-edit", GenerationDevice: "cuda:0"}, BadgeCloud, "", "generation_not_ready"},
 		{"vary: edit model loaded -> cloud", "vary", Host{GenerationReady: true, GenerationBackend: "qwenimage-edit", GenerationDevice: "cuda:0"}, BadgeCloud, "", "edit_model_loaded"},
-		{"inpaint: edit model loaded -> cloud", "inpaint", Host{GenerationReady: true, GenerationImg2Img: true, GenerationBackend: "qwenimage-edit", GenerationDevice: "cuda:0"}, BadgeCloud, "", "edit_model_loaded"},
+		{"outpaint: edit model loaded -> cloud", "outpaint", Host{GenerationReady: true, GenerationImg2Img: true, GenerationBackend: "qwenimage-edit", GenerationDevice: "cuda:0"}, BadgeCloud, "", "edit_model_loaded"},
 		{"outpaint: qwenimage loaded -> local", "outpaint", Host{GenerationReady: true, GenerationImg2Img: true, GenerationBackend: "qwenimage", GenerationDevice: "cuda:0"}, BadgeLocal, "cuda", ""},
 	}
 	for _, c := range cases {

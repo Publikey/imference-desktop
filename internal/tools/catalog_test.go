@@ -16,12 +16,16 @@ func TestEmbeddedCatalogParses(t *testing.T) {
 	// The tools the gallery menus reference must exist.
 	for _, id := range []string{
 		"upscale", "vary", "remove-background", "erase-object", "segment", "outpaint",
-		"inpaint", "restore-faces", "describe", "resize", "crop", "convert", "strip-metadata",
+		"restore-faces", "describe", "resize", "crop", "convert", "strip-metadata",
 		"video-trim", "video-convert", "video-concat", "interpolate", "instruct-edit",
 	} {
 		if _, ok := c.Get(id); !ok {
 			t.Errorf("catalog lacks %q", id)
 		}
+	}
+	// Disabled in the engine (available: false): the menus skip it.
+	if _, ok := c.Get("inpaint"); ok {
+		t.Error("inpaint is disabled and must not be in the catalog")
 	}
 	for _, tool := range c.Tools {
 		if tool.Name == "" || tool.Category == "" || len(tool.Inputs) == 0 || len(tool.Outputs) == 0 {

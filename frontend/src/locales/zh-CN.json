@@ -1013,7 +1013,6 @@
       "switching": "正在切换…",
       "switchBack": "切换回 {{name}}",
       "switchFailed": "无法切换：{{error}}",
-      "advanced": "高级",
       "galleryEmpty": "图库中还没有图片。",
       "more": "更多",
       "notLoaded": "运行时加载"

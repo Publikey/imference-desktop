@@ -1025,7 +1025,6 @@
       "switching": "Switching…",
       "switchBack": "Switch back to {{name}}",
       "switchFailed": "Could not switch: {{error}}",
-      "advanced": "Advanced",
       "galleryEmpty": "No images in the gallery yet.",
       "more": "More",
       "notLoaded": "loads when you run it"

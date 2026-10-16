@@ -22,7 +22,6 @@ import {
   Download,
   Cloud,
   Cpu,
-  ChevronDown,
   FolderOpen,
   ImagePlus,
   Images,
@@ -998,7 +997,9 @@ function ErrorPanel({
 
 // ------------------------------------------------------------------------
 // Edit with instructions: the instruction on top, optional reference images,
-// the model, keep size, and an advanced section.
+// and the model. The other params (keep_size, negative_prompt, steps,
+// guidance, seed) stay API / MCP only: the defaults are right for every model,
+// and the GPT Image edit models ignore them.
 // ------------------------------------------------------------------------
 
 const REF_MAX_MB = 30;
@@ -1030,7 +1031,6 @@ function InstructEditForm({
   onModelsChanged?: () => void;
 }) {
   const { t } = useTranslation();
-  const [advanced, setAdvanced] = useState(false);
   const [picking, setPicking] = useState(false);
   const [refError, setRefError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1057,9 +1057,6 @@ function InstructEditForm({
     };
     reader.readAsDataURL(f);
   };
-  const advancedFields = ["negative_prompt", "steps", "guidance", "seed"]
-    .map(spec)
-    .filter((p): p is ToolParamSpec => !!p);
   const cloudModels = models?.cloud ?? [];
   const modelValue = String(params.model ?? models?.defaultCloud ?? "");
 
@@ -1189,43 +1186,6 @@ function InstructEditForm({
               {models?.local ? t("tools.instruct.onThisComputer") : t("tools.instruct.notLoaded")}
             </span>
           </p>
-        )}
-      </div>
-
-      <label className="flex items-center gap-2 text-sm">
-        <Checkbox
-          checked={params.keep_size !== false}
-          onCheckedChange={(c) => onChange("keep_size", !!c)}
-          disabled={disabled}
-        />
-        {t("tools.params.keep_size")}
-      </label>
-
-      <div className="border-t pt-2">
-        <button
-          type="button"
-          onClick={() => setAdvanced((a) => !a)}
-          className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 text-xs font-medium"
-          aria-expanded={advanced}
-        >
-          <ChevronDown className={cn("size-3.5 transition-transform", advanced && "rotate-180")} />
-          {t("tools.instruct.advanced")}
-        </button>
-        {advanced && (
-          <div className="mt-3 space-y-3">
-            {advancedFields.map((p) => (
-              <ParamField
-                key={p.name}
-                toolId={tool.id}
-                spec={p}
-                value={params[p.name]}
-                onChange={(v) => onChange(p.name, v)}
-                disabled={disabled}
-                label={t(`tools.params.${p.name}`, { defaultValue: humanize(p.name) })}
-                hint={t(`tools.paramHints.${tool.id}.${p.name}`, { defaultValue: p.description ?? "" })}
-              />
-            ))}
-          </div>
         )}
       </div>
     </div>

@@ -21,7 +21,7 @@ import (
 var USDCBaseAddress = common.HexToAddress("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
 
 // USDCDecimals on Base mainnet — used by both balance formatting and
-// the maxAmountRequired conversion in the x402 client.
+// the offer amount conversion in the x402 client.
 const USDCDecimals = 6
 
 // defaultRPCURL is the public Base mainnet RPC. Rate-limited but free

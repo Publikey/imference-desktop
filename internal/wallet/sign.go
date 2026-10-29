@@ -15,7 +15,8 @@ import (
 )
 
 // Authorization is the EIP-3009 TransferWithAuthorization payload —
-// the exact shape that goes into the x402 X-PAYMENT header. All numeric
+// the exact shape that goes into the x402 payment header (PAYMENT-SIGNATURE
+// in v2, X-PAYMENT in v1). All numeric
 // fields are stringified uint256 because that's what the Coinbase
 // facilitator expects on the wire (matches x402-fetch's encodePayment).
 type Authorization struct {
@@ -39,7 +40,7 @@ type SignedAuthorization struct {
 // payment requirements it received in the 402 body.
 type SignEIP3009Params struct {
 	PayTo             common.Address // accepts[i].payTo
-	Value             *big.Int       // accepts[i].maxAmountRequired (already parsed from string)
+	Value             *big.Int       // accepts[i].amount (v2) or maxAmountRequired (v1), parsed
 	Asset             common.Address // accepts[i].asset (USDC contract)
 	ChainID           int64          // 8453 for base mainnet
 	DomainName        string         // accepts[i].extra.name ("USD Coin")
@@ -49,7 +50,7 @@ type SignEIP3009Params struct {
 
 // SignEIP3009 builds the typed data, signs it with the wallet's private
 // key, and returns the SignedAuthorization that the x402 client wraps
-// into the X-PAYMENT header.
+// into the payment header.
 //
 // Time bounds match x402-fetch: validAfter = now - 600s (allows slight
 // server clock skew), validBefore = now + maxTimeoutSeconds. Nonce is

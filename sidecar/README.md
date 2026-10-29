@@ -50,7 +50,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cu124
 
 # 3. imference-engine with the image-backend extras (keep the tag in sync with
 #    EngineTarball in internal/installer/installer.go)
-pip install "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2,tools] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.0.tar.gz"
+pip install "imference-engine[sdxl,sd15,zimage,flux,chroma,qwenimage,anima,krea2,tools] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.1.tar.gz"
 #    (or, from a checkout: pip install -e "C:\path\to\imference-engine[sdxl,...,tools]")
 
 # 3b. GPU flavor of onnxruntime for the editing tools (replaces the CPU wheel)

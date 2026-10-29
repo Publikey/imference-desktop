@@ -12,10 +12,10 @@ import (
 
 func TestEngineTarballPinsToolsRelease(t *testing.T) {
 	t.Setenv(EngineSourceEnvVar, "")
-	if got := PinnedEngineVersion(); got != "0.5.0" {
-		t.Fatalf("PinnedEngineVersion = %q, want 0.5.0", got)
+	if got := PinnedEngineVersion(); got != "0.5.1" {
+		t.Fatalf("PinnedEngineVersion = %q, want 0.5.1", got)
 	}
-	if !strings.Contains(EngineTarball, "/tags/v0.5.0.tar.gz") {
+	if !strings.Contains(EngineTarball, "/tags/v0.5.1.tar.gz") {
 		t.Fatalf("EngineTarball must stay a tag pin, got %s", EngineTarball)
 	}
 	for _, extra := range []string{"sdxl", "krea2", "tools"} {

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 )
 
@@ -84,7 +85,7 @@ func TestCatalogKeepsManifestOrder(t *testing.T) {
 	for _, p := range up.Params {
 		names = append(names, p.Name)
 	}
-	if got, want := names, []string{"scale", "model", "tile"}; len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+	if got, want := names, []string{"scale", "model", "tile", "format"}; !slices.Equal(got, want) {
 		t.Fatalf("upscale params order = %v, want %v", got, want)
 	}
 	scale, _ := up.Param("scale")

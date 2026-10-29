@@ -234,7 +234,7 @@
     },
     {
       "id": "erase-object",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "name": "Magic eraser",
       "description": "Remove what the mask covers and fill it with matching background (LaMa).",
       "category": "image",
@@ -262,12 +262,20 @@
           "description": "Grow the mask by this many pixels (catches edges and shadows).",
           "min": 0,
           "max": 64
+        },
+        "format": {
+          "type": "enum",
+          "default": "webp",
+          "description": "webp: high quality (lossy, q92), far smaller files. png: lossless. Over 16383 px a side the result is png.",
+          "values": [
+            "webp",
+            "png"
+          ]
         }
       },
       "outputs": {
         "image": {
-          "type": "image",
-          "format": "png"
+          "type": "image"
         }
       },
       "runtimes": {
@@ -400,9 +408,9 @@
     },
     {
       "id": "interpolate",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "name": "Smooth motion",
-      "description": "Multiply a video's frame rate with RIFE frame interpolation (2x or 4x).",
+      "description": "Double a video's frame rate with RIFE frame interpolation.",
       "category": "video",
       "mcp_name": "interpolate_frames",
       "inputs": {
@@ -411,7 +419,7 @@
           "required": true,
           "description": "Source video or GIF",
           "max_mb": 200,
-          "max_seconds": 60
+          "max_seconds": 10
         }
       },
       "params": {
@@ -419,8 +427,7 @@
           "type": "enum",
           "default": 2,
           "values": [
-            2,
-            4
+            2
           ]
         }
       },
@@ -557,7 +564,7 @@
     },
     {
       "id": "remove-background",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "name": "Remove background",
       "description": "Cut out the subject: transparent PNG, a mask, or the subject on a solid color.",
       "category": "image",
@@ -602,12 +609,20 @@
           "description": "Hard cut at this level (default: soft alpha).",
           "min": 0,
           "max": 1
+        },
+        "format": {
+          "type": "enum",
+          "default": "webp",
+          "description": "webp: high quality (lossy, q92), far smaller files. png: lossless. Over 16383 px a side the result is png. The mask output is always png.",
+          "values": [
+            "webp",
+            "png"
+          ]
         }
       },
       "outputs": {
         "image": {
-          "type": "image",
-          "format": "png"
+          "type": "image"
         }
       },
       "runtimes": {
@@ -749,7 +764,7 @@
     },
     {
       "id": "restore-faces",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "name": "Restore faces",
       "description": "Detect faces and restore them with GFPGAN, blended back into the image.",
       "category": "image",
@@ -776,12 +791,20 @@
           "default": 10,
           "min": 1,
           "max": 20
+        },
+        "format": {
+          "type": "enum",
+          "default": "webp",
+          "description": "webp: high quality (lossy, q92), far smaller files. png: lossless. Over 16383 px a side the result is png.",
+          "values": [
+            "webp",
+            "png"
+          ]
         }
       },
       "outputs": {
         "image": {
-          "type": "image",
-          "format": "png"
+          "type": "image"
         }
       },
       "runtimes": {
@@ -955,7 +978,7 @@
     },
     {
       "id": "upscale",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "name": "Upscale",
       "description": "Upscale 2x or 4x with Real-ESRGAN (sharp details, no hallucinated content).",
       "category": "image",
@@ -993,12 +1016,20 @@
           "description": "Tile size (0 = whole image; lower uses less memory).",
           "min": 0,
           "max": 1024
+        },
+        "format": {
+          "type": "enum",
+          "default": "webp",
+          "description": "webp: high quality (lossy, q92), far smaller files. png: lossless. Over 16383 px a side the result is png.",
+          "values": [
+            "webp",
+            "png"
+          ]
         }
       },
       "outputs": {
         "image": {
-          "type": "image",
-          "format": "png"
+          "type": "image"
         }
       },
       "runtimes": {

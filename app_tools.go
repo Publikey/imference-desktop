@@ -35,7 +35,7 @@ import (
 	"imference-desktop-go/internal/sidecar"
 	"imference-desktop-go/internal/tools"
 	"imference-desktop-go/internal/types"
-	"imference-desktop-go/internal/wallet"
+	"imference-desktop-go/internal/x402"
 )
 
 // creditUSD is the dollar value of one credit (1 credit = $0.001).
@@ -988,11 +988,11 @@ func (a *App) runToolLocal(ctx context.Context, jobID string, t tools.Tool, inpu
 func (a *App) runToolCloud(ctx context.Context, jobID string, t tools.Tool, inputs, params map[string]any, outDir string) ([]rawOutput, float64, *tools.Error) {
 	s := a.settings.Get()
 	rail := cloudRail(s.PaymentMode)
-	var signer *wallet.Wallet
+	var signer x402.Signer
 	if rail == "x402" {
-		w, err := wallet.LoadFromKeychain()
+		w, err := a.loadX402Signer()
 		if err != nil {
-			return nil, 0, tools.NewError(tools.CodeCloud, "x402 mode selected but no wallet configured — open Settings to generate/import one")
+			return nil, 0, tools.NewError(tools.CodeCloud, err.Error())
 		}
 		signer = w
 	} else if s.APIKey == "" {

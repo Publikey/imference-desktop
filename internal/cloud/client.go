@@ -21,7 +21,6 @@ import (
 
 	"imference-desktop-go/internal/logbus"
 	"imference-desktop-go/internal/types"
-	"imference-desktop-go/internal/wallet"
 	"imference-desktop-go/internal/x402"
 )
 
@@ -959,7 +958,7 @@ func (c *Client) GenerateX402(
 	ctx context.Context,
 	model string,
 	req types.GenerationRequest,
-	signer *wallet.Wallet,
+	signer x402.Signer,
 	onEnqueued func(requestID, kind string),
 ) (types.GenerationResult, error) {
 	if signer == nil {

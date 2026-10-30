@@ -456,7 +456,7 @@
     "activeMethod": "当前方式",
     "apiKeyCredit": "API 密钥（积分）",
     "x402Wallet": "x402（USDC 钱包）",
-    "apiKeyPlaceholder": "来自 imference.com 的 Bearer 令牌",
+    "apiKeyPlaceholder": "粘贴你在 imference.com 获取的 API 密钥",
     "x402WalletLabel": "x402 钱包（Base 链 USDC）",
     "paths": "路径",
     "pathsHint": "云端和本地模型在主界面提示词上方的表单中选择。",
@@ -1052,7 +1052,6 @@
   },
   "web": {
     "signOut": "退出登录",
-    "apiKeyHint": "已使用此密钥登录。要使用其他密钥，请先退出登录。",
     "gallery": {
       "nav": "图库",
       "desc": "你的图片保存在你这边的位置。",
@@ -1067,6 +1066,131 @@
       "unsupported": "此浏览器无法写入文件夹（Chrome、Edge 或 Brave 可以）：图片保存在浏览器存储中。",
       "privacy": "你的图片从不保存在我们的服务器上：生成结果交给你的浏览器并保存在这里，云端副本会在 24 小时内过期。",
       "bannerText": "你的图库文件夹需要再次授权才能读取。"
+    }
+  },
+  "webpay": {
+    "title": {
+      "needsKey": "选择支付方式",
+      "insufficient": "充值积分",
+      "wallet": "重新连接钱包",
+      "manual": "积分"
+    },
+    "subtitle": {
+      "needsKey": "支付期间，你的提示词和设置都会保留。",
+      "insufficient": "你还剩 {{credits}} 积分，不足以完成本次生成。",
+      "wallet": "按次支付需要在此浏览器中连接钱包。",
+      "manual": "积分可用于图片、视频和工具。"
+    },
+    "run": {
+      "image": "每张图片",
+      "video": "每个视频",
+      "tool": "每次编辑",
+      "price": "{{credits}} 积分（{{usd}}）"
+    },
+    "recommended": "推荐",
+    "pack": {
+      "title": "积分包",
+      "amount": "{{credits}} 积分",
+      "runs": {
+        "image_one": "约可用 {{what}} 生成 {{n}} 张图片",
+        "image_other": "约可用 {{what}} 生成 {{n}} 张图片",
+        "video_one": "约可用 {{what}} 生成 {{n}} 个视频",
+        "video_other": "约可用 {{what}} 生成 {{n}} 个视频",
+        "tool_one": "约可进行 {{n}} 次{{what}}",
+        "tool_other": "约可进行 {{n}} 次{{what}}"
+      },
+      "point1": "一次付款，无需订阅",
+      "point2": "你的密钥也可用于 Imference Desktop、Claude（MCP）和 API",
+      "card": "用银行卡支付 {{usd}}",
+      "usdc": "用 USDC 支付 {{usd}}"
+    },
+    "perRun": {
+      "title": "按次支付",
+      "exact": "按实际价格",
+      "unit": {
+        "image": "每张图片，以 Base 上的 USDC 支付",
+        "video": "每个视频，以 Base 上的 USDC 支付",
+        "tool": "每次编辑，以 Base 上的 USDC 支付"
+      },
+      "point1": "无需账户，无需密钥",
+      "point2": "每次付款都由你的钱包确认",
+      "button": "用我的钱包支付",
+      "on": "正在使用 {{address}} 按次支付。",
+      "reconnect": "重新连接钱包",
+      "backToCredits": "改用我的积分"
+    },
+    "wallet": {
+      "detected": "已检测到 {{name}}",
+      "none": "此浏览器中没有钱包。获取一个：",
+      "pick": "支付钱包：",
+      "waiting": "正在等待 {{name}}。没有看到弹窗？请点击浏览器工具栏中的 {{name}} 图标打开请求。"
+    },
+    "trust": {
+      "card": "银行卡支付由 Stripe 处理，Imference 不会看到你的卡号。",
+      "wallet": "USDC 付款在你自己的钱包中确认，Imference 从不持有你的密钥或资金。",
+      "unit": "1 积分 = $0.001，价格以美元计",
+      "terms": "条款"
+    },
+    "noWallet": "此浏览器中未检测到钱包。安装 MetaMask 或 Coinbase Wallet 即可用 USDC 支付，也可以用银行卡支付。",
+    "haveKey": "已有 API 密钥？",
+    "useKey": "使用",
+    "invalidKey": "无法识别此密钥。",
+    "cancelled": "已在钱包中取消支付。",
+    "notEnoughUsdc": "此钱包在 Base 上的 USDC 不足。",
+    "signTitle": "请在钱包中确认支付 {{usd}}",
+    "signHint": "Base 上的 USDC，来自 {{address}}（{{name}}）。",
+    "notice": {
+      "pending": "已收到付款，正在添加积分…",
+      "added": "已添加 {{credits}} 积分，可以开始生成了。",
+      "cancelled": "支付已取消，未产生任何费用。"
+    },
+    "keep": {
+      "title": "请保存你的密钥：它就是你的账户",
+      "text": "没有邮箱或密码。此密钥是找回积分的唯一方式，可用于这里、Imference Desktop、Claude（MCP）或 API。此浏览器会记住它，但请另存到安全的地方。",
+      "copy": "复制",
+      "copied": "已复制",
+      "download": "下载",
+      "done": "我已保存"
+    },
+    "chip": {
+      "getCredits": "获取积分",
+      "balance": "{{credits}} 积分",
+      "credits": "积分",
+      "buyTitle": "购买积分",
+      "wallet": "USDC · {{address}}",
+      "walletTitle": "正在用钱包按次支付"
+    },
+    "key": {
+      "none": "还没有密钥？购买一次积分即可自动创建。"
+    },
+    "settings": {
+      "title": "生成的支付方式",
+      "desc": "选择一种，随时可以切换。",
+      "inUse": "使用中",
+      "credits": {
+        "title": "积分",
+        "desc": "预付积分存于你的 API 密钥中。同一密钥也可用于 Imference Desktop、Claude（MCP）和 API。",
+        "status": "密钥尾号 {{hint}} · 剩余 {{credits}} 积分",
+        "none": "此浏览器中还没有 API 密钥。",
+        "use": "用我的积分支付",
+        "change": "使用其他密钥",
+        "forget": "移除此密钥"
+      },
+      "wallet": {
+        "title": "按次支付",
+        "desc": "每次生成以 Base 上的 USDC 支付，并在你的钱包中确认。无需账户。",
+        "status": "{{name}} · {{address}}",
+        "none": "未连接钱包。",
+        "use": "用我的钱包支付",
+        "reconnect": "重新连接",
+        "disconnect": "停止用钱包支付"
+      }
+    },
+    "card": {
+      "back": "其他支付方式",
+      "secure": "由 Stripe 提供安全支付",
+      "unavailable": "无法加载 Stripe。请检查网络连接或广告拦截插件后重试。",
+      "late": "已收到付款，积分稍后到账。"
     }
   },
   "engine": {

@@ -171,7 +171,7 @@ var webCustom = map[string]func(u *webUser, raw []json.RawMessage) (any, error){
 		return webSettings(u.app.GetSettings(), u), nil
 	},
 	// Only the cloud choices are writable from the browser: no server paths,
-	// no payment mode switch (x402 needs a wallet the server must not hold),
+	// no payment mode switch (per-run x402 is web.SetPayMode, see web_pay.go),
 	// and the API key stays the one the session logged in with.
 	"SaveSettings": func(u *webUser, raw []json.RawMessage) (any, error) {
 		var next types.Settings
@@ -200,7 +200,7 @@ var webCustom = map[string]func(u *webUser, raw []json.RawMessage) (any, error){
 // webSettings forces the web invariants on a settings value.
 func webSettings(s types.Settings, u *webUser) types.Settings {
 	s.APIKey = u.apiKey
-	s.PaymentMode = "credits"
+	s.PaymentMode = u.paymentMode() // credits, or x402 with the browser wallet (web_pay.go)
 	s.WalletAddress = ""
 	s.PythonPath, s.SDXLPath, s.OutputDir = "", "", ""
 	s.LocalModel = nil

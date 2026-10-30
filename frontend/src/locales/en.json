@@ -462,7 +462,7 @@
     "activeMethod": "Active method",
     "apiKeyCredit": "API key (credit)",
     "x402Wallet": "x402 (USDC wallet)",
-    "apiKeyPlaceholder": "Bearer token from imference.com",
+    "apiKeyPlaceholder": "Paste your API key from imference.com",
     "x402WalletLabel": "x402 wallet (USDC on Base)",
     "paths": "Paths",
     "pathsHint": "The cloud and local models are chosen from the form, above the prompt.",
@@ -1064,7 +1064,6 @@
   },
   "web": {
     "signOut": "Sign out",
-    "apiKeyHint": "Signed in with this key. Sign out to use another one.",
     "gallery": {
       "nav": "Gallery",
       "desc": "Where your images are kept, on your side.",
@@ -1079,6 +1078,131 @@
       "unsupported": "This browser cannot write to a folder (Chrome, Edge or Brave can): images stay in the browser's storage.",
       "privacy": "Your images are never stored on our servers: a result is uploaded by the generator, handed to your browser, saved here, and the cloud copy expires within 24 hours.",
       "bannerText": "Your gallery folder needs your permission again to be read."
+    }
+  },
+  "webpay": {
+    "title": {
+      "needsKey": "Choose how to pay",
+      "insufficient": "Top up your credits",
+      "wallet": "Reconnect your wallet",
+      "manual": "Credits"
+    },
+    "subtitle": {
+      "needsKey": "Your prompt and settings stay as they are while you pay.",
+      "insufficient": "You have {{credits}} credits left, not enough for this run.",
+      "wallet": "Paying per run needs your wallet connected in this browser.",
+      "manual": "Credits pay for images, videos and tools."
+    },
+    "run": {
+      "image": "per image",
+      "video": "per video",
+      "tool": "per edit",
+      "price": "{{credits}} credits ({{usd}})"
+    },
+    "recommended": "Recommended",
+    "pack": {
+      "title": "Credit pack",
+      "amount": "{{credits}} credits",
+      "runs": {
+        "image_one": "About {{n}} image with {{what}}",
+        "image_other": "About {{n}} images with {{what}}",
+        "video_one": "About {{n}} video with {{what}}",
+        "video_other": "About {{n}} videos with {{what}}",
+        "tool_one": "About {{n}} {{what}} edit",
+        "tool_other": "About {{n}} {{what}} edits"
+      },
+      "point1": "One payment, no subscription",
+      "point2": "Your key also works in Imference Desktop, in Claude (MCP) and through the API",
+      "card": "Pay {{usd}} by card",
+      "usdc": "Pay {{usd}} in USDC"
+    },
+    "perRun": {
+      "title": "Pay as you go",
+      "exact": "Exact price",
+      "unit": {
+        "image": "per image, in USDC on Base",
+        "video": "per video, in USDC on Base",
+        "tool": "per edit, in USDC on Base"
+      },
+      "point1": "No account and no key",
+      "point2": "Your wallet asks you to confirm each payment",
+      "button": "Pay with my wallet",
+      "on": "Paying per run with {{address}}.",
+      "reconnect": "Reconnect the wallet",
+      "backToCredits": "Use my credits instead"
+    },
+    "wallet": {
+      "detected": "{{name}} detected",
+      "none": "No wallet in this browser. Get one:",
+      "pick": "Pay with:",
+      "waiting": "Waiting for {{name}}. Nothing showing? Click the {{name}} icon in your browser's toolbar to open the request."
+    },
+    "trust": {
+      "card": "Card payments are processed by Stripe. Imference never sees your card number.",
+      "wallet": "USDC payments are confirmed in your own wallet. Imference never holds your keys or your funds.",
+      "unit": "1 credit = $0.001, prices in US dollars",
+      "terms": "Terms"
+    },
+    "noWallet": "No wallet found in this browser. Install MetaMask or Coinbase Wallet to pay in USDC, or pay by card.",
+    "haveKey": "Already have an API key?",
+    "useKey": "Use",
+    "invalidKey": "This key isn't recognised.",
+    "cancelled": "Payment cancelled in the wallet.",
+    "notEnoughUsdc": "Not enough USDC on Base in this wallet.",
+    "signTitle": "Confirm the payment of {{usd}} in your wallet",
+    "signHint": "USDC on Base, from {{address}} ({{name}}).",
+    "notice": {
+      "pending": "Payment received, adding your credits…",
+      "added": "{{credits}} credits added. You can generate.",
+      "cancelled": "Payment cancelled, nothing was charged."
+    },
+    "keep": {
+      "title": "Keep your key: it is your account",
+      "text": "There is no email or password. This key is the only way back to your credits, here, in Imference Desktop, in Claude (MCP) or through the API. This browser remembers it, but save it somewhere safe.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "download": "Download",
+      "done": "I saved it"
+    },
+    "chip": {
+      "getCredits": "Get credits",
+      "balance": "{{credits}} credits",
+      "credits": "Credits",
+      "buyTitle": "Buy credits",
+      "wallet": "USDC · {{address}}",
+      "walletTitle": "Paying per run with your wallet"
+    },
+    "key": {
+      "none": "No key yet? Buy credits once and the key is created for you."
+    },
+    "settings": {
+      "title": "How your runs are paid",
+      "desc": "Pick one. You can switch at any time.",
+      "inUse": "In use",
+      "credits": {
+        "title": "Credits",
+        "desc": "Prepaid credits on your API key. The same key works in Imference Desktop, in Claude (MCP) and through the API.",
+        "status": "Key ending in {{hint}} · {{credits}} credits left",
+        "none": "No API key in this browser yet.",
+        "use": "Pay with my credits",
+        "change": "Use another key",
+        "forget": "Forget this key"
+      },
+      "wallet": {
+        "title": "Pay as you go",
+        "desc": "Each run is paid in USDC on Base and confirmed in your wallet. No account needed.",
+        "status": "{{name}} · {{address}}",
+        "none": "No wallet connected.",
+        "use": "Pay with my wallet",
+        "reconnect": "Reconnect",
+        "disconnect": "Stop paying with the wallet"
+      }
+    },
+    "card": {
+      "back": "Other ways to pay",
+      "secure": "Secure payment by Stripe",
+      "unavailable": "Stripe could not be loaded. Check your connection or ad blocker, then try again.",
+      "late": "Payment received. Your credits will appear in a moment."
     }
   },
   "engine": {

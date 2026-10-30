@@ -286,7 +286,7 @@ function PayDialog() {
             <label className="text-sm font-medium" htmlFor="webpay-key">
               {t("webpay.haveKey")}
             </label>
-            <div className="flex min-w-[16rem] flex-1 gap-2">
+            <div className="flex min-w-[min(16rem,100%)] flex-1 gap-2">
               <Input
                 id="webpay-key"
                 type="password"

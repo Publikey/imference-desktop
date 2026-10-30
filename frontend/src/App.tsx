@@ -2005,7 +2005,7 @@ export default function App() {
 
 
       {updateInfo?.updateAvailable && updateInfo.latestVersion && (
-        <div className="relative z-10 mx-auto w-full max-w-[110rem] px-6 pt-4">
+        <div className="relative z-10 mx-auto w-full max-w-[110rem] px-4 pt-4 sm:px-6">
           <UpdateBanner info={updateInfo} onDismiss={dismissUpdate} />
         </div>
       )}
@@ -2013,7 +2013,7 @@ export default function App() {
       <main className="relative z-10 min-h-0 flex-1 overflow-y-auto xl:overflow-hidden">
         {/* Three drag-reorderable panels — Create / Activity / Gallery — side by
             side on desktop, stacked (in the same order) on narrow windows. */}
-        <div className="mx-auto w-full max-w-[110rem] px-6 pt-5 pb-16 xl:flex xl:h-full xl:flex-col xl:pb-0">
+        <div className="mx-auto w-full max-w-[110rem] px-4 pt-5 pb-16 sm:px-6 xl:flex xl:h-full xl:flex-col xl:pb-0">
           <PanelBoard
             columns={visibleColumns(panelColumns, panelHidden)}
             onColumnsChange={(next) => setPanelColumns(restoreHidden(next, panelColumns, panelHidden))}
@@ -2376,10 +2376,13 @@ function Header({
   // One system for the whole bar: every control is 36px high (h-9) with the
   // same radius; three zones — where things run (left), which panels are
   // shown (centre, exactly centred), app utilities as uniform icon buttons
-  // (right).
+  // (right). On a phone the bar is a plain row (no centred grid, it can't fit)
+  // and keeps only what a touch user needs: the panel switches, theme, logs and
+  // settings — the command palette and the language live in Settings / need a
+  // keyboard anyway, and the web app has a single (cloud) mode to show.
   const iconBtn = "text-muted-foreground hover:text-foreground hover:bg-muted relative size-9 rounded-lg";
   return (
-    <header className="bg-background/70 supports-[backdrop-filter]:bg-background/55 sticky top-0 z-10 grid h-14 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b px-5 backdrop-blur-xl">
+    <header className="bg-background/70 supports-[backdrop-filter]:bg-background/55 sticky top-0 z-10 flex h-14 items-center justify-between gap-2 border-b px-3 backdrop-blur-xl sm:grid sm:grid-cols-[1fr_auto_1fr] sm:gap-4 sm:px-5">
       <div className="flex min-w-0 items-center gap-3">
         {/* Logo + app version stacked — the version is important operational info. */}
         <div className="flex shrink-0 flex-col items-center leading-none">
@@ -2392,7 +2395,7 @@ function Header({
         <div
           role="radiogroup"
           aria-label={t("header.modeGroup")}
-          className="bg-muted/50 inline-flex h-9 shrink-0 items-center gap-0.5 rounded-lg border p-0.5"
+          className={cn("bg-muted/50 inline-flex h-9 shrink-0 items-center gap-0.5 rounded-lg border p-0.5", isWeb && "max-sm:hidden")}
         >
           {(["local", "cloud"] as const).map((m) => (
             <button
@@ -2432,14 +2435,14 @@ function Header({
       {/* Panel switches: Engine / Create / Edit / Gallery on or off. */}
       <PanelToggles hidden={panelHidden} onToggle={onTogglePanel} modLabel={modLabel} />
 
-      <div className="flex items-center justify-end gap-1">
+      <div className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-1">
         <Button
           variant="ghost"
           size="icon"
           onClick={onOpenPalette}
           title={`${t("palette.title")} (${modLabel}K)`}
           aria-label={t("palette.title")}
-          className={iconBtn}
+          className={cn(iconBtn, "max-sm:hidden")}
         >
           <Search className="size-4" />
         </Button>
@@ -2490,7 +2493,7 @@ function LanguageToggle() {
       // English), so the tooltip stays readable before AND after switching.
       title={next.label}
       aria-label={next.label}
-      className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 rounded-lg p-0 text-[11px] font-semibold"
+      className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 rounded-lg p-0 text-[11px] font-semibold max-sm:hidden"
     >
       {current.short}
     </Button>
@@ -2834,7 +2837,8 @@ function Composer({
 // (Local blue / Cloud deep cyan), like the comet it launches and the Activity
 // widget. Disabled, it stays opaque and readable: a quiet mode-tinted surface
 // with a dashed outline instead of a faded gradient. Below xl, the right lane
-// stays free for the Activity dock (z-40).
+// stays free for the Activity dock (z-40) — a narrower lane on phones, where
+// the dock is icon-only.
 function PrimaryAction({
   action,
   contextHint,
@@ -2846,7 +2850,7 @@ function PrimaryAction({
 }) {
   const burst = useLaunchBurst("generate");
   return (
-    <div className="sticky bottom-2 z-30 max-xl:pr-36">
+    <div className="sticky bottom-2 z-30 max-sm:pr-[4.5rem] sm:max-xl:pr-36">
       <span className="relative block w-full rounded-2xl" data-mode={mode}>
         <LaunchBurst burst={burst} />
         <Button
@@ -3670,7 +3674,8 @@ function Gallery({
   const [saved, setSaved] = useState<SavedImage[]>([]);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [cols, setCols] = useState(3);
+  // Two columns on a phone (three leaves ~110px thumbnails), three otherwise.
+  const [cols, setCols] = useState(() => (window.innerWidth < 640 ? 2 : 3));
   const [filter, setFilter] = useState<GalleryFilter>(EMPTY_FILTER);
   const [facets, setFacets] = useState<GalleryFacets | null>(null);
   // Multi-selection (keyed by filename), the context menu, and the fullscreen
@@ -4158,7 +4163,7 @@ function FilterBar({
           onChange={(e) => setQ(e.target.value)}
           placeholder={t("gallery.search")}
           aria-label={t("gallery.search")}
-          className="border-input bg-background h-8 w-44 rounded-md border pl-8 pr-2 text-xs outline-none"
+          className="border-input bg-background h-8 w-36 rounded-md border pl-8 pr-2 text-xs outline-none sm:w-44"
         />
       </div>
       {models.length > 0 && (
@@ -4402,6 +4407,9 @@ function SavedTile({
       // past threshold starts the img2img drag; a plain click still opens the
       // tile. Videos can't seed img2img → no drag affordance for them.
       onPointerDown={(e) => {
+        // A finger moving over a tile is a scroll, not a drag: on touch, img2img
+        // goes through the viewer's "use as source" instead.
+        if (e.pointerType === "touch") return;
         if (image.kind === "video" || isVideoSrc(srcRef.current)) return;
         shared.startImageDrag(e, ensureSrc, srcRef.current, image.name);
       }}
@@ -4685,6 +4693,7 @@ function Lightbox({
   const [loading, setLoading] = useState(true);
   // Click-to-zoom: a 2× magnifier whose focus follows the cursor. Reset on nav.
   const [zoom, setZoom] = useState(false);
+  const swipeRef = useRef<{ x: number; y: number } | null>(null); // touch start, for swipe nav
   const [origin, setOrigin] = useState("50% 50%");
   useEffect(() => setZoom(false), [index]);
   // Distraction-free view: hide the meta panel, go solid black, fill the window.
@@ -4738,7 +4747,7 @@ function Lightbox({
   const meta = current.meta;
 
   const iconBtn =
-    "rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10";
+    "rounded-full bg-white/10 p-1.5 text-white transition hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 sm:p-2";
 
   // Portal to <body>: the gallery renders inside <main> (relative z-10), whose
   // stacking context would otherwise trap this overlay below root-level fixed
@@ -4747,35 +4756,53 @@ function Lightbox({
     <div
       className={cn(
         "animate-in fade-in fixed inset-0 z-50 flex items-center justify-center",
-        full ? "bg-black p-0" : "bg-black/85 p-6 backdrop-blur-sm"
+        // Phones: room for the top bar; the image + details column scrolls below it.
+        full ? "bg-black p-0" : "bg-black/85 px-3 pb-4 pt-16 backdrop-blur-sm md:p-6"
       )}
       onClick={onClose}
+      onTouchStart={(e) => {
+        const p = e.touches[0];
+        swipeRef.current = e.touches.length === 1 && p ? { x: p.clientX, y: p.clientY } : null;
+      }}
+      onTouchEnd={(e) => {
+        // Horizontal swipe = previous / next (not while zoomed: that's panning).
+        const s = swipeRef.current;
+        const p = e.changedTouches[0];
+        swipeRef.current = null;
+        if (!s || !p || zoom) return;
+        const dx = p.clientX - s.x;
+        if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(p.clientY - s.y) * 1.5) return;
+        if (dx < 0 && hasNext) next();
+        else if (dx > 0 && hasPrev) prev();
+      }}
     >
       {/* Top bar: counter + actions + close. */}
-      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 py-3" onClick={(e) => e.stopPropagation()}>
+      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 px-3 py-3 sm:px-4" onClick={(e) => e.stopPropagation()}>
         <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium tabular-nums text-white">
           {t("gallery.counter", { i: index + 1, n: total })}
         </span>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 sm:gap-1.5">
           {/* Editing tools: a dropdown of the tools for this item. */}
           {current.name && onTool && (
             <div className="relative">
               <button
                 type="button"
-                className={cn(iconBtn, "flex items-center gap-1.5 px-3", editOpen && "bg-white/25")}
+                className={cn(iconBtn, "flex items-center gap-1.5 sm:px-3", editOpen && "bg-white/25")}
                 title={t("tools.edit")}
                 aria-label={t("tools.edit")}
                 aria-expanded={editOpen}
                 onClick={() => setEditOpen((o) => !o)}
               >
                 <Wand2 className="size-5" />
-                <span className="text-sm font-medium">{t("tools.edit")}</span>
-                <ChevronDown className="size-4" />
+                <span className="text-sm font-medium max-sm:hidden">{t("tools.edit")}</span>
+                <ChevronDown className="size-4 max-sm:hidden" />
               </button>
               {editOpen && (
                 <div
                   role="menu"
-                  className="animate-in fade-in zoom-in-95 absolute right-0 top-full z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto rounded-xl border border-white/15 bg-neutral-900/95 p-1 shadow-2xl backdrop-blur"
+                  // Phones: pinned under the top bar across the screen — hung off
+                  // the button, a 18rem menu runs off the left edge.
+                  className="animate-in fade-in zoom-in-95 absolute right-0 top-full z-20 mt-2 max-h-[70vh] w-72 overflow-y-auto max-sm:fixed max-sm:inset-x-3 max-sm:top-14 max-sm:mt-0 max-sm:w-auto rounded-xl border border-white/15 bg-neutral-900/95 p-1 shadow-2xl backdrop-blur"
                 >
                   <ToolMenuList
                     dark
@@ -4832,12 +4859,12 @@ function Lightbox({
 
       {/* Prev / next edge arrows. */}
       {hasPrev && (
-        <button type="button" className={cn(iconBtn, "absolute left-4 top-1/2 z-10 -translate-y-1/2")} aria-label={t("gallery.prev")} onClick={(e) => { e.stopPropagation(); prev(); }}>
+        <button type="button" className={cn(iconBtn, "absolute left-4 top-1/2 z-10 -translate-y-1/2 pointer-coarse:hidden")} aria-label={t("gallery.prev")} onClick={(e) => { e.stopPropagation(); prev(); }}>
           <ChevronLeft className="size-6" />
         </button>
       )}
       {hasNext && (
-        <button type="button" className={cn(iconBtn, "absolute right-4 top-1/2 z-10 -translate-y-1/2")} aria-label={t("gallery.next")} onClick={(e) => { e.stopPropagation(); next(); }}>
+        <button type="button" className={cn(iconBtn, "absolute right-4 top-1/2 z-10 -translate-y-1/2 pointer-coarse:hidden")} aria-label={t("gallery.next")} onClick={(e) => { e.stopPropagation(); next(); }}>
           <ChevronRight className="size-6" />
         </button>
       )}
@@ -4847,11 +4874,11 @@ function Lightbox({
           "flex w-full flex-col items-center",
           full
             ? "h-full max-w-none gap-0"
-            : "max-h-full max-w-6xl gap-4 md:flex-row md:items-stretch"
+            : "max-h-full max-w-6xl gap-4 max-md:overflow-y-auto md:flex-row md:items-stretch"
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+        <div className="relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden max-md:flex-none md:w-auto">
           {loading && !src && (
             // A dimensioned placeholder (from the known aspect) so the frame
             // doesn't jump when the full image resolves.
@@ -4876,7 +4903,7 @@ function Lightbox({
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
                   "animate-in fade-in zoom-in-95 min-h-0 object-contain",
-                  full ? "max-h-screen max-w-full" : "max-h-[85vh] rounded-xl shadow-2xl"
+                  full ? "max-h-dvh max-w-full" : "max-h-[65dvh] rounded-xl shadow-2xl md:max-h-[85vh]"
                 )}
               />
             ) : (
@@ -4895,7 +4922,7 @@ function Lightbox({
                 className={cn(
                   "animate-in fade-in zoom-in-95 min-h-0 object-contain transition-transform duration-150",
                   // Fullscreen: edge-to-edge, no frame. Otherwise: framed with a cap.
-                  full ? "max-h-screen max-w-full" : "max-h-[85vh] rounded-xl shadow-2xl",
+                  full ? "max-h-dvh max-w-full" : "max-h-[65dvh] rounded-xl shadow-2xl md:max-h-[85vh]",
                   zoom ? "cursor-zoom-out" : "cursor-zoom-in"
                 )}
               />
@@ -4905,7 +4932,7 @@ function Lightbox({
       </div>
 
       {/* Keyboard-hint footer — discoverable navigation + zoom affordance. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center">
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center pointer-coarse:hidden">
         <div className="flex items-center gap-3 rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/70 backdrop-blur">
           {total > 1 && (
             <span className="flex items-center gap-1">

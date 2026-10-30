@@ -195,15 +195,16 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
       <DialogContent
         // Don't close on an accidental outside click — only the X / Done / Esc.
         onInteractOutside={(e) => e.preventDefault()}
-        className="ring-border/60 flex h-[86vh] max-h-[720px] gap-0 overflow-hidden rounded-2xl p-0 shadow-2xl ring-1 sm:max-w-3xl"
+        className="ring-border/60 flex h-[86dvh] max-h-[720px] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-2xl ring-1 sm:max-w-3xl sm:flex-row"
       >
-        {/* Rail — brand mark, category list, version. */}
-        <nav className="bg-muted/30 flex w-52 shrink-0 flex-col border-r">
-          <div className="flex items-center gap-2.5 px-4 pb-3 pt-4">
+        {/* Rail — brand mark, category list, version. On a phone it becomes a
+            strip of tabs above the pane (a side rail leaves the pane no room). */}
+        <nav className="bg-muted/30 flex shrink-0 flex-col border-b sm:w-52 sm:border-b-0 sm:border-r">
+          <div className="flex items-center gap-2.5 px-4 pb-2 pt-4 sm:pb-3">
             <img src={logoUrl} alt="" className="size-6" />
             <DialogTitle className="text-sm font-semibold">{t("settings.title")}</DialogTitle>
           </div>
-          <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
+          <div className="flex gap-1 overflow-x-auto px-2 pb-2 sm:flex-1 sm:flex-col sm:gap-0.5 sm:overflow-x-visible sm:overflow-y-auto">
             {VISIBLE_PANES.map((p) => {
               const Icon = p.icon;
               const isActive = pane === p.id;
@@ -213,7 +214,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                   type="button"
                   onClick={() => setPane(p.id)}
                   className={cn(
-                    "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+                    "flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-left text-sm transition-colors sm:w-full",
                     isActive
                       ? "settings-nav-active font-medium"
                       : "text-muted-foreground hover:text-foreground hover:bg-background/60"
@@ -225,15 +226,15 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
               );
             })}
           </div>
-          <div className="text-muted-foreground border-t px-4 py-2.5 text-[11px]">
-            Imference Desktop{" "}
+          <div className="text-muted-foreground border-t px-4 py-2.5 text-[11px] max-sm:hidden">
+            {isWeb ? "Imference Web" : "Imference Desktop"}{" "}
             {appVersion === "dev" ? t("settings.devBuild") : appVersion ? `v${appVersion}` : ""}
           </div>
         </nav>
 
         {/* Pane — persistent header, scrollable body, footer. */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex items-start justify-between gap-3 border-b px-6 py-4">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <header className="flex items-start justify-between gap-3 border-b px-4 py-3 sm:px-6 sm:py-4">
             <div className="space-y-0.5">
               <h2 className="text-base font-semibold leading-tight">{t(active.labelKey)}</h2>
               <p className="text-muted-foreground text-xs">{t(active.descKey)}</p>
@@ -242,7 +243,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             <DialogDescription className="sr-only">{t("settings.desc")}</DialogDescription>
           </header>
 
-          <div className="min-w-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          <div className="min-w-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
             {pane === "engine" && <LocalEngineSection onInstallDone={handleInstallDone} />}
 
             {pane === "runtime" && (
@@ -386,7 +387,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             )}
           </div>
 
-          <footer className="flex items-center justify-between gap-2 border-t px-6 py-3">
+          <footer className="flex items-center justify-between gap-2 border-t px-4 py-3 sm:px-6">
             <span
               className={cn(
                 "text-muted-foreground inline-flex items-center gap-1.5 text-xs transition-opacity duration-200",

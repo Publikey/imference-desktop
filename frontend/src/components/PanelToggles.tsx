@@ -55,7 +55,7 @@ export function PanelToggles({
               ` (${modLabel}${key})`
             }
             className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed",
+              "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs sm:px-3 font-medium transition-colors disabled:cursor-not-allowed",
               // Shown = filled (unmistakable), hidden = plain muted text.
               on
                 ? "bg-primary text-primary-foreground shadow-sm"

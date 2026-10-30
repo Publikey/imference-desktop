@@ -386,6 +386,16 @@
      The main window is three drag-reorderable panels (Create / Activity /
      Gallery). Panels are light columns — a slim header over the content — so
      the cards inside keep the visual weight. */
+  /* iOS Safari zooms the page into any focused field under 16px and leaves it
+     zoomed: on phones, fields get 16px text. */
+  @media (pointer: coarse) and (max-width: 639px) {
+    input,
+    textarea,
+    select {
+      font-size: max(16px, 1em);
+    }
+  }
+
   .panel-grip {
     cursor: grab;
     touch-action: none;

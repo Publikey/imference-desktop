@@ -117,7 +117,7 @@ export function LogPanel({ open, onOpenChange }: Props) {
       />
       <div
         className={cn(
-          "fixed top-0 right-0 z-40 flex h-screen w-[640px] max-w-[100vw] transform flex-col border-l bg-background shadow-2xl transition-transform duration-300 ease-[var(--ease-out-expo)]",
+          "fixed top-0 right-0 z-40 flex h-dvh w-[640px] max-w-[100vw] transform flex-col border-l bg-background shadow-2xl transition-transform duration-300 ease-[var(--ease-out-expo)]",
           open ? "translate-x-0" : "translate-x-full"
         )}
         // Don't unmount on close — keep the subscription alive so the panel

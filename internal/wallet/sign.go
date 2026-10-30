@@ -48,26 +48,30 @@ type SignEIP3009Params struct {
 	MaxTimeoutSeconds int64          // accepts[i].maxTimeoutSeconds
 }
 
-// SignEIP3009 builds the typed data, signs it with the wallet's private
-// key, and returns the SignedAuthorization that the x402 client wraps
-// into the payment header.
+// NewEIP3009 builds the authorization `from` would sign for p and its EIP-712
+// typed data. Time bounds match x402-fetch: validAfter = now - 600s (allows
+// slight server clock skew), validBefore = now + maxTimeoutSeconds. Nonce is
+// 32 fresh random bytes — the USDC contract enforces uniqueness, so reusing
+// one would fail at the facilitator.
 //
-// Time bounds match x402-fetch: validAfter = now - 600s (allows slight
-// server clock skew), validBefore = now + maxTimeoutSeconds. Nonce is
-// 32 fresh random bytes — the USDC contract enforces uniqueness, so
-// reusing one would fail at the facilitator.
-func (w *Wallet) SignEIP3009(p SignEIP3009Params) (SignedAuthorization, error) {
+// The typed data mirrors x402-fetch.bundle.mjs:signAuthorization3 and
+// authorizationTypes:
+//
+//	types.TransferWithAuthorization = [
+//	  {from address}, {to address}, {value uint256},
+//	  {validAfter uint256}, {validBefore uint256}, {nonce bytes32}
+//	]
+//	domain = { name, version, chainId, verifyingContract: asset }
+func NewEIP3009(from common.Address, p SignEIP3009Params) (Authorization, apitypes.TypedData, error) {
 	now := time.Now().Unix()
 	validAfter := now - 600
 	validBefore := now + p.MaxTimeoutSeconds
 
 	var nonceBytes [32]byte
 	if _, err := rand.Read(nonceBytes[:]); err != nil {
-		return SignedAuthorization{}, fmt.Errorf("wallet: read random nonce: %w", err)
+		return Authorization{}, apitypes.TypedData{}, fmt.Errorf("wallet: read random nonce: %w", err)
 	}
 	nonceHex := "0x" + hex.EncodeToString(nonceBytes[:])
-
-	from := w.Address()
 
 	auth := Authorization{
 		From:        from.Hex(),
@@ -77,14 +81,6 @@ func (w *Wallet) SignEIP3009(p SignEIP3009Params) (SignedAuthorization, error) {
 		ValidBefore: fmt.Sprintf("%d", validBefore),
 		Nonce:       nonceHex,
 	}
-
-	// Construct the EIP-712 typed data exactly mirroring
-	// x402-fetch.bundle.mjs:signAuthorization3 and authorizationTypes:
-	//   types.TransferWithAuthorization = [
-	//     {from address}, {to address}, {value uint256},
-	//     {validAfter uint256}, {validBefore uint256}, {nonce bytes32}
-	//   ]
-	//   domain = { name, version, chainId, verifyingContract: asset }
 	typedData := apitypes.TypedData{
 		Types: apitypes.Types{
 			"EIP712Domain": []apitypes.Type{
@@ -110,18 +106,51 @@ func (w *Wallet) SignEIP3009(p SignEIP3009Params) (SignedAuthorization, error) {
 			VerifyingContract: p.Asset.Hex(),
 		},
 		Message: apitypes.TypedDataMessage{
-			"from":        from.Hex(),
-			"to":          p.PayTo.Hex(),
-			"value":       p.Value.String(),
-			"validAfter":  fmt.Sprintf("%d", validAfter),
-			"validBefore": fmt.Sprintf("%d", validBefore),
+			"from":        auth.From,
+			"to":          auth.To,
+			"value":       auth.Value,
+			"validAfter":  auth.ValidAfter,
+			"validBefore": auth.ValidBefore,
 			"nonce":       nonceHex,
 		},
 	}
+	return auth, typedData, nil
+}
 
+// RecoverSigner returns the address that produced sig (65 bytes, V 0/1 or
+// 27/28) over typedData. A signer that isn't `from` means the hashing is wrong
+// on one side, or the signature isn't for this authorization.
+func RecoverSigner(typedData apitypes.TypedData, sig []byte) (common.Address, error) {
+	if len(sig) != 65 {
+		return common.Address{}, fmt.Errorf("wallet: signature is %d bytes, want 65", len(sig))
+	}
 	// Use the library helper instead of building 0x1901||domainSep||messageHash
 	// by hand — TypedDataAndHash does both HashStruct calls in the order the
 	// EIP-712 spec mandates. Removes a class of subtle bugs.
+	digest, _, err := apitypes.TypedDataAndHash(typedData)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("wallet: EIP712 hash: %w", err)
+	}
+	s := append([]byte(nil), sig...)
+	if s[64] >= 27 {
+		s[64] -= 27 // crypto.SigToPub expects the 0/1 recovery id
+	}
+	pubkey, err := crypto.SigToPub(digest, s)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("wallet: recover signer: %w", err)
+	}
+	return crypto.PubkeyToAddress(*pubkey), nil
+}
+
+// SignEIP3009 builds the typed data, signs it with the wallet's private
+// key, and returns the SignedAuthorization that the x402 client wraps
+// into the payment header.
+func (w *Wallet) SignEIP3009(p SignEIP3009Params) (SignedAuthorization, error) {
+	from := w.Address()
+	auth, typedData, err := NewEIP3009(from, p)
+	if err != nil {
+		return SignedAuthorization{}, err
+	}
 	digest, _, err := apitypes.TypedDataAndHash(typedData)
 	if err != nil {
 		return SignedAuthorization{}, fmt.Errorf("wallet: EIP712 hash: %w", err)
@@ -135,13 +164,11 @@ func (w *Wallet) SignEIP3009(p SignEIP3009Params) (SignedAuthorization, error) {
 	// Paranoid self-check: ecrecover our own signature and confirm it
 	// resolves back to `from`. If this fails, the hashing is wrong on our
 	// side and we'd otherwise eat a "Bad Request" mystery from the
-	// facilitator without knowing why. crypto.SigToPub expects V=0/1, which
-	// is what crypto.Sign just produced — do this BEFORE bumping V.
-	pubkey, err := crypto.SigToPub(digest, signature)
+	// facilitator without knowing why.
+	recovered, err := RecoverSigner(typedData, signature)
 	if err != nil {
-		return SignedAuthorization{}, fmt.Errorf("wallet: recover pubkey from own signature: %w", err)
+		return SignedAuthorization{}, err
 	}
-	recovered := crypto.PubkeyToAddress(*pubkey)
 	if recovered != from {
 		return SignedAuthorization{}, fmt.Errorf(
 			"wallet: signature self-check failed: recovered %s, expected %s — EIP-712 hash is wrong",

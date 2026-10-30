@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"imference-desktop-go/internal/wallet"
 	"imference-desktop-go/internal/x402"
 )
 
@@ -160,7 +159,7 @@ func escapeQuotes(s string) string { return quoteEscaper.Replace(s) }
 // into destDir. rail "x402" pays with signer on /ondemand/tools; anything else
 // uses the Bearer apiKey. onStage reports "uploading" / "queued" /
 // "downloading"; onEnqueued gets the request id the moment it exists.
-func (c *Client) RunTool(ctx context.Context, rail, apiKey string, signer *wallet.Wallet, req ToolRequest,
+func (c *Client) RunTool(ctx context.Context, rail, apiKey string, signer x402.Signer, req ToolRequest,
 	destDir string, onEnqueued func(requestID string, credits float64), onStage func(stage string)) (*ToolResult, error) {
 	stage := func(s string) {
 		if onStage != nil {

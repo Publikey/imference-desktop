@@ -24,12 +24,11 @@ function rpc(body: { methodID?: number; methodName?: string; args: unknown[] }):
       signal: ctl.signal,
     })
       .then(async (r) => {
-        if (r.status === 401) {
-          window.location.href = "login";
-          return reject(new Error("not signed in"));
-        }
         const j = await r.json().catch(() => ({}));
-        if (!r.ok) return reject(new Error(j.error || `HTTP ${r.status}`));
+        if (!r.ok) {
+          // j.code tags the payment failures (web_pay.go): see web-pay.ts.
+          return reject(Object.assign(new Error(j.error || `HTTP ${r.status}`), { code: j.code || "" }));
+        }
         resolve(j.result);
       })
       .catch(reject);
@@ -144,6 +143,16 @@ async function localCall(name: string, args: any[]): Promise<{ handled: boolean;
   return { handled: false };
 }
 
+/**
+ * Set by web-pay.ts at startup: runs a paid call (GenerateCloud, RunTool) and
+ * opens the payment dialog when the server says it can't be paid. A hook, so
+ * this module never imports the app's code (which imports this one).
+ */
+export const payHooks: {
+  withPayment?: <T>(method: string, args: any[], run: () => Promise<T>) => Promise<T>;
+} = {};
+const PAID_METHODS = ["GenerateCloud", "RunTool"];
+
 function call(body: { methodID?: number; methodName?: string; args: unknown[] }): CancellablePromise<any> {
   const name = body.methodName?.startsWith("main.App.")
     ? body.methodName.slice("main.App.".length)
@@ -151,10 +160,11 @@ function call(body: { methodID?: number; methodName?: string; args: unknown[] })
       ? nameByID.get(body.methodID)
       : undefined;
   if (!name || !GALLERY_METHODS.includes(name)) return rpc(body);
+  const run = () =>
+    localCall(name, body.args as any[]).then((r) => (r.handled ? r.value : rpc(body)));
+  const pay = payHooks.withPayment;
   return new CancellablePromise<any>((resolve, reject) => {
-    localCall(name, body.args as any[])
-      .then((r) => (r.handled ? resolve(r.value) : rpc(body).then(resolve, reject)))
-      .catch(reject);
+    (pay && PAID_METHODS.includes(name) ? pay(name, body.args as any[], run) : run()).then(resolve, reject);
   });
 }
 

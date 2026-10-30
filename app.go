@@ -45,6 +45,7 @@ import (
 	"imference-desktop-go/internal/update"
 	"imference-desktop-go/internal/version"
 	"imference-desktop-go/internal/wallet"
+	"imference-desktop-go/internal/x402"
 )
 
 // App is the Wails-bound facade. Every method on *App becomes a
@@ -70,8 +71,11 @@ type App struct {
 	// browser. Results are returned (image + metadata) instead of written;
 	// resumed cloud jobs wait in an outbox until the browser takes them.
 	clientGallery bool
-	outboxPath    string
-	outboxMu      sync.Mutex
+	// x402Signer signs x402 payments; nil = the wallet in the OS keychain.
+	// The web version sets the user's browser wallet here.
+	x402Signer func() (x402.Signer, error)
+	outboxPath string
+	outboxMu   sync.Mutex
 
 	bus       *logbus.Bus
 	settings  *settings.Store
@@ -556,10 +560,10 @@ func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult
 	var err error
 	switch s.PaymentMode {
 	case "x402":
-		w, lerr := wallet.LoadFromKeychain()
+		w, lerr := a.loadX402Signer()
 		if lerr != nil {
 			a.bus.Warn("app", "GenerateCloud: x402 mode but no wallet configured", nil)
-			return types.GenerationResult{}, errors.New("x402 mode selected but no wallet configured — open Settings to generate/import one")
+			return types.GenerationResult{}, lerr
 		}
 		result, err = a.cloud.GenerateX402(a.ctx, s.CloudModel, req, w, onEnqueued)
 	default:
@@ -585,6 +589,22 @@ func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult
 	}
 	a.autoSave(&result, meta)
 	return result, nil
+}
+
+// errNoWallet: x402 selected but no local wallet in the keychain.
+var errNoWallet = errors.New("x402 mode selected but no wallet configured — open Settings to generate/import one")
+
+// loadX402Signer returns what signs x402 payments: the x402Signer hook (web),
+// else the wallet in the OS keychain.
+func (a *App) loadX402Signer() (x402.Signer, error) {
+	if a.x402Signer != nil {
+		return a.x402Signer()
+	}
+	w, err := wallet.LoadFromKeychain()
+	if err != nil {
+		return nil, errNoWallet
+	}
+	return w, nil
 }
 
 // cloudRail maps the settings payment mode to a pending-record rail tag.
@@ -1175,17 +1195,17 @@ type samplingBounds struct {
 }
 
 var customSamplingByBackend = map[string]samplingBounds{
-	"sdxl":   {28, 1, 50, 6.0, 1, 20},
-	"sd15":   {25, 1, 50, 7.0, 1, 20},
-	"zimage": {8, 1, 50, 1.0, 1, 10}, // turbo-family norm; a base finetune can slide up
-	"flux":   {28, 1, 50, 3.5, 0, 10},
-	"chroma": {28, 1, 50, 2.0, 0, 10},
+	"sdxl":      {28, 1, 50, 6.0, 1, 20},
+	"sd15":      {25, 1, 50, 7.0, 1, 20},
+	"zimage":    {8, 1, 50, 1.0, 1, 10}, // turbo-family norm; a base finetune can slide up
+	"flux":      {28, 1, 50, 3.5, 0, 10},
+	"chroma":    {28, 1, 50, 2.0, 0, 10},
 	"qwenimage": {40, 1, 50, 4.0, 0, 10},
 	// Qwen-Image-Edit 2511, GGUF lite build with the Lightning 4-step LoRA
 	// (the catalog's): 4 steps, CFG 1.0. Only used by the instruct-edit tool —
 	// the Generate flow refuses edit models.
 	"qwenimage-edit": {4, 1, 80, 1.0, 0, 10},
-	"anima":     {28, 1, 50, 6.0, 1, 20},
+	"anima":          {28, 1, 50, 6.0, 1, 20},
 	// Krea 2 Turbo: TDM-distilled — 8 steps, guidance OFF (cfg 0 in the Krea
 	// convention; >0 re-enables CFG and doubles the transformer passes).
 	"krea2": {8, 1, 16, 0.0, 0, 10},

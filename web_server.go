@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"imference-desktop-go/internal/types"
 )
 
@@ -41,15 +43,23 @@ type webConfig struct {
 	checkKey func(ctx context.Context, apiKey string) error
 }
 
-// webUser is one signed-in user: one cloud-only App, shared by their tabs.
+// webUser is one user: one cloud-only App, shared by their tabs. A visitor
+// without an API key is a guest: the app works, but generating needs a key
+// with credits or a browser wallet paying per run (web_pay.go).
 type webUser struct {
-	id     string // sha256(api key)[:16] — also the data folder name
-	apiKey string
+	id     string // sha256(api key)[:16], or "guest-<random>" — also the data folder name
+	apiKey string // "" for a guest
+	guest  bool
 	app    *App
 
 	mu       sync.Mutex
-	subs     map[chan []byte]struct{}
+	subs     map[chan []byte]string // open event streams -> their session id
 	lastSeen time.Time
+	// payMode "wallet" = pay each run with the browser wallet at payer;
+	// "" = credits (the API key).
+	payMode string
+	payer   common.Address
+	signs   map[string]chan signReply // pending browser signatures, by id
 }
 
 type webServer struct {
@@ -90,8 +100,13 @@ func (s *webServer) routes() http.Handler {
 func (s *webServer) mux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "ok") })
-	mux.HandleFunc("GET /login", s.loginPage)
+	mux.HandleFunc("GET /login", func(w http.ResponseWriter, r *http.Request) { // old bookmarks
+		http.Redirect(w, r, s.path("/"), http.StatusFound)
+	})
 	mux.HandleFunc("POST /web/login", s.login)
+	mux.HandleFunc("POST /web/pay/card", s.payCard)
+	mux.HandleFunc("POST /web/pay/pack", s.payPack)
+	mux.HandleFunc("POST /web/sign", s.sign)
 	mux.HandleFunc("POST /web/logout", s.logout)
 	mux.HandleFunc("POST /web/call", s.call)
 	mux.HandleFunc("GET /web/events", s.events)
@@ -131,9 +146,97 @@ func (s *webServer) userFor(r *http.Request) *webUser {
 	return u
 }
 
-// ensureUser returns the user's App, creating it (cloud-only, own folders).
+// maxGuests bounds the guest Apps held in memory (each visitor without a key
+// gets one); idle ones are evicted after cfg.idleAfter.
+const maxGuests = 5000
+
+var errTooManyGuests = errors.New("too many visitors right now, try again in a few minutes")
+
+// sessionUser returns the request's user; a visitor without a valid session
+// gets a fresh guest session (and its cookie).
+func (s *webServer) sessionUser(w http.ResponseWriter, r *http.Request) (*webUser, error) {
+	u, _, err := s.session(w, r)
+	return u, err
+}
+
+// session is sessionUser with the session id.
+func (s *webServer) session(w http.ResponseWriter, r *http.Request) (*webUser, string, error) {
+	if u := s.userFor(r); u != nil {
+		c, _ := r.Cookie(sessionCookie)
+		return u, c.Value, nil
+	}
+	s.mu.Lock()
+	guests := 0
+	for _, u := range s.users {
+		if u.guest {
+			guests++
+		}
+	}
+	s.mu.Unlock()
+	if guests >= maxGuests {
+		return nil, "", errTooManyGuests
+	}
+	u, err := s.newUser("guest-"+newSessionID()[:16], "")
+	if err != nil {
+		return nil, "", err
+	}
+	return u, s.startSession(w, u), nil
+}
+
+// startSession opens a new session for u, sets its cookie, returns its id.
+func (s *webServer) startSession(w http.ResponseWriter, u *webUser) string {
+	sid := newSessionID()
+	s.mu.Lock()
+	s.sessions[sid] = u.id
+	s.mu.Unlock()
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sid, Path: s.path("/"), HttpOnly: true,
+		Secure: s.cfg.secure, SameSite: http.SameSiteStrictMode, MaxAge: 7 * 24 * 3600})
+	return sid
+}
+
+// bindKey moves the request's session to the user of apiKey (signing in, or
+// after a purchase created that key), or opens a session for it.
+func (s *webServer) bindKey(w http.ResponseWriter, r *http.Request, apiKey string) error {
+	u, err := s.ensureUser(apiKey)
+	if err != nil {
+		return err
+	}
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		s.mu.Lock()
+		old, ok := s.sessions[c.Value]
+		if ok {
+			s.sessions[c.Value] = u.id
+			// The session's open tabs now listen to the new user: signature
+			// requests and progress go where the session is.
+			if prev := s.users[old]; prev != nil && prev != u {
+				prev.mu.Lock()
+				u.mu.Lock()
+				for ch, sid := range prev.subs {
+					if sid == c.Value {
+						delete(prev.subs, ch)
+						u.subs[ch] = sid
+					}
+				}
+				u.mu.Unlock()
+				prev.mu.Unlock()
+			}
+		}
+		s.mu.Unlock()
+		if ok {
+			return nil
+		}
+	}
+	s.startSession(w, u)
+	return nil
+}
+
+// ensureUser returns the App of an API key's user, creating it.
 func (s *webServer) ensureUser(apiKey string) (*webUser, error) {
-	uid := userID(apiKey)
+	return s.newUser(userID(apiKey), apiKey)
+}
+
+// newUser returns user uid, creating its App (cloud-only, own folders).
+func (s *webServer) newUser(uid, apiKey string) (*webUser, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if u := s.users[uid]; u != nil {
@@ -145,14 +248,16 @@ func (s *webServer) ensureUser(apiKey string) (*webUser, error) {
 	}
 	app := newApp(appOptions{configDir: root, outputDir: filepath.Join(root, "gallery"), cloudOnly: true,
 		clientGallery: !s.cfg.serverGallery})
-	u := &webUser{id: uid, apiKey: apiKey, app: app, subs: map[chan []byte]struct{}{}, lastSeen: time.Now()}
+	u := &webUser{id: uid, apiKey: apiKey, guest: apiKey == "", app: app, subs: map[chan []byte]string{},
+		lastSeen: time.Now(), signs: map[string]chan signReply{}}
+	app.x402Signer = u.browserSigner
 	app.ctx = context.Background()
 	if s.cfg.apiBase != "" {
 		app.cloud.SetBaseURL(s.cfg.apiBase)
 	}
 	app.emitter = u.publish
 	app.bus.SetEmitter(func(name string, data ...any) { app.emit(name, data...) })
-	// Persist the web invariants (API key, credits rail, cloud tools) once.
+	// Persist the web invariants (API key, payment rail, cloud tools) once.
 	if _, err := app.SaveSettings(webSettings(app.GetSettings(), u)); err != nil {
 		return nil, err
 	}
@@ -206,6 +311,10 @@ func (s *webServer) evictIdle(now time.Time) {
 					delete(s.sessions, sid)
 				}
 			}
+			if u.guest {
+				// Nobody can come back to a guest: its session is gone.
+				_ = os.RemoveAll(filepath.Join(s.cfg.dataDir, "users", uid))
+			}
 		}
 	}
 }
@@ -234,20 +343,17 @@ func (s *webServer) login(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	if err := s.cfg.checkKey(ctx, key); err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		code := ""
+		if errors.Is(err, errUnknownKey) {
+			code = "invalid_key"
+		}
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error(), "code": code})
 		return
 	}
-	u, err := s.ensureUser(key)
-	if err != nil {
+	if err := s.bindKey(w, r, key); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	sid := newSessionID()
-	s.mu.Lock()
-	s.sessions[sid] = u.id
-	s.mu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sid, Path: s.path("/"), HttpOnly: true,
-		Secure: s.cfg.secure, SameSite: http.SameSiteStrictMode, MaxAge: 7 * 24 * 3600})
 	writeJSON(w, http.StatusOK, map[string]string{"ok": "1"})
 }
 
@@ -267,9 +373,9 @@ func (s *webServer) call(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing "+csrfHeader+" header", http.StatusForbidden)
 		return
 	}
-	u := s.userFor(r)
-	if u == nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not signed in"})
+	u, err := s.sessionUser(w, r)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 		return
 	}
 	var req rpcRequest
@@ -277,12 +383,13 @@ func (s *webServer) call(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad request: " + err.Error()})
 		return
 	}
-	if req.MethodName == "web.GetConfig" {
-		gallery := "client"
-		if s.cfg.serverGallery {
-			gallery = "server"
+	if strings.HasPrefix(req.MethodName, "web.") {
+		res, err := s.webMethod(u, req)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"result": map[string]any{"gallery": gallery}})
+		writeJSON(w, http.StatusOK, map[string]any{"result": res})
 		return
 	}
 	m, err := s.rpc.lookup(req)
@@ -290,7 +397,21 @@ func (s *webServer) call(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
+	// A run needs a way to pay: credits on a key, or the browser wallet.
+	if paidMethods[m.name] && !u.canPay() {
+		writeJSON(w, http.StatusPaymentRequired, map[string]string{
+			"error": "an API key with credits is needed to generate", "code": codeNeedsKey})
+		return
+	}
 	res, err := u.call(r.Context(), m, req.Args)
+	payErr := err
+	if payErr == nil {
+		payErr = toolResultErr(res) // a tool's own error rides in its result
+	}
+	if code := payErrCode(payErr); code != "" {
+		writeJSON(w, http.StatusPaymentRequired, map[string]string{"error": payErr.Error(), "code": code})
+		return
+	}
 	if err != nil {
 		status := http.StatusUnprocessableEntity
 		if errors.Is(err, errNotOnWeb) {
@@ -304,9 +425,9 @@ func (s *webServer) call(w http.ResponseWriter, r *http.Request) {
 
 // events streams the user's App events as Server-Sent Events.
 func (s *webServer) events(w http.ResponseWriter, r *http.Request) {
-	u := s.userFor(r)
-	if u == nil {
-		http.Error(w, "not signed in", http.StatusUnauthorized)
+	u, sid, err := s.session(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	fl, ok := w.(http.Flusher)
@@ -319,13 +440,20 @@ func (s *webServer) events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	ch := make(chan []byte, 64)
 	u.mu.Lock()
-	u.subs[ch] = struct{}{}
+	u.subs[ch] = sid
 	u.mu.Unlock()
 	defer func() {
-		u.mu.Lock()
-		delete(u.subs, ch)
-		u.lastSeen = time.Now()
-		u.mu.Unlock()
+		// The stream may have moved to another user (bindKey).
+		s.mu.Lock()
+		for _, u := range s.users {
+			u.mu.Lock()
+			if _, ok := u.subs[ch]; ok {
+				delete(u.subs, ch)
+				u.lastSeen = time.Now()
+			}
+			u.mu.Unlock()
+		}
+		s.mu.Unlock()
 	}()
 	_, _ = io.WriteString(w, ": connected\n\n")
 	fl.Flush()
@@ -347,22 +475,18 @@ func (s *webServer) events(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// static serves the web frontend; the app shell needs a session, assets don't.
+// static serves the web frontend. The app opens without a key: a visitor
+// gets a guest session.
 func (s *webServer) static(w http.ResponseWriter, r *http.Request) {
 	p := strings.TrimPrefix(r.URL.Path, "/")
 	if p == "" || p == "index.html" {
-		if s.userFor(r) == nil {
-			http.Redirect(w, r, s.path("/login"), http.StatusFound)
+		if _, err := s.sessionUser(w, r); err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
 	}
 	http.FileServerFS(s.assets).ServeHTTP(w, r)
-}
-
-func (s *webServer) loginPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, loginHTML)
 }
 
 func securityHeaders(h http.Handler) http.Handler {
@@ -395,37 +519,10 @@ func checkKeyRemote(ctx context.Context, base, key string) error {
 	if resp.StatusCode == http.StatusOK {
 		return nil
 	}
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return errors.New("unknown API key")
+	// The API answers 404 "user not found" for a key it doesn't know.
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden ||
+		resp.StatusCode == http.StatusNotFound {
+		return errUnknownKey
 	}
 	return fmt.Errorf("imference API answered %d", resp.StatusCode)
 }
-
-const loginHTML = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Imference · Sign in</title>
-<link rel="icon" type="image/svg+xml" href="logo.svg">
-<style>
-:root{color-scheme:light dark;--bg:#f6f8fb;--card:#fff;--fg:#0f172a;--muted:#64748b;--line:#e2e8f0;--acc:#0b72e7}
-@media (prefers-color-scheme:dark){:root{--bg:#0b1020;--card:#121a2e;--fg:#e2e8f0;--muted:#94a3b8;--line:#22304d}}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
-form{width:100%;max-width:380px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px}
-h1{font-size:20px;margin:0 0 4px}p{color:var(--muted);margin:0 0 20px;font-size:14px}
-label{display:block;font-size:13px;margin-bottom:6px}input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:inherit;font:inherit}
-button{margin-top:16px;width:100%;padding:10px;border:0;border-radius:10px;background:var(--acc);color:#fff;font:inherit;font-weight:600;cursor:pointer}
-.err{color:#dc2626;font-size:13px;min-height:20px;margin-top:10px}a{color:var(--acc)}
-</style></head><body>
-<form id="f"><h1>Imference</h1><p>Sign in with your imference.com API key. <a href="https://imference.com/payments" target="_blank" rel="noopener">Get a key</a></p>
-<label for="k">API key</label><input id="k" name="k" type="password" autocomplete="current-password" required autofocus>
-<button type="submit">Sign in</button><div class="err" id="e"></div></form>
-<script>
-document.getElementById('f').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const e = document.getElementById('e'); e.textContent = '';
-  const r = await fetch('web/login', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Imference-Web': '1'},
-    body: JSON.stringify({apiKey: document.getElementById('k').value})});
-  if (r.ok) { location.href = './'; return; }
-  const j = await r.json().catch(() => ({}));
-  e.textContent = j.error || ('Sign-in failed (' + r.status + ')');
-});
-</script></body></html>`

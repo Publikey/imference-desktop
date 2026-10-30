@@ -105,6 +105,7 @@ import type {
 import { Browser } from "@wailsio/runtime";
 import { isWeb } from "@/lib/target";
 import { WebGalleryBanner } from "@/components/WebGallerySection";
+import { WebAccount, WebPayNotice } from "@/components/WebPay";
 
 // Module-load side effect: install console + window error hooks before any
 // component renders. The api wrapping itself happens inside wails-bridge.ts
@@ -421,7 +422,11 @@ export default function App() {
   const confirm = useConfirm();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [sidecar, setSidecar] = useState<SidecarStatus>({ state: "idle" });
-  const [prompt, setPrompt] = useState("");
+  // Web: the prompt survives the trip to Stripe and the reload after signing in.
+  const [prompt, setPrompt] = useState(() => (isWeb ? readWebDraft() : ""));
+  useEffect(() => {
+    if (isWeb) writeWebDraft(prompt);
+  }, [prompt]);
   const [mode, setModeRaw] = useState<Mode>(isWeb ? "cloud" : "local");
   // The web build has no local engine: every mode switch lands on the cloud.
   const setMode = useCallback((m: Mode) => setModeRaw(isWeb ? "cloud" : m), []);
@@ -804,14 +809,18 @@ export default function App() {
   // x402 is gated on the ACTUAL wallet (keychain), not settings.walletAddress —
   // that mirror is only written on generate/import, so a fresh settings.json with
   // an existing keychain wallet would otherwise read as "not configured".
+  // Web: a run is always allowed to start — without a way to pay, the server
+  // refuses it and the payment dialog opens (WebPay.tsx).
   const cloudConfigured =
-    settings?.paymentMode === "x402" ? walletConfigured : !!settings?.apiKey;
+    isWeb || (settings?.paymentMode === "x402" ? walletConfigured : !!settings?.apiKey);
   const cloudReady = cloudConfigured && !!settings?.cloudModel;
 
   // First run: nothing is usable yet (no local engine AND no cloud payment).
   // The Create panel shows a guided setup instead of the (non-functional)
   // composer, unless the user has skipped it.
-  const firstRun = !engineInstalled && !cloudConfigured && !onboardingSkipped;
+  // Web: no onboarding — the app opens on the composer, and the first run asks
+  // how to pay (WebPay.tsx).
+  const firstRun = !isWeb && !engineInstalled && !cloudConfigured && !onboardingSkipped;
 
   // Refresh wallet-configured state whenever x402 is (or becomes) the mode, or a
   // wallet is generated/imported (walletAddress changes). Reads the keychain.
@@ -1965,6 +1974,7 @@ export default function App() {
         <span className="aurora-blob aurora-blob-2" />
         <span className="aurora-blob aurora-blob-3" />
       </div>
+      {isWeb && <WebPayNotice />}
       {isWeb && <WebGalleryBanner />}
       <Header
         appVersion={appVersion}
@@ -2298,14 +2308,27 @@ export default function App() {
   );
 }
 
+const WEB_DRAFT = "imference.web.prompt";
+
+function readWebDraft(): string {
+  try {
+    return sessionStorage.getItem(WEB_DRAFT) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeWebDraft(p: string) {
+  try {
+    sessionStorage.setItem(WEB_DRAFT, p);
+  } catch {
+    /* storage blocked: nothing to restore */
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Header — frosted, sticky, content-deferential.
 // ---------------------------------------------------------------------------
-
-async function webSignOut() {
-  await fetch("web/logout", { method: "POST", credentials: "same-origin", headers: { "X-Imference-Web": "1" } });
-  window.location.href = "login";
-}
 
 function Header({
   appVersion,
@@ -2440,11 +2463,7 @@ function Header({
         >
           <Settings className="size-4" />
         </Button>
-        {isWeb && (
-          <Button variant="ghost" size="sm" onClick={() => void webSignOut()} className="h-9 rounded-lg">
-            {t("web.signOut")}
-          </Button>
-        )}
+        {isWeb && <WebAccount />}
       </div>
     </header>
   );

@@ -26,6 +26,7 @@ import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
 import { CreditSection } from "@/components/CreditSection";
 import { StorageSection } from "@/components/StorageSection";
 import { isWeb } from "@/lib/target";
+import { WebPaymentSettings } from "@/components/WebPay";
 import { WebGallerySection } from "@/components/WebGallerySection";
 import { ToolsSection } from "@/components/ToolsSection";
 import { api } from "@/lib/wails-bridge";
@@ -284,25 +285,27 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                   </div>
                 </div>
 
-                <div
-                  id="settings-apikey"
-                  className={cn(
-                    "bg-card scroll-mt-4 grid gap-2 rounded-2xl border p-4 shadow-sm transition-opacity",
-                    draft.paymentMode === "x402" && "opacity-55"
-                  )}
-                >
-                  <Label htmlFor="apiKey">{t("settings.apiKeyCredit")}</Label>
-                  <Input
-                    id="apiKey"
-                    type="password"
-                    value={draft.apiKey}
-                    onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
-                    placeholder={t("settings.apiKeyPlaceholder")}
-                    disabled={isWeb}
-                  />
-                  {isWeb && <p className="text-muted-foreground text-xs">{t("web.apiKeyHint")}</p>}
-                  <CreditSection apiKey={draft.apiKey} />
-                </div>
+                {isWeb ? (
+                  <WebPaymentSettings />
+                ) : (
+                  <div
+                    id="settings-apikey"
+                    className={cn(
+                      "bg-card scroll-mt-4 grid gap-2 rounded-2xl border p-4 shadow-sm transition-opacity",
+                      draft.paymentMode === "x402" && "opacity-55"
+                    )}
+                  >
+                    <Label htmlFor="apiKey">{t("settings.apiKeyCredit")}</Label>
+                    <Input
+                      id="apiKey"
+                      type="password"
+                      value={draft.apiKey}
+                      onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
+                      placeholder={t("settings.apiKeyPlaceholder")}
+                    />
+                    <CreditSection apiKey={draft.apiKey} />
+                  </div>
+                )}
 
                 <div
                   id="settings-x402"

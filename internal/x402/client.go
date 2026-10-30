@@ -173,10 +173,17 @@ func (nopLogger) Info(string, string, ...any)  {}
 func (nopLogger) Warn(string, string, ...any)  {}
 func (nopLogger) Error(string, string, ...any) {}
 
+// Signer is whatever signs the EIP-3009 authorization: the local wallet
+// (*wallet.Wallet), or, in the web version, the user's browser wallet.
+type Signer interface {
+	Address() common.Address
+	SignEIP3009(p wallet.SignEIP3009Params) (wallet.SignedAuthorization, error)
+}
+
 // Client wraps an underlying http.Client with x402 retry logic.
 type Client struct {
 	HTTP      *http.Client
-	Signer    *wallet.Wallet
+	Signer    Signer
 	MaxAmount *big.Int // atomic units; reject 402s that ask for more
 	Logger    Logger
 	// Balance reads the wallet's USDC balance in atomic units; nil means
@@ -187,7 +194,7 @@ type Client struct {
 // New returns a Client with sane defaults: short HTTP timeout, nop
 // logger, MaxAmount = 1 USDC (= 1_000_000 atomic on a 6-decimal asset)
 // as a "shouldn't accidentally pay $1 per request" sanity bound.
-func New(signer *wallet.Wallet) *Client {
+func New(signer Signer) *Client {
 	return &Client{
 		HTTP:      &http.Client{}, // caller's responsibility to set timeouts on the request via context
 		Signer:    signer,

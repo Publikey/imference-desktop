@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -136,7 +135,7 @@ func startServerWith(t *testing.T, apiBase, basePath string, serverGallery bool)
 			if strings.HasPrefix(key, "good") {
 				return nil
 			}
-			return errors.New("unknown API key")
+			return errUnknownKey
 		},
 	}, assets)
 	hs := httptest.NewServer(srv.routes())
@@ -182,29 +181,39 @@ func TestBindingIDsMatchGeneratedBindings(t *testing.T) {
 	}
 }
 
+// settingsKey is the API key the session's settings carry ("" = guest).
+func settingsKey(t *testing.T, c *client) string {
+	t.Helper()
+	code, m := c.call("GetSettings")
+	if code != http.StatusOK {
+		t.Fatalf("GetSettings: %d %v", code, m)
+	}
+	k, _ := m["result"].(map[string]any)["apiKey"].(string)
+	return k
+}
+
 func TestLoginCSRFAndShell(t *testing.T) {
 	_, hs := startServer(t, "")
 	c := newClient(t, hs.URL)
-	// App shell requires a session.
+	// The app opens without a key: a guest session.
 	resp, _ := c.hc.Get(hs.URL + "/")
-	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/login" {
-		t.Fatalf("shell without session: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	if resp.StatusCode != http.StatusOK || len(resp.Cookies()) != 1 {
+		t.Fatalf("shell without session: %d %v", resp.StatusCode, resp.Cookies())
+	}
+	if k := settingsKey(t, c); k != "" {
+		t.Fatalf("guest has key %q", k)
 	}
 	if code, _ := c.post("/web/login", map[string]string{"apiKey": "good-1"}, false); code != http.StatusForbidden {
 		t.Fatalf("login without CSRF header: %d", code)
 	}
-	if code, _ := c.post("/web/login", map[string]string{"apiKey": "bad"}, true); code != http.StatusUnauthorized {
-		t.Fatalf("bad key: %d", code)
-	}
-	if code, _ := c.call("GetSettings"); code != http.StatusUnauthorized {
-		t.Fatalf("call before login: %d", code)
+	if code, m := c.post("/web/login", map[string]string{"apiKey": "bad"}, true); code != http.StatusUnauthorized || m["code"] != "invalid_key" {
+		t.Fatalf("bad key: %d %v", code, m)
 	}
 	if code, _ := c.post("/web/login", map[string]string{"apiKey": "good-1"}, true); code != http.StatusOK {
 		t.Fatalf("login: %d", code)
 	}
-	resp, _ = c.hc.Get(hs.URL + "/")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("shell with session: %d", resp.StatusCode)
+	if k := settingsKey(t, c); k != "good-1" {
+		t.Fatalf("after login: key %q", k)
 	}
 	if code, _ := c.post("/web/call", map[string]any{"methodName": "main.App.GetVersion", "args": []any{}}, false); code != http.StatusForbidden {
 		t.Fatalf("call without CSRF header: %d", code)
@@ -212,8 +221,12 @@ func TestLoginCSRFAndShell(t *testing.T) {
 	if code, _ := c.post("/web/logout", nil, true); code != http.StatusOK {
 		t.Fatal("logout")
 	}
-	if code, _ := c.call("GetSettings"); code != http.StatusUnauthorized {
-		t.Fatalf("call after logout: %d", code)
+	if k := settingsKey(t, c); k != "" {
+		t.Fatalf("after logout: key %q", k)
+	}
+	// Old bookmarks of the sign-in page land on the app.
+	if resp, _ := c.hc.Get(hs.URL + "/login"); resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/" {
+		t.Fatalf("/login: %d %s", resp.StatusCode, resp.Header.Get("Location"))
 	}
 }
 
@@ -356,8 +369,8 @@ func TestEvictIdle(t *testing.T) {
 	if len(srv.users) != 0 || len(srv.sessions) != 0 {
 		t.Fatal("idle user not evicted")
 	}
-	if code, _ := c.call("GetSettings"); code != http.StatusUnauthorized {
-		t.Fatalf("evicted session still valid: %d", code)
+	if k := settingsKey(t, c); k != "" {
+		t.Fatalf("evicted session still signed in: %q", k)
 	}
 }
 
@@ -372,10 +385,10 @@ func TestBasePath(t *testing.T) {
 		t.Fatalf("/app: %d %s", resp.StatusCode, resp.Header.Get("Location"))
 	}
 	resp, _ = c.hc.Get(hs.URL + "/app/")
-	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/app/login" {
-		t.Fatalf("/app/ without session: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	if ck := resp.Cookies(); resp.StatusCode != http.StatusOK || len(ck) != 1 || ck[0].Path != "/app/" {
+		t.Fatalf("/app/ without session: %d %+v", resp.StatusCode, ck)
 	}
-	if resp, _ := c.hc.Get(hs.URL + "/app/login"); resp.StatusCode != http.StatusOK {
+	if resp, _ := c.hc.Get(hs.URL + "/app/login"); resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/app/" {
 		t.Fatalf("/app/login: %d", resp.StatusCode)
 	}
 	req, _ := http.NewRequest(http.MethodPost, hs.URL+"/app/web/login", strings.NewReader(`{"apiKey":"good-1"}`))
@@ -383,9 +396,6 @@ func TestBasePath(t *testing.T) {
 	resp, err := c.hc.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("login under /app: %v %v", err, resp)
-	}
-	if ck := resp.Cookies(); len(ck) != 1 || ck[0].Path != "/app/" {
-		t.Fatalf("cookie path: %+v", ck)
 	}
 	if code, m := c.call("GetVersion"); code != http.StatusOK {
 		t.Fatalf("call under /app: %d %v", code, m)

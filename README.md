@@ -211,6 +211,18 @@ reverse proxy (`WEB_APP_URL`, see the imference repo README). Base images are
 overridable (`--build-arg NODE_IMAGE=... GO_IMAGE=...`) when Docker Hub
 rate-limits.
 
+**Deployment (Imference Web).** `.github/workflows/web-deploy.yml` builds
+`Dockerfile.web` on every push to `main` and deploys it to the `imference-web`
+Azure Container App (internal ingress on `8090`, one replica, env
+`IMFERENCE_WEB_BASE=/app` and `IMFERENCE_WEB_SECURE=1`, image pulled with its
+system managed identity). It needs these repo secrets:
+`IMFERENCE_AZURE_CLIENT_ID`, `IMFERENCE_AZURE_TENANT_ID`,
+`IMFERENCE_AZURE_SUBSCRIPTION_ID` (OIDC, with a federated credential for this
+repo's `main`; the identity needs push rights on the registry and Contributor on the
+Container App), `IMFERENCE_REGISTRY_URL` and `IMFERENCE_RESOURCE_GROUP`. From
+Git Bash, pass `/app` to `az` with `MSYS_NO_PATHCONV=1`, or it becomes a
+Windows path.
+
 **Gallery on the user's disk (default).** The server never keeps images: a
 result comes back to the browser (image + metadata) and
 `src/lib/web-gallery.ts` saves it, in the desktop format
@@ -227,7 +239,7 @@ keeps the previous server-side gallery.
 
 Prototype limits: sessions live in memory (a restart signs everyone out) and
 the server is single-instance; the API key is stored in the user's
-`settings.json` on the server; no rate limiting; credits only (no x402). `go test -tags "web server" .` covers the
+`settings.json` on the server; no rate limiting. `go test -tags "web server" .` covers the
 binding-ID mapping, sign-in/CSRF, the method policy, per-user isolation, the
 event stream and a cloud generation end to end against a mock API.
 

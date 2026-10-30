@@ -14,6 +14,8 @@
 // GalleryFacets, GetSavedImage, DeleteSavedImage); web-runtime.ts routes those
 // calls here instead of to the server.
 
+import { GALLERY_CHANGED_EVENT } from "./target";
+
 type Meta = Record<string, any> & {
   prompt?: string;
   source?: string;
@@ -180,12 +182,16 @@ function storedMode(): GalleryMode {
 }
 
 let cachedRoot: DirHandle | null = null;
+// The folder handle this page holds access to (picked, re-granted, or found
+// granted); access lasts as long as the page.
+let grantedFolder: DirHandle | null = null;
 let metaCache: Map<string, Meta | undefined> | null = null;
 const listeners = new Set<() => void>();
 
 function changed() {
   metaCache = null;
   listeners.forEach((f) => f());
+  window.dispatchEvent(new Event(GALLERY_CHANGED_EVENT));
 }
 
 /** Subscribe to gallery-location changes (folder picked, permission granted). */
@@ -207,7 +213,7 @@ async function root(): Promise<DirHandle | null> {
     if (h) {
       const p = (await h.queryPermission?.({ mode: "readwrite" })) ?? "granted";
       if (p !== "granted") return null;
-      return (cachedRoot = h);
+      return (cachedRoot = grantedFolder = h);
     }
   }
   return (cachedRoot = await browserRoot());
@@ -216,6 +222,12 @@ async function root(): Promise<DirHandle | null> {
 export async function galleryStatus(): Promise<GalleryStatus> {
   const mode = storedMode();
   if (mode === "folder") {
+    // The folder this page was granted (picker or "Allow"): trust it — on
+    // Chrome for Android a copy read back from IndexedDB can still answer
+    // "prompt" right after the grant.
+    if (grantedFolder) {
+      return { mode, folderName: grantedFolder.name, needsPermission: false, folderSupported: folderSupported() };
+    }
     const h = await idbGet<DirHandle>("gallery").catch(() => undefined);
     if (h) {
       const p = (await h.queryPermission?.({ mode: "readwrite" })) ?? "granted";
@@ -233,7 +245,7 @@ export async function chooseFolder(): Promise<GalleryStatus> {
   const prev = await root().catch(() => null);
   await idbSet("gallery", h);
   localStorage.setItem(MODE_KEY, "folder");
-  cachedRoot = h;
+  cachedRoot = grantedFolder = h;
   if (prev && prev !== h) await copyAll(prev, h);
   changed();
   return galleryStatus();
@@ -243,7 +255,7 @@ export async function chooseFolder(): Promise<GalleryStatus> {
 export async function reconnectFolder(): Promise<GalleryStatus> {
   const h = await idbGet<DirHandle>("gallery");
   if (h && (await h.requestPermission?.({ mode: "readwrite" })) === "granted") {
-    cachedRoot = h;
+    cachedRoot = grantedFolder = h;
     changed();
   }
   return galleryStatus();
@@ -252,7 +264,7 @@ export async function reconnectFolder(): Promise<GalleryStatus> {
 /** Switch back to the browser's own storage (the folder keeps its files). */
 export async function useBrowserStorage(): Promise<GalleryStatus> {
   localStorage.setItem(MODE_KEY, "browser");
-  cachedRoot = null;
+  cachedRoot = grantedFolder = null;
   changed();
   return galleryStatus();
 }

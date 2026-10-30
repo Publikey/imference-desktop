@@ -103,7 +103,7 @@ import type {
   UpdateInfo,
 } from "@/lib/types";
 import { Browser } from "@wailsio/runtime";
-import { isWeb } from "@/lib/target";
+import { GALLERY_CHANGED_EVENT, isWeb } from "@/lib/target";
 import { WebGalleryBanner } from "@/components/WebGallerySection";
 import { WebPaymentBar, WebPayNotice } from "@/components/WebPay";
 
@@ -3673,6 +3673,10 @@ function Gallery({
   const confirm = useConfirm();
   const [saved, setSaved] = useState<SavedImage[]>([]);
   const [done, setDone] = useState(false);
+  // Mirrors `done` for loadMore: the reset below clears both, then loads at once
+  // — reading the state there saw the stale `true` of a fully loaded gallery,
+  // so the reload waited for the bottom of the gallery to scroll into view.
+  const doneRef = useRef(false);
   const [loading, setLoading] = useState(false);
   // Two columns on a phone (three leaves ~110px thumbnails), three otherwise.
   const [cols, setCols] = useState(() => (window.innerWidth < 640 ? 2 : 3));
@@ -3706,7 +3710,7 @@ function Gallery({
   useEffect(refreshFacets, [refreshFacets]);
 
   const loadMore = useCallback(() => {
-    if (loadingRef.current || done) return;
+    if (loadingRef.current || doneRef.current) return;
     loadingRef.current = true;
     setLoading(true);
     api
@@ -3717,25 +3721,45 @@ function Gallery({
           const seen = new Set(cur.map((x) => x.name));
           return [...cur, ...page.filter((p) => !seen.has(p.name))];
         });
-        if (page.length < GALLERY_PAGE) setDone(true);
+        if (page.length < GALLERY_PAGE) {
+          doneRef.current = true;
+          setDone(true);
+        }
       })
-      .catch(() => setDone(true))
+      .catch(() => {
+        doneRef.current = true;
+        setDone(true);
+      })
       .finally(() => {
         loadingRef.current = false;
         setLoading(false);
       });
-  }, [done, filter]);
+  }, [filter]);
 
-  // Initial load + reset-and-reload whenever the filter changes.
+  // Web: the gallery moved (folder picked / access granted) → reload in place.
+  const [location, setLocation] = useState(0);
+  useEffect(() => {
+    if (!isWeb) return;
+    const onChange = () => {
+      setLocation((n) => n + 1);
+      refreshFacets();
+    };
+    window.addEventListener(GALLERY_CHANGED_EVENT, onChange);
+    return () => window.removeEventListener(GALLERY_CHANGED_EVENT, onChange);
+  }, [refreshFacets]);
+
+  // Initial load + reset-and-reload whenever the filter (or, web, the
+  // gallery's location) changes.
   useEffect(() => {
     savedRef.current = [];
     diskCountRef.current = 0;
     setSaved([]);
+    doneRef.current = false;
     setDone(false);
     loadingRef.current = false;
     loadMore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  }, [filter, location]);
 
   // Fold freshly-finished session generations into the gallery as real saved
   // images (the Activity panel already covers live progress, so the gallery no

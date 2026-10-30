@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderOpen, HardDrive, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GALLERY_CHANGED_EVENT } from "@/lib/target";
 import type { GalleryStatus } from "@/lib/web-gallery";
 
 // Web build only: where the gallery is stored on the user's side. Lazily
@@ -20,8 +21,8 @@ export function WebGallerySection() {
     setErr("");
     try {
       const g = await gallery();
+      // No page reload: the gallery panel follows GALLERY_CHANGED_EVENT.
       setSt(await f(g));
-      window.location.reload(); // the gallery panel reloads from the new place
     } catch (e: any) {
       if (e?.name !== "AbortError") setErr(String(e?.message || e));
     }
@@ -71,9 +72,14 @@ export function WebGalleryBanner() {
   const { t } = useTranslation();
   const [need, setNeed] = useState(false);
   useEffect(() => {
-    void gallery()
-      .then((g) => g.galleryStatus())
-      .then((s) => setNeed(s.needsPermission));
+    const check = () =>
+      void gallery()
+        .then((g) => g.galleryStatus())
+        .then((s) => setNeed(s.needsPermission));
+    check();
+    // Access granted (here or in Settings) → the banner goes away.
+    window.addEventListener(GALLERY_CHANGED_EVENT, check);
+    return () => window.removeEventListener(GALLERY_CHANGED_EVENT, check);
   }, []);
   if (!need) return null;
   return (
@@ -85,8 +91,7 @@ export function WebGalleryBanner() {
         className="h-7"
         onClick={async () => {
           const g = await gallery();
-          const s = await g.reconnectFolder();
-          if (!s.needsPermission) window.location.reload();
+          setNeed((await g.reconnectFolder()).needsPermission);
         }}
       >
         {t("web.gallery.reconnect")}

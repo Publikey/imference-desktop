@@ -3,9 +3,11 @@
 // lives in lib/web-pay.ts.
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, ArrowLeft, Check, CheckCircle2, Coins, CreditCard, Copy, Download, KeyRound, Loader2, Lock, ShieldCheck, Sparkles, Wallet, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronRight, Coins, CreditCard, Copy, Download, KeyRound, Loader2, Lock, ShieldCheck, Sparkles, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Segmented } from "@/components/ui/segmented";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   PACK_CREDITS,
@@ -583,34 +585,107 @@ function KeepKeyDialog() {
 }
 
 /** Header: what pays the next run, and the way to get credits. */
-export function WebAccount() {
-  const { t } = useTranslation();
+/**
+ * Engine panel > Payment on the web, the counterpart of the Desktop PaymentBar:
+ * credits or pay as you go, and the active way's status with its next step.
+ */
+export function WebPaymentBar({ onConfigure }: { onConfigure: (section: string) => void }) {
+  const { t, i18n } = useTranslation();
+  const failure = useFailure();
   const { session, balance } = useWebPay();
-  const open = () => void openPayDialog("manual");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const mode = session.payMode === "wallet" ? "wallet" : "credits";
+  const num = (n: number) => new Intl.NumberFormat(i18n.language).format(n);
+
+  const switchTo = async (m: string) => {
+    if (m === mode) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await (m === "wallet" ? payPerRun() : switchToCredits());
+    } catch (e) {
+      setErr(failure(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const buy = () => void openPayDialog("manual");
+  const row: { ok: boolean; icon: React.ReactNode; label: string; action: string; title: string; onClick: () => void } =
+    err
+      ? { ok: false, icon: <Wallet className="size-3.5 shrink-0" />, label: err, action: t("common.manage"), title: t("payment.manageTitle"), onClick: () => onConfigure("cloud") }
+      : mode === "wallet"
+        ? {
+            ok: true,
+            icon: <Wallet className="size-3.5 shrink-0" />,
+            label: t("webpay.chip.wallet", { address: shortAddr(session.payer) }),
+            action: t("common.manage"),
+            title: t("webpay.chip.walletTitle"),
+            onClick: () => onConfigure("cloud"),
+          }
+        : session.hasKey
+          ? {
+              ok: balance === null || balance > 0,
+              icon: <Coins className="size-3.5 shrink-0" />,
+              label: balance === null ? t("webpay.chip.credits") : t("webpay.chip.balance", { credits: num(balance) }),
+              action: t("credit.buy"),
+              title: t("webpay.chip.buyTitle"),
+              onClick: buy,
+            }
+          : {
+              ok: false,
+              icon: <Coins className="size-3.5 shrink-0" />,
+              label: t("webpay.chip.none"),
+              action: t("webpay.chip.getCredits"),
+              title: t("webpay.chip.buyTitle"),
+              onClick: buy,
+            };
+
   return (
-    <div className="flex items-center gap-1">
-      {session.payMode === "wallet" ? (
-        <Button variant="ghost" size="sm" onClick={open} className="h-9 gap-1.5 rounded-lg" title={t("webpay.chip.walletTitle")}>
-          <Wallet className="size-4" />
-          {t("webpay.chip.wallet", { address: shortAddr(session.payer) })}
-        </Button>
-      ) : session.hasKey ? (
-        <Button variant="ghost" size="sm" onClick={open} className="h-9 gap-1.5 rounded-lg" title={t("webpay.chip.buyTitle")}>
-          <Coins className="size-4" />
-          {balance === null ? t("webpay.chip.credits") : t("webpay.chip.balance", { credits: balance })}
-        </Button>
-      ) : (
-        <Button size="sm" onClick={open} className="h-9 gap-1.5 rounded-lg">
-          <Coins className="size-4" />
-          {t("webpay.chip.getCredits")}
-        </Button>
-      )}
-      {session.hasKey && (
-        <Button variant="ghost" size="sm" onClick={() => void signOut()} className="text-muted-foreground h-9 rounded-lg">
-          {t("web.signOut")}
-        </Button>
-      )}
-    </div>
+    <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+          {t("payment.title")}
+        </span>
+        <Segmented
+          size="sm"
+          value={mode}
+          onChange={(m) => void switchTo(m)}
+          items={[
+            { value: "credits", label: t("webpay.settings.credits.title") },
+            { value: "wallet", label: t("webpay.settings.wallet.title") },
+          ]}
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={row.onClick}
+        title={row.title}
+        disabled={busy}
+        className={cn(
+          "mt-2 flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition",
+          !row.ok
+            ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
+            : "border-border/60 text-muted-foreground hover:bg-muted/40"
+        )}
+      >
+        {row.icon}
+        {busy ? (
+          <Loader2 className="size-3.5 shrink-0 animate-spin" />
+        ) : row.ok ? (
+          <Check className="size-3.5 shrink-0 text-emerald-500" />
+        ) : (
+          <AlertTriangle className="size-3.5 shrink-0" />
+        )}
+        <span className="min-w-0 flex-1 truncate">{busy ? t("common.checking") : row.label}</span>
+        <span className="inline-flex shrink-0 items-center gap-0.5 font-medium">
+          {row.action}
+          <ChevronRight className="size-3" />
+        </span>
+      </button>
+    </section>
   );
 }
 

@@ -1063,7 +1063,6 @@
     }
   },
   "web": {
-    "signOut": "Sign out",
     "gallery": {
       "nav": "Gallery",
       "desc": "Where your images are kept, on your side.",
@@ -1166,6 +1165,7 @@
     },
     "chip": {
       "getCredits": "Get credits",
+      "none": "No credits yet",
       "balance": "{{credits}} credits",
       "credits": "Credits",
       "buyTitle": "Buy credits",

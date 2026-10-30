@@ -14,7 +14,14 @@ export default defineConfig(({ mode }) => {
             port: Number(process.env.WAILS_VITE_PORT) || 9245,
             strictPort: true,
         },
-        plugins: web ? [react(), tailwindcss()] : [react(), tailwindcss(), wails("./bindings")],
+        plugins: web
+            ? [
+                react(),
+                tailwindcss(),
+                // The browser version's product name, in the tab and in link previews.
+                { name: "web-title", transformIndexHtml: (html) => html.replace("<title>Imference Desktop</title>", "<title>Imference Web</title>") },
+            ]
+            : [react(), tailwindcss(), wails("./bindings")],
         resolve: {
             alias: [
                 { find: "@", replacement: resolve(__dirname, "./src") },

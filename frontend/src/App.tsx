@@ -105,7 +105,7 @@ import type {
 import { Browser } from "@wailsio/runtime";
 import { isWeb } from "@/lib/target";
 import { WebGalleryBanner } from "@/components/WebGallerySection";
-import { WebAccount, WebPayNotice } from "@/components/WebPay";
+import { WebPaymentBar, WebPayNotice } from "@/components/WebPay";
 
 // Module-load side effect: install console + window error hooks before any
 // component renders. The api wrapping itself happens inside wails-bridge.ts
@@ -1890,6 +1890,11 @@ export default function App() {
           />
         </div>
       )}
+      {!firstRun && isWeb && (
+        <div data-blocker="payment" className="rounded-xl">
+          <WebPaymentBar onConfigure={openSettings} />
+        </div>
+      )}
 
       {/* 2. Model */}
       {!firstRun && (
@@ -2379,8 +2384,8 @@ function Header({
         {/* Logo + app version stacked — the version is important operational info. */}
         <div className="flex shrink-0 flex-col items-center leading-none">
           <img src={logoUrl} alt="Imference" className="size-7" />
-          <span className="text-muted-foreground mt-0.5 text-[10px] tabular-nums" title={t("header.versionTitle")}>
-            {appVersion === "dev" ? "dev" : appVersion ? `v${appVersion}` : ""}
+          <span className="text-muted-foreground mt-0.5 text-[10px] tabular-nums" title={isWeb ? undefined : t("header.versionTitle")}>
+            {isWeb ? "Web" : appVersion === "dev" ? "dev" : appVersion ? `v${appVersion}` : ""}
           </span>
         </div>
         {/* The global mode: where everything runs. */}
@@ -2463,7 +2468,6 @@ function Header({
         >
           <Settings className="size-4" />
         </Button>
-        {isWeb && <WebAccount />}
       </div>
     </header>
   );

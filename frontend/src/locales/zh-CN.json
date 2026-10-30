@@ -1051,7 +1051,6 @@
     }
   },
   "web": {
-    "signOut": "退出登录",
     "gallery": {
       "nav": "图库",
       "desc": "你的图片保存在你这边的位置。",
@@ -1154,6 +1153,7 @@
     },
     "chip": {
       "getCredits": "获取积分",
+      "none": "还没有积分",
       "balance": "{{credits}} 积分",
       "credits": "积分",
       "buyTitle": "购买积分",

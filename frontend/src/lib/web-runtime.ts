@@ -13,25 +13,51 @@ export { Create, CancellablePromise };
 
 const CSRF = { "X-Imference-Web": "1" };
 
+function post(url: string, body: unknown, signal: AbortSignal): Promise<{ r: Response; j: any }> {
+  return fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", ...CSRF },
+    body: JSON.stringify(body),
+    signal,
+  }).then(async (r) => ({ r, j: await r.json().catch(() => ({})) }));
+}
+
+// A gateway blip while waiting on a long call (proxy restart, ingress
+// timeout) is retried: the run goes on server-side.
+const WAIT_RETRY = new Set([502, 503, 504]);
+
 function rpc(body: { methodID?: number; methodName?: string; args: unknown[] }): CancellablePromise<any> {
   const ctl = new AbortController();
   const p = new CancellablePromise<any>((resolve, reject) => {
-    fetch("web/call", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json", ...CSRF },
-      body: JSON.stringify(body),
-      signal: ctl.signal,
-    })
-      .then(async (r) => {
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          // j.code tags the payment failures (web_pay.go): see web-pay.ts.
-          return reject(Object.assign(new Error(j.error || `HTTP ${r.status}`), { code: j.code || "" }));
+    (async () => {
+      let { r, j } = await post("web/call", body, ctl.signal);
+      // Long calls (generations, tools) answer 202 {pending} at once; their
+      // response is then collected from web/call/wait (web_async.go), so no
+      // request outlives the hosting's timeout.
+      let blips = 0;
+      while (r.status === 202 && j.pending) {
+        let next: { r: Response; j: any };
+        try {
+          next = await post("web/call/wait", { id: j.pending }, ctl.signal);
+        } catch (e) {
+          if (ctl.signal.aborted || ++blips > 5) throw e;
+          await new Promise((res) => setTimeout(res, 2000));
+          continue;
         }
-        resolve(j.result);
-      })
-      .catch(reject);
+        if (WAIT_RETRY.has(next.r.status) && ++blips <= 5) {
+          await new Promise((res) => setTimeout(res, 2000));
+          continue;
+        }
+        ({ r, j } = next);
+        blips = 0;
+      }
+      if (!r.ok) {
+        // j.code tags the payment failures (web_pay.go): see web-pay.ts.
+        throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { code: j.code || "" });
+      }
+      return j.result;
+    })().then(resolve, reject);
   }, () => ctl.abort());
   return p;
 }

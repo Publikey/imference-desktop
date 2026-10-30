@@ -68,8 +68,9 @@ type webServer struct {
 	rpc    *rpcTable
 
 	mu       sync.Mutex
-	users    map[string]*webUser // by user id
-	sessions map[string]string   // session id -> user id
+	users    map[string]*webUser   // by user id
+	sessions map[string]string     // session id -> user id
+	calls    map[string]*asyncCall // long calls in flight or uncollected (web_async.go)
 }
 
 func newWebServer(cfg webConfig, assets fs.FS) *webServer {
@@ -77,7 +78,7 @@ func newWebServer(cfg webConfig, assets fs.FS) *webServer {
 		cfg.checkKey = func(ctx context.Context, key string) error { return checkKeyRemote(ctx, cfg.apiBase, key) }
 	}
 	return &webServer{cfg: cfg, assets: assets, rpc: newRPCTable(),
-		users: map[string]*webUser{}, sessions: map[string]string{}}
+		users: map[string]*webUser{}, sessions: map[string]string{}, calls: map[string]*asyncCall{}}
 }
 
 // checkBasePath accepts "" or a URL path such as "/app". Anything else is a
@@ -127,6 +128,7 @@ func (s *webServer) mux() *http.ServeMux {
 	mux.HandleFunc("POST /web/sign", s.sign)
 	mux.HandleFunc("POST /web/logout", s.logout)
 	mux.HandleFunc("POST /web/call", s.call)
+	mux.HandleFunc("POST /web/call/wait", s.wait)
 	mux.HandleFunc("GET /web/events", s.events)
 	mux.HandleFunc("GET /", s.static)
 	return mux
@@ -312,6 +314,7 @@ func (u *webUser) publish(name string, data ...any) {
 func (s *webServer) evictLoop() {
 	for range time.Tick(time.Minute) {
 		s.evictIdle(time.Now())
+		s.sweepCalls(time.Now())
 	}
 }
 
@@ -391,7 +394,7 @@ func (s *webServer) call(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing "+csrfHeader+" header", http.StatusForbidden)
 		return
 	}
-	u, err := s.sessionUser(w, r)
+	u, sid, err := s.session(w, r)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 		return
@@ -421,24 +424,32 @@ func (s *webServer) call(w http.ResponseWriter, r *http.Request) {
 			"error": "an API key with credits is needed to generate", "code": codeNeedsKey})
 		return
 	}
-	res, err := u.call(r.Context(), m, req.Args)
+	if asyncMethods[m.name] {
+		s.startAsync(w, sid, u, m, req.Args)
+		return
+	}
+	status, body := callResponse(r.Context(), u, m, req.Args)
+	writeJSON(w, status, body)
+}
+
+// callResponse runs m for u and returns the status and body web/call answers.
+func callResponse(ctx context.Context, u *webUser, m *rpcMethod, args []json.RawMessage) (int, any) {
+	res, err := u.call(ctx, m, args)
 	payErr := err
 	if payErr == nil {
 		payErr = toolResultErr(res) // a tool's own error rides in its result
 	}
 	if code := payErrCode(payErr); code != "" {
-		writeJSON(w, http.StatusPaymentRequired, map[string]string{"error": payErr.Error(), "code": code})
-		return
+		return http.StatusPaymentRequired, map[string]string{"error": payErr.Error(), "code": code}
 	}
 	if err != nil {
 		status := http.StatusUnprocessableEntity
 		if errors.Is(err, errNotOnWeb) {
 			status = http.StatusNotImplemented
 		}
-		writeJSON(w, status, map[string]string{"error": err.Error()})
-		return
+		return status, map[string]string{"error": err.Error()}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"result": res})
+	return http.StatusOK, map[string]any{"result": res}
 }
 
 // events streams the user's App events as Server-Sent Events.

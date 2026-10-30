@@ -109,7 +109,12 @@ func (c *client) call(name string, args ...any) (int, map[string]any) {
 	if args == nil {
 		args = []any{}
 	}
-	return c.post("/web/call", map[string]any{"methodName": "main.App." + name, "args": args}, true)
+	code, m := c.post("/web/call", map[string]any{"methodName": "main.App." + name, "args": args}, true)
+	// Long calls answer 202 {pending}: collect them like the browser does.
+	for code == http.StatusAccepted && m["pending"] != nil {
+		code, m = c.post("/web/call/wait", map[string]any{"id": m["pending"]}, true)
+	}
+	return code, m
 }
 
 // startServer keeps the gallery on the server (the original prototype mode);

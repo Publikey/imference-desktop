@@ -6,6 +6,14 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * A touch screen (phone, tablet). There, focusing a text field from code pops
+ * the on-screen keyboard over half the screen, so fields are not auto-focused.
+ */
+export function coarsePointer(): boolean {
+  return typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
+}
+
+/**
  * A cloud model's `cost` is denominated in credits (1 credit = $0.001). Bearer
  * users pay in credits; x402 users pay in on-chain USDC. Convert credits → a
  * USD string with just enough precision (2 decimals, 3 for sub-cent costs).

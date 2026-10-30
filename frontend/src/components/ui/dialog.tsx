@@ -1,9 +1,16 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { XIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, coarsePointer } from "@/lib/utils";
 
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  // Closing: let go of the focused field while it is still on the page. Chrome
+  // on Android, when the field that holds the keyboard is removed, stops
+  // showing the keyboard for the next field tapped (until a reload).
+  const { open } = props;
+  React.useEffect(() => {
+    if (open === false && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  }, [open]);
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
 }
 
@@ -38,6 +45,7 @@ function DialogOverlay({
 function DialogContent({
   className,
   children,
+  onOpenAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   return (
@@ -45,6 +53,14 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        // Touch screens: focus the dialog itself, not its first field — that
+        // would pop the keyboard over the dialog as soon as it opens.
+        onOpenAutoFocus={(e) => {
+          onOpenAutoFocus?.(e);
+          if (e.defaultPrevented || !coarsePointer()) return;
+          e.preventDefault();
+          (e.currentTarget as HTMLElement | null)?.focus();
+        }}
         className={cn(
           "bg-background fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg sm:max-w-lg",
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",

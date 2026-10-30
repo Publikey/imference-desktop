@@ -56,7 +56,7 @@ import {
   toolById,
   useTools,
 } from "@/lib/tools";
-import { cn } from "@/lib/utils";
+import { cn, coarsePointer } from "@/lib/utils";
 import { isWeb } from "@/lib/target";
 import { LaunchBurst, useLaunchBurst } from "@/components/LaunchBurst";
 import type {
@@ -1101,7 +1101,7 @@ function InstructEditForm({
         <Textarea
           id="ie-instruction"
           rows={4}
-          autoFocus
+          autoFocus={!coarsePointer()}
           maxLength={instructionSpec?.maxLength}
           value={(params.instruction as string) ?? ""}
           placeholder={t("tools.instruct.placeholder")}

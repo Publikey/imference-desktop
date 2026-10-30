@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn, creditsToUSD } from "@/lib/utils";
+import { cn, coarsePointer, creditsToUSD } from "@/lib/utils";
 import type { ModelInfo, PaymentMode } from "@/lib/types";
 
 // Display label + ordering for the LOCAL backends — the fallback grouping for
@@ -220,7 +220,7 @@ export function ModelPickerDialog({
             <div className="relative">
               <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
               <input
-                autoFocus
+                autoFocus={!coarsePointer()}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("modelPicker.searchPlaceholder")}

@@ -12,7 +12,7 @@ import {
 import { AddButton, ComposerCardHeader } from "@/components/ComposerCard";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/wails-bridge";
-import { cn } from "@/lib/utils";
+import { cn, coarsePointer } from "@/lib/utils";
 import type { AppSettings, CatalogLora, CloudLoraRef, LoraEntry, LoraRef } from "@/lib/types";
 
 /** Backends whose local engine applies user LoRAs. Mirrors the Go gate
@@ -630,7 +630,7 @@ function LoraPickerDialog({
             <div className="relative">
               <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
               <input
-                autoFocus
+                autoFocus={!coarsePointer()}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("loraPicker.searchPlaceholder")}

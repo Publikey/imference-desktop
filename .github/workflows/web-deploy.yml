@@ -31,12 +31,19 @@ jobs:
           tenant-id: ${{ secrets.IMFERENCE_AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.IMFERENCE_AZURE_SUBSCRIPTION_ID }}
 
+      # Without a registry username/password the deploy action pushes with
+      # whatever docker login exists: log docker in with the Azure identity.
+      - name: Log in to the registry
+        env:
+          REGISTRY: ${{ secrets.IMFERENCE_REGISTRY_URL }}
+        run: az acr login --name "${REGISTRY%%.*}"
+
       - name: Build, push and deploy
         uses: azure/container-apps-deploy-action@v2
         with:
           appSourcePath: ${{ github.workspace }}
           dockerfilePath: Dockerfile.web
-          # No registry password: the push uses the Azure login above (AcrPush or
+          # No registry password: the push uses the az acr login above (AcrPush or
           # Contributor), and the app pulls with its own managed identity.
           registryUrl: ${{ secrets.IMFERENCE_REGISTRY_URL }}
           containerAppName: imference-web

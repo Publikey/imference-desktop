@@ -1,0 +1,47 @@
+name: Deploy Imference Web
+
+# Builds the browser version (Dockerfile.web) and deploys it to the
+# imference-web Container App, which the imference API serves under /app
+# (WEB_APP_URL). Runs on every push to main, or by hand. Registry and
+# resource group come from secrets: this repo is public.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time: the app runs a single replica (sessions are in memory).
+concurrency:
+  group: web-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC login to Azure
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.IMFERENCE_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.IMFERENCE_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.IMFERENCE_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build, push and deploy
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          dockerfilePath: Dockerfile.web
+          registryUrl: ${{ secrets.IMFERENCE_REGISTRY_URL }}
+          registryUsername: ${{ secrets.IMFERENCE_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.IMFERENCE_REGISTRY_PASSWORD }}
+          containerAppName: imference-web
+          resourceGroup: ${{ secrets.IMFERENCE_RESOURCE_GROUP }}
+          imageToBuild: ${{ secrets.IMFERENCE_REGISTRY_URL }}/imference-web:${{ github.sha }}
+          # Reachable only through the API's /app proxy.
+          ingress: internal
+          targetPort: 8090

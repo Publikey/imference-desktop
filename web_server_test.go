@@ -145,6 +145,19 @@ func startServerWith(t *testing.T, apiBase, basePath string, serverGallery bool)
 
 // The web runtime sends Wails' numeric binding IDs: they must map to the same
 // methods the generated bindings name.
+func TestCheckBasePath(t *testing.T) {
+	for _, ok := range []string{"", "/app", "/app/", "/imference-web_2"} {
+		if err := checkBasePath(ok); err != nil {
+			t.Errorf("%q rejected: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"app", "C:/Program Files/Git/app/", "//evil.example", "/app?x=1", "/a b"} {
+		if checkBasePath(bad) == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}
+
 func TestBindingIDsMatchGeneratedBindings(t *testing.T) {
 	src, err := os.ReadFile(filepath.Join("frontend", "bindings", "imference-desktop-go", "app.ts"))
 	if err != nil {

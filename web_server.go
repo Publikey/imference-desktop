@@ -80,6 +80,24 @@ func newWebServer(cfg webConfig, assets fs.FS) *webServer {
 		users: map[string]*webUser{}, sessions: map[string]string{}}
 }
 
+// checkBasePath accepts "" or a URL path such as "/app". Anything else is a
+// misconfiguration, e.g. Git Bash rewriting "/app" into "C:/Program Files/Git/app"
+// when it is passed to az (set MSYS_NO_PATHCONV=1).
+func checkBasePath(p string) error {
+	if p == "" {
+		return nil
+	}
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") {
+		return fmt.Errorf("IMFERENCE_WEB_BASE %q: want a path such as /app", p)
+	}
+	for _, r := range p {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("/-_.", r)) {
+			return fmt.Errorf("IMFERENCE_WEB_BASE %q: want a path such as /app", p)
+		}
+	}
+	return nil
+}
+
 // routes mounts the app under cfg.basePath. The frontend only uses relative
 // URLs (assets, web/call, web/events, login), so the same build works at "/"
 // and under a prefix such as "/app/".

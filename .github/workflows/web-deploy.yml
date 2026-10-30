@@ -36,9 +36,9 @@ jobs:
         with:
           appSourcePath: ${{ github.workspace }}
           dockerfilePath: Dockerfile.web
+          # No registry password: the push uses the Azure login above (AcrPush or
+          # Contributor), and the app pulls with its own managed identity.
           registryUrl: ${{ secrets.IMFERENCE_REGISTRY_URL }}
-          registryUsername: ${{ secrets.IMFERENCE_REGISTRY_USERNAME }}
-          registryPassword: ${{ secrets.IMFERENCE_REGISTRY_PASSWORD }}
           containerAppName: imference-web
           resourceGroup: ${{ secrets.IMFERENCE_RESOURCE_GROUP }}
           imageToBuild: ${{ secrets.IMFERENCE_REGISTRY_URL }}/imference-web:${{ github.sha }}

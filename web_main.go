@@ -36,8 +36,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	base := os.Getenv("IMFERENCE_WEB_BASE")
+	if err := checkBasePath(base); err != nil {
+		log.Fatal(err)
+	}
 	srv := newWebServer(webConfig{
-		basePath:      os.Getenv("IMFERENCE_WEB_BASE"),
+		basePath:      base,
 		dataDir:       envOr("IMFERENCE_WEB_DATA", "web-data"),
 		apiBase:       os.Getenv("IMFERENCE_BASE_URL"),
 		secure:        os.Getenv("IMFERENCE_WEB_SECURE") == "1",

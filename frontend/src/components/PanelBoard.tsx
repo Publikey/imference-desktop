@@ -28,6 +28,14 @@ const STORAGE_KEY = "imference.panels.v3";
 // grows to fill the rest, so it isn't width-controlled.
 const MIN_COL_PX = 240;
 const MAX_COL_PX = 960;
+// The gallery column never gets less than this: when the side columns would
+// squeeze it further, neighbouring side columns stack into one (fitColumns).
+const MIN_GROW_PX = 360;
+// Room between two columns: the divider (xl:w-2) plus the row gap (xl:gap-2)
+// on both of its sides.
+const DIVIDER_PX = 24;
+// Side-by-side columns from this window width (Tailwind xl); stacked below.
+const ROW_LAYOUT_PX = 1280;
 
 type PersistedLayout = {
   columns: PanelColumns;
@@ -117,6 +125,63 @@ function loadLayout(): PersistedLayout {
     // corrupted storage → defaults
   }
   return { columns: DEFAULT_COLUMNS, collapsed: {}, widths: {}, hidden: DEFAULT_HIDDEN };
+}
+
+/**
+ * The columns that actually fit `width` px. The persisted arrangement is kept
+ * as the user made it; only its rendering folds: while the side columns plus a
+ * MIN_GROW_PX gallery don't fit, two side columns merge into one (the later
+ * one's panels stacked under the earlier one's). Neighbours first, then the
+ * pair whose merged column is narrowest — the short Engine goes over Create
+ * before the wide Edit does. Widening the window unfolds it again.
+ *
+ * Stacked (below the row layout) there is one column: the grow column (the
+ * gallery, endlessly scrolling) goes last so nothing ends up under it.
+ */
+export function fitColumns(
+  cols: PanelColumns,
+  width: number,
+  colPx: (col: PanelId[]) => number,
+  isGrow: (col: PanelId[]) => boolean,
+  rowLayout: boolean
+): PanelColumns {
+  if (!rowLayout) return [...cols.filter((c) => !isGrow(c)), ...cols.filter(isGrow)];
+  let out = cols.map((c) => [...c]);
+  const need = (cs: PanelColumns) =>
+    cs.reduce((sum, c) => sum + (isGrow(c) ? MIN_GROW_PX : colPx(c)), 0) + DIVIDER_PX * (cs.length - 1);
+  while (out.length > 1 && need(out) > width) {
+    const side = out.map((_, i) => i).filter((i) => !isGrow(out[i]));
+    let best: { i: number; j: number; score: number } | null = null;
+    for (let k = 0; k + 1 < side.length; k++) {
+      const i = side[k];
+      const j = side[k + 1];
+      // Adjacent pairs always win over pairs split by the gallery.
+      const score = (j - i > 1 ? 1e6 : 0) + colPx([...out[i], ...out[j]]);
+      if (!best || score < best.score) best = { i, j, score };
+    }
+    if (!best) break; // a single side column: nothing left to stack
+    const { i, j } = best;
+    out = out.map((c, k) => (k === i ? [...out[i], ...out[j]] : c)).filter((_, k) => k !== j);
+  }
+  return out;
+}
+
+/** The board's own width, and whether the row layout is on (both drive the fit). */
+function useBoardWidth() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(() => window.innerWidth);
+  const [rowLayout, setRowLayout] = useState(() => window.innerWidth >= ROW_LAYOUT_PX);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setWidth(el.clientWidth);
+      setRowLayout(window.innerWidth >= ROW_LAYOUT_PX);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { ref, width, rowLayout };
 }
 
 /** Panel arrangement state (2D columns), persisted to localStorage. */
@@ -239,7 +304,7 @@ function usePanelFlip(layoutKey: string, dragId: PanelId | null) {
 }
 
 export function PanelBoard({
-  columns,
+  columns: arranged,
   onColumnsChange,
   collapsed,
   onToggleCollapsed,
@@ -258,8 +323,7 @@ export function PanelBoard({
   const { t } = useTranslation();
   const [dragId, setDragId] = useState<PanelId | null>(null);
   const [resizing, setResizing] = useState(false);
-  const registerNode = usePanelFlip(JSON.stringify(columns) + JSON.stringify(collapsed), dragId);
-
+  const board = useBoardWidth();
 
   // A non-grow column's width: the widest manual override among its panels, else
   // its spec default (rem → px). The gallery column grows and isn't sized here.
@@ -268,6 +332,22 @@ export function PanelBoard({
       Math.max(...col.map((id) => widths[id] ?? (panels[id].width ?? 25) * 16)),
     [widths, panels]
   );
+  // What a column takes in the row: a slim rail, or its width.
+  const colFootprintPx = useCallback(
+    (col: PanelId[]) =>
+      col.length === 1 && !!collapsed[col[0]] && !!panels[col[0]].collapsible ? 48 : colWidthPx(col),
+    [collapsed, panels, colWidthPx]
+  );
+  const isGrowCol = useCallback((col: PanelId[]) => col.some((id) => panels[id].grow), [panels]);
+  const fit = useCallback(
+    (cols: PanelColumns) => fitColumns(cols, board.width, colFootprintPx, isGrowCol, board.rowLayout),
+    [board.width, board.rowLayout, colFootprintPx, isGrowCol]
+  );
+
+  // Everything below works on what is on screen: a drag saves the on-screen
+  // arrangement (what the user sees is what they move).
+  const columns = fit(arranged);
+  const registerNode = usePanelFlip(JSON.stringify(columns) + JSON.stringify(collapsed), dragId);
 
   // Drag the divider between columns ci and ci+1. Resizes the non-grow neighbour
   // (prefer the left column); the gallery flexes to absorb the change. Live —
@@ -292,11 +372,17 @@ export function PanelBoard({
       e.preventDefault();
       const startX = e.clientX;
       const startW = colWidthPx(target);
+      // Room left before the gallery would drop under MIN_GROW_PX — past it the
+      // layout would fold under the pointer.
+      const used =
+        columns.reduce((sum, c) => sum + (isGrowCol(c) ? MIN_GROW_PX : colFootprintPx(c)), 0) +
+        DIVIDER_PX * (columns.length - 1);
+      const maxW = Math.max(startW, Math.min(MAX_COL_PX, startW + board.width - used));
       setResizing(true);
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
       const onMove = (ev: PointerEvent) => {
-        const w = Math.min(MAX_COL_PX, Math.max(MIN_COL_PX, startW + (ev.clientX - startX) * sign));
+        const w = Math.min(maxW, Math.max(MIN_COL_PX, startW + (ev.clientX - startX) * sign));
         const next = { ...widths };
         for (const id of target) next[id] = w;
         onWidthsChange(next);
@@ -311,7 +397,7 @@ export function PanelBoard({
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
     },
-    [columns, panels, widths, colWidthPx, onWidthsChange]
+    [columns, panels, widths, colWidthPx, colFootprintPx, isGrowCol, board.width, onWidthsChange]
   );
 
   const canResize = (ci: number) => {
@@ -324,7 +410,7 @@ export function PanelBoard({
 
   // Live 2D reorder while dragging: place `from` relative to the hovered `to`.
   const moveTo = useCallback(
-    (from: PanelId, to: PanelId, mode: DropMode) => {
+    (from: PanelId, to: PanelId, mode: DropMode, vertical: DropMode) => {
       if (from === to) return;
       // Remove `from`, dropping any column it emptied.
       let next: PanelColumns = columns
@@ -338,11 +424,17 @@ export function PanelBoard({
         next = next.map((c, i) => (i === ci ? col : c));
       } else {
         const at = mode === "right" ? ci + 1 : ci;
-        next = [...next.slice(0, at), [from], ...next.slice(at)];
+        const wider = [...next.slice(0, at), [from], ...next.slice(at)];
+        // No room for one more column: drop it above / below the target instead.
+        if (fit(wider).length < wider.length) {
+          const col = [...next[ci]];
+          col.splice(col.indexOf(to) + (vertical === "below" ? 1 : 0), 0, from);
+          next = next.map((c, i) => (i === ci ? col : c));
+        } else next = wider;
       }
       if (JSON.stringify(next) !== JSON.stringify(columns)) onColumnsChange(next);
     },
-    [columns, onColumnsChange]
+    [columns, onColumnsChange, fit]
   );
 
   // Reorder via pointer events (not native HTML5 drag): WebKit/WKWebView doesn't
@@ -362,9 +454,10 @@ export function PanelBoard({
           const r = target!.getBoundingClientRect();
           const rx = (x - (r.left + r.width / 2)) / r.width;
           const ry = (y - (r.top + r.height / 2)) / r.height;
-          const horizontal = window.innerWidth >= 1280 && Math.abs(rx) > Math.abs(ry);
-          const mode: DropMode = horizontal ? (rx < 0 ? "left" : "right") : ry < 0 ? "above" : "below";
-          moveTo(from, to, mode);
+          const horizontal = window.innerWidth >= ROW_LAYOUT_PX && Math.abs(rx) > Math.abs(ry);
+          const vertical: DropMode = ry < 0 ? "above" : "below";
+          const mode: DropMode = horizontal ? (rx < 0 ? "left" : "right") : vertical;
+          moveTo(from, to, mode, vertical);
         },
         onEnd: () => setDragId(null),
       });
@@ -376,7 +469,7 @@ export function PanelBoard({
     // Desktop: the board fills the window height and every column scrolls on
     // its own (the wheel moves the column under the cursor, like an editor's
     // side panels); stacked on narrow windows, the page scrolls.
-    <div className="flex w-full flex-col gap-6 xl:h-full xl:min-h-0 xl:flex-row xl:items-stretch xl:gap-2">
+    <div ref={board.ref} className="flex w-full flex-col gap-6 xl:h-full xl:min-h-0 xl:flex-row xl:items-stretch xl:gap-2">
       {columns.map((col, ci) => {
         const grow = col.some((id) => panels[id].grow);
         const rail = col.length === 1 && !!collapsed[col[0]] && !!panels[col[0]].collapsible;

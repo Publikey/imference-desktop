@@ -107,40 +107,15 @@ func (b *browserSign) SignEIP3009(p wallet.SignEIP3009Params) (wallet.SignedAuth
 	if err != nil {
 		return wallet.SignedAuthorization{}, err
 	}
-	id := newSessionID()[:16]
-	ch := make(chan signReply, 1)
-	b.u.mu.Lock()
-	if len(b.u.subs) == 0 {
-		b.u.mu.Unlock()
-		return wallet.SignedAuthorization{}, errNoTab
-	}
-	b.u.signs[id] = ch
-	b.u.mu.Unlock()
-	defer func() {
-		b.u.mu.Lock()
-		delete(b.u.signs, id)
-		b.u.mu.Unlock()
-	}()
-
-	b.u.publish("web:sign", map[string]any{
-		"id":        id,
+	rep, err := b.ask(map[string]any{
 		"address":   b.addr.Hex(),
 		"amount":    p.Value.String(), // atomic USDC
 		"payTo":     p.PayTo.Hex(),
 		"chainId":   p.ChainID,
 		"typedData": browserTypedData(td),
 	})
-	var rep signReply
-	select {
-	case rep = <-ch:
-	case <-time.After(signTimeout):
-		return wallet.SignedAuthorization{}, errSignTimeout
-	}
-	if rep.Error == "cancelled" {
-		return wallet.SignedAuthorization{}, errSignCancelled
-	}
-	if rep.Error != "" {
-		return wallet.SignedAuthorization{}, fmt.Errorf("wallet: %s", rep.Error)
+	if err != nil {
+		return wallet.SignedAuthorization{}, err
 	}
 	sig, err := hexutil.Decode(rep.Signature)
 	if err != nil {
@@ -159,6 +134,81 @@ func (b *browserSign) SignEIP3009(p wallet.SignEIP3009Params) (wallet.SignedAuth
 		sig[64] += 27
 	}
 	return wallet.SignedAuthorization{Authorization: auth, Signature: hexutil.Encode(sig)}, nil
+}
+
+// ask sends a "web:sign" request to the user's tab and waits for its answer.
+func (b *browserSign) ask(req map[string]any) (signReply, error) {
+	id := newSessionID()[:16]
+	ch := make(chan signReply, 1)
+	b.u.mu.Lock()
+	if len(b.u.subs) == 0 {
+		b.u.mu.Unlock()
+		return signReply{}, errNoTab
+	}
+	b.u.signs[id] = ch
+	b.u.mu.Unlock()
+	defer func() {
+		b.u.mu.Lock()
+		delete(b.u.signs, id)
+		b.u.mu.Unlock()
+	}()
+
+	req["id"] = id
+	b.u.publish("web:sign", req)
+	var rep signReply
+	select {
+	case rep = <-ch:
+	case <-time.After(signTimeout):
+		return signReply{}, errSignTimeout
+	}
+	if rep.Error == "cancelled" {
+		return signReply{}, errSignCancelled
+	}
+	if rep.Error != "" {
+		return signReply{}, fmt.Errorf("wallet: %s", rep.Error)
+	}
+	return rep, nil
+}
+
+// SignPersonal has the browser wallet personal_sign message: the call-history
+// sign-in (app_history.go), which costs nothing. The signature is checked
+// against the connected address before the API sees it.
+func (b *browserSign) SignPersonal(message string) (string, error) {
+	rep, err := b.ask(map[string]any{
+		"address": b.addr.Hex(),
+		"purpose": "history",
+		"message": message,
+	})
+	if err != nil {
+		return "", err
+	}
+	sig, err := hexutil.Decode(rep.Signature)
+	if err != nil {
+		return "", fmt.Errorf("wallet: bad signature: %w", err)
+	}
+	signer, err := wallet.RecoverPersonalSigner(message, sig)
+	if err != nil {
+		return "", err
+	}
+	if signer != b.addr {
+		return "", fmt.Errorf("wallet: signed by %s, expected %s", signer.Hex(), b.addr.Hex())
+	}
+	if sig[64] < 27 {
+		sig[64] += 27
+	}
+	return hexutil.Encode(sig), nil
+}
+
+// browserHistorySigner is the App's historySigner: the wallet connected in
+// the tab, whatever the payment mode.
+func (u *webUser) browserHistorySigner() (historySigner, error) {
+	u.mu.Lock()
+	addr := u.payer
+	u.mu.Unlock()
+	if addr == (common.Address{}) {
+		return nil, errNoPayer
+	}
+	return &browserSign{u: u, addr: addr}, nil
 }
 
 // browserTypedData is the typed data in the shape eth_signTypedData_v4 takes

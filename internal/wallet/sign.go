@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -186,4 +187,32 @@ func (w *Wallet) SignEIP3009(p SignEIP3009Params) (SignedAuthorization, error) {
 		Authorization: auth,
 		Signature:     hexutil.Encode(signature),
 	}, nil
+}
+
+// SignPersonal signs message with EIP-191 personal_sign (what a browser
+// wallet's personal_sign does) and returns the 0x-prefixed 65-byte signature,
+// v = 27/28. Used for the call-history sign-in: no transaction, no cost.
+func (w *Wallet) SignPersonal(message string) (string, error) {
+	sig, err := crypto.Sign(accounts.TextHash([]byte(message)), w.priv)
+	if err != nil {
+		return "", fmt.Errorf("wallet: personal_sign: %w", err)
+	}
+	sig[64] += 27
+	return hexutil.Encode(sig), nil
+}
+
+// RecoverPersonalSigner returns the address that personal_signed message.
+func RecoverPersonalSigner(message string, sig []byte) (common.Address, error) {
+	if len(sig) != 65 {
+		return common.Address{}, fmt.Errorf("wallet: signature is %d bytes, want 65", len(sig))
+	}
+	s := append([]byte(nil), sig...)
+	if s[64] >= 27 {
+		s[64] -= 27
+	}
+	pub, err := crypto.SigToPub(accounts.TextHash([]byte(message)), s)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("wallet: recover signer: %w", err)
+	}
+	return crypto.PubkeyToAddress(*pub), nil
 }

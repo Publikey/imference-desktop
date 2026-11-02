@@ -771,3 +771,41 @@ export type LocalApiInfo = {
   port: number;
   discoveryPath: string;
 };
+
+/** One file a past cloud call produced. `url` is absent once expired. */
+export type CloudHistoryOutput = {
+  name?: string;
+  kind: string;
+  format?: string;
+  width?: number;
+  height?: number;
+  text?: string;
+  url?: string;
+};
+
+/** One past cloud call. The server never keeps the prompt or the settings. */
+export type CloudHistoryItem = {
+  request_id: string;
+  created_at: string;
+  rail: "credits" | "x402";
+  kind: "image" | "video" | "tool" | string;
+  tool_id?: string;
+  status: "pending" | "done" | "failed";
+  error?: string;
+  error_code?: string;
+  credits_charged: number;
+  outputs: CloudHistoryOutput[];
+  available_until: string | null;
+  expired: boolean;
+};
+
+export type CloudHistoryRail = "credits" | "x402";
+
+export type CloudHistoryPage = {
+  data: CloudHistoryItem[];
+  next_cursor?: string;
+  retention_hours: number;
+  rail: CloudHistoryRail;
+  /** The rails this user can read (an API key: credits, a wallet: x402). */
+  rails: CloudHistoryRail[];
+};

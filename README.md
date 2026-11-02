@@ -237,6 +237,16 @@ metadata. Cloud jobs that finish while no tab is open wait in a per-user server
 outbox (`TakeClientGalleryOutbox`) until the next visit. `IMFERENCE_WEB_GALLERY=server`
 keeps the previous server-side gallery.
 
+**Cloud history.** The gallery's **History** button (and the command palette)
+lists every cloud call paid with the API key or the wallet, newest first, from
+the API's `GET /history` (`app_history.go`, `internal/cloud/history.go`). The
+server keeps the call and its results only, never the prompt or the settings;
+a result can be saved to the gallery again (`RedownloadCloudOutput`) for 24 h.
+An API key reads its own calls. A wallet signs a Sign-In with Ethereum message
+(`personal_sign`, no payment): the desktop with its keychain wallet (a new
+sign-in every hour, no prompt), the web with the browser wallet (one prompt a
+day, `web:sign` with `purpose: "history"`).
+
 Prototype limits: sessions live in memory (a restart signs everyone out) and
 the server is single-instance; the API key is stored in the user's
 `settings.json` on the server; no rate limiting. `go test -tags "web server" .` covers the

@@ -377,6 +377,16 @@ export function ListCatalogLoras(): $CancellablePromise<types$0.CatalogLora[] | 
 }
 
 /**
+ * ListCloudHistory returns one page of the cloud call history, newest first.
+ * rail "credits" reads the API key's calls, "x402" the wallet's (signed in
+ * with the wallet, no payment); "" picks the payment mode's rail when it is
+ * available, else the other one. cursor is the previous page's NextCursor.
+ */
+export function ListCloudHistory(rail: string, cursor: string): $CancellablePromise<types$0.CloudHistoryPage> {
+    return $Call.ByID(1375426170, rail, cursor);
+}
+
+/**
  * ListCloudLoras returns every curated LoRA imference runs in the cloud; the
  * picker marks which ones fit the selected cloud model. Nothing is downloaded:
  * imference applies them on its workers (and re-checks compatibility).
@@ -498,6 +508,16 @@ export function PurgeBaseComponentsCache(): $CancellablePromise<void> {
  */
 export function RecheckPendingCloud(): $CancellablePromise<void> {
     return $Call.ByID(2444376496);
+}
+
+/**
+ * RedownloadCloudOutput downloads a past cloud result again (its URL is served
+ * for 24 h) and saves it to the gallery like a fresh one. The prompt and the
+ * settings were never kept, so the saved file carries only what the history
+ * knows: where it came from, its size and its time.
+ */
+export function RedownloadCloudOutput(item: types$0.CloudHistoryItem, index: number): $CancellablePromise<types$0.GenerationResult> {
+    return $Call.ByID(4160358944, item, index);
 }
 
 /**

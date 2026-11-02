@@ -41,6 +41,7 @@ import {
   ChevronRight,
   Clock,
   Plus,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -64,6 +65,7 @@ import { EnginePanel } from "@/components/EnginePanel";
 import { ActivityDock } from "@/components/ActivityDock";
 import { LaunchBurst, useLaunchBurst } from "@/components/LaunchBurst";
 import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
+import { CloudHistoryDialog } from "@/components/CloudHistoryDialog";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { EditEmpty, ToolEditor, defaultToolFor, type ToolSource } from "@/components/ToolEditor";
 import { ToolMenuList } from "@/components/ToolBits";
@@ -547,6 +549,13 @@ export default function App() {
   // the palette can open the picker, not just ModelBar's own trigger).
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // The gallery's History button opens it from deep in the tree.
+  useEffect(() => {
+    const open = () => setHistoryOpen(true);
+    window.addEventListener(OPEN_HISTORY_EVENT, open);
+    return () => window.removeEventListener(OPEN_HISTORY_EVENT, open);
+  }, []);
   const [activityOpen, setActivityOpen] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
 
@@ -1689,7 +1698,7 @@ export default function App() {
     disabled: primary.disabled,
     onClick: primary.onClick,
     onBlocked: primary.onBlocked,
-    blocked: paletteOpen || shortcutsOpen || settingsOpen || modelPickerOpen || !!customModelPath || !!lightbox,
+    blocked: paletteOpen || shortcutsOpen || historyOpen || settingsOpen || modelPickerOpen || !!customModelPath || !!lightbox,
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1853,6 +1862,7 @@ export default function App() {
     }
     cmds.push({ id: "settings", group: gApp, label: t("palette.settings"), icon: <Settings />, keywords: "preferences", run: () => openSettings() });
     cmds.push({ id: "logs", group: gApp, label: t("palette.logs"), icon: <ScrollText />, keywords: "console debug", run: () => setLogsOpen((o) => !o) });
+    cmds.push({ id: "history", group: gApp, label: t("history.title"), icon: <History />, keywords: "history calls past cloud download redownload api key wallet", run: () => setHistoryOpen(true) });
     cmds.push({ id: "shortcuts", group: gApp, label: t("shortcuts.title"), icon: <Keyboard />, keywords: "keyboard keys help", run: () => setShortcutsOpen(true) });
 
     return cmds;
@@ -2309,9 +2319,13 @@ export default function App() {
       <LogPanel open={logsOpen} onOpenChange={setLogsOpen} />
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} commands={commands} />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <CloudHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
     </div>
   );
 }
+
+/** Opens the cloud call history (CloudHistoryDialog) from anywhere. */
+const OPEN_HISTORY_EVENT = "imference:open-history";
 
 const WEB_DRAFT = "imference.web.prompt";
 
@@ -3737,9 +3751,9 @@ function Gallery({
   }, [filter]);
 
   // Web: the gallery moved (folder picked / access granted) → reload in place.
+  // Both: a cloud result saved again from the history (CloudHistoryDialog).
   const [location, setLocation] = useState(0);
   useEffect(() => {
-    if (!isWeb) return;
     const onChange = () => {
       setLocation((n) => n + 1);
       refreshFacets();
@@ -4056,7 +4070,18 @@ function Gallery({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <FilterBar facets={facets} filter={filter} onChange={setFilter} />
-        <ColumnPicker cols={cols} onChange={setCols} />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.dispatchEvent(new Event(OPEN_HISTORY_EVENT))}
+            title={t("history.title")}
+          >
+            <History />
+            {t("history.button")}
+          </Button>
+          <ColumnPicker cols={cols} onChange={setCols} />
+        </div>
       </div>
 
       {initialLoading ? (

@@ -271,6 +271,9 @@ func (s *webServer) newUser(uid, apiKey string) (*webUser, error) {
 	u := &webUser{id: uid, apiKey: apiKey, guest: apiKey == "", app: app, subs: map[chan []byte]string{},
 		lastSeen: time.Now(), signs: map[string]chan signReply{}}
 	app.x402Signer = u.browserSigner
+	// Call history: the browser wallet signs one sign-in a day.
+	app.historySigner = u.browserHistorySigner
+	app.historyTTL = 24 * time.Hour
 	app.ctx = context.Background()
 	if s.cfg.apiBase != "" {
 		app.cloud.SetBaseURL(s.cfg.apiBase)

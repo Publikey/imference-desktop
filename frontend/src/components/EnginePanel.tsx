@@ -79,7 +79,7 @@ export function EnginePanel({
 
   return (
     // Mode-tinted surface, like the Create panel's (mode-surface in index.css).
-    <div className="mode-surface flex flex-col gap-3 p-3" data-mode={mode}>
+    <div className="mode-surface flex flex-col gap-3" data-mode={mode}>
       {engineBlock}
 
       {local ? (

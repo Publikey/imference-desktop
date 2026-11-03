@@ -483,16 +483,17 @@ export function PanelBoard({
               ? "mx-auto xl:mx-0 xl:w-12 xl:shrink-0"
               : "mx-auto w-full max-w-2xl xl:mx-0 xl:max-w-none xl:w-[var(--col-w)] xl:shrink-0"
         );
-        const style =
-          grow || rail
-            ? undefined
-            : ({ "--col-w": `${colWidthPx(col)}px` } as React.CSSProperties);
+        // Columns enter left to right, 60ms apart (index.css .panel-enter).
+        const style = {
+          ...(grow || rail ? {} : { "--col-w": `${colWidthPx(col)}px` }),
+          "--enter-delay": `${ci * 60}ms`,
+        } as React.CSSProperties;
         // Key by position, not content: a content key remounts the whole column
         // on every live reorder, destroying the dragged panel's node (and its
         // dragend) mid-drag.
         return (
           <Fragment key={ci}>
-            <div className={columnClass} style={style} data-scroll-root>
+            <div className={cn(columnClass, "panel-enter")} style={style} data-scroll-root>
               {col.map((id) => (
                 <Panel
                   key={id}

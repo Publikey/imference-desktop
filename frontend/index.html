@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <title>Imference Desktop</title>
+    <meta name="color-scheme" content="light dark" />
+    <!-- First paint in the right theme, before the app's CSS and JS load: the
+         stored choice (lib/theme.ts, "imference.theme") or the OS. Values are
+         the canvas tokens (design/tokens: --im-canvas). -->
+    <script>
+      try {
+        var p = localStorage.getItem("imference.theme");
+        if (p === "dark" || (p !== "light" && matchMedia("(prefers-color-scheme: dark)").matches))
+          document.documentElement.classList.add("dark");
+      } catch (e) {}
+    </script>
+    <style>
+      html { background: #f8f9fb; }
+      html.dark { background: #0a0d11; color-scheme: dark; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

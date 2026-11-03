@@ -59,7 +59,7 @@ export function PanelToggles({
             className={cn("ds-seg-item h-[30px] sm:px-3 disabled:cursor-not-allowed", !on && "[&_svg]:opacity-60")}
           >
             <PanelIcon id={id} className="size-3.5" />
-            <span className="hidden md:inline">{name}</span>
+            <span className="hidden lg:inline">{name}</span>
           </button>
         );
       })}

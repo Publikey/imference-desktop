@@ -429,7 +429,7 @@ export function ToolEditor({
 
 
   return (
-    <div className="tool-editor @container mode-surface flex flex-col overflow-hidden" data-mode={mode}>
+    <div className="tool-editor @container ds-card flex flex-col overflow-hidden" data-mode={mode}>
         <header className="flex items-center gap-3 border-b px-3 py-2.5">
           <span className="brand-surface flex size-8 items-center justify-center rounded-xl text-white">
             <ToolIcon id={currentId} className="size-4" />

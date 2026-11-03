@@ -1,0 +1,22 @@
+# Design system guard: the generated token CSS must match tokens.json, every
+# text colour must keep WCAG AA contrast, and the frontend must typecheck.
+name: design-check
+
+on:
+  pull_request:
+    paths: ["design/**", "frontend/**"]
+  workflow_dispatch:
+
+jobs:
+  tokens-and-types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tokens up to date + AA contrast
+        run: node design/tokens/build.mjs --check
+      - name: Typecheck the frontend
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund && npx tsc -b

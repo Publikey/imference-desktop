@@ -2041,7 +2041,7 @@ export default function App() {
                       // scrollbar-gutter:stable reserves the scrollbar its own lane
                       // beyond the right padding, so it never clips the cards'
                       // rounded corners (Windows/WebView2 shows a wide scrollbar).
-                      "create-surface relative flex flex-col gap-4 p-3 pb-4",
+                      "create-surface relative flex flex-col gap-3 pb-4",
                       dropActive && "create-drop-active"
                     )}
                     data-mode={mode}
@@ -2556,7 +2556,7 @@ function EngineControl({
   // engine moves through install → select → start → running (the left header
   // cluster no longer shifts on every state change).
   const pill =
-    "inline-flex h-9 min-w-[9.5rem] items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-[color,background-color,border-color] disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex h-9 min-w-0 shrink items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-xs font-medium lg:min-w-[9.5rem] transition-[color,background-color,border-color] disabled:cursor-not-allowed disabled:opacity-50";
 
   if (installing) {
     return (

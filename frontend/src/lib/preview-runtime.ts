@@ -3,8 +3,10 @@
 // the real UI renders in a plain browser, in realistic states, with no engine,
 // no GPU and no network but the catalog mock (design/bench/mock-api.mjs).
 //
-// Scenario: ?scenario=ready (default) | empty | generating | firstrun
+// Scenario: ?scenario=ready (default) | empty | firstrun
 // Catalog:  ?api=http://127.0.0.1:8799 (default)
+// Gallery:  ?gallery=code1,code2,… (model codes, in order) curates the images
+//           shown, for product shots; default = every catalog image.
 //
 // Never part of a shipped build: only the preview modes alias it in.
 import * as Create from "wails-runtime-dist/create.js";
@@ -49,7 +51,7 @@ function toModel(m: any, formats: any[]) {
     shortDescription: m.short_description || "",
     mediumDescription: m.medium_description || "",
     image: m.image || "",
-    modelUrl: "",
+    modelUrl: m.im_local ? `https://models.example/${m.model_code}.safetensors` : "",
     promptPre: "",
     promptNegative: "",
     stepsDefault: m.steps_default ?? undefined,
@@ -115,7 +117,11 @@ async function getSettings() {
 async function savedImages(offset: number, limit: number) {
   if (scenario === "empty" || scenario === "firstrun") return [];
   const { models } = await loadCatalog();
-  const list = models.filter((m) => m.model_type !== "video").map((m, i) => ({
+  const pick = q.get("gallery")?.split(",").filter(Boolean);
+  const pool = pick
+    ? pick.map((c) => models.find((m) => m.model_code === c)).filter(Boolean)
+    : models.filter((m) => m.model_type !== "video");
+  const list = pool.map((m: any, i: number) => ({
     name: `${String(1000 + i)}-${m.model_code}.webp`,
     kind: "image",
     source: i % 3 === 0 ? "cloud" : "local",
@@ -157,6 +163,7 @@ function tools() {
     inputs: [{ name: "image", type: "image", required: true, multiple: false }],
     params: [], outputs: [{ name: "image", type: "image" }],
     runtimes: { local: ["cpu", "cuda"] }, credits: 2, cloudAvailable: true, weightsMb: 120,
+    weights: [{ sizeMb: 120, cached: true }],
     badge: i % 4 === 3 ? "cloud" : "local", device: "cuda", priceCredits: 2, priceUsd: 0.002,
   }));
 }
@@ -246,8 +253,16 @@ async function handle(name: string, args: any[]): Promise<any> {
       return { models: 38.4e9, outputs: 1.2e9, engine: 6.1e9, cache: 2.4e9 };
     case "GetLocalAPIInfo":
       return { enabled: true, url: "http://127.0.0.1:7862", token: "demo" };
-    case "ListEditModels":
-      return { local: [], cloud: [] };
+    case "ListEditModels": {
+      // A local instruction-edit model already loaded (the desktop pitch).
+      const edit = {
+        modelCode: "qwen-image-edit-2511", name: "Qwen-Image-Edit 2511", shortDescription: "Edit with plain words",
+        mediumDescription: "", image: "", modelUrl: "https://models.example/qwen-image-edit-2511.safetensors",
+        promptPre: "", promptNegative: "", schedulerDefault: "", formatCode: "sq", backendType: "qwenimage-edit",
+        cost: 2, canLocal: true, canCloud: true, modelType: "image",
+      };
+      return { local: edit, cloud: [edit], defaultCloud: edit.modelCode, localCandidate: edit, localCandidateCached: true };
+    }
     case "CheckModelReadiness":
       return { ready: true, missing: [], bytes: 0 };
     case "GenerateLocal":

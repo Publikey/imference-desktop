@@ -36,7 +36,7 @@ export function ToolsSection({
     <div className="space-y-4">
       {/* Where tools run follows the app's global mode (Engine panel). */}
 
-      <div className="bg-card grid gap-4 rounded-2xl border p-4 shadow-sm sm:grid-cols-2">
+      <div className="ds-card grid gap-4 p-4 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor="tools-device" className="text-xs">
             {t("tools.settings.device")}
@@ -71,7 +71,7 @@ export function ToolsSection({
         </div>
       </div>
 
-      <div className="bg-card grid gap-2 rounded-2xl border p-4 shadow-sm">
+      <div className="ds-card grid gap-2 p-4">
         <label className="flex items-center gap-2.5 text-sm font-medium">
           <Checkbox checked={!ts.localApiDisabled} onCheckedChange={(on) => set({ localApiDisabled: !on || undefined })} />
           <Bot className="text-muted-foreground size-4" />

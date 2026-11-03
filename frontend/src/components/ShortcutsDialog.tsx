@@ -61,7 +61,7 @@ export function ShortcutsDialog({
         <div className="grid gap-5 sm:grid-cols-3">
           {sections.map((s) => (
             <div key={s.title} className="min-w-0">
-              <h3 className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-wide">
+              <h3 className="ds-label mb-2">
                 {s.title}
               </h3>
               <dl className="space-y-2">

@@ -139,7 +139,7 @@ export function LocalReadinessCard({
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="bg-card hover:border-primary/30 flex w-full items-center gap-2 rounded-2xl border px-4 py-2.5 text-left text-xs shadow-sm transition"
+        className="ds-card hover:border-primary/30 flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs transition"
       >
         <Check className="size-3.5 shrink-0 text-emerald-500" />
         <span className="min-w-0 flex-1 truncate">
@@ -151,7 +151,7 @@ export function LocalReadinessCard({
   }
 
   return (
-    <section className="bg-card grid min-w-0 gap-2.5 overflow-hidden rounded-2xl border px-4 py-3 text-xs shadow-sm">
+    <section className="ds-card grid min-w-0 gap-2.5 overflow-hidden px-4 py-3 text-xs">
       <div className="flex items-center justify-between">
         <ComposerCardHeader title={t("readiness.title")} help={t("readiness.help")} />
         <div className="flex items-center gap-2">

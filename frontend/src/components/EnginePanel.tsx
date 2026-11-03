@@ -86,7 +86,7 @@ export function EnginePanel({
         <>
           {/* The machine */}
           <section className="rounded-xl border p-3 text-xs">
-            <p className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-[11px] font-medium tracking-wide uppercase">
+            <p className="ds-label mb-1.5 flex">
               <MemoryStick className="size-3.5" /> {t("engine.machine")}
             </p>
             <p className="font-medium">{status?.gpuName || t("engine.noGpu")}</p>
@@ -98,7 +98,7 @@ export function EnginePanel({
           {/* The generation model the engine holds */}
           <section className="rounded-xl border p-3 text-xs">
             <div className="mb-1.5 flex items-center gap-2">
-              <p className="text-muted-foreground flex flex-1 items-center gap-1.5 text-[11px] font-medium tracking-wide uppercase">
+              <p className="ds-label flex flex-1">
                 <Cpu className="size-3.5" /> {t("engine.generation")}
               </p>
               <SidecarPill sidecar={sidecar} />
@@ -119,7 +119,7 @@ export function EnginePanel({
           {warm.length > 0 && (
           <section className="rounded-xl border p-3 text-xs">
             <div className="mb-1.5 flex items-center gap-2">
-              <p className="text-muted-foreground flex flex-1 items-center gap-1.5 text-[11px] font-medium tracking-wide uppercase">
+              <p className="ds-label flex flex-1">
                 <Wrench className="size-3.5" /> {t("engine.tools")}
               </p>
               {status?.toolsBusy && <Loader2 className="text-muted-foreground size-3.5 animate-spin" />}

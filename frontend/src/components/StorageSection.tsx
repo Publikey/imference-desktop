@@ -144,7 +144,7 @@ export function StorageSection({
   return (
     <div className="grid gap-4">
       {/* Usage against the quota */}
-      <section className="bg-card grid gap-3 rounded-2xl border p-4 shadow-sm">
+      <section className="ds-card grid gap-3 p-4">
         <div className="flex items-baseline justify-between gap-2">
           <Label>{t("storage.usageTitle")}</Label>
           <span className="text-muted-foreground text-xs tabular-nums">
@@ -193,7 +193,7 @@ export function StorageSection({
       </section>
 
       {/* Cached checkpoints */}
-      <section className="bg-card grid gap-2 rounded-2xl border p-4 shadow-sm">
+      <section className="ds-card grid gap-2 p-4">
         <Label>{t("storage.modelsTitle")}</Label>
         <p className="text-muted-foreground text-xs">{t("storage.modelsHint")}</p>
 
@@ -242,7 +242,7 @@ export function StorageSection({
       </section>
 
       {/* Folders on disk */}
-      <section className="bg-card grid gap-2 rounded-2xl border p-4 shadow-sm">
+      <section className="ds-card grid gap-2 p-4">
         <Label>{t("storage.foldersTitle")}</Label>
 
         <FolderRow

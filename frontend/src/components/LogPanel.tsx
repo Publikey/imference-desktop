@@ -121,8 +121,9 @@ export function LogPanel({ open, onOpenChange }: Props) {
           open ? "translate-x-0" : "translate-x-full"
         )}
         // Don't unmount on close — keep the subscription alive so the panel
-        // doesn't miss entries when hidden.
-        aria-hidden={!open}
+        // doesn't miss entries when hidden. inert (not aria-hidden): off-screen
+        // it must also drop out of the Tab order.
+        inert={!open}
       >
       <div className="flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-3">

@@ -276,6 +276,7 @@
     "deleteSelectedConfirm": "{{count}} images will be permanently removed from disk.",
     "emptyFiltered": "No images match this filter",
     "empty": "Your generations will appear here",
+    "emptyHint": "Write a prompt in Create, then Generate ({{keys}}).",
     "filterModel": "Model",
     "filterEngine": "Engine",
     "filterSource": "Source",
@@ -1221,7 +1222,8 @@
       "idle": "Stopped",
       "starting": "Loading…",
       "ready": "Ready",
-      "error": "Error"
+      "error": "Error",
+      "stopped": "Stopped"
     },
     "engineName": "Engine: {{engine}}"
   }

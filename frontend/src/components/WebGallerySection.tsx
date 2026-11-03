@@ -31,7 +31,7 @@ export function WebGallerySection() {
   if (!st) return null;
   return (
     <div className="space-y-4">
-      <div className="bg-card rounded-2xl border p-4 shadow-sm">
+      <div className="ds-card p-4">
         <div className="flex items-center gap-2 text-sm font-medium">
           {st.mode === "folder" ? <FolderOpen className="size-4" /> : <HardDrive className="size-4" />}
           {st.mode === "folder" ? t("web.gallery.folder", { name: st.folderName }) : t("web.gallery.browser")}

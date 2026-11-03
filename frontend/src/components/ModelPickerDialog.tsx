@@ -224,7 +224,7 @@ export function ModelPickerDialog({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("modelPicker.searchPlaceholder")}
-                className="border-input bg-background h-9 w-full rounded-md border pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                className="ds-field h-9 w-full pl-8 pr-3 text-sm"
               />
             </div>
             {showMedia && (
@@ -296,7 +296,7 @@ export function ModelPickerDialog({
           ) : (
             groups.map((g) => (
               <section key={g.key} className="mb-5 last:mb-0">
-                <h4 className="text-muted-foreground mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                <h4 className="ds-label mb-2 flex gap-2">
                   {g.label}
                   <span className="bg-border h-px flex-1" />
                   <span className="opacity-70">{g.items.length}</span>

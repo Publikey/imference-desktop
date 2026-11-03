@@ -292,7 +292,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                   <div
                     id="settings-apikey"
                     className={cn(
-                      "bg-card scroll-mt-4 grid gap-2 rounded-2xl border p-4 shadow-sm transition-opacity",
+                      "ds-card scroll-mt-4 grid gap-2 p-4 transition-opacity",
                       draft.paymentMode === "x402" && "opacity-55"
                     )}
                   >
@@ -312,7 +312,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                   id="settings-x402"
                   hidden={isWeb}
                   className={cn(
-                    "bg-card scroll-mt-4 rounded-2xl border p-4 shadow-sm transition-opacity",
+                    "ds-card scroll-mt-4 p-4 transition-opacity",
                     draft.paymentMode !== "x402" && "opacity-55"
                   )}
                 >
@@ -329,7 +329,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             )}
 
             {pane === "paths" && (
-              <div className="bg-card grid gap-4 rounded-2xl border p-4 shadow-sm">
+              <div className="ds-card grid gap-4 p-4">
                 <p className="text-muted-foreground text-xs">{t("settings.pathsHint")}</p>
                 <div className="grid gap-2">
                   <Label htmlFor="pythonPath">
@@ -363,7 +363,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             {pane === "tools" && <ToolsSection draft={draft} setDraft={setDraft} />}
 
             {pane === "language" && (
-              <div className="bg-card grid gap-2 rounded-2xl border p-4 shadow-sm">
+              <div className="ds-card grid gap-2 p-4">
                 <Label htmlFor="lang">{t("settings.language")}</Label>
                 <Select
                   id="lang"

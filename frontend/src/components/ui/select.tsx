@@ -40,8 +40,8 @@ export function Select({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          "border-input bg-background hover:border-primary/40 focus-visible:ring-[var(--brand-from)]/30 w-full appearance-none rounded-md border transition-colors outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50",
-          sm ? "h-7 pl-2.5 pr-7 text-xs" : "h-9 pl-2.5 pr-8 text-sm"
+          "ds-field w-full appearance-none disabled:cursor-not-allowed disabled:opacity-50",
+          sm ? "h-8 rounded-md pl-2.5 pr-7 text-xs" : "h-9 pl-2.5 pr-8 text-sm"
         )}
       >
         {children}

@@ -21,12 +21,12 @@ export function ComposerCardHeader({
 }) {
   return (
     <div className="flex min-h-6 items-center justify-between gap-2">
-      <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide">
+      <span className="ds-label">
         {title}
-        {optionalLabel && <span className="text-muted-foreground/50 normal-case">· {optionalLabel}</span>}
+        {optionalLabel && <span className="ds-hint">{optionalLabel}</span>}
         {help && (
-          <HoverPopover content={help} always className="inline-flex normal-case">
-            <Info className="text-muted-foreground/60 hover:text-foreground size-3.5 cursor-help" />
+          <HoverPopover content={help} always className="inline-flex">
+            <Info className="text-subtle hover:text-foreground size-3.5 cursor-help transition-colors" />
           </HoverPopover>
         )}
       </span>
@@ -47,13 +47,13 @@ export function FieldLabel({
   htmlFor?: string;
 }) {
   return (
-    <span className="text-muted-foreground/80 mb-1 inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide">
+    <span className="ds-sublabel mb-1.5">
       <label htmlFor={htmlFor} className="cursor-text">
         {label}
       </label>
       {help && (
-        <HoverPopover content={help} always className="inline-flex normal-case">
-          <Info className="text-muted-foreground/50 hover:text-foreground size-3 cursor-help" />
+        <HoverPopover content={help} always className="inline-flex">
+          <Info className="text-subtle hover:text-foreground size-3 cursor-help transition-colors" />
         </HoverPopover>
       )}
     </span>
@@ -77,7 +77,7 @@ export function AddButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold shadow-sm transition-colors disabled:pointer-events-none disabled:opacity-40"
+      className="ds-chip-btn"
     >
       <Plus className="size-3.5" strokeWidth={2.5} />
       {label}

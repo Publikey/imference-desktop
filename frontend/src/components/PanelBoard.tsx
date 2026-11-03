@@ -633,7 +633,7 @@ function Panel({
             className="bg-card/60 hover:border-primary/30 hover:bg-card group flex flex-1 items-center gap-2 rounded-xl border px-3 py-2 shadow-sm backdrop-blur transition-colors"
           >
             <span className="text-muted-foreground [&_svg]:size-4">{spec.icon}</span>
-            <h2 className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.14em]">
+            <h2 className="ds-panel-title">
               {spec.title}
             </h2>
             {spec.badge}
@@ -654,7 +654,7 @@ function Panel({
       <header className="flex h-6 select-none items-center gap-1.5 px-1">
         {grip}
         <span className="text-muted-foreground [&_svg]:size-3.5">{spec.icon}</span>
-        <h2 className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.14em]">
+        <h2 className="ds-panel-title">
           {spec.title}
         </h2>
         {spec.badge}

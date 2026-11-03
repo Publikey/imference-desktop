@@ -158,7 +158,7 @@ export function ModelBar({
   );
 
   return (
-    <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
+    <section className="ds-card px-4 py-3">
       <ComposerCardHeader
         title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
         help={isCloud ? t("modelBar.cloudHelp") : t("modelBar.localHelp")}

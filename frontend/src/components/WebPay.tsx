@@ -643,9 +643,9 @@ export function WebPaymentBar({ onConfigure }: { onConfigure: (section: string) 
             };
 
   return (
-    <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
+    <section className="ds-card px-4 py-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+        <span className="ds-label">
           {t("payment.title")}
         </span>
         <Segmented
@@ -869,7 +869,7 @@ function ModeCard({
   return (
     <section
       className={
-        "bg-card grid gap-3 rounded-2xl border p-4 shadow-sm " + (active ? "border-primary ring-primary/20 ring-2" : "")
+        "ds-card grid gap-3 p-4 " + (active ? "border-primary ring-primary/20 ring-2" : "")
       }
     >
       <div className="flex items-start gap-3">

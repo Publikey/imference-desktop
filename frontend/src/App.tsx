@@ -27,6 +27,7 @@ import {
   Wand2,
   Activity,
   Images,
+  LayoutGrid,
   Brush,
   Sun,
   Moon,
@@ -2011,6 +2012,7 @@ export default function App() {
       )}
 
       <main className="relative z-10 min-h-0 flex-1 overflow-y-auto xl:overflow-hidden">
+        <h1 className="sr-only">{isWeb ? "Imference Web" : "Imference Desktop"}</h1>
         {/* Three drag-reorderable panels — Create / Activity / Gallery — side by
             side on desktop, stacked (in the same order) on narrow windows. */}
         <div className="mx-auto w-full max-w-[110rem] px-4 pt-5 pb-16 sm:px-6 xl:flex xl:h-full xl:flex-col xl:pb-0">
@@ -2395,7 +2397,7 @@ function Header({
         <div
           role="radiogroup"
           aria-label={t("header.modeGroup")}
-          className={cn("bg-muted/50 inline-flex h-9 shrink-0 items-center gap-0.5 rounded-lg border p-0.5", isWeb && "max-sm:hidden")}
+          className={cn("ds-seg h-9 shrink-0", isWeb && "max-sm:hidden")}
         >
           {(["local", "cloud"] as const).map((m) => (
             <button
@@ -2407,10 +2409,7 @@ function Header({
               disabled={isWeb && m === "local"}
               onClick={() => onModeChange(m)}
               title={t(m === "local" ? "header.modeLocalTitle" : "header.modeCloudTitle")}
-              className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors disabled:hidden",
-                mode === m ? "mode-chip border" : "text-muted-foreground hover:text-foreground"
-              )}
+              className={cn("ds-seg-item h-[30px] px-3 font-semibold disabled:hidden", mode === m && "mode-chip")}
             >
               {m === "local" ? <Cpu className="size-3.5" /> : <Cloud className="size-3.5" />}
               {t(m === "local" ? "mode.local" : "mode.cloud")}
@@ -2492,7 +2491,8 @@ function LanguageToggle() {
       // The next language names itself (中文 reads it in Chinese, English in
       // English), so the tooltip stays readable before AND after switching.
       title={next.label}
-      aria-label={next.label}
+      // The name starts with the visible code (WCAG 2.5.3, label in name).
+      aria-label={`${current.short} · ${next.label}`}
       className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 rounded-lg p-0 text-[11px] font-semibold max-sm:hidden"
     >
       {current.short}
@@ -2655,7 +2655,7 @@ function FirstRunSetup({
 }) {
   const { t } = useTranslation();
   return (
-    <section className="bg-card relative overflow-hidden rounded-2xl border p-4 shadow-sm">
+    <section className="ds-card relative overflow-hidden p-4">
       <div className="canvas-glow pointer-events-none absolute inset-0" />
       <div className="relative flex flex-col gap-4">
         <div className="flex items-start gap-3">
@@ -2759,10 +2759,10 @@ function Composer({
   const preRef = useAutoGrow(prePrompt);
   const negRef = useAutoGrow(negativePrompt);
   const secondaryField =
-    "border-input bg-background/60 placeholder:text-muted-foreground/40 focus:border-primary/40 block max-h-24 w-full resize-none rounded-lg border px-3 py-1.5 text-xs leading-snug outline-none transition-colors";
+    "ds-field block max-h-24 w-full resize-none px-3 py-1.5 text-xs leading-snug";
 
   return (
-    <section className="composer bg-card rounded-2xl border px-4 py-3">
+    <section className="ds-card composer px-4 py-3">
       <ComposerCardHeader
         title={t("composer.prompt")}
         help={t("composer.promptHelp")}
@@ -2795,7 +2795,7 @@ function Composer({
         onChange={(e) => onPromptChange(e.target.value)}
         placeholder={t("composer.promptPlaceholder")}
         rows={3}
-        className="border-input bg-background/60 placeholder:text-muted-foreground/40 focus:border-primary/40 mt-2 block max-h-72 min-h-28 w-full resize-none rounded-xl border px-3 py-2.5 text-sm leading-relaxed outline-none transition-colors"
+        className="ds-field rounded-xl mt-2 block max-h-72 min-h-28 w-full resize-none px-3 py-2.5 text-sm leading-relaxed"
       />
 
       {showModelFields && (
@@ -2862,7 +2862,9 @@ function PrimaryAction({
           data-launch="generate"
           data-mode={mode}
           className={cn(
-            "btn-run relative flex h-auto min-h-14 w-full aria-disabled:opacity-50 flex-col gap-0.5 overflow-hidden whitespace-normal rounded-2xl px-5 py-2.5 font-semibold",
+            // Colours come from .btn-run (index.css) through these two variables,
+            // so the Button variant's utilities can't override the run states.
+            "btn-run relative flex h-auto min-h-14 w-full flex-col gap-0.5 overflow-hidden whitespace-normal rounded-2xl bg-[var(--run-bg)] px-5 py-2.5 font-semibold text-[color:var(--run-fg)] hover:bg-[var(--run-bg)]",
             burst > 0 && "btn-launch"
           )}
           key={`gen-${burst}`}
@@ -2922,7 +2924,7 @@ function FormatSelector({
   };
 
   return (
-    <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
+    <section className="ds-card px-4 py-3">
       <div className="flex flex-col gap-2">
         <ComposerCardHeader title={t("params.format")} help={t("params.formatHelp")} />
         {/* A fixed 3-column grid of equal cells, not a wrapping segmented
@@ -3104,14 +3106,14 @@ function ParamsPanel({
     .join(" · ");
 
   return (
-    <section className="bg-card rounded-2xl border shadow-sm">
+    <section className="ds-card">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
       >
         <div className="flex min-w-0 items-center gap-2">
-          <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+          <span className="ds-label">
             {t("params.title")}
           </span>
           <span className="text-muted-foreground/60 truncate text-[11px]">{summary}</span>
@@ -3202,7 +3204,7 @@ function ParamsPanel({
 
             {mode === "local" && (
               <div className="grid gap-3 border-t pt-3">
-                <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                <span className="ds-label">
                   {t("params.advanced")}
                 </span>
                 {showClip && (
@@ -3290,6 +3292,8 @@ function RangeRow({
         max={max}
         step={step}
         value={value}
+        aria-label={label}
+        aria-valuetext={format ? format(value) : undefined}
         onChange={(e) => onChange(Number(e.target.value))}
         className="range w-full"
       />
@@ -3356,7 +3360,7 @@ function RefImageCard({
   };
 
   return (
-    <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
+    <section className="ds-card px-4 py-3">
       <input
         ref={inputRef}
         type="file"
@@ -4053,8 +4057,9 @@ function Gallery({
   const initialLoading = empty && loading;
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex flex-col gap-3 pb-20">
+      {/* Filters wrap among themselves; the column picker keeps its corner. */}
+      <div className="flex items-start justify-between gap-2">
         <FilterBar facets={facets} filter={filter} onChange={setFilter} />
         <ColumnPicker cols={cols} onChange={setCols} />
       </div>
@@ -4062,14 +4067,22 @@ function Gallery({
       {initialLoading ? (
         <GallerySkeleton cols={cols} />
       ) : empty ? (
-        <div className="border-border/60 text-muted-foreground/70 relative flex min-h-[60vh] w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border border-dashed lg:min-h-[70vh]">
+        <div className="relative flex min-h-[60vh] w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl text-center lg:min-h-[70vh]">
           <div className="canvas-glow pointer-events-none absolute inset-0" />
-          <div className="brand-surface relative flex size-12 items-center justify-center rounded-2xl text-white shadow-[0_8px_24px_-8px_color-mix(in_oklch,var(--brand-to)_60%,transparent)]">
-            <ImageIcon className="size-5" strokeWidth={1.75} />
+          {/* Three ghost tiles fanned behind the mark: the gallery-to-be. */}
+          <div aria-hidden className="empty-fan relative mb-4 h-28 w-40">
+            <span className="empty-fan-tile -rotate-[10deg] -translate-x-9" />
+            <span className="empty-fan-tile rotate-[9deg] translate-x-9" />
+            <span className="empty-fan-tile z-[1] flex items-center justify-center">
+              <span className="brand-surface flex size-11 items-center justify-center rounded-xl text-white shadow-[0_8px_24px_-8px_color-mix(in_oklch,var(--brand-to)_60%,transparent)]">
+                <ImageIcon className="size-5" strokeWidth={1.75} />
+              </span>
+            </span>
           </div>
-          <p className="relative text-sm">
+          <p className="text-foreground relative text-base font-semibold tracking-[-0.011em]">
             {filtered ? t("gallery.emptyFiltered") : t("gallery.empty")}
           </p>
+          {!filtered && <p className="text-muted-foreground relative max-w-72 text-sm">{t("gallery.emptyHint", { keys: `${modLabel}↵` })}</p>}
           {filtered && (
             <button
               type="button"
@@ -4179,15 +4192,15 @@ function FilterBar({
   }, [q, filter.text]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
       <div className="relative">
-        <Search className="text-muted-foreground/60 pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
+        <Search className="text-subtle pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder={t("gallery.search")}
           aria-label={t("gallery.search")}
-          className="border-input bg-background h-8 w-36 rounded-md border pl-8 pr-2 text-xs outline-none sm:w-44"
+          className="ds-field h-8 w-36 pl-8 pr-2 text-xs sm:w-44"
         />
       </div>
       {models.length > 0 && (
@@ -4254,19 +4267,18 @@ function FacetSelect({
 function ColumnPicker({ cols, onChange }: { cols: number; onChange: (n: number) => void }) {
   const { t } = useTranslation();
   return (
-    <div className="bg-muted inline-flex items-center gap-0.5 rounded-lg p-0.5" role="group" aria-label={t("gallery.columns")}>
+    <div className="ds-seg h-8 shrink-0" role="radiogroup" aria-label={t("gallery.columns", { count: cols })}>
+      <LayoutGrid className="text-subtle mx-1 size-3.5 shrink-0" aria-hidden />
       {[1, 2, 3, 4].map((n) => (
         <button
           key={n}
           type="button"
+          role="radio"
+          aria-checked={cols === n}
           onClick={() => onChange(n)}
           aria-label={t("gallery.columns", { count: n })}
-          className={cn(
-            "rounded-md px-2 py-1 text-xs font-medium tabular-nums transition",
-            cols === n
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          )}
+          title={t("gallery.columns", { count: n })}
+          className="ds-seg-item h-[26px] min-w-[26px] px-1.5 tabular-nums"
         >
           {n}
         </button>
@@ -4286,7 +4298,7 @@ function GallerySkeleton({ cols, rows = 3 }: { cols: number; rows?: number }) {
           {Array.from({ length: rows }).map((_, ri) => (
             <Skeleton
               key={ri}
-              className="w-full rounded-2xl"
+              className="w-full rounded-xl"
               style={{ aspectRatio: ratios[(ci + ri * cols) % ratios.length] }}
             />
           ))}
@@ -4438,8 +4450,8 @@ function SavedTile({
         shared.startImageDrag(e, ensureSrc, srcRef.current, image.name);
       }}
       className={cn(
-        "rise-in group bg-muted/40 relative cursor-zoom-in overflow-hidden rounded-2xl ring-1 transition-shadow duration-200 hover:shadow-lg",
-        selected ? "ring-2 ring-[var(--brand-to)]" : "ring-border/60"
+        "rise-in group bg-muted/40 relative cursor-zoom-in overflow-hidden rounded-xl ring-1 transition-[box-shadow,transform] duration-200 ease-[var(--im-ease-out)] hover:-translate-y-0.5 hover:shadow-lg",
+        selected ? "ring-2 ring-[var(--brand-to)]" : "ring-border"
       )}
       title={image.name}
       // Capped, repeating stagger so a page of tiles cascades in without long
@@ -4636,7 +4648,7 @@ function TileContextMenu({
         {target.name && (
           <>
             <div className="bg-border/70 my-1 h-px" />
-            <div className="text-muted-foreground px-2.5 pb-0.5 pt-1 text-[11px] font-medium uppercase tracking-wide">
+            <div className="ds-label px-2.5 pb-0.5 pt-1">
               {t("tools.edit")}
             </div>
             <ToolMenuList kind={target.kind} onPick={(id, mode) => { onTool(id, target, mode); onClose(); }} />
@@ -5010,13 +5022,13 @@ function MetaPanel({ meta }: { meta: GenerationMeta }) {
     <div className="bg-background/95 flex w-full shrink-0 flex-col gap-3 overflow-y-auto rounded-xl p-4 text-sm shadow-2xl md:max-h-[85vh] md:w-80">
       {meta.prompt && (
         <div>
-          <div className="text-muted-foreground mb-1 text-[11px] font-medium uppercase tracking-wide">{t("meta.prompt")}</div>
+          <div className="ds-label mb-1">{t("meta.prompt")}</div>
           <p className="leading-relaxed">{meta.prompt}</p>
         </div>
       )}
       {meta.negativePrompt && (
         <div>
-          <div className="text-muted-foreground mb-1 text-[11px] font-medium uppercase tracking-wide">{t("meta.negative")}</div>
+          <div className="ds-label mb-1">{t("meta.negative")}</div>
           <p className="text-muted-foreground leading-relaxed">{meta.negativePrompt}</p>
         </div>
       )}

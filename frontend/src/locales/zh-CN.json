@@ -273,6 +273,7 @@
     "deleteSelectedConfirm": "{{count}} 张图片将从磁盘中永久删除。",
     "emptyFiltered": "没有符合筛选条件的图片",
     "empty": "你生成的图片将显示在这里",
+    "emptyHint": "在“创作”中输入提示词，然后点击生成（{{keys}}）。",
     "filterModel": "模型",
     "filterEngine": "引擎",
     "filterSource": "来源",
@@ -1209,7 +1210,8 @@
       "idle": "已停止",
       "starting": "加载中…",
       "ready": "就绪",
-      "error": "错误"
+      "error": "错误",
+      "stopped": "已停止"
     },
     "engineName": "引擎：{{engine}}"
   }

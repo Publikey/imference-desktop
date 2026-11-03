@@ -1556,7 +1556,7 @@ function GenModelBox({
 
   return (
     <div className="space-y-2 rounded-xl border p-3 text-xs">
-      <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">{t("tools.gen.model")}</p>
+      <p className="ds-label">{t("tools.gen.model")}</p>
       {cloud ? (
         models.cloud ? (
           <>

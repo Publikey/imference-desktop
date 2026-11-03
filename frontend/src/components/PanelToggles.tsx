@@ -37,7 +37,7 @@ export function PanelToggles({
     <div
       role="group"
       aria-label={t("panels.toggleGroup")}
-      className="bg-muted/50 inline-flex h-9 items-center gap-0.5 rounded-lg border p-0.5"
+      className="ds-seg h-9"
     >
       {PANEL_ORDER.map(({ id, key }) => {
         const on = !hidden[id];
@@ -54,13 +54,9 @@ export function PanelToggles({
               (last ? t("panels.lastVisible") : t(on ? "panels.hide" : "panels.show", { name })) +
               ` (${modLabel}${key})`
             }
-            className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs sm:px-3 font-medium transition-colors disabled:cursor-not-allowed",
-              // Shown = filled (unmistakable), hidden = plain muted text.
-              on
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground/70 hover:text-foreground hover:bg-background/70"
-            )}
+            // Shown = a raised thumb with full-strength text and icon; hidden =
+            // flat, muted, with the icon dimmed — a toggle, not a tab.
+            className={cn("ds-seg-item h-[30px] sm:px-3 disabled:cursor-not-allowed", !on && "[&_svg]:opacity-60")}
           >
             <PanelIcon id={id} className="size-3.5" />
             <span className="hidden md:inline">{name}</span>

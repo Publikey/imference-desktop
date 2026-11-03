@@ -101,7 +101,7 @@ export function LocalEngineSection({ onInstallDone }: Props) {
   const statusPill = renderStatusPill(engineInfo, installing, progress);
 
   return (
-    <section className="bg-card rounded-2xl border p-4 shadow-sm">
+    <section className="ds-card p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold">{t("engineSection.title")}</h3>

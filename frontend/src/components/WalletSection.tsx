@@ -138,7 +138,7 @@ export function WalletSection({ onChanged }: Props) {
   }
 
   return (
-    <section className="bg-card rounded-2xl border p-4 shadow-sm">
+    <section className="ds-card p-4">
       <div className="mb-3 flex items-center gap-2">
         <Wallet className="size-4" />
         <h3 className="text-sm font-semibold">{t("wallet.title")}</h3>

@@ -6,3 +6,9 @@ export const isWeb = import.meta.env.MODE === "web";
 // reloads in place. Never a page reload: Chrome on Android drops a folder's
 // access on reload, which made "Allow access" come back in a loop.
 export const GALLERY_CHANGED_EVENT = "imference:gallery-changed";
+
+/** Opens the cloud call history (CloudHistoryDialog, mounted in App). */
+export const OPEN_HISTORY_EVENT = "imference:open-history";
+export function openCloudHistory() {
+  window.dispatchEvent(new Event(OPEN_HISTORY_EVENT));
+}

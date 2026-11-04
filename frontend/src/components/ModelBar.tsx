@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ExternalModelWarning } from "@/components/ExternalModelWarning";
 import { Section } from "@/components/ds";
 import { useTranslation } from "react-i18next";
@@ -45,6 +45,8 @@ type Props = {
   engineState?: string;
   selectionCached?: boolean;
   onLoadNow?: () => void;
+  /** Shown under the model, in the same card (the cloud payment line). */
+  footer?: ReactNode;
 };
 
 // ModelBar — the single model selector for the whole app. Shows the active
@@ -71,6 +73,7 @@ export function ModelBar({
   engineState,
   selectionCached,
   onLoadNow,
+  footer,
 }: Props) {
   const { t } = useTranslation();
   const [localModels, setLocalModels] = useState<ModelInfo[]>([]);
@@ -246,6 +249,8 @@ export function ModelBar({
       {customError && mode === "local" && (
         <p className="text-destructive mt-2 text-xs">{customError}</p>
       )}
+
+      {footer && <div className="mt-3 border-t pt-3">{footer}</div>}
 
       <ModelPickerDialog
         open={pickerOpen}

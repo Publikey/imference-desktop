@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Segmented } from "@/components/ds";
 import { cn, coarsePointer, creditsToUSD } from "@/lib/utils";
 import type { ModelInfo, PaymentMode } from "@/lib/types";
 
@@ -191,28 +192,21 @@ export function ModelPickerDialog({
             {isCloud ? t("modelPicker.cloudDesc") : t("modelPicker.localDesc")}
           </DialogDescription>
 
-          {/* Local: Catalog / My models tabs */}
+          {/* Local: Catalog / My models */}
           {!isCloud && (
-            <div className="mt-1 flex gap-1">
-              {(["catalog", "mine"] as const).map((tabId) => (
-                <button
-                  key={tabId}
-                  type="button"
-                  onClick={() => setTab(tabId)}
-                  className={cn(
-                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-                    tab === tabId
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "hover:bg-accent border-transparent text-muted-foreground"
-                  )}
-                >
-                  {tabId === "catalog" ? t("modelPicker.catalogTab") : t("modelPicker.mineTab")}
-                  {tabId === "mine" && customModels.length > 0 && (
-                    <span className="ml-1.5 opacity-70">{customModels.length}</span>
-                  )}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              label={t("modelPicker.localTitle")}
+              value={tab}
+              onChange={(v) => setTab(v as "catalog" | "mine")}
+              options={[
+                { value: "catalog", label: t("modelPicker.catalogTab") },
+                {
+                  value: "mine",
+                  label: customModels.length > 0 ? `${t("modelPicker.mineTab")} · ${customModels.length}` : t("modelPicker.mineTab"),
+                },
+              ]}
+              className="mt-2 self-start"
+            />
           )}
 
           {/* Search + type filter */}
@@ -227,25 +221,29 @@ export function ModelPickerDialog({
                 className="ds-field h-9 w-full pl-8 pr-3 text-sm"
               />
             </div>
-            {showMedia && (
-              <div className="flex flex-wrap gap-1.5">
-                {MEDIA_FILTERS.map((f) => (
-                  <Chip key={f} active={mediaFilter === f} onClick={() => setMediaFilter(f)}>
-                    {t(`modelPicker.media.${f}`)}
-                  </Chip>
-                ))}
-              </div>
-            )}
-            {presentGroups.length > 1 && (
-              <div className="flex flex-wrap gap-1.5">
-                <Chip active={typeFilter === "all"} onClick={() => setTypeFilter("all")}>
-                  {t("common.all")}
-                </Chip>
-                {presentGroups.map((g) => (
-                  <Chip key={g.key} active={typeFilter === g.key} onClick={() => setTypeFilter(g.key)}>
-                    {g.label}
-                  </Chip>
-                ))}
+            {/* Kind (All / Image / Video) as a switch, then the families as
+                toggles: a second "All" chip read as a duplicate. */}
+            {(showMedia || presentGroups.length > 1) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {showMedia && (
+                  <Segmented
+                    label={t("modelPicker.mediaLabel")}
+                    value={mediaFilter}
+                    onChange={(v) => setMediaFilter(v as (typeof MEDIA_FILTERS)[number])}
+                    options={MEDIA_FILTERS.map((f) => ({ value: f, label: t(`modelPicker.media.${f}`) }))}
+                    className="mr-1.5"
+                  />
+                )}
+                {presentGroups.length > 1 &&
+                  presentGroups.map((g) => (
+                    <Chip
+                      key={g.key}
+                      active={typeFilter === g.key}
+                      onClick={() => setTypeFilter(typeFilter === g.key ? "all" : g.key)}
+                    >
+                      {g.label}
+                    </Chip>
+                  ))}
               </div>
             )}
           </div>
@@ -338,6 +336,7 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         "rounded-full border px-2.5 py-1 text-xs font-medium transition",
         active

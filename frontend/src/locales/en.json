@@ -36,14 +36,16 @@
     "installing": "Installing engine…",
     "install": "Install engine",
     "starting": "Starting…",
-    "runningTitle": "Local engine running · {{device}} — click to stop",
-    "on": "Local engine on",
+    "on": "Engine on",
     "stop": "Stop",
     "selectModelTitle": "Pick a local model — that's what the engine loads and runs",
     "selectModel": "Select a model",
     "startTitle": "Start the local engine (loads the selected model)",
     "restart": "Restart engine",
-    "start": "Start local engine"
+    "start": "Start local engine",
+    "off": "Engine off",
+    "error": "Engine error",
+    "detailsTitle": "Local engine: status and details"
   },
   "mode": {
     "local": "Local",
@@ -101,7 +103,10 @@
     "prompt": "Prompt",
     "promptHelp": "Describe the image you want: subject, setting, style, lighting. Ctrl+Enter (⌘+Enter) generates.",
     "negativeHelp": "What the model should avoid. Pre-filled with the model's own recommendation.",
-    "qualityTagsHelp": "Added in front of your prompt. Pre-filled with the tags this model responds to best."
+    "qualityTagsHelp": "Added in front of your prompt. Pre-filled with the tags this model responds to best.",
+    "extras": "Negative prompt & quality tags",
+    "extrasSet": "in use",
+    "extrasHide": "Hide"
   },
   "hint": {
     "configurePayment": "Configure a payment method above",
@@ -277,7 +282,7 @@
     "deleteSelectedConfirm": "{{count}} images will be permanently removed from disk.",
     "emptyFiltered": "No images match this filter",
     "empty": "Your generations will appear here",
-    "emptyHint": "Write a prompt in Create, then Generate ({{keys}}).",
+    "emptyHint": "Write a prompt in Create, then Generate",
     "filterModel": "Model",
     "filterEngine": "Engine",
     "filterSource": "Source",
@@ -311,7 +316,9 @@
     "lbNav": "Navigate",
     "lbZoom": "Click image to zoom",
     "fullscreen": "Fullscreen",
-    "exitFullscreen": "Exit fullscreen"
+    "exitFullscreen": "Exit fullscreen",
+    "filters": "Filters",
+    "all": "All"
   },
   "meta": {
     "model": "Model",
@@ -413,7 +420,8 @@
     },
     "typeCloudApi": "Cloud API",
     "costUsd": "${{usd}}",
-    "badgeCached": "On disk"
+    "badgeCached": "On disk",
+    "mediaLabel": "Kind"
   },
   "customModel": {
     "title": "Add custom model",
@@ -545,7 +553,9 @@
     "devBadge": "dev · editable",
     "devSource": "source",
     "updatingTo": " — updating to v{{version}}…",
-    "pipHint": "Detailed pip output streams to the Logs panel (open it from the header)."
+    "pipHint": "Detailed pip output streams to the Logs panel (open it from the header).",
+    "version": "Version",
+    "environment": "Environment"
   },
   "runtime": {
     "title": "Engine / machine",
@@ -1038,7 +1048,7 @@
     "swap": {
       "button": "Load {{model}} (replaces {{current}} in the engine)",
       "confirmTitle": "Load {{model}}?",
-      "confirmBody": "{{model}} replaces {{current}} in the local engine. Loading takes a moment; switch back from the Engine panel or the model list when you are done.",
+      "confirmBody": "{{model}} replaces {{current}} in the local engine. Loading takes a moment; switch back from the model list when you are done.",
       "confirm": "Load it",
       "nothing": "nothing"
     },
@@ -1231,9 +1241,9 @@
     "engineName": "Engine: {{engine}}"
   },
   "history": {
-    "title": "Cloud history",
+    "title": "Run history",
     "button": "History",
-    "desc": "Every cloud call paid with your API key or your wallet. Prompts and settings are never kept on the server. Results can be downloaded again for {{hours}} h.",
+    "desc": "Every cloud run paid with your API key or your wallet. Prompts and settings are never kept on the server. Results can be downloaded again for {{hours}} h.",
     "rail": {
       "credits": "API key",
       "x402": "Wallet"
@@ -1260,7 +1270,7 @@
     "save": "Save to gallery",
     "saved": "Saved to the gallery",
     "saveFailed": "Could not download the result: {{error}}",
-    "empty": "No cloud calls yet",
+    "empty": "No cloud runs yet",
     "more": "Load more",
     "noRail": "Add an API key or a wallet to see the calls they paid for."
   },
@@ -1302,10 +1312,10 @@
     "walletText": "Connect a wallet (Base network) and approve each image's exact price. Nothing is prepaid.",
     "payNow": "Choose a payment method",
     "payLater": "or decide at your first image",
-    "tourTitle": "Your workspace, in three panels",
-    "tour1Desktop": "Engine: where images are made (this computer or the cloud) and which model.",
-    "tour1Web": "Engine: how you pay and which model.",
-    "tour2": "Create: your prompt, a format, then Generate. Running jobs show in Activity.",
+    "tourTitle": "Your workspace",
+    "tour1Desktop": "Top bar: run on this computer or in the cloud. In local mode, the engine button shows its state and your GPU.",
+    "tour1Web": "Top of Create: the model, and under it how you pay (credits or a wallet).",
+    "tour2": "Create: the model, your prompt, a format, then Generate. Running jobs show in Activity.",
     "tour3": "Gallery: your results. Click to view, drag one onto Create or Edit to reuse it.",
     "keyGenerate": "Generate",
     "keyCommands": "Commands",
@@ -1320,6 +1330,8 @@
     "finishCloud": "Set up cloud payment",
     "skip": "Skip",
     "back": "Back",
-    "progress": "Step {{step}} of {{total}}"
+    "progress": "Step {{step}} of {{total}}",
+    "mapBar": "Local · Cloud",
+    "mapBarWeb": "Imference Web"
   }
 }

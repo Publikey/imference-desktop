@@ -4,6 +4,7 @@ import { modLabel } from "@/components/CommandPalette";
 import { ToolMenuList } from "@/components/ToolBits";
 import type { ToolSource } from "@/components/ToolEditor";
 import { Button } from "@/components/ui/button";
+import { Popover } from "@/components/ui/popover";
 import { useConfirm } from "@/components/ui/confirm";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,12 +14,13 @@ import { GALLERY_CHANGED_EVENT, isWeb } from "@/lib/target";
 import type { GalleryFacets, GalleryFilter, GenerationMeta, Job, SavedImage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/wails-bridge";
-import { Segmented } from "@/components/ds";
+import { Kbd, Segmented } from "@/components/ds";
 import {
   Check,
+  CornerDownLeft,
   Copy,
   FolderOpen,
-  History,
+  SlidersHorizontal,
   ImageIcon,
   LayoutGrid,
   Maximize2,
@@ -30,10 +32,11 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Lightbox } from "./Lightbox";
-import { OPEN_HISTORY_EVENT, isVideoSrc, tileClickGuard } from "./shared";
+import { isVideoSrc, tileClickGuard } from "./shared";
 
 // ---------------------------------------------------------------------------
 // Gallery — this session's finished generations + the saved-image history, in
@@ -491,21 +494,10 @@ export function Gallery({
 
   return (
     <div className="flex flex-col gap-3 pb-20">
-      {/* Filters wrap among themselves; the column picker keeps its corner. */}
-      <div className="flex items-start justify-between gap-2">
+      {/* One toolbar: search · filters | density. */}
+      <div className="flex items-center gap-2">
         <FilterBar facets={facets} filter={filter} onChange={setFilter} />
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => window.dispatchEvent(new Event(OPEN_HISTORY_EVENT))}
-            title={t("history.title")}
-          >
-            <History />
-            {t("history.button")}
-          </Button>
-          <ColumnPicker cols={cols} onChange={setCols} />
-        </div>
+        <ColumnPicker cols={cols} onChange={setCols} />
       </div>
 
       {initialLoading ? (
@@ -526,7 +518,17 @@ export function Gallery({
           <p className="text-foreground relative text-base font-semibold tracking-[-0.011em]">
             {filtered ? t("gallery.emptyFiltered") : t("gallery.empty")}
           </p>
-          {!filtered && <p className="text-muted-foreground relative max-w-72 text-sm">{t("gallery.emptyHint", { keys: `${modLabel}↵` })}</p>}
+          {!filtered && (
+            <p className="text-muted-foreground relative max-w-72 text-sm">
+              {t("gallery.emptyHint")}{" "}
+              <span className="inline-flex translate-y-[-1px] items-center gap-1 align-middle">
+                <Kbd>{modLabel}</Kbd>
+                <Kbd>
+                  <CornerDownLeft className="size-3" />
+                </Kbd>
+              </span>
+            </p>
+          )}
           {filtered && (
             <button
               type="button"
@@ -634,43 +636,89 @@ export function FilterBar({
     return () => clearTimeout(id);
   }, [q, filter.text]);
 
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const popId = useId();
+  const count = (filter.engine ? 1 : 0) + (filter.modelCode ? 1 : 0) + (filter.source ? 1 : 0);
+  const hasFacets = models.length > 0 || engines.length > 1 || sources.length > 1;
+
   return (
-    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-      <div className="relative">
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="relative min-w-0 flex-1 sm:max-w-xs">
         <Search className="text-subtle pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder={t("gallery.search")}
           aria-label={t("gallery.search")}
-          className="ds-field h-8 w-36 pl-8 pr-2 text-xs sm:w-44"
+          className="ds-field h-8 w-full pl-8 pr-2 text-xs"
         />
       </div>
-      {models.length > 0 && (
-        <FacetSelect
-          label={t("gallery.filterModel")}
-          value={filter.modelCode}
-          facets={models}
-          onChange={(v) => onChange({ ...filter, modelCode: v })}
-        />
+      {hasFacets && (
+        <>
+          <button
+            ref={anchorRef}
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            aria-controls={open ? popId : undefined}
+            aria-haspopup="dialog"
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors",
+              count > 0 || open
+                ? "border-primary/40 bg-primary/10 text-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+            )}
+          >
+            <SlidersHorizontal className="size-3.5" />
+            <span className="max-sm:sr-only">{t("gallery.filters")}</span>
+            {count > 0 && (
+              <span className="bg-primary text-primary-foreground grid size-4 place-items-center rounded-full text-[10px] font-semibold tabular-nums">
+                {count}
+              </span>
+            )}
+          </button>
+          <Popover id={popId} open={open} onOpenChange={setOpen} anchorRef={anchorRef} label={t("gallery.filters")} className="w-64 p-3">
+            <div className="grid gap-3">
+              {models.length > 0 && (
+                <FacetSelect
+                  label={t("gallery.filterModel")}
+                  value={filter.modelCode}
+                  facets={models}
+                  onChange={(v) => onChange({ ...filter, modelCode: v })}
+                />
+              )}
+              {engines.length > 1 && (
+                <FacetSelect
+                  label={t("gallery.filterEngine")}
+                  value={filter.engine}
+                  facets={engines}
+                  onChange={(v) => onChange({ ...filter, engine: v })}
+                />
+              )}
+              {sources.length > 1 && (
+                <FacetSelect
+                  label={t("gallery.filterSource")}
+                  value={filter.source}
+                  facets={sources}
+                  onChange={(v) => onChange({ ...filter, source: v })}
+                />
+              )}
+              <div className="flex justify-end border-t pt-3">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!active}
+                  onClick={() => onChange(EMPTY_FILTER)}
+                >
+                  {t("common.clear")}
+                </Button>
+              </div>
+            </div>
+          </Popover>
+        </>
       )}
-      {engines.length > 1 && (
-        <FacetSelect
-          label={t("gallery.filterEngine")}
-          value={filter.engine}
-          facets={engines}
-          onChange={(v) => onChange({ ...filter, engine: v })}
-        />
-      )}
-      {sources.length > 1 && (
-        <FacetSelect
-          label={t("gallery.filterSource")}
-          value={filter.source}
-          facets={sources}
-          onChange={(v) => onChange({ ...filter, source: v })}
-        />
-      )}
-      {active && (
+      {active && !hasFacets && (
         <button
           type="button"
           onClick={() => onChange(EMPTY_FILTER)}
@@ -695,15 +743,21 @@ export function FacetSelect({
   onChange: (v: string) => void;
 }) {
   const { t } = useTranslation();
+  const id = useId();
   return (
-    <Select size="sm" value={value} onChange={onChange} className="max-w-40" aria-label={label}>
-      <option value="">{t("gallery.filterAll", { label })}</option>
+    <div className="grid gap-1.5">
+      <label htmlFor={id} className="ds-sublabel">
+        {label}
+      </label>
+    <Select id={id} size="sm" value={value} onChange={onChange} className="w-full">
+      <option value="">{t("gallery.all")}</option>
       {facets.map((f) => (
         <option key={f.value} value={f.value}>
           {f.label} ({f.count})
         </option>
       ))}
     </Select>
+    </div>
   );
 }
 
@@ -1021,18 +1075,42 @@ export function TileContextMenu({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Clamp so the menu stays on screen (approx sizes; good enough without measuring).
+  // Placed at the cursor from its measured size: below and to the right of the
+  // click, flipped above / to the left when that side has no room, and capped
+  // to the window (it scrolls inside if taller). Hidden until measured.
   const W = 268;
-  const H = Math.min(window.innerHeight - 16, 640);
-  const left = Math.min(x, window.innerWidth - W - 8);
-  const top = Math.min(y, window.innerHeight - H - 8);
+  const M = 8;
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number } | null>(null);
+  // Re-placed whenever its content resizes: the Edit tools list arrives after
+  // the first paint and makes the menu taller.
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    const place = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const h = Math.min(el.scrollHeight, vh - 2 * M);
+      const left = x + W + M <= vw ? x : Math.max(M, x - W);
+      const below = vh - y - M;
+      const top = h <= below ? y : y - h >= M ? y - h : Math.max(M, vh - h - M);
+      setPos({ left, top, maxHeight: vh - 2 * M });
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    for (const child of Array.from(el.children)) ro.observe(child);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [x, y]);
   const meta = target.meta;
   const run = (fn: () => void) => () => {
     fn();
     onClose();
   };
 
-  return (
+  // Portalled to <body>: inside the board, an ancestor with a transform (the
+  // panels' entrance animation) makes `fixed` relative to it, not the window.
+  return createPortal(
     <div
       className="fixed inset-0 z-50"
       onClick={onClose}
@@ -1042,8 +1120,12 @@ export function TileContextMenu({
       }}
     >
       <div
-        className="animate-in fade-in zoom-in-95 bg-popover absolute overflow-y-auto rounded-xl border p-1 shadow-2xl duration-100"
-        style={{ left, top, width: W, maxHeight: H }}
+        ref={menuRef}
+        className={cn(
+          "animate-in fade-in zoom-in-95 bg-popover absolute overflow-y-auto rounded-xl border p-1 shadow-2xl duration-100",
+          !pos && "invisible"
+        )}
+        style={{ left: pos?.left ?? x, top: pos?.top ?? y, width: W, maxHeight: pos?.maxHeight }}
         onClick={(e) => e.stopPropagation()}
         role="menu"
       >
@@ -1101,7 +1183,8 @@ export function TileContextMenu({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

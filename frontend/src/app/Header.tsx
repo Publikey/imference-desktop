@@ -5,13 +5,15 @@ import { modLabel } from "@/components/CommandPalette";
 import type { PanelId } from "@/components/PanelBoard";
 import { PanelToggles } from "@/components/PanelToggles";
 import { Button } from "@/components/ui/button";
-import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { isWeb } from "@/lib/target";
 import { isDark, setThemePref, subscribeTheme, type ThemePref } from "@/lib/theme";
-import type { SidecarStatus } from "@/lib/types";
+import type { ModelInfo, SidecarStatus } from "@/lib/types";
+import { EngineDetails } from "@/components/EnginePanel";
+import { Popover } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { SegGroup, SegItem } from "@/components/ds";
 import {
+  ChevronDown,
   Cloud,
   Cpu,
   Download,
@@ -24,7 +26,7 @@ import {
   Square,
   Sun,
 } from "lucide-react";
-import { useSyncExternalStore } from "react";
+import { useId, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import type { Mode } from "./shared";
 
@@ -38,6 +40,8 @@ export function Header({
   engineInstalled,
   installing,
   hasLocalModel,
+  engineModel,
+  loraCount,
   onInstallEngine,
   onStartEngine,
   onStopEngine,
@@ -56,6 +60,8 @@ export function Header({
   engineInstalled: boolean;
   installing: boolean;
   hasLocalModel: boolean;
+  engineModel: ModelInfo | null | undefined;
+  loraCount: number;
   onInstallEngine: () => void;
   onStartEngine: () => void;
   onStopEngine: () => void;
@@ -72,24 +78,23 @@ export function Header({
   const { t } = useTranslation();
   // One system for the whole bar: every control is 36px high (h-9) with the
   // same radius; three zones — where things run (left), which panels are
-  // shown (centre, exactly centred), app utilities as uniform icon buttons
-  // (right). On a phone the bar is a plain row (no centred grid, it can't fit)
-  // and keeps only what a touch user needs: the panel switches, theme, logs and
-  // settings — the command palette and the language live in Settings / need a
-  // keyboard anyway, and the web app has a single (cloud) mode to show.
+  // shown (centre, exactly centred), a few uniform icon buttons (right):
+  // commands, theme, settings. The language is in the palette and Settings,
+  // the logs in the palette (and back here, flagged, when something fails). On a phone
+  // the bar is a plain row with the panel switches, theme and settings.
   const iconBtn = "text-muted-foreground hover:text-foreground hover:bg-muted relative size-9 rounded-lg";
   return (
     <header className="bg-background/70 supports-[backdrop-filter]:bg-background/55 sticky top-0 z-10 flex h-14 items-center justify-between gap-2 border-b px-3 backdrop-blur-xl sm:grid sm:grid-cols-[1fr_auto_1fr] sm:gap-4 sm:px-5">
       <div className="flex min-w-0 items-center gap-3">
-        {/* Logo + app version stacked — the version is important operational info. */}
-        <div className="flex shrink-0 flex-col items-center leading-none">
-          <img src={logoUrl} alt="Imference" className="size-7" />
-          <span className="text-muted-foreground mt-0.5 text-[10px] tabular-nums" title={isWeb ? undefined : t("header.versionTitle")}>
-            {isWeb ? "Web" : appVersion === "dev" ? "dev" : appVersion ? `v${appVersion}` : ""}
-          </span>
-        </div>
+        {/* The mark alone; the version is in its tooltip and in Settings. */}
+        <img
+          src={logoUrl}
+          alt="Imference"
+          title={isWeb ? "Imference Web" : `Imference Desktop${appVersion ? (appVersion === "dev" ? " (dev)" : ` v${appVersion}`) : ""}`}
+          className="size-7 shrink-0"
+        />
         {/* The global mode: where everything runs. */}
-        <SegGroup role="radiogroup" label={t("header.modeGroup")} className={cn("h-9 shrink-0", isWeb && "max-sm:hidden")}>
+        <SegGroup role="radiogroup" label={t("header.modeGroup")} className="h-9 shrink-0 max-sm:hidden">
           {(["local", "cloud"] as const).map((m) => (
             <SegItem
               key={m}
@@ -112,6 +117,8 @@ export function Header({
             engineInstalled={engineInstalled}
             installing={installing}
             hasLocalModel={hasLocalModel}
+            engineModel={engineModel}
+            loraCount={loraCount}
             onInstall={onInstallEngine}
             onStart={onStartEngine}
             onStop={onStopEngine}
@@ -120,7 +127,7 @@ export function Header({
         )}
       </div>
 
-      {/* Panel switches: Engine / Create / Edit / Gallery on or off. */}
+      {/* Panel switches: Create / Edit / Gallery on or off. */}
       <PanelToggles hidden={panelHidden} onToggle={onTogglePanel} modLabel={modLabel} />
 
       <div className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-1">
@@ -134,58 +141,33 @@ export function Header({
         >
           <Search className="size-4" />
         </Button>
-        <ThemeToggle />
-        <LanguageToggle />
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggleLogs}
-          aria-label={errorLogCount > 0 ? t("header.logsWithErrors", { count: errorLogCount }) : t("common.logs")}
-          title={errorLogCount > 0 ? t("header.errors", { count: errorLogCount }) : t("common.logs")}
-          className={iconBtn}
-        >
-          <ScrollText className="size-4" />
-          {errorLogCount > 0 && (
+        {/* Logs: in the palette; here only when something failed. */}
+        {errorLogCount > 0 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggleLogs}
+            aria-label={t("header.logsWithErrors", { count: errorLogCount })}
+            title={t("header.errors", { count: errorLogCount })}
+            className={iconBtn}
+          >
+            <ScrollText className="size-4" />
             <span className="bg-destructive ring-background absolute right-1.5 top-1.5 size-2 rounded-full ring-2" />
-          )}
-        </Button>
+          </Button>
+        )}
+        <ThemeToggle />
+        {/* The main utility: named, not just an icon (icon only on phones). */}
         <Button
           variant="ghost"
-          size="icon"
           onClick={onOpenSettings}
           title={t("common.settings")}
-          aria-label={t("common.settings")}
-          className={iconBtn}
+          className="text-muted-foreground hover:text-foreground hover:bg-muted h-9 gap-2 rounded-lg px-2.5 max-sm:w-9 max-sm:px-0"
         >
           <Settings className="size-4" />
+          <span className="max-sm:sr-only">{t("common.settings")}</span>
         </Button>
       </div>
     </header>
-  );
-}
-
-// LanguageToggle — cycles through SUPPORTED_LANGUAGES from the header. It sets
-// an explicit (persisted) choice, exactly like picking a language in Settings;
-// "follow the system" remains available there.
-export function LanguageToggle() {
-  const { i18n } = useTranslation();
-  const idx = SUPPORTED_LANGUAGES.findIndex((l) => l.code === i18n.language);
-  const current = SUPPORTED_LANGUAGES[idx] ?? SUPPORTED_LANGUAGES[0];
-  const next = SUPPORTED_LANGUAGES[(Math.max(idx, 0) + 1) % SUPPORTED_LANGUAGES.length];
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={() => setLanguage(next.code)}
-      // The next language names itself (中文 reads it in Chinese, English in
-      // English), so the tooltip stays readable before AND after switching.
-      title={next.label}
-      // The name starts with the visible code (WCAG 2.5.3, label in name).
-      aria-label={`${current.short} · ${next.label}`}
-      className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 rounded-lg p-0 text-[11px] font-semibold max-sm:hidden"
-    >
-      {current.short}
-    </Button>
   );
 }
 
@@ -216,16 +198,17 @@ export function ThemeToggle() {
   );
 }
 
-// EngineControl — the local engine's status *and* its lifecycle switch. Because
-// the backend (sdxl/zimage/wan) and weights are chosen BY the model, "starting
-// the engine" means "load the selected model"; there is no model-agnostic start.
-// So: not installed → Install · no model → Select a model · model ready, stopped
-// → Start (loads it) · running → Stop (frees VRAM).
+// EngineControl — the local engine's status, and the door to its details.
+// Not installed → Install · no model → Select a model (both act directly).
+// Otherwise the pill shows the state (dot + word) and opens a popover with the
+// machine, the model the engine holds, its tool models, and Start / Stop.
 export function EngineControl({
   status,
   engineInstalled,
   installing,
   hasLocalModel,
+  engineModel,
+  loraCount,
   onInstall,
   onStart,
   onStop,
@@ -235,93 +218,123 @@ export function EngineControl({
   engineInstalled: boolean;
   installing: boolean;
   hasLocalModel: boolean;
+  engineModel: ModelInfo | null | undefined;
+  loraCount: number;
   onInstall: () => void;
   onStart: () => void;
   onStop: () => void;
   onSelectModel: () => void;
 }) {
   const { t } = useTranslation();
-  // A shared floor width + centering so the pill keeps a stable footprint as the
-  // engine moves through install → select → start → running (the left header
-  // cluster no longer shifts on every state change).
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const popId = useId();
+  // A shared floor width so the pill keeps a stable footprint as the engine
+  // moves through its states (the left cluster doesn't shift on each change).
   const pill =
-    "inline-flex h-9 min-w-0 shrink items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-xs font-medium lg:min-w-[9.5rem] transition-[color,background-color,border-color] disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex h-9 min-w-0 shrink items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-3 text-xs font-medium lg:min-w-[9.5rem] transition-colors disabled:cursor-not-allowed disabled:opacity-50";
 
   if (installing) {
     return (
-      <span className={cn(pill, "border-border text-muted-foreground")}>
-        <Loader2 className="size-3 animate-spin" /> {t("engineControl.installing")}
+      <span className={cn(pill, "text-muted-foreground")}>
+        <Loader2 className="size-3.5 animate-spin" /> {t("engineControl.installing")}
       </span>
     );
   }
   if (!engineInstalled) {
     return (
-      <button
-        type="button"
-        onClick={onInstall}
-        className={cn(pill, "border-primary/30 bg-primary/10 text-primary hover:bg-primary/20")}
-      >
-        <Download className="size-3" /> {t("engineControl.install")}
+      <button type="button" onClick={onInstall} className={cn(pill, "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15")}>
+        <Download className="size-3.5" /> {t("engineControl.install")}
       </button>
     );
   }
-  if (status.state === "starting") {
-    return (
-      <span className={cn(pill, "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300")}>
-        <Loader2 className="size-3 animate-spin" /> {t("engineControl.starting")}
-      </span>
-    );
-  }
-  if (status.state === "ready") {
-    return (
-      <button
-        type="button"
-        onClick={onStop}
-        title={t("engineControl.runningTitle", { device: status.device })}
-        className={cn(
-          pill,
-          "group border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-600 dark:text-emerald-300"
-        )}
-      >
-        <span className="size-1.5 rounded-full bg-emerald-500 group-hover:hidden" />
-        <Square className="hidden size-3 group-hover:inline" />
-        <span className="group-hover:hidden">{t("engineControl.on")}</span>
-        <span className="hidden group-hover:inline">{t("engineControl.stop")}</span>
-      </button>
-    );
-  }
-  // No downloaded model → "start" is meaningless (the model picks the backend +
-  // weights). Guide to model selection instead of a dead greyed button.
   if (!hasLocalModel) {
     return (
       <button
         type="button"
         onClick={onSelectModel}
         title={t("engineControl.selectModelTitle")}
-        className={cn(pill, "border-border text-muted-foreground hover:text-foreground hover:border-primary/40")}
+        className={cn(pill, "text-muted-foreground hover:text-foreground hover:border-border-strong")}
       >
-        <Cpu className="size-3" /> {t("engineControl.selectModel")}
+        <Cpu className="size-3.5" /> {t("engineControl.selectModel")}
       </button>
     );
   }
 
-  // Model ready but engine stopped / errored → Start (loads that model).
-  const isError = status.state === "error";
-  const errMsg = status.state === "error" ? status.message : undefined;
+  const state = status.state;
+  const tone =
+    state === "ready" ? "text-success" : state === "starting" ? "text-warning" : state === "error" ? "text-destructive" : "text-muted-foreground";
+  const word =
+    state === "ready"
+      ? t("engineControl.on")
+      : state === "starting"
+        ? t("engineControl.starting")
+        : state === "error"
+          ? t("engineControl.error")
+          : t("engineControl.off");
+
   return (
-    <button
-      type="button"
-      onClick={onStart}
-      title={errMsg || t("engineControl.startTitle")}
-      className={cn(
-        pill,
-        isError
-          ? "border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10"
-          : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
-      )}
-    >
-      <Play className="size-3" />
-      {isError ? t("engineControl.restart") : t("engineControl.start")}
-    </button>
+    <>
+      <button
+        ref={anchorRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={open ? popId : undefined}
+        aria-haspopup="dialog"
+        title={t("engineControl.detailsTitle")}
+        className={cn(pill, "hover:bg-muted text-foreground", open && "bg-muted")}
+      >
+        {state === "starting" ? (
+          <Loader2 className={cn("size-3.5 animate-spin", tone)} />
+        ) : (
+          <span className={cn("size-2 rounded-full bg-current", tone, state === "ready" && "engine-dot-live")} />
+        )}
+        <span className="truncate">{word}</span>
+        <ChevronDown className={cn("text-muted-foreground size-3.5 transition-transform", open && "rotate-180")} />
+      </button>
+      <Popover
+        id={popId}
+        open={open}
+        onOpenChange={setOpen}
+        anchorRef={anchorRef}
+        label={t("engineControl.detailsTitle")}
+        className="w-80"
+      >
+        <div className="p-4">
+          <EngineDetails sidecar={status} localModel={engineModel} loraCount={loraCount} />
+        </div>
+        <div className="bg-muted/40 flex items-center justify-end gap-2 rounded-b-2xl border-t px-4 py-3">
+          {state === "error" && "message" in status && status.message && (
+            <p className="text-destructive min-w-0 flex-1 truncate text-xs" title={status.message}>
+              {status.message}
+            </p>
+          )}
+          {state === "ready" || state === "starting" ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={state === "starting"}
+              onClick={() => {
+                setOpen(false);
+                onStop();
+              }}
+            >
+              <Square /> {t("engineControl.stop")}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => {
+                setOpen(false);
+                onStart();
+              }}
+            >
+              <Play /> {state === "error" ? t("engineControl.restart") : t("engineControl.start")}
+            </Button>
+          )}
+        </div>
+      </Popover>
+    </>
   );
 }

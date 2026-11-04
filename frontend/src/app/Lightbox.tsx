@@ -1,6 +1,7 @@
 // Full-screen viewer with generation details.
 // (Split out of App.tsx; see App.tsx for how the pieces fit together.)
 import { ToolMenuList } from "@/components/ToolBits";
+import { ENGINE_LABEL } from "@/lib/engines";
 import { isWeb } from "@/lib/target";
 import type { GenerationMeta } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -109,8 +110,12 @@ export function Lightbox({
   if (!current) return null;
   const meta = current.meta;
 
+  // Actions sit in frosted groups (edit | image actions | delete | view), each
+  // button flat inside its group; the edge arrows are standalone discs.
   const iconBtn =
-    "rounded-full bg-white/10 p-1.5 text-white transition hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 sm:p-2";
+    "rounded-full p-1.5 text-white/85 transition hover:bg-white/15 hover:text-white disabled:opacity-30 sm:p-2 [&_svg]:size-[1.125rem]";
+  const group = "flex items-center gap-0.5 rounded-full bg-white/10 p-1 backdrop-blur";
+  const navBtn = "rounded-full bg-white/10 p-2 text-white backdrop-blur transition hover:bg-white/20";
 
   // Portal to <body>: the gallery renders inside <main> (relative z-10), whose
   // stacking context would otherwise trap this overlay below root-level fixed
@@ -144,21 +149,24 @@ export function Lightbox({
         <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium tabular-nums text-white">
           {t("gallery.counter", { i: index + 1, n: total })}
         </span>
-        <div className="flex items-center gap-1 sm:gap-1.5">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Editing tools: a dropdown of the tools for this item. */}
           {current.name && onTool && (
             <div className="relative">
               <button
                 type="button"
-                className={cn(iconBtn, "flex items-center gap-1.5 sm:px-3", editOpen && "bg-white/25")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full bg-white px-3 py-2 text-neutral-900 shadow-lg transition hover:bg-white/90 [&_svg]:size-4",
+                  editOpen && "bg-white/85"
+                )}
                 title={t("tools.edit")}
                 aria-label={t("tools.edit")}
                 aria-expanded={editOpen}
                 onClick={() => setEditOpen((o) => !o)}
               >
-                <Wand2 className="size-5" />
-                <span className="text-sm font-medium max-sm:hidden">{t("tools.edit")}</span>
-                <ChevronDown className="size-4 max-sm:hidden" />
+                <Wand2 />
+                <span className="text-sm font-semibold max-sm:hidden">{t("tools.edit")}</span>
+                <ChevronDown className="max-sm:hidden" />
               </button>
               {editOpen && (
                 <div
@@ -179,32 +187,37 @@ export function Lightbox({
               )}
             </div>
           )}
+          <div className={group}>
           {/* img2img needs an image source — hidden for videos. */}
           {!isVideoSrc(src) && (
             <button type="button" className={iconBtn} title={t("gallery.ctxUseAsSource")} aria-label={t("gallery.ctxUseAsSource")} onClick={() => onUseAsSource(current.getSrc)}>
-              <ImageIcon className="size-5" />
+              <ImageIcon />
             </button>
           )}
           {meta?.prompt && (
             <button type="button" className={iconBtn} title={t("gallery.ctxReuse")} aria-label={t("gallery.ctxReuse")} onClick={() => onReuseSettings(meta)}>
-              <RotateCcw className="size-5" />
+              <RotateCcw />
             </button>
           )}
           {meta?.prompt && (
             <button type="button" className={iconBtn} title={t("gallery.ctxCopyPrompt")} aria-label={t("gallery.ctxCopyPrompt")} onClick={() => void navigator.clipboard?.writeText(meta.prompt).catch(() => {})}>
-              <Copy className="size-5" />
+              <Copy />
             </button>
           )}
           {current.savedPath && !isWeb && (
             <button type="button" className={iconBtn} title={t("gallery.ctxReveal")} aria-label={t("gallery.ctxReveal")} onClick={() => void api.revealInFolder(current.savedPath!).catch(() => {})}>
-              <FolderOpen className="size-5" />
+              <FolderOpen />
             </button>
           )}
+          </div>
           {current.name && (
-            <button type="button" className={cn(iconBtn, "hover:bg-red-600/70")} title={t("gallery.ctxDelete")} aria-label={t("gallery.ctxDelete")} onClick={() => onDelete(current.name!)}>
-              <Trash2 className="size-5" />
-            </button>
+            <div className={group}>
+              <button type="button" className={cn(iconBtn, "hover:bg-red-600/80")} title={t("gallery.ctxDelete")} aria-label={t("gallery.ctxDelete")} onClick={() => onDelete(current.name!)}>
+                <Trash2 />
+              </button>
+            </div>
           )}
+          <div className={group}>
           <button
             type="button"
             className={iconBtn}
@@ -212,22 +225,23 @@ export function Lightbox({
             aria-label={full ? t("gallery.exitFullscreen") : t("gallery.fullscreen")}
             onClick={() => setFull((f) => !f)}
           >
-            {full ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}
+            {full ? <Minimize2 /> : <Maximize2 />}
           </button>
           <button type="button" className={iconBtn} title={t("common.close")} aria-label={t("common.close")} onClick={onClose}>
-            <X className="size-5" />
+            <X />
           </button>
+          </div>
         </div>
       </div>
 
       {/* Prev / next edge arrows. */}
       {hasPrev && (
-        <button type="button" className={cn(iconBtn, "absolute left-4 top-1/2 z-10 -translate-y-1/2 pointer-coarse:hidden")} aria-label={t("gallery.prev")} onClick={(e) => { e.stopPropagation(); prev(); }}>
+        <button type="button" className={cn(navBtn, "absolute left-4 top-1/2 z-10 -translate-y-1/2 pointer-coarse:hidden")} aria-label={t("gallery.prev")} onClick={(e) => { e.stopPropagation(); prev(); }}>
           <ChevronLeft className="size-6" />
         </button>
       )}
       {hasNext && (
-        <button type="button" className={cn(iconBtn, "absolute right-4 top-1/2 z-10 -translate-y-1/2 pointer-coarse:hidden")} aria-label={t("gallery.next")} onClick={(e) => { e.stopPropagation(); next(); }}>
+        <button type="button" className={cn(navBtn, "absolute right-4 top-1/2 z-10 -translate-y-1/2 pointer-coarse:hidden")} aria-label={t("gallery.next")} onClick={(e) => { e.stopPropagation(); next(); }}>
           <ChevronRight className="size-6" />
         </button>
       )}
@@ -237,7 +251,7 @@ export function Lightbox({
           "flex w-full flex-col items-center",
           full
             ? "h-full max-w-none gap-0"
-            : "max-h-full max-w-6xl gap-4 max-md:overflow-y-auto md:flex-row md:items-stretch"
+            : "max-h-full max-w-6xl gap-4 max-md:overflow-y-auto md:flex-row md:items-center"
         )}
         onClick={(e) => e.stopPropagation()}
       >
@@ -281,11 +295,12 @@ export function Lightbox({
                   setOrigin(`${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`);
                 }}
                 onMouseLeave={() => setOrigin("50% 50%")}
-                style={{ transformOrigin: origin, transform: zoom ? "scale(2)" : "scale(1)" }}
+                style={{ transformOrigin: origin, transform: zoom ? "scale(2)" : "scale(1)", ["--ar" as string]: lightboxAspect }}
                 className={cn(
                   "animate-in fade-in zoom-in-95 min-h-0 object-contain transition-transform duration-150",
-                  // Fullscreen: edge-to-edge, no frame. Otherwise: framed with a cap.
-                  full ? "max-h-dvh max-w-full" : "max-h-[65dvh] rounded-xl shadow-2xl md:max-h-[85vh]",
+                  // Fullscreen: edge-to-edge, no frame. Otherwise: framed, and as
+                  // large as the window allows (a small file is scaled up too).
+                  full ? "max-h-dvh max-w-full" : "lightbox-img max-h-[65dvh] rounded-xl shadow-2xl",
                   zoom ? "cursor-zoom-out" : "cursor-zoom-in"
                 )}
               />
@@ -320,15 +335,22 @@ export function Lightbox({
   );
 }
 
+function formatCreated(iso: string | undefined, lang: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.replace("T", " ").slice(0, 19);
+  return new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" }).format(d);
+}
+
 export function MetaPanel({ meta }: { meta: GenerationMeta }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const rows: [string, string][] = [];
   const add = (k: string, v: string | number | undefined | null) => {
     if (v !== undefined && v !== null && v !== "" && v !== 0) rows.push([k, String(v)]);
   };
   add(t("meta.model"), meta.modelName || meta.modelCode);
-  add(t("meta.engine"), meta.engine);
-  add(t("meta.source"), meta.source);
+  add(t("meta.engine"), meta.engine ? (ENGINE_LABEL[meta.engine] ?? meta.engine) : "");
+  add(t("meta.source"), meta.source === "local" || meta.source === "cloud" ? t(`mode.${meta.source}`) : meta.source);
   add(t("meta.size"), meta.width && meta.height ? `${meta.width}×${meta.height}` : "");
   add(t("meta.format"), meta.formatCode);
   add(t("meta.steps"), meta.numSteps);
@@ -343,10 +365,10 @@ export function MetaPanel({ meta }: { meta: GenerationMeta }) {
     add(t("meta.ranOn"), meta.ranOn ? t(`tools.mode.${meta.ranOn}`) : "");
     add(t("meta.sourceImage"), meta.sourceImage);
   }
-  add(t("meta.created"), meta.createdAt ? meta.createdAt.replace("T", " ").slice(0, 19) : "");
+  add(t("meta.created"), formatCreated(meta.createdAt, i18n.language));
 
   return (
-    <div className="bg-background/95 flex w-full shrink-0 flex-col gap-3 overflow-y-auto rounded-xl p-4 text-sm shadow-2xl md:max-h-[85vh] md:w-80">
+    <div className="bg-popover/95 text-popover-foreground flex w-full shrink-0 flex-col gap-4 overflow-y-auto rounded-2xl border p-5 text-sm shadow-2xl backdrop-blur md:max-h-[calc(100dvh-8rem)] md:w-80">
       {meta.prompt && (
         <div>
           <div className="ds-label mb-1">{t("meta.prompt")}</div>
@@ -360,7 +382,7 @@ export function MetaPanel({ meta }: { meta: GenerationMeta }) {
         </div>
       )}
       {rows.length > 0 && (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 border-t pt-4 text-xs">
           {rows.map(([k, v]) => (
             <Fragment key={k}>
               <dt className="text-muted-foreground">{k}</dt>

@@ -134,21 +134,9 @@ export function LocalReadinessCard({
     }
   };
 
-  if (allReady && !expanded) {
-    return (
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
-        className="ds-card hover:border-primary/30 flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs transition"
-      >
-        <Check className="size-3.5 shrink-0 text-emerald-500" />
-        <span className="min-w-0 flex-1 truncate">
-          {t("readiness.readyLine", { name: model.name })}
-        </span>
-        <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
-      </button>
-    );
-  }
+  // All green: nothing to prepare. The model card says it is loaded and the
+  // header's engine pill carries the engine state — no third "ready" line.
+  if (allReady && !expanded) return null;
 
   return (
     <section className="ds-card grid min-w-0 gap-2.5 overflow-hidden px-4 py-3 text-xs">

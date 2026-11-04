@@ -1,6 +1,7 @@
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Activity, AlertCircle, Check, Cloud, Copy, Cpu, Loader2, RefreshCw, X } from "lucide-react";
+import { Activity, AlertCircle, Check, Cloud, Copy, Cpu, History, Loader2, RefreshCw, X } from "lucide-react";
+import { openCloudHistory } from "@/lib/target";
 import { QueuePanel } from "@/components/QueuePanel";
 import { ToolIcon } from "@/components/ToolBits";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -164,6 +165,18 @@ export function ActivityDock({
                     {t("queue.recheck")}
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    openCloudHistory();
+                  }}
+                  title={t("history.title")}
+                  className="text-muted-foreground/60 hover:text-foreground inline-flex items-center gap-1 text-[11px] font-medium transition-colors"
+                >
+                  <History className="size-3" />
+                  {t("history.button")}
+                </button>
                 {hasFinished && (
                   <button
                     type="button"
@@ -199,7 +212,7 @@ export function ActivityDock({
       )}
 
       {/* The widget and, to its left, the finish notices popping out of it.
-          Phones: tucked closer to the corner, icon-only when idle. */}
+          Phones: tucked closer to the corner. */}
       <div className="pointer-events-none fixed bottom-2 right-4 z-40 flex sm:bottom-6 sm:right-6 flex-row-reverse items-end gap-3">
       {/* Persistent widget — a prominent floating pill: brand-tinted with a live
           cloud/local count while runs are in flight, solid card otherwise. */}
@@ -244,10 +257,12 @@ export function ActivityDock({
           key={`pill-${pulse?.id ?? 0}`}
           style={pulse ? ({ "--dock-ring": pulse.color } as CSSProperties) : undefined}
           className={cn(
-            "relative flex items-center gap-2.5 overflow-hidden rounded-2xl border px-4 py-3 text-sm font-semibold shadow-xl backdrop-blur transition-colors",
+            "relative flex items-center gap-2.5 overflow-hidden rounded-2xl border text-sm font-semibold shadow-xl backdrop-blur transition-colors",
+            // Idle: a quiet round icon, out of the gallery's way; it widens
+            // into a counted pill while runs are in flight.
             busy
-              ? "brand-surface dock-busy border-transparent text-white"
-              : "bg-card text-foreground hover:border-[var(--brand-from)]/40",
+              ? "brand-surface dock-busy border-transparent px-4 py-3 text-white"
+              : "bg-card text-foreground hover:border-[var(--brand-from)]/40 p-3",
             pulse && (pulse.kind === "start" ? "dock-arrive" : "dock-pop")
           )}
         >
@@ -274,7 +289,7 @@ export function ActivityDock({
               )}
             </span>
           ) : (
-            <span className="max-sm:hidden">{t("panels.queue")}</span>
+            <span className="sr-only">{t("panels.queue")}</span>
           )}
         </span>
         {/* Outside the pill: its overflow-hidden (for the flash) clipped the

@@ -35,14 +35,16 @@
     "installing": "正在安装引擎…",
     "install": "安装引擎",
     "starting": "启动中…",
-    "runningTitle": "本地引擎运行中 · {{device}} — 点击停止",
-    "on": "本地引擎已启动",
+    "on": "引擎运行中",
     "stop": "停止",
     "selectModelTitle": "请选择一个本地模型 — 引擎将加载并运行它",
     "selectModel": "选择模型",
     "startTitle": "启动本地引擎（加载所选模型）",
     "restart": "重启引擎",
-    "start": "启动本地引擎"
+    "start": "启动本地引擎",
+    "off": "引擎已停止",
+    "error": "引擎出错",
+    "detailsTitle": "本地引擎：状态与详情"
   },
   "mode": {
     "local": "本地",
@@ -99,7 +101,10 @@
     "prompt": "提示词",
     "promptHelp": "描述你想要的图像：主体、场景、风格、光线。Ctrl+Enter（⌘+Enter）生成。",
     "negativeHelp": "模型应避免的内容。已预填该模型推荐的内容。",
-    "qualityTagsHelp": "添加在提示词之前。已预填该模型效果最佳的标签。"
+    "qualityTagsHelp": "添加在提示词之前。已预填该模型效果最佳的标签。",
+    "extras": "反向提示词与质量标签",
+    "extrasSet": "已启用",
+    "extrasHide": "收起"
   },
   "hint": {
     "configurePayment": "请先在上方配置支付方式",
@@ -274,7 +279,7 @@
     "deleteSelectedConfirm": "{{count}} 张图片将从磁盘中永久删除。",
     "emptyFiltered": "没有符合筛选条件的图片",
     "empty": "你生成的图片将显示在这里",
-    "emptyHint": "在“创作”中输入提示词，然后点击生成（{{keys}}）。",
+    "emptyHint": "在“创作”中输入提示词，然后点击生成",
     "filterModel": "模型",
     "filterEngine": "引擎",
     "filterSource": "来源",
@@ -305,7 +310,9 @@
     "lbNav": "浏览",
     "lbZoom": "点击图片放大",
     "fullscreen": "全屏",
-    "exitFullscreen": "退出全屏"
+    "exitFullscreen": "退出全屏",
+    "filters": "筛选",
+    "all": "全部"
   },
   "meta": {
     "model": "模型",
@@ -407,7 +414,8 @@
     },
     "typeCloudApi": "云端 API",
     "costUsd": "${{usd}}",
-    "badgeCached": "已下载"
+    "badgeCached": "已下载",
+    "mediaLabel": "类型"
   },
   "customModel": {
     "title": "添加自定义模型",
@@ -537,7 +545,9 @@
     "devBadge": "开发 · 可编辑",
     "devSource": "源",
     "updatingTo": " — 正在更新到 v{{version}}…",
-    "pipHint": "详细的 pip 输出会实时显示在日志面板中（从顶栏打开）。"
+    "pipHint": "详细的 pip 输出会实时显示在日志面板中（从顶栏打开）。",
+    "version": "版本",
+    "environment": "运行环境"
   },
   "runtime": {
     "title": "引擎 / 本机",
@@ -1026,7 +1036,7 @@
     "swap": {
       "button": "加载 {{model}}（替换引擎中的 {{current}}）",
       "confirmTitle": "加载 {{model}}？",
-      "confirmBody": "{{model}} 将替换本地引擎中的 {{current}}。加载需要一点时间；完成后可在“引擎”面板或模型列表中切换回来。",
+      "confirmBody": "{{model}} 将替换本地引擎中的 {{current}}。加载需要一点时间；完成后可在模型列表中切换回来。",
       "confirm": "加载",
       "nothing": "无"
     },
@@ -1219,9 +1229,9 @@
     "engineName": "引擎：{{engine}}"
   },
   "history": {
-    "title": "云端历史",
-    "button": "历史",
-    "desc": "使用您的 API 密钥或钱包支付的所有云端调用。服务器从不保存提示词和设置。结果可在 {{hours}} 小时内重新下载。",
+    "title": "运行记录",
+    "button": "记录",
+    "desc": "使用您的 API 密钥或钱包支付的所有云端运行。服务器从不保存提示词和设置。结果可在 {{hours}} 小时内重新下载。",
     "rail": {
       "credits": "API 密钥",
       "x402": "钱包"
@@ -1248,7 +1258,7 @@
     "save": "保存到图库",
     "saved": "已保存到图库",
     "saveFailed": "无法下载结果：{{error}}",
-    "empty": "暂无云端调用",
+    "empty": "暂无云端运行",
     "more": "加载更多",
     "noRail": "添加 API 密钥或钱包以查看其支付的调用。"
   },
@@ -1290,10 +1300,10 @@
     "walletText": "连接钱包（Base 网络），确认每张图像的确切价格。无需预付。",
     "payNow": "选择付款方式",
     "payLater": "或在第一张图像时再决定",
-    "tourTitle": "你的工作区，三个面板",
-    "tour1Desktop": "引擎：在哪里生成（这台电脑或云端）以及使用哪个模型。",
-    "tour1Web": "引擎：如何付款以及使用哪个模型。",
-    "tour2": "创作：输入提示词，选择画幅，然后生成。运行中的任务显示在“任务”中。",
+    "tourTitle": "你的工作区",
+    "tour1Desktop": "顶栏：在这台电脑或云端运行。本地模式下，引擎按钮显示其状态和你的显卡。",
+    "tour1Web": "创作顶部：模型，以及下方的付款方式（积分或钱包）。",
+    "tour2": "创作：模型、提示词、画幅，然后生成。运行中的任务显示在“任务”中。",
     "tour3": "画廊：你的作品。点击查看，拖到创作或编辑中即可再次使用。",
     "keyGenerate": "生成",
     "keyCommands": "命令",
@@ -1308,6 +1318,8 @@
     "finishCloud": "设置云端付款",
     "skip": "跳过",
     "back": "返回",
-    "progress": "第 {{step}} 步，共 {{total}} 步"
+    "progress": "第 {{step}} 步，共 {{total}} 步",
+    "mapBar": "本地 · 云端",
+    "mapBarWeb": "Imference Web"
   }
 }

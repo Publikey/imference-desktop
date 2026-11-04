@@ -197,7 +197,7 @@ export function CommandPalette({
             rows.map(({ c, i, header }) => (
               <Fragment key={c.id}>
                 {header && (
-                  <div className="text-muted-foreground/60 px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider">
+                  <div className="ds-sublabel px-2.5 pb-1 pt-3">
                     {header}
                   </div>
                 )}

@@ -7,6 +7,8 @@ import { AlertCircle, AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronRigh
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
+import { PaymentRow } from "@/components/PaymentBar";
+import { openCloudHistory } from "@/lib/target";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -592,7 +594,7 @@ function KeepKeyDialog() {
 
 /** Header: what pays the next run, and the way to get credits. */
 /**
- * Engine panel > Payment on the web, the counterpart of the Desktop PaymentBar:
+ * The payment line under the model on the web, the counterpart of the Desktop PaymentBar:
  * credits or pay as you go, and the active way's status with its next step.
  */
 export function WebPaymentBar({ onConfigure }: { onConfigure: (section: string) => void }) {
@@ -649,49 +651,22 @@ export function WebPaymentBar({ onConfigure }: { onConfigure: (section: string) 
             };
 
   return (
-    <section className="ds-card px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="ds-label">
-          {t("payment.title")}
-        </span>
-        <Segmented
-          size="sm"
-          value={mode}
-          onChange={(m) => void switchTo(m)}
-          items={[
-            { value: "credits", label: t("webpay.settings.credits.title") },
-            { value: "wallet", label: t("webpay.settings.wallet.title") },
-          ]}
-        />
-      </div>
-
-      <button
-        type="button"
-        onClick={row.onClick}
-        title={row.title}
-        disabled={busy}
-        className={cn(
-          "mt-2 flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition",
-          !row.ok
-            ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
-            : "border-border/60 text-muted-foreground hover:bg-muted/40"
-        )}
-      >
-        {row.icon}
-        {busy ? (
-          <Loader2 className="size-3.5 shrink-0 animate-spin" />
-        ) : row.ok ? (
-          <Check className="size-3.5 shrink-0 text-emerald-500" />
-        ) : (
-          <AlertTriangle className="size-3.5 shrink-0" />
-        )}
-        <span className="min-w-0 flex-1 truncate">{busy ? t("common.checking") : row.label}</span>
-        <span className="inline-flex shrink-0 items-center gap-0.5 font-medium">
-          {row.action}
-          <ChevronRight className="size-3" />
-        </span>
-      </button>
-    </section>
+    <PaymentRow
+      method={mode}
+      methods={[
+        { value: "credits", label: t("webpay.settings.credits.title") },
+        { value: "wallet", label: t("webpay.settings.wallet.title") },
+      ]}
+      onMethodChange={(m) => void switchTo(m)}
+      icon={row.icon}
+      ok={row.ok}
+      busy={busy}
+      label={busy ? t("common.checking") : row.label}
+      action={row.action}
+      title={row.title}
+      onClick={row.onClick}
+      onHistory={openCloudHistory}
+    />
   );
 }
 

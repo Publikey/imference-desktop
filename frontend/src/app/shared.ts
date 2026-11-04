@@ -64,9 +64,6 @@ export function readFileAsDataURL(file: File): Promise<string> {
 // which live in their own module (an imported binding is read-only).
 export const tileClickGuard = { suppressed: false };
 
-/** Opens the cloud call history (CloudHistoryDialog) from anywhere. */
-export const OPEN_HISTORY_EVENT = "imference:open-history";
-
 // True when a native (OS-originated) drag carries an image file we can drop.
 export function dragHasImage(dt: DataTransfer | null): boolean {
   if (!dt) return false;

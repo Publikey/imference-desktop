@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { KeyRound, Wallet, AlertTriangle, Check, Loader2, ChevronRight } from "lucide-react";
+import { KeyRound, Wallet, AlertTriangle, Loader2, ChevronRight, History } from "lucide-react";
+import { openCloudHistory } from "@/lib/target";
 import { Segmented } from "@/components/ui/segmented";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
@@ -8,10 +9,10 @@ import type { AppSettings, PaymentMode } from "@/lib/types";
 
 type Status = { ok: boolean; label: string };
 
-// PaymentBar — cloud-mode payment method picker. A small toggle switches between
-// "API key (credit)" and "x402 (USDC wallet)"; below it, a live status for the
-// active method. When it isn't usable (no key / no wallet / 0 USDC) the status
-// row turns into an amber warning that deep-links to Settings → Cloud payment.
+// PaymentBar — cloud-mode payment (desktop): the live status of the active
+// method ("API key (credit)" or "x402 (USDC wallet)") and a switch between
+// them. When it can't pay (no key / no wallet / 0 USDC) the status turns into
+// an amber warning that deep-links to Settings → Cloud payment.
 export function PaymentBar({
   settings,
   onModeChange,
@@ -61,50 +62,105 @@ export function PaymentBar({
   const Icon = mode === "bearer" ? KeyRound : Wallet;
 
   return (
-    <section className="ds-card px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="ds-label">
-          {t("payment.title")}
-        </span>
-        {/* Method toggle — the full form of each method still lives in Settings. */}
-        <Segmented
-          size="sm"
-          value={mode}
-          onChange={(m) => onModeChange(m as PaymentMode)}
-          items={[
-            { value: "bearer", label: t("payment.apiKey") },
-            { value: "x402", label: "x402" },
-          ]}
-        />
-      </div>
+    <PaymentRow
+      method={mode}
+      methods={[
+        { value: "bearer", label: t("payment.apiKey") },
+        { value: "x402", label: "x402" },
+      ]}
+      onMethodChange={(m) => onModeChange(m as PaymentMode)}
+      icon={<Icon className="size-3.5 shrink-0" />}
+      ok={!status || status.ok}
+      busy={loading}
+      label={loading ? t("common.checking") : status?.label ?? ""}
+      action={status && !status.ok ? t("common.configure") : t("common.manage")}
+      title={status?.ok ? t("payment.manageTitle") : t("payment.configureTitle")}
+      onClick={() => onConfigure(section)}
+      onHistory={openCloudHistory}
+    />
+  );
+}
 
-      <button
-        type="button"
-        onClick={() => onConfigure(section)}
-        title={status?.ok ? t("payment.manageTitle") : t("payment.configureTitle")}
-        className={cn(
-          "mt-2 flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition",
-          status && !status.ok
-            ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
-            : "border-border/60 text-muted-foreground hover:bg-muted/40"
+/**
+ * The payment line under the model (one card with it): the active method's
+ * live status — a button to its settings — and the method switch. Turns
+ * amber when the method can't pay yet.
+ */
+export function PaymentRow({
+  method,
+  methods,
+  onMethodChange,
+  icon,
+  ok,
+  busy,
+  label,
+  action,
+  title,
+  onClick,
+  onHistory,
+}: {
+  method: string;
+  methods: { value: string; label: string }[];
+  onMethodChange: (m: string) => void;
+  icon: ReactNode;
+  ok: boolean;
+  busy: boolean;
+  label: string;
+  action: string;
+  title: string;
+  onClick: () => void;
+  /** The cloud calls billed to this account (CloudHistoryDialog). */
+  onHistory?: () => void;
+}) {
+  const { t } = useTranslation();
+  // Two lines: how you pay (label + method switch), then where that stands
+  // (balance → its settings) and the run history.
+  return (
+    <div className="grid gap-2" role="group" aria-label={t("payment.title")}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="ds-sublabel">{t("payment.title")}</span>
+        <Segmented size="sm" value={method} onChange={onMethodChange} items={methods} />
+      </div>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={onClick}
+          title={title}
+          disabled={busy && !label}
+          className={cn(
+            "group -ml-2 flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-xs transition-colors",
+            ok ? "text-foreground hover:bg-muted/60" : "bg-warning/10 text-warning hover:bg-warning/15 ml-0"
+          )}
+        >
+          <span className={cn("shrink-0", ok && "text-muted-foreground")}>{icon}</span>
+          <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+          {busy ? (
+            <Loader2 className="size-3.5 shrink-0 animate-spin opacity-60" />
+          ) : !ok ? (
+            <AlertTriangle className="size-3.5 shrink-0" />
+          ) : null}
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center gap-0.5 font-medium",
+              ok && "text-muted-foreground group-hover:text-foreground"
+            )}
+          >
+            {action}
+            <ChevronRight className="size-3.5" />
+          </span>
+        </button>
+        {onHistory && (
+          <button
+            type="button"
+            onClick={onHistory}
+            title={t("history.title")}
+            className="text-muted-foreground hover:text-foreground hover:bg-muted/60 -mr-2 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-colors"
+          >
+            <History className="size-3.5" />
+            {t("history.button")}
+          </button>
         )}
-      >
-        <Icon className="size-3.5 shrink-0" />
-        {loading ? (
-          <Loader2 className="size-3.5 shrink-0 animate-spin" />
-        ) : status?.ok ? (
-          <Check className="size-3.5 shrink-0 text-emerald-500" />
-        ) : (
-          <AlertTriangle className="size-3.5 shrink-0" />
-        )}
-        <span className="min-w-0 flex-1 truncate">
-          {loading ? t("common.checking") : status?.label}
-        </span>
-        <span className="inline-flex shrink-0 items-center gap-0.5 font-medium">
-          {status && !status.ok ? t("common.configure") : t("common.manage")}
-          <ChevronRight className="size-3" />
-        </span>
-      </button>
-    </section>
+      </div>
+    </div>
   );
 }

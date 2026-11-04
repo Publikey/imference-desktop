@@ -4,20 +4,20 @@ import { FieldLabel, Section } from "@/components/ds";
 import { LaunchBurst, useLaunchBurst } from "@/components/LaunchBurst";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { CornerDownLeft, Download, Loader2, Sparkles, X } from "lucide-react";
-import { useLayoutEffect, useRef } from "react";
+import { CornerDownLeft, Download, Loader2, Plus, Sparkles, X } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ComposerAction, Mode } from "./shared";
 
 // ---------------------------------------------------------------------------
-// Composer — the prompt input + primary action. Mode lives above (ModeToggle),
+// Composer — the prompt input + primary action. Mode lives in the header,
 // not here; several generations can be launched back-to-back.
 // ---------------------------------------------------------------------------
 
 // Grow a textarea to fit its content (clamped by the element's CSS min/max-h),
 // re-measuring whenever the value changes — including external edits like
 // "reuse settings" or an img2img drop that repopulate the prompt.
-export function useAutoGrow(value: string) {
+export function useAutoGrow(value: string, remeasure?: unknown) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -27,7 +27,7 @@ export function useAutoGrow(value: string) {
     // them the box is 2px short and shows a scrollbar on a single line. Past
     // max-height the CSS cap wins and the scrollbar is real.
     el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
-  }, [value]);
+  }, [value, remeasure]);
   return ref;
 }
 
@@ -55,9 +55,13 @@ export function Composer({
   const { t } = useTranslation();
   // ⌘/Ctrl+Enter is handled globally in App (works from anywhere, not just this
   // field), so the textarea needs no key handler of its own.
+  // Negative prompt + quality tags. Most models pre-fill them, so "has a
+  // value" can't decide: folded by default, with a note when they are in use.
+  const [extrasOpen, setExtrasOpen] = useState(false);
   const promptRef = useAutoGrow(prompt);
-  const preRef = useAutoGrow(prePrompt);
-  const negRef = useAutoGrow(negativePrompt);
+  const preRef = useAutoGrow(prePrompt, extrasOpen);
+  const negRef = useAutoGrow(negativePrompt, extrasOpen);
+  const extrasSet = !!(negativePrompt.trim() || prePrompt.trim());
   const secondaryField =
     "ds-field block max-h-24 w-full resize-none px-3 py-1.5 text-xs leading-snug";
 
@@ -86,20 +90,39 @@ export function Composer({
       }
     >
 
-      {/* The prompt is the hero: the biggest field, the readable size. */}
+      {/* The prompt is the hero: no well of its own inside the card — the card
+          is the field (it takes the focus ring, .composer:focus-within). */}
       <textarea
         id="composer-prompt"
         data-blocker="prompt"
+        aria-label={t("composer.prompt")}
         ref={promptRef}
         value={prompt}
         onChange={(e) => onPromptChange(e.target.value)}
         placeholder={t("composer.promptPlaceholder")}
         rows={3}
-        className="ds-field rounded-xl mt-2 block max-h-72 min-h-28 w-full resize-none px-3 py-2.5 text-sm leading-relaxed"
+        className="composer-input mt-2 block max-h-72 min-h-24 w-full resize-none bg-transparent text-[0.9375rem] leading-relaxed outline-none"
       />
 
-      {showModelFields && (
-        <div className="mt-3 grid gap-2.5">
+      {/* Negative prompt and quality tags: folded away until wanted. */}
+      {showModelFields && !extrasOpen && (
+        <div className="mt-2 flex">
+          <button
+            type="button"
+            onClick={() => setExtrasOpen(true)}
+            aria-expanded={false}
+            aria-controls="composer-extras"
+            className="text-muted-foreground hover:text-foreground -ml-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium transition-colors"
+          >
+            <Plus className="size-3.5" />
+            {t("composer.extras")}
+            {extrasSet && <span className="text-subtle font-normal">· {t("composer.extrasSet")}</span>}
+          </button>
+        </div>
+      )}
+
+      {showModelFields && extrasOpen && (
+        <div id="composer-extras" className="mt-3 grid gap-2.5 border-t pt-3">
           <div>
             <FieldLabel label={t("composer.negativePrompt")} help={t("composer.negativeHelp")} htmlFor="composer-negative" />
             <textarea
@@ -124,6 +147,15 @@ export function Composer({
               className={secondaryField}
             />
           </div>
+          <button
+            type="button"
+            onClick={() => setExtrasOpen(false)}
+            aria-expanded
+            aria-controls="composer-extras"
+            className="text-muted-foreground hover:text-foreground justify-self-start text-xs font-medium transition-colors"
+          >
+            {t("composer.extrasHide")}
+          </button>
         </div>
       )}
     </Section>
@@ -150,7 +182,7 @@ export function PrimaryAction({
 }) {
   const burst = useLaunchBurst("generate");
   return (
-    <div className="sticky bottom-2 z-30 max-sm:pr-[4.5rem] sm:max-xl:pr-36">
+    <div className="run-dock sticky bottom-0 z-30 pb-3 xl:-bottom-6 xl:pb-9 max-sm:pr-[4.5rem] sm:max-xl:pr-36">
       <span className="relative block w-full rounded-2xl" data-mode={mode}>
         <LaunchBurst burst={burst} />
         <Button

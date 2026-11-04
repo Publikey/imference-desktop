@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import logoUrl from "@/assets/logo.svg";
 import { modLabel } from "@/components/CommandPalette";
+import { Kbd } from "@/components/ds";
 import { useEngineStatus } from "@/components/EnginePanel";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { Button } from "@/components/ui/button";
@@ -228,7 +229,7 @@ export function Welcome({
         {t("welcome.tourTitle")}
       </h2>
       <div aria-hidden className="welcome-map mt-5">
-        <span>{t("panels.engine")}</span>
+        <span className="is-bar">{t(isWeb ? "welcome.mapBarWeb" : "welcome.mapBar")}</span>
         <span className="is-main">{t("panels.create")}</span>
         <span className="is-wide">{t("panels.gallery")}</span>
       </div>
@@ -252,7 +253,7 @@ export function Welcome({
         </span>
         <span className="inline-flex items-center gap-1.5">
           <Kbd>{modLabel}</Kbd>
-          <Kbd>1–4</Kbd>
+          <Kbd>1–3</Kbd>
           {t("welcome.keyPanels")}
         </span>
       </div>
@@ -435,10 +436,3 @@ function TourItem({ n, text }: { n: number; text: string }) {
   );
 }
 
-function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <kbd className="bg-muted text-foreground inline-flex h-5 min-w-5 items-center justify-center rounded-md border px-1 font-sans text-[11px] font-medium">
-      {children}
-    </kbd>
-  );
-}

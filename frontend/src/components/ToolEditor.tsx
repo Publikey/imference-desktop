@@ -128,8 +128,8 @@ export function ToolEditor({
   /** The app's global mode: a run goes there (a one-off cloud run is the
    *  only exception, offered when this machine cannot run the tool). */
   mode: "local" | "cloud";
-  /** Bring the Engine panel forward (a model swap is happening there). */
-  onEngineActivity: () => void;
+  /** A model swap starts in the engine (the header pill shows it). */
+  onEngineActivity?: () => void;
 }) {
   const open = true;
   const { t } = useTranslation();
@@ -269,7 +269,7 @@ export function ToolEditor({
 
   const isMaskTool = (MASK_TOOLS as readonly string[]).includes(currentId);
   const isInstruct = currentId === INSTRUCT_EDIT_ID;
-  // Runs follow the app's mode (the Engine panel); the panel has no switch.
+  // Runs follow the app's mode (the header switch); the panel has no switch.
   const runOn: "local" | "cloud" = mode;
   const effectiveCloud = !!tool && runOn === "cloud";
   const confirm = useConfirm();
@@ -348,11 +348,11 @@ export function ToolEditor({
     });
     if (!ok) return;
     setSwapping(true);
-    onEngineActivity();
+    onEngineActivity?.();
     try {
       await localSwap.run();
     } catch {
-      // the Engine panel shows the failure (model:progress error)
+      // the header engine pill shows the failure (model:progress error)
     }
   };
   // The swap ends when the engine has the new model: the tool list refreshes.

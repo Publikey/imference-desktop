@@ -161,6 +161,27 @@
     border-radius: var(--im-radius-xl);
     box-shadow: var(--im-shadow-xs), var(--im-shadow-inset);
   }
+  /* Related sections joined into one card: shared edges, a hairline between
+     them (Reference image + LoRAs, Format + Parameters). */
+  .ds-stack {
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--im-radius-xl);
+    box-shadow: var(--im-shadow-xs);
+  }
+  .ds-stack > .ds-card {
+    box-shadow: var(--im-shadow-inset);
+  }
+  .ds-stack > .ds-card:not(:first-child) {
+    border-top-color: color-mix(in oklch, var(--im-border) 70%, transparent);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+  .ds-stack > .ds-card:not(:last-child) {
+    border-bottom-width: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
   .ds-field {
     background-color: var(--im-sunken);
     border: 1px solid var(--im-input);
@@ -335,11 +356,34 @@
       box-shadow 0.25s ease,
       border-color 0.25s ease;
   }
+  /* The pinned Generate: the column fades out behind it instead of showing
+     half-cut cards above and around the button. */
+  /* xl: the column scrolls with a 24px bottom padding, which a sticky child
+     can't cover — the dock sits 24px lower (-bottom-6) and pads it back. */
+  .run-dock {
+    margin-top: -1.25rem;
+    padding-top: 1.75rem;
+    background: linear-gradient(to bottom, transparent, var(--background) 1.75rem);
+  }
+  /* Lightbox image (md+): as tall as the window allows, and no wider than the
+     viewer row leaves beside the 20rem details panel. --ar = width / height. */
+  @media (min-width: 768px) {
+    .lightbox-img {
+      width: auto;
+      max-height: none;
+      height: min(calc(100dvh - 8rem), calc((min(100vw - 3rem, 72rem) - 21rem) / var(--ar, 1)));
+    }
+  }
+  .composer-input::placeholder {
+    color: var(--im-fg-subtle);
+  }
+  /* Focus ring drawn inside the border: the Create column scrolls, and an
+     outer ring was clipped at its edges. */
   .composer:focus-within {
-    border-color: transparent;
+    border-color: color-mix(in oklch, var(--brand-from) 70%, transparent);
     box-shadow:
-      0 0 0 2px color-mix(in oklch, var(--brand-from) 50%, transparent),
-      0 16px 44px -18px color-mix(in oklch, var(--brand-to) 45%, rgba(0, 0, 0, 0.22));
+      inset 0 0 0 1px color-mix(in oklch, var(--brand-from) 70%, transparent),
+      0 1px 2px rgba(0, 0, 0, 0.04);
   }
   /* Empty gallery: three ghost tiles fanned behind the brand mark. */
   .empty-fan-tile {
@@ -1383,7 +1427,8 @@
 }
 .welcome-map {
   display: grid;
-  grid-template-columns: 0.8fr 1fr 1.5fr;
+  grid-template-columns: 1fr 1.8fr;
+  grid-template-rows: auto 1fr;
   gap: 6px;
   height: 92px;
   padding: 6px;
@@ -1401,6 +1446,11 @@
   color: var(--im-fg-muted);
   background: var(--im-surface);
   border: 1px solid var(--im-border);
+}
+.welcome-map span.is-bar {
+  grid-column: 1 / -1;
+  padding-block: 4px;
+  font-weight: 500;
 }
 .welcome-map span.is-main {
   color: var(--im-fg);

@@ -19,10 +19,21 @@ import type { Mode } from "./shared";
 // AspectGlyph draws the format's actual proportions in a 14px box. A shape says
 // "portrait, quite tall" faster than "9:13" does, and it costs no width in a
 // cell that also has to hold a name and a pixel count.
-export function AspectGlyph({ width, height, active }: { width: number; height: number; active: boolean }) {
+export function AspectGlyph({
+  width,
+  height,
+  active,
+  size = 14,
+}: {
+  width: number;
+  height: number;
+  active: boolean;
+  /** The longer side, in px. */
+  size?: number;
+}) {
   const w = width > 0 ? width : 1;
   const h = height > 0 ? height : 1;
-  const scale = 14 / Math.max(w, h);
+  const scale = size / Math.max(w, h);
   return (
     <span
       aria-hidden
@@ -64,16 +75,30 @@ export function FormatSelector({
     onChange({ formatCode: CUSTOM_FORMAT, customWidth: d.width, customHeight: d.height });
   };
 
+  const current = isCustom ? { width: params.customWidth, height: params.customHeight } : dimsForModel(model, params.formatCode);
+  const tile = (active: boolean, dashed = false) =>
+    cn(
+      "flex h-16 min-w-0 flex-col items-center justify-center gap-1.5 rounded-lg border px-1 transition-colors",
+      active
+        ? "border-[var(--brand-to)] bg-[var(--brand-to)]/10 text-foreground"
+        : cn("border-border/70 text-muted-foreground hover:text-foreground hover:bg-muted/50", dashed && "border-dashed")
+    );
+
   return (
     <section className="ds-card px-4 py-3">
-      <div className="flex flex-col gap-2">
-        <SectionHeader title={t("params.format")} help={t("params.formatHelp")} />
-        {/* A fixed 3-column grid of equal cells, not a wrapping segmented
-            control: with nine formats of uneven label lengths, wrapping put a
-            different number of pills on each line and the whole box read as
-            scattered. Equal cells on a grid line up, and nine of them still fit
-            in three rows — same height, ordered. */}
-        <div className="grid grid-cols-3 gap-1.5">
+      <div className="flex flex-col gap-2.5">
+        <SectionHeader
+          title={t("params.format")}
+          help={t("params.formatHelp")}
+          action={
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {current.width}×{current.height}
+            </span>
+          }
+        />
+        {/* Equal tiles, as many per row as fit: a shape and a name, the pixels
+            in the tooltip and, for the chosen one, in the header. */}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-1.5">
           {orderedFormats(formats).map((f) => {
             const active = !isCustom && params.formatCode === f.formatCode;
             return (
@@ -83,24 +108,12 @@ export function FormatSelector({
                 onClick={() => onChange({ formatCode: f.formatCode })}
                 title={`${formatName(f, t)} · ${f.width}×${f.height}${f.ratio ? ` · ${formatRatio(f)}` : ""}`}
                 aria-pressed={active}
-                className={cn(
-                  "flex min-w-0 flex-col gap-0.5 rounded-lg border px-2 py-1.5 text-left transition",
-                  active
-                    ? "border-[var(--brand-to)] bg-[var(--brand-to)]/10"
-                    : "border-border/70 hover:border-primary/30 hover:bg-muted/50"
-                )}
+                className={tile(active)}
               >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <AspectGlyph width={f.width} height={f.height} active={active} />
-                  <span className="truncate text-[11px] font-medium capitalize">
-                    {formatName(f, t)}
-                  </span>
+                <span className="flex h-5 items-center">
+                  <AspectGlyph width={f.width} height={f.height} active={active} size={18} />
                 </span>
-                {/* The pixels the model actually renders — the thing you're
-                    choosing. The ratio it implies is drawn by the glyph. */}
-                <span className="text-muted-foreground/80 text-[10px] tabular-nums">
-                  {f.width}×{f.height}
-                </span>
+                <span className="w-full truncate text-center text-[11px] font-medium capitalize sm:text-xs">{formatName(f, t)}</span>
               </button>
             );
           })}
@@ -109,20 +122,13 @@ export function FormatSelector({
               type="button"
               onClick={enterCustom}
               aria-pressed={isCustom}
-              className={cn(
-                "flex min-w-0 flex-col gap-0.5 rounded-lg border px-2 py-1.5 text-left transition",
-                isCustom
-                  ? "border-[var(--brand-to)] bg-[var(--brand-to)]/10"
-                  : "border-border/70 border-dashed hover:border-primary/30 hover:bg-muted/50"
-              )}
+              title={t("formats.freeDims")}
+              className={tile(isCustom, true)}
             >
-              <span className="flex min-w-0 items-center gap-1.5">
-                <AspectGlyph width={params.customWidth} height={params.customHeight} active={isCustom} />
-                <span className="truncate text-[11px] font-medium">{t("formats.custom")}</span>
+              <span className="flex h-5 items-center">
+                <AspectGlyph width={params.customWidth} height={params.customHeight} active={isCustom} size={18} />
               </span>
-              <span className="text-muted-foreground/80 text-[10px] tabular-nums">
-                {isCustom ? `${params.customWidth}×${params.customHeight}` : t("formats.freeDims")}
-              </span>
+              <span className="w-full truncate text-center text-[11px] font-medium sm:text-xs">{t("formats.custom")}</span>
             </button>
           )}
         </div>
@@ -166,7 +172,7 @@ export function DimInput({
 }) {
   return (
     <label className="flex min-w-0 flex-1 flex-col gap-1">
-      <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">{label}</span>
+      <span className="ds-sublabel">{label}</span>
       <input
         type="number"
         min={256}

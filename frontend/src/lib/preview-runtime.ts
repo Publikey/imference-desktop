@@ -28,7 +28,7 @@ function bindingID(fqn: string): number {
   return h >>> 0;
 }
 const METHODS =
-  "AddLora CancelModelDownload CancelTool CancelToolWeights CheckForUpdate CheckModelReadiness ClearLogs DeleteCachedModel DeleteSavedImage DetectPython DownloadCatalogLora DownloadModelComponents DownloadToolWeights DropPendingCloudJob EngineStatus EnsureLocalModel ExportWalletPrivateKey GalleryFacets GenerateCloud GenerateLocal GenerateWallet GetCreditBalance GetEngineInfo GetFolderSizes GetLocalAPIInfo GetLogs GetSavedImage GetSettings GetSidecarStatus GetStorageInfo GetToolsSettings GetVersion GetWalletInfo ImportWallet InstallEngine ListCachedModels ListCatalogLoras ListCloudLoras ListCloudModels ListEditModels ListLocalModels ListPendingCloudJobs ListSavedImages ListTools LogFromFrontend OpenCacheFolder PickLoraFile PickModelFile ProbeTools PurgeBaseComponentsCache RecheckPendingCloud RefreshWalletBalance ReleaseTools RemoveCustomModel RemoveLora RestartSidecar RevealInFolder RunTool SaveSettings SelectCloudModel SelectLocalModel SetToolsSettings StartSidecar StopLocalGeneration StopSidecar SwitchBackFromEditModel SwitchToEditModel TakeClientGalleryOutbox ToolGenModels UseCustomModel".split(
+  "AddLora CancelModelDownload CancelTool CancelToolWeights CheckForUpdate CheckModelReadiness ClearLogs DeleteCachedModel DeleteSavedImage DetectPython DownloadCatalogLora DownloadModelComponents DownloadToolWeights DropPendingCloudJob EngineStatus EnsureLocalModel ExportWalletPrivateKey GalleryFacets GenerateCloud GenerateLocal GenerateWallet GetCreditBalance GetEngineInfo GetFolderSizes GetLocalAPIInfo GetLogs GetSavedImage GetSettings GetSidecarStatus GetStorageInfo GetToolsSettings GetVersion GetWalletInfo ImportWallet InstallEngine ListCachedModels ListCatalogLoras ListCloudHistory ListCloudLoras ListCloudModels ListEditModels ListLocalModels ListPendingCloudJobs ListSavedImages ListTools LogFromFrontend OpenCacheFolder PickLoraFile PickModelFile ProbeTools PurgeBaseComponentsCache RecheckPendingCloud RedownloadCloudOutput RefreshWalletBalance ReleaseTools RemoveCustomModel RemoveLora RestartSidecar RevealInFolder RunTool SaveSettings SelectCloudModel SelectLocalModel SetToolsSettings StartSidecar StopLocalGeneration StopSidecar SwitchBackFromEditModel SwitchToEditModel TakeClientGalleryOutbox ToolGenModels UseCustomModel".split(
     " ",
   );
 const nameByID = new Map(METHODS.map((n) => [bindingID("main.App." + n), n]));
@@ -234,6 +234,9 @@ async function handle(name: string, args: any[]): Promise<any> {
       };
       return { models: count((i) => i.meta.modelCode, (i) => i.meta.modelName), engines: count((i) => i.meta.engine, (i) => i.meta.engine), sources: count((i) => i.source, (i) => i.source) };
     }
+    case "ListCloudHistory":
+      // No past calls in the preview: the dialog's empty state.
+      return { data: [], retention_hours: 24, rail: "credits", rails: ["credits"] };
     case "GetCreditBalance":
       return { configured: scenario !== "firstrun", credits: 4496 };
     case "GetWalletInfo":

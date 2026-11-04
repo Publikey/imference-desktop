@@ -34,7 +34,7 @@ export function ToolsSection({
 
   return (
     <div className="space-y-4">
-      {/* Where tools run follows the app's global mode (Engine panel). */}
+      {/* Where tools run follows the app's global mode (header switch). */}
 
       <div className="ds-card grid gap-4 p-4 sm:grid-cols-2">
         <div className="grid gap-2">

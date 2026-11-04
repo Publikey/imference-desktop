@@ -195,7 +195,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
       <DialogContent
         // Don't close on an accidental outside click — only the X / Done / Esc.
         onInteractOutside={(e) => e.preventDefault()}
-        className="ring-border/60 flex h-[86dvh] max-h-[720px] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-2xl ring-1 sm:max-w-3xl sm:flex-row"
+        className="ring-border/60 flex h-[86dvh] max-h-[640px] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-2xl ring-1 sm:max-w-3xl sm:flex-row"
       >
         {/* Rail — brand mark, category list, version. On a phone it becomes a
             strip of tabs above the pane (a side rail leaves the pane no room). */}

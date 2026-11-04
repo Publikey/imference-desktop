@@ -1,7 +1,6 @@
 import { ActivityDock } from "@/components/ActivityDock";
 import { CommandPalette, modLabel, type Command } from "@/components/CommandPalette";
 import { CustomModelDialog } from "@/components/CustomModelDialog";
-import { EnginePanel } from "@/components/EnginePanel";
 import { LocalReadinessCard } from "@/components/LocalReadinessCard";
 import { LogPanel } from "@/components/LogPanel";
 import { CloudLoraCard, LORA_BACKENDS, LoraCard, loraFits } from "@/components/LoraCard";
@@ -29,7 +28,7 @@ import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { prepareRefImage } from "@/lib/image";
 import { installLogCapture } from "@/lib/log-capture";
 import { beginPointerDrag } from "@/lib/pointer-drag";
-import { isWeb } from "@/lib/target";
+import { isWeb, OPEN_HISTORY_EVENT } from "@/lib/target";
 import { setThemePref } from "@/lib/theme";
 import { isEditModel, refreshTools } from "@/lib/tools";
 import type {
@@ -98,7 +97,6 @@ import {
   runCost,
   snapDim,
 } from "./app/model-params";
-import { ModeToggle } from "./app/ModeToggle";
 import { ParamsPanel } from "./app/ParamsPanel";
 import { RefImageCard } from "./app/RefImages";
 import {
@@ -109,7 +107,6 @@ import {
   flagBlockers,
   isVideoSrc,
   nextJobId,
-  OPEN_HISTORY_EVENT,
   readFileAsDataURL,
   readWebDraft,
   tileClickGuard,
@@ -258,7 +255,7 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  // The gallery's History button opens it from deep in the tree.
+  // Opened from the payment line and the Activity panel (openCloudHistory).
   useEffect(() => {
     const open = () => setHistoryOpen(true);
     window.addEventListener(OPEN_HISTORY_EVENT, open);
@@ -1595,41 +1592,12 @@ export default function App() {
     hasFinished, clearFinished, openSettings, panelHidden, togglePanel
   ]);
 
-  // The engine block — Local/Cloud, payment, model, local readiness, a held
-  // model switch. One element, shown in the Create panel today; the Engine
-  // panel / bar take it over (see the Engine surface).
-  // The Engine panel owns the engine block; Create shows it only while the
-  // panel is off (so it is never out of reach).
-  const engineSurfaceHidden = !!panelHidden.engine;
+  // The engine block — payment, model, local readiness, a held model switch —
+  // at the top of Create. The mode itself lives in the header (one switch),
+  // and the machine's details in the header's engine popover.
   const engineBlock = (
     <>
-      {/* 1. Mode — first, single source of truth (not repeated in the composer). */}
-      {!isWeb && (
-        <ModeToggle
-          mode={mode}
-          onModeChange={setMode}
-          localReady={localReady}
-          cloudReady={cloudReady}
-        />
-      )}
-
-      {/* 1b. Payment — cloud only: pick x402 or API key, deep-link to config. */}
-      {!firstRun && !isWeb && mode === "cloud" && (
-        <div data-blocker="payment" className="rounded-xl">
-          <PaymentBar
-            settings={settings}
-            onModeChange={setPaymentMode}
-            onConfigure={openSettings}
-          />
-        </div>
-      )}
-      {!firstRun && isWeb && (
-        <div data-blocker="payment" className="rounded-xl">
-          <WebPaymentBar onConfigure={openSettings} />
-        </div>
-      )}
-
-      {/* 2. Model */}
+      {/* 1. Model — with, in the cloud, how it is paid on the same card. */}
       {!firstRun && (
         <div data-blocker="model" className="rounded-2xl">
         <ModelBar
@@ -1649,6 +1617,17 @@ export default function App() {
           engineState={sidecar.state}
           selectionCached={localCached}
           onLoadNow={() => activateLocalModel(true)}
+          footer={
+            !isWeb && mode === "cloud" ? (
+              <div data-blocker="payment" className="rounded-lg">
+                <PaymentBar settings={settings} onModeChange={setPaymentMode} onConfigure={openSettings} />
+              </div>
+            ) : isWeb ? (
+              <div data-blocker="payment" className="rounded-lg">
+                <WebPaymentBar onConfigure={openSettings} />
+              </div>
+            ) : undefined
+          }
         />
         </div>
       )}
@@ -1720,6 +1699,8 @@ export default function App() {
         engineInstalled={engineInstalled}
         installing={installing}
         hasLocalModel={!!settings?.localModel}
+        engineModel={settings?.localModel}
+        loraCount={activeLoras.length}
         onInstallEngine={installEngine}
         onStartEngine={startEngine}
         onStopEngine={stopEngine}
@@ -1758,7 +1739,7 @@ export default function App() {
               create: {
                 title: t("panels.create"),
                 icon: <Wand2 />,
-                width: 25,
+                width: 24,
                 content: (
                   // Mode-tinted surface: the panel is felt in the active mode's
                   // accent. Its column scrolls (PanelBoard), so a long open
@@ -1787,8 +1768,8 @@ export default function App() {
                         <span className="text-foreground text-sm font-semibold">{t("refImage.dropHere")}</span>
                       </div>
                     )}
-                    {/* The engine block lives in the Engine surface when it is shown. */}
-                    {engineSurfaceHidden && engineBlock}
+                    {/* Where it runs: payment, model, local readiness. */}
+                    {engineBlock}
 
                     {/* An edit model is loaded: say so first, it blocks Generate. */}
                     {editModelActive && (
@@ -1834,9 +1815,10 @@ export default function App() {
                           onNegativePromptChange={(v) => setParams((pp) => (pp ? { ...pp, negativePrompt: v } : pp))}
                         />
 
-                        {/* 3b. Reference images — its own card. Optional, and a
-                            different kind of input from the text above, so it
-                            reads as a separate step rather than a field. */}
+                        {/* 3. Optional inputs — reference images and LoRAs —
+                            joined into one card (.ds-stack), a hairline apart. */}
+                        {(refSlots > 0 || (!!activeModel && LORA_BACKENDS.has(activeModel.backendType ?? ""))) && (
+                        <div className="ds-stack">
                         {refSlots > 0 && (
                           <RefImageCard
                             slots={refSlots}
@@ -1888,22 +1870,20 @@ export default function App() {
                           />
                         )}
 
-                        {/* 4. Format — a primary creative choice, right under the
-                            prompt; local mode also allows free custom dimensions. */}
+                        </div>
+                        )}
+
+                        {/* 4. Format, then the fine-tuning Parameters — one card. */}
                         {activeModel && params && (
+                        <div className="ds-stack">
                           <FormatSelector
                             model={activeModel}
                             mode={mode}
                             params={params}
                             onChange={(patch) => setParams((pp) => (pp ? { ...pp, ...patch } : pp))}
                           />
-                        )}
-
-                        {/* 5. Parameters — seeded from the model, tweakable per
-                            generation. Below the format (fine-tuning follows the
-                            main creative act). */}
-                        {activeModel && params && (
                           <ParamsPanel model={activeModel} mode={mode} params={params} onChange={setParams} />
+                        </div>
                         )}
 
                         {/* 6. The run button — last in the panel, but pinned to
@@ -1912,20 +1892,6 @@ export default function App() {
                       </>
                     )}
                   </div>
-                ),
-              },
-              engine: {
-                title: t("panels.engine"),
-                icon: <PanelIcon id="engine" />,
-                width: 22,
-                content: (
-                  <EnginePanel
-                    engineBlock={engineBlock}
-                    mode={mode}
-                    sidecar={sidecar}
-                    localModel={settings?.localModel}
-                    loraCount={mode === "local" ? activeLoras.length : activeCloudLoras.length}
-                  />
                 ),
               },
               edit: {
@@ -1942,7 +1908,6 @@ export default function App() {
                     onClose={() => setEditTarget(null)}
                     onRunJob={runToolJob}
                     mode={mode}
-                    onEngineActivity={() => flashPanel("engine")}
                   />
                 ) : (
                   <EditEmpty

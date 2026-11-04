@@ -12,17 +12,18 @@ import { beginPointerDrag } from "@/lib/pointer-drag";
 // also collapse to a slim rail.
 // ---------------------------------------------------------------------------
 
-export type PanelId = "engine" | "create" | "edit" | "gallery";
+export type PanelId = "create" | "edit" | "gallery";
 export type PanelColumns = PanelId[][];
 
 // Every panel can be switched off from the header (PanelToggles); a hidden
 // panel keeps its slot in the persisted arrangement so it comes back where the
 // user last put it. Default: Create + Gallery shown, Edit off.
-const ALL_PANELS: PanelId[] = ["engine", "create", "edit", "gallery"];
-const DEFAULT_COLUMNS: PanelColumns = [["engine"], ["create"], ["edit"], ["gallery"]];
-// v3: Activity left the panel system (it's a floating dock now). Older keys are
-// simply not read — their layouts (which listed "queue") reset to the v3 default.
-const STORAGE_KEY = "imference.panels.v3";
+const ALL_PANELS: PanelId[] = ["create", "edit", "gallery"];
+const DEFAULT_COLUMNS: PanelColumns = [["create"], ["edit"], ["gallery"]];
+// v4: the Engine panel left the panel system (its block heads Create, its
+// details live in the header's engine popover). Older keys are simply not
+// read — their layouts reset to the v4 default.
+const STORAGE_KEY = "imference.panels.v4";
 
 // Manual-resize bounds for a sidebar column (px). The gallery column always
 // grows to fill the rest, so it isn't width-controlled.
@@ -70,7 +71,6 @@ function withEditPanel(cols: unknown): PanelColumns | null {
     const gi = next.findIndex((c) => Array.isArray(c) && c.includes("gallery"));
     next.splice(gi < 0 ? next.length : gi, 0, ["edit"]);
   }
-  if (!next.flat().includes("engine")) next.unshift(["engine"]);
   return validColumns(next) ? next : null;
 }
 
@@ -132,8 +132,7 @@ function loadLayout(): PersistedLayout {
  * as the user made it; only its rendering folds: while the side columns plus a
  * MIN_GROW_PX gallery don't fit, two side columns merge into one (the later
  * one's panels stacked under the earlier one's). Neighbours first, then the
- * pair whose merged column is narrowest — the short Engine goes over Create
- * before the wide Edit does. Widening the window unfolds it again.
+ * pair whose merged column is narrowest. Widening the window unfolds it again.
  *
  * Stacked (below the row layout) there is one column: the grow column (the
  * gallery, endlessly scrolling) goes last so nothing ends up under it.

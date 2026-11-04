@@ -30,7 +30,7 @@ export type PayQuote = { credits: number; label: string; image?: string; kind: "
 export type Session = { hasKey: boolean; keyHint: string; payMode: "" | "wallet"; payer: string };
 
 type Dialog = { reason: PayReason; quote: PayQuote; resolve: (retry: boolean) => void };
-type Signing = { usd: number; address: string; wallet: string };
+type Signing = { usd: number; address: string; wallet: string; purpose?: "history" };
 export type Notice =
   | { kind: "checkout-pending" }
   | { kind: "credits-added"; credits: number }
@@ -217,19 +217,38 @@ async function ensureBase(eth: Eip1193) {
 export async function handleSignRequest(req: {
   id: string;
   address: string;
-  amount: string;
-  typedData: unknown;
+  amount?: string;
+  typedData?: unknown;
+  /** A sign-in to read the call history: personal_sign, no payment. */
+  purpose?: "history";
+  message?: string;
 }) {
   const reply = (body: Record<string, string>) => post("web/sign", { id: req.id, ...body }).catch(() => {});
   const w = chosenWallet();
   if (!w) return reply({ error: "no wallet in this browser" });
-  set({ signing: { usd: Number(req.amount) / 1e6, address: req.address, wallet: w.name } });
+  const history = req.purpose === "history" && typeof req.message === "string";
+  set({
+    signing: {
+      usd: Number(req.amount || 0) / 1e6,
+      address: req.address,
+      wallet: w.name,
+      purpose: history ? "history" : undefined,
+    },
+  });
   try {
-    await ensureBase(w.provider);
-    const signature: string = await w.provider.request({
-      method: "eth_signTypedData_v4",
-      params: [req.address, JSON.stringify(req.typedData)],
-    });
+    let signature: string;
+    if (history) {
+      // personal_sign takes the message hex-encoded (UTF-8), then the address.
+      const hex =
+        "0x" + Array.from(new TextEncoder().encode(req.message), (b) => b.toString(16).padStart(2, "0")).join("");
+      signature = await w.provider.request({ method: "personal_sign", params: [hex, req.address] });
+    } else {
+      await ensureBase(w.provider);
+      signature = await w.provider.request({
+        method: "eth_signTypedData_v4",
+        params: [req.address, JSON.stringify(req.typedData)],
+      });
+    }
     await reply({ signature });
   } catch (e: any) {
     // 4001 = the user rejected the request in the wallet.

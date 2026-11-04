@@ -503,9 +503,15 @@ function SigningCard() {
     <div className="bg-background fixed right-4 bottom-4 z-[60] flex max-w-sm items-center gap-3 rounded-xl border p-4 shadow-lg">
       <Loader2 className="text-primary size-5 shrink-0 animate-spin" />
       <div className="grid gap-0.5">
-        <span className="text-sm font-medium">{t("webpay.signTitle", { usd: usd(signing.usd) })}</span>
+        <span className="text-sm font-medium">
+          {signing.purpose === "history"
+            ? t("webpay.signHistoryTitle")
+            : t("webpay.signTitle", { usd: usd(signing.usd) })}
+        </span>
         <span className="text-muted-foreground text-xs">
-          {t("webpay.signHint", { address: shortAddr(signing.address), name: signing.wallet })}
+          {signing.purpose === "history"
+            ? t("webpay.signHistoryHint", { address: shortAddr(signing.address), name: signing.wallet })
+            : t("webpay.signHint", { address: shortAddr(signing.address), name: signing.wallet })}
         </span>
       </div>
     </div>

@@ -54,6 +54,67 @@ export interface CatalogLora {
 }
 
 /**
+ * CloudHistoryItem is one past cloud call. The server keeps the call and its
+ * results only: never the prompt or the settings.
+ */
+export interface CloudHistoryItem {
+    "request_id": string;
+    "created_at": string;
+
+    /**
+     * "credits" | "x402"
+     */
+    "rail": string;
+
+    /**
+     * "image" | "video" | "tool"
+     */
+    "kind": string;
+    "tool_id"?: string;
+
+    /**
+     * "pending" | "done" | "failed"
+     */
+    "status": string;
+    "error"?: string;
+    "error_code"?: string;
+    "credits_charged": number;
+    "outputs": CloudHistoryOutput[] | null;
+    "available_until": string | null;
+    "expired": boolean;
+}
+
+/**
+ * CloudHistoryOutput is one file a past cloud call produced (GET /history).
+ * URL is "" once the output has expired: the file may be gone.
+ */
+export interface CloudHistoryOutput {
+    "name"?: string;
+    "kind": string;
+    "format"?: string;
+    "width"?: number;
+    "height"?: number;
+    "text"?: string;
+    "url"?: string;
+}
+
+/**
+ * CloudHistoryPage is one page of the call history, for one rail.
+ */
+export interface CloudHistoryPage {
+    "data": CloudHistoryItem[] | null;
+    "next_cursor"?: string;
+    "retention_hours": number;
+
+    /**
+     * Rail is whose calls these are; Rails lists the ones this user can read
+     * (an API key: "credits", a wallet: "x402").
+     */
+    "rail": string;
+    "rails": string[] | null;
+}
+
+/**
  * CloudLoraRef is one catalog LoRA applied to a cloud generation.
  */
 export interface CloudLoraRef {

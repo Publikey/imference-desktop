@@ -79,7 +79,7 @@ export function bindingID(fqn: string): number {
 
 const GALLERY_METHODS = [
   "ListSavedImages", "GalleryFacets", "GetSavedImage", "DeleteSavedImage", "RevealInFolder",
-  "GenerateCloud", "RunTool",
+  "GenerateCloud", "RunTool", "RedownloadCloudOutput",
 ];
 const nameByID = new Map(GALLERY_METHODS.map((n) => [bindingID("main.App." + n), n]));
 
@@ -132,8 +132,9 @@ async function localCall(name: string, args: any[]): Promise<{ handled: boolean;
       return { handled: true, value: null };
     case "RevealInFolder":
       return { handled: true, value: null };
+    case "RedownloadCloudOutput":
     case "GenerateCloud": {
-      const res: any = await rpc({ methodName: "main.App.GenerateCloud", args });
+      const res: any = await rpc({ methodName: "main.App." + name, args });
       if (res?.imageBase64) res.savedPath = await g.saveDataURL(res.imageBase64, res.source || "cloud", res.seed || 0, res.meta);
       return { handled: true, value: res };
     }

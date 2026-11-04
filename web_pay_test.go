@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
@@ -94,6 +95,7 @@ func walletTab(t *testing.T, srv *webServer, c *client, refuse bool) (signed *at
 				Data struct {
 					ID        string         `json:"id"`
 					TypedData map[string]any `json:"typedData"`
+					Message   string         `json:"message"` // personal_sign (history sign-in)
 				} `json:"data"`
 			}
 			if json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ev) != nil || ev.Name != "web:sign" {
@@ -102,6 +104,12 @@ func walletTab(t *testing.T, srv *webServer, c *client, refuse bool) (signed *at
 			reply := map[string]any{"id": ev.Data.ID}
 			if refuse {
 				reply["error"] = "cancelled"
+			} else if ev.Data.Message != "" {
+				// What personal_sign does with the message.
+				sig, _ := crypto.Sign(accounts.TextHash([]byte(ev.Data.Message)), key)
+				sig[64] += 27
+				reply["signature"] = hexutil.Encode(sig)
+				signed.Add(1)
 			} else {
 				// What eth_signTypedData_v4 does with the typed data the tab got.
 				td := ev.Data.TypedData

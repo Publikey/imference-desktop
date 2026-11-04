@@ -67,6 +67,9 @@ func main() {
 		},
 	})
 
+	// Native background = the app canvas in the last theme the renderer
+	// reported (app_appearance.go), so a dark launch never flashes white.
+	dark, _ := loadAppearance()
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "Imference Desktop",
 		// Open wide enough to clear the 1280px (xl) breakpoint so the panel board
@@ -77,7 +80,7 @@ func main() {
 		Height:           860,
 		MinWidth:         900,
 		MinHeight:        600,
-		BackgroundColour: application.RGBA{Red: 255, Green: 255, Blue: 255, Alpha: 255},
+		BackgroundColour: windowBackground(dark),
 		URL:              "/",
 	})
 

@@ -592,6 +592,16 @@ export function SelectLocalModel(modelCode: string): $CancellablePromise<void> {
 }
 
 /**
+ * SetAppearance is called by the renderer whenever the resolved theme changes
+ * (launch, a manual switch, the OS flipping while on "system"). It repaints
+ * every window's native background and remembers the choice for next launch.
+ * The web build has no native window: nothing to do.
+ */
+export function SetAppearance(dark: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3167202905, dark);
+}
+
+/**
  * SetToolsSettings saves the preferences and applies them (idle timeout,
  * local API on/off).
  */

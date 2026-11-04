@@ -3,6 +3,9 @@
 // split as the language choice in i18n.ts, and kept out of settings.json for
 // the same reason (pure UI concern, no Go round-trip before first paint).
 
+import { SetAppearance } from "../../bindings/imference-desktop-go/app";
+import { isWeb } from "./target";
+
 export type ThemePref = "system" | "light" | "dark";
 
 const STORAGE_KEY = "imference.theme";
@@ -25,8 +28,17 @@ export function isDark(): boolean {
   return pref === "dark" || (pref === "system" && media.matches);
 }
 
+let reported: boolean | null = null;
+
 function apply(): void {
-  document.documentElement.classList.toggle("dark", isDark());
+  const dark = isDark();
+  document.documentElement.classList.toggle("dark", dark);
+  // Desktop: the native window background follows (app_appearance.go), and
+  // the next launch opens in this colour. Only on a change.
+  if (!isWeb && reported !== dark) {
+    reported = dark;
+    SetAppearance(dark).catch(() => {});
+  }
 }
 
 /** Current preference (React: pair with subscribeTheme via useSyncExternalStore). */

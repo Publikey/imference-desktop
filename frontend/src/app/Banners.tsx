@@ -12,7 +12,7 @@ export function UpdateBanner({ info, onDismiss }: { info: UpdateInfo; onDismiss:
   const { t } = useTranslation();
   const url = info.url ?? "https://github.com/Publikey/imference-desktop/releases/latest";
   return (
-    <div className="animate-in fade-in slide-in-from-top-1 flex items-center gap-2.5 rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+    <div className="ds-callout ds-callout-warning animate-in fade-in slide-in-from-top-1 flex items-center gap-2.5 px-4 py-2.5 text-sm">
       <Download className="size-4 shrink-0" />
       <p className="flex-1 leading-relaxed">
         {/* Split around the bolded version so both word orders (en/zh) work. */}

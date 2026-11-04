@@ -1776,7 +1776,7 @@ export default function App() {
                       <div
                         role="note"
                         data-blocker="edit-model"
-                        className="flex gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs leading-relaxed text-warning"
+                        className="ds-callout ds-callout-warning flex gap-2 p-3 text-xs leading-relaxed"
                       >
                         <Wand2 className="mt-0.5 size-4 shrink-0" />
                         <div className="space-y-2">

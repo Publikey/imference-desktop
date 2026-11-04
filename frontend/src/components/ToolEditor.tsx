@@ -604,7 +604,7 @@ export function ToolEditor({
                     </div>
                   ) : localBlocked ? (
                     <div className="space-y-1.5">
-                      <p className="rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-2xs leading-snug text-warning">
+                      <p className="ds-callout ds-callout-warning px-2.5 py-1.5 text-2xs leading-snug">
                         {t(`tools.reason.${tool.reason ?? "no_device"}`, { defaultValue: t("tools.reason.no_device") })}
                       </p>
                       {cloudOnce}
@@ -952,7 +952,7 @@ function WhereNotice({
     // The price is on the Run button; the privacy note can be dismissed for good.
     if (privacySeen) return null;
     return (
-      <div className="flex gap-2 rounded-xl border border-info/30 bg-info/10 p-3 text-xs leading-relaxed text-info">
+      <div className="ds-callout ds-callout-info flex gap-2 p-3 text-xs leading-relaxed">
         <ShieldAlert className="mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="font-medium">{t("tools.privacyTitle")}</p>
@@ -1012,7 +1012,7 @@ function ErrorPanel({
       </div>
 
       {error.cloudRetry && (
-        <div className="space-y-2 rounded-lg border border-info/30 bg-info/10 p-2.5 text-info">
+        <div className="ds-callout ds-callout-info space-y-2 p-2.5">
           <p>{t("tools.cloudRetryBody")}</p>
           <p className="font-medium">
             {t("tools.priceLine", { price: formatToolPrice(t, error.cloudRetry.credits, rail) })}

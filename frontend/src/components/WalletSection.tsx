@@ -145,7 +145,7 @@ export function WalletSection({ onChanged }: Props) {
       </div>
 
       {error && (
-        <div className="mb-3 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <div className="ds-callout ds-callout-danger mb-3 px-3 py-2 text-xs">
           {error}
         </div>
       )}
@@ -349,7 +349,7 @@ function ConfirmReplaceView({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="grid gap-3 rounded border border-destructive/40 bg-destructive/5 p-3">
+    <div className="ds-callout ds-callout-danger grid gap-3 p-3 text-foreground">
       <div className="flex items-start gap-2">
         <AlertTriangle className="text-destructive mt-0.5 size-4 shrink-0" />
         <div className="text-sm">
@@ -389,7 +389,7 @@ function ExportView({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="grid gap-3 rounded border border-warning/40 bg-warning/5 p-3">
+    <div className="ds-callout ds-callout-warning grid gap-3 p-3 text-foreground">
       <p className="text-sm font-medium">{t("wallet.yourKey")}</p>
       <p className="text-muted-foreground text-xs">{t("wallet.exportWarning")}</p>
       <div className="flex items-center gap-2">

@@ -393,7 +393,8 @@
     "notLoaded": "Selected, not loaded yet. It loads when you generate.",
     "downloadBelow": "Download it in Local setup below first.",
     "loadNow": "Load now",
-    "loading": "Loading a model into the engine…"
+    "loading": "Loading a model into the engine…",
+    "change": "Change"
   },
   "modelPicker": {
     "cloudTitle": "Cloud models",

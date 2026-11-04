@@ -270,7 +270,7 @@ function PayDialog() {
         )}
 
         {err && (
-          <div className="border-destructive/30 bg-destructive/5 text-destructive mx-6 mb-4 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm">
+          <div className="ds-callout ds-callout-danger mx-6 mb-4 flex items-start gap-2 px-3 py-2 text-sm">
             <AlertCircle className="mt-0.5 size-4 shrink-0" />
             <span>{err}</span>
           </div>
@@ -487,7 +487,7 @@ function CardPane({
         </div>
       )}
       {failed && (
-        <div className="border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-lg border px-3 py-2 text-sm">
+        <div className="ds-callout ds-callout-danger flex items-start gap-2 px-3 py-2 text-sm">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
           <span>{failed}</span>
         </div>
@@ -822,7 +822,7 @@ export function WebPaymentSettings() {
       </ModeCard>
 
       {err && (
-        <div className="border-destructive/30 bg-destructive/5 text-destructive flex items-start gap-2 rounded-lg border px-3 py-2 text-sm">
+        <div className="ds-callout ds-callout-danger flex items-start gap-2 px-3 py-2 text-sm">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
           <span>{err}</span>
         </div>

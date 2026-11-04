@@ -159,6 +159,7 @@
        .ds-sublabel a field label, one step quieter
        .ds-seg / .ds-seg-item   segmented control (track + thumb)
        .ds-chip-btn a small secondary pill action ("Add", "Refresh")
+       .ds-callout  a notice (+ .ds-callout-warning / -info / -danger)
        .ds-panel-title          the title above a board panel
      ====================================================================== */
   .ds-card {
@@ -187,6 +188,30 @@
     border-bottom-width: 0;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
+  }
+  /* A notice inside a panel or dialog (what blocks a run, a failure, a tip):
+     one shape, the tone sets the colour. Padding and text size stay with the
+     caller (an inline hint and a banner differ). */
+  .ds-callout {
+    border: 1px solid var(--callout-border);
+    border-radius: var(--im-radius-lg);
+    background-color: var(--callout-bg);
+    color: var(--callout-fg);
+  }
+  .ds-callout-warning {
+    --callout-fg: var(--im-warning);
+  }
+  .ds-callout-info {
+    --callout-fg: var(--im-info);
+  }
+  .ds-callout-danger {
+    --callout-fg: var(--im-danger);
+  }
+  .ds-callout-warning,
+  .ds-callout-info,
+  .ds-callout-danger {
+    --callout-border: color-mix(in oklch, var(--callout-fg) 30%, transparent);
+    --callout-bg: color-mix(in oklch, var(--callout-fg) 9%, transparent);
   }
   .ds-field {
     background-color: var(--im-sunken);
@@ -334,9 +359,9 @@
     color: white;
     box-shadow: 0 8px 24px -8px color-mix(in oklch, var(--brand-to) 65%, transparent);
     transition:
-      filter 0.15s ease,
-      box-shadow 0.2s ease,
-      transform 0.14s var(--ease-spring);
+      filter var(--im-duration-fast) var(--im-ease-standard),
+      box-shadow var(--im-duration-base) var(--im-ease-standard),
+      transform var(--im-duration-fast) var(--ease-spring);
   }
   /* Hover: clearly lifts and brightens with a bigger colored glow, so it reads
      as interactive well before the click. */
@@ -351,7 +376,7 @@
     filter: brightness(0.94) saturate(1.05);
     box-shadow: 0 2px 8px -6px color-mix(in oklch, var(--brand-to) 70%, transparent);
     transform: translateY(1px) scale(0.96);
-    transition-duration: 0.04s;
+    transition-duration: var(--im-duration-instant);
   }
   /* Composer surface: layered shadow at rest, brand focus glow when active. */
   .composer {
@@ -359,8 +384,8 @@
       0 1px 2px rgba(0, 0, 0, 0.04),
       0 12px 36px -16px rgba(0, 0, 0, 0.18);
     transition:
-      box-shadow 0.25s ease,
-      border-color 0.25s ease;
+      box-shadow var(--im-duration-base) var(--im-ease-standard),
+      border-color var(--im-duration-base) var(--im-ease-standard);
   }
   /* The pinned Generate: the column fades out behind it instead of showing
      half-cut cards above and around the button. */
@@ -429,7 +454,7 @@
      Local = the brand blue, Cloud = cyan (the Create surface's accents). */
   .mode-accent {
     height: 2px;
-    transition: background 0.35s var(--ease-out-expo);
+    transition: background var(--im-duration-slow) var(--ease-out-expo);
   }
   .mode-accent[data-mode="local"] {
     background: linear-gradient(90deg, var(--brand-from), var(--brand-to));
@@ -485,9 +510,9 @@
       inset 0 1px 0 0 rgb(255 255 255 / 0.18),
       0 8px 22px -10px color-mix(in oklch, var(--run-from) 80%, transparent);
     transition:
-      filter 0.15s ease,
-      box-shadow 0.2s ease,
-      transform 0.14s var(--ease-spring);
+      filter var(--im-duration-fast) var(--im-ease-standard),
+      box-shadow var(--im-duration-base) var(--im-ease-standard),
+      transform var(--im-duration-fast) var(--ease-spring);
   }
   .btn-run[data-mode="cloud"] {
     --run-from: color-mix(in oklch, var(--cloud-from) 72%, black);
@@ -510,7 +535,7 @@
     filter: brightness(0.94);
     box-shadow: 0 2px 8px -6px color-mix(in oklch, var(--run-from) 70%, transparent);
     transform: translateY(1px) scale(0.97);
-    transition-duration: 0.04s;
+    transition-duration: var(--im-duration-instant);
   }
   /* Disabled: opaque and readable — a quiet surface in the mode's hue with a
      dashed hairline, not a see-through gradient (whose hint fell under 3:1).
@@ -988,7 +1013,7 @@
     background-image: linear-gradient(135deg, var(--brand-from), var(--brand-to));
     border: 2px solid var(--background);
     box-shadow: 0 1px 4px -1px color-mix(in oklch, var(--brand-to) 70%, transparent);
-    transition: transform 0.12s var(--ease-spring);
+    transition: transform var(--im-duration-fast) var(--ease-spring);
   }
   input[type="range"].range::-webkit-slider-thumb:hover {
     transform: scale(1.15);
@@ -1065,11 +1090,11 @@
 .theme-transition *::before,
 .theme-transition *::after {
   transition:
-    background-color 0.28s var(--ease-out-expo),
-    border-color 0.28s var(--ease-out-expo),
-    color 0.28s var(--ease-out-expo),
-    fill 0.28s var(--ease-out-expo),
-    stroke 0.28s var(--ease-out-expo) !important;
+    background-color var(--im-duration-slow) var(--ease-out-expo),
+    border-color var(--im-duration-slow) var(--ease-out-expo),
+    color var(--im-duration-slow) var(--ease-out-expo),
+    fill var(--im-duration-slow) var(--ease-out-expo),
+    stroke var(--im-duration-slow) var(--ease-out-expo) !important;
 }
 /* The aurora keeps its own long drift; don't let the cross-fade retime it. */
 .theme-transition .aurora-blob {
@@ -1103,7 +1128,7 @@
    the whole window and a thin frame in the mode's colour complete it: subtle,
    but visible wherever the eye is. */
 .app-frame {
-  transition: box-shadow 0.5s var(--ease-out-expo);
+  transition: box-shadow var(--im-duration-slower) var(--ease-out-expo);
 }
 .app-frame::after {
   content: "";
@@ -1111,7 +1136,7 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  transition: background 0.5s var(--ease-out-expo);
+  transition: background var(--im-duration-slower) var(--ease-out-expo);
 }
 /* No frame around the window (it read as a focus ring): the mode is told by
    the header switch, its accent line and the run button. A faint top wash in
@@ -1675,4 +1700,24 @@
 .btn-run[data-mode="cloud"] {
   --run-from: color-mix(in oklch, var(--brand-from) 70%, var(--cloud-from));
   --run-to: color-mix(in oklch, var(--cloud-from) 78%, black);
+}
+
+/* The chosen model as a banner (ModelBar): its art fills the button; the veil
+   darkens the left and bottom so white text reads over any image, and a brand
+   hairline answers hover and focus. */
+.model-banner {
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--im-fg) 10%, transparent);
+  isolation: isolate;
+}
+.model-banner-veil {
+  background:
+    linear-gradient(90deg, rgb(4 8 20 / 0.78) 0%, rgb(4 8 20 / 0.45) 45%, rgb(4 8 20 / 0.05) 80%),
+    linear-gradient(0deg, rgb(4 8 20 / 0.45), transparent 60%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  border-radius: inherit;
+  transition: box-shadow var(--im-duration-fast) var(--im-ease-standard);
+}
+.model-banner:hover:not(:disabled) .model-banner-veil,
+.model-banner:focus-visible .model-banner-veil {
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--brand-to) 75%, transparent);
 }

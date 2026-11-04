@@ -1,6 +1,6 @@
 // Reference-image slots (img2img, first/last frame).
 // (Split out of App.tsx; see App.tsx for how the pieces fit together.)
-import { AddButton, ComposerCardHeader } from "@/components/ComposerCard";
+import { AddButton, SectionHeader } from "@/components/ds";
 import { HoverPopover } from "@/components/ui/hover-popover";
 import { prepareRefImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
@@ -78,7 +78,7 @@ export function RefImageCard({
           e.target.value = ""; // let the same file be re-picked later
         }}
       />
-      <ComposerCardHeader
+      <SectionHeader
         title={pair ? t("refImage.titlePair") : t("refImage.title")}
         optionalLabel={t("refImage.optional")}
         help={pair ? t("refImage.hintPair") : t("refImage.hint")}

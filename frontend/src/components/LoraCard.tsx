@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AddButton, ComposerCardHeader } from "@/components/ComposerCard";
+import { AddButton, Section, SectionHeader } from "@/components/ds";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/wails-bridge";
 import { cn, coarsePointer } from "@/lib/utils";
@@ -404,22 +404,21 @@ function LoraCardShell({
   const { t } = useTranslation();
   const full = count >= MAX_ACTIVE_LORAS;
   return (
-    <section className="ds-card px-4 py-3">
-      <ComposerCardHeader
-        title={t("lora.title")}
-        optionalLabel={t("lora.optional")}
-        help={t("lora.help")}
-        action={
-          <AddButton
-            label={t("lora.add")}
-            onClick={onAdd}
-            disabled={full}
-            title={full ? t("lora.tooMany", { max: MAX_ACTIVE_LORAS }) : undefined}
-          />
-        }
-      />
+    <Section
+      title={t("lora.title")}
+      optionalLabel={t("lora.optional")}
+      help={t("lora.help")}
+      action={
+        <AddButton
+          label={t("lora.add")}
+          onClick={onAdd}
+          disabled={full}
+          title={full ? t("lora.tooMany", { max: MAX_ACTIVE_LORAS }) : undefined}
+        />
+      }
+    >
       {count > 0 && <ul className="mt-3 grid gap-3">{children}</ul>}
-    </section>
+    </Section>
   );
 }
 

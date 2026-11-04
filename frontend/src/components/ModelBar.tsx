@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useState } from "react";
 import { ExternalModelWarning } from "@/components/ExternalModelWarning";
-import { ComposerCardHeader } from "@/components/ComposerCard";
+import { Section } from "@/components/ds";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
@@ -158,11 +158,10 @@ export function ModelBar({
   );
 
   return (
-    <section className="ds-card px-4 py-3">
-      <ComposerCardHeader
-        title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
-        help={isCloud ? t("modelBar.cloudHelp") : t("modelBar.localHelp")}
-      />
+    <Section
+      title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
+      help={isCloud ? t("modelBar.cloudHelp") : t("modelBar.localHelp")}
+    >
       <div className="mt-2 flex items-center">
         {listError ? (
           <div className="flex h-10 flex-1 items-center gap-2">
@@ -271,6 +270,6 @@ export function ModelBar({
         }}
         onRemoveCustom={onRemoveCustom}
       />
-    </section>
+    </Section>
   );
 }

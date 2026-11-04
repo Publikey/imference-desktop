@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Brush, Images, Server, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SegGroup, SegItem } from "@/components/ds";
 import type { PanelId } from "@/components/PanelBoard";
 
 // ---------------------------------------------------------------------------
@@ -34,20 +35,16 @@ export function PanelToggles({
   const { t } = useTranslation();
   const visibleCount = PANEL_ORDER.filter((p) => !hidden[p.id]).length;
   return (
-    <div
-      role="group"
-      aria-label={t("panels.toggleGroup")}
-      className="ds-seg h-9"
-    >
+    <SegGroup label={t("panels.toggleGroup")} className="h-9">
       {PANEL_ORDER.map(({ id, key }) => {
         const on = !hidden[id];
         const last = on && visibleCount === 1;
         const name = t(`panels.${id}`);
         return (
-          <button
+          <SegItem
             key={id}
-            type="button"
-            aria-pressed={on}
+            kind="toggle"
+            on={on}
             disabled={last}
             onClick={() => onToggle(id)}
             title={
@@ -56,13 +53,13 @@ export function PanelToggles({
             }
             // Shown = a raised thumb with full-strength text and icon; hidden =
             // flat, muted, with the icon dimmed — a toggle, not a tab.
-            className={cn("ds-seg-item h-[30px] sm:px-3 disabled:cursor-not-allowed", !on && "[&_svg]:opacity-60")}
+            className={cn("h-[30px] sm:px-3 disabled:cursor-not-allowed", !on && "[&_svg]:opacity-60")}
           >
             <PanelIcon id={id} className="size-3.5" />
             <span className="hidden lg:inline">{name}</span>
-          </button>
+          </SegItem>
         );
       })}
-    </div>
+    </SegGroup>
   );
 }

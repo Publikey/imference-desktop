@@ -1,6 +1,6 @@
 // The prompt composer and the primary run button.
 // (Split out of App.tsx; see App.tsx for how the pieces fit together.)
-import { ComposerCardHeader, FieldLabel } from "@/components/ComposerCard";
+import { FieldLabel, Section } from "@/components/ds";
 import { LaunchBurst, useLaunchBurst } from "@/components/LaunchBurst";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -62,29 +62,29 @@ export function Composer({
     "ds-field block max-h-24 w-full resize-none px-3 py-1.5 text-xs leading-snug";
 
   return (
-    <section className="ds-card composer px-4 py-3">
-      <ComposerCardHeader
-        title={t("composer.prompt")}
-        help={t("composer.promptHelp")}
-        action={
-          prompt.length > 0 && (
-            <>
-              <span className="text-muted-foreground/60 text-[10px] tabular-nums">
-                {t("composer.charCount", { count: prompt.length })}
-              </span>
-              <button
-                type="button"
-                onClick={() => onPromptChange("")}
-                title={t("composer.clear")}
-                aria-label={t("composer.clear")}
-                className="text-muted-foreground/60 hover:text-foreground hover:bg-muted rounded p-0.5 transition-colors"
-              >
-                <X className="size-3.5" />
-              </button>
-            </>
-          )
-        }
-      />
+    <Section
+      className="composer"
+      title={t("composer.prompt")}
+      help={t("composer.promptHelp")}
+      action={
+        prompt.length > 0 && (
+          <>
+            <span className="text-muted-foreground/60 text-[10px] tabular-nums">
+              {t("composer.charCount", { count: prompt.length })}
+            </span>
+            <button
+              type="button"
+              onClick={() => onPromptChange("")}
+              title={t("composer.clear")}
+              aria-label={t("composer.clear")}
+              className="text-muted-foreground/60 hover:text-foreground hover:bg-muted rounded p-0.5 transition-colors"
+            >
+              <X className="size-3.5" />
+            </button>
+          </>
+        )
+      }
+    >
 
       {/* The prompt is the hero: the biggest field, the readable size. */}
       <textarea
@@ -126,7 +126,7 @@ export function Composer({
           </div>
         </div>
       )}
-    </section>
+    </Section>
   );
 }
 

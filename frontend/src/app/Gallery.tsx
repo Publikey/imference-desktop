@@ -12,6 +12,7 @@ import { GALLERY_CHANGED_EVENT, isWeb } from "@/lib/target";
 import type { GalleryFacets, GalleryFilter, GenerationMeta, Job, SavedImage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/wails-bridge";
+import { Segmented } from "@/components/ds";
 import {
   Check,
   Copy,
@@ -696,23 +697,15 @@ export function FacetSelect({
 export function ColumnPicker({ cols, onChange }: { cols: number; onChange: (n: number) => void }) {
   const { t } = useTranslation();
   return (
-    <div className="ds-seg h-8 shrink-0" role="radiogroup" aria-label={t("gallery.columns", { count: cols })}>
-      <LayoutGrid className="text-subtle mx-1 size-3.5 shrink-0" aria-hidden />
-      {[1, 2, 3, 4].map((n) => (
-        <button
-          key={n}
-          type="button"
-          role="radio"
-          aria-checked={cols === n}
-          onClick={() => onChange(n)}
-          aria-label={t("gallery.columns", { count: n })}
-          title={t("gallery.columns", { count: n })}
-          className="ds-seg-item h-[26px] min-w-[26px] px-1.5 tabular-nums"
-        >
-          {n}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      label={t("gallery.columns", { count: cols })}
+      value={cols}
+      onChange={onChange}
+      options={[1, 2, 3, 4].map((n) => ({ value: n, label: n, title: t("gallery.columns", { count: n }) }))}
+      leading={<LayoutGrid className="text-subtle mx-1 size-3.5 shrink-0" aria-hidden />}
+      className="h-8 shrink-0"
+      itemClassName="h-[26px] min-w-[26px] px-1.5 tabular-nums"
+    />
   );
 }
 

@@ -10,6 +10,7 @@ import { isWeb } from "@/lib/target";
 import { isDark, setThemePref, subscribeTheme, type ThemePref } from "@/lib/theme";
 import type { SidecarStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { SegGroup, SegItem } from "@/components/ds";
 import {
   Cloud,
   Cpu,
@@ -88,28 +89,22 @@ export function Header({
           </span>
         </div>
         {/* The global mode: where everything runs. */}
-        <div
-          role="radiogroup"
-          aria-label={t("header.modeGroup")}
-          className={cn("ds-seg h-9 shrink-0", isWeb && "max-sm:hidden")}
-        >
+        <SegGroup role="radiogroup" label={t("header.modeGroup")} className={cn("h-9 shrink-0", isWeb && "max-sm:hidden")}>
           {(["local", "cloud"] as const).map((m) => (
-            <button
+            <SegItem
               key={m}
-              type="button"
-              role="radio"
-              aria-checked={mode === m}
+              on={mode === m}
               data-mode={m}
               disabled={isWeb && m === "local"}
               onClick={() => onModeChange(m)}
               title={t(m === "local" ? "header.modeLocalTitle" : "header.modeCloudTitle")}
-              className={cn("ds-seg-item h-[30px] px-3 font-semibold disabled:hidden", mode === m && "mode-chip")}
+              className={cn("h-[30px] px-3 font-semibold disabled:hidden", mode === m && "mode-chip")}
             >
               {m === "local" ? <Cpu className="size-3.5" /> : <Cloud className="size-3.5" />}
               {t(m === "local" ? "mode.local" : "mode.cloud")}
-            </button>
+            </SegItem>
           ))}
-        </div>
+        </SegGroup>
         {/* The local engine's status and start / stop: local mode only. */}
         {!isWeb && mode === "local" && (
           <EngineControl

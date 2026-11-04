@@ -1,4 +1,3 @@
-import { ComposerCardHeader } from "@/components/ComposerCard";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -13,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SectionHeader } from "@/components/ds";
 import { ProgressBar } from "@/components/ui/progress";
 import type {
   ComponentsProgress,
@@ -153,7 +153,7 @@ export function LocalReadinessCard({
   return (
     <section className="ds-card grid min-w-0 gap-2.5 overflow-hidden px-4 py-3 text-xs">
       <div className="flex items-center justify-between">
-        <ComposerCardHeader title={t("readiness.title")} help={t("readiness.help")} />
+        <SectionHeader title={t("readiness.title")} help={t("readiness.help")} />
         <div className="flex items-center gap-2">
           {pendingActions > 1 && (
             <button

@@ -1,6 +1,6 @@
 // Format (aspect / size) picker of the Create panel.
 // (Split out of App.tsx; see App.tsx for how the pieces fit together.)
-import { ComposerCardHeader } from "@/components/ComposerCard";
+import { SectionHeader } from "@/components/ds";
 import type { ModelInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
@@ -67,7 +67,7 @@ export function FormatSelector({
   return (
     <section className="ds-card px-4 py-3">
       <div className="flex flex-col gap-2">
-        <ComposerCardHeader title={t("params.format")} help={t("params.formatHelp")} />
+        <SectionHeader title={t("params.format")} help={t("params.formatHelp")} />
         {/* A fixed 3-column grid of equal cells, not a wrapping segmented
             control: with nine formats of uneven label lengths, wrapping put a
             different number of pills on each line and the whole box read as

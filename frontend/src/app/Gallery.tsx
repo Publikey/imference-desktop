@@ -3,6 +3,7 @@
 import { modLabel } from "@/components/CommandPalette";
 import { ToolMenuList } from "@/components/ToolBits";
 import type { ToolSource } from "@/components/ToolEditor";
+import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +18,7 @@ import {
   Check,
   Copy,
   FolderOpen,
+  History,
   ImageIcon,
   LayoutGrid,
   Maximize2,
@@ -31,7 +33,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Lightbox } from "./Lightbox";
-import { isVideoSrc, tileClickGuard } from "./shared";
+import { OPEN_HISTORY_EVENT, isVideoSrc, tileClickGuard } from "./shared";
 
 // ---------------------------------------------------------------------------
 // Gallery — this session's finished generations + the saved-image history, in
@@ -172,9 +174,9 @@ export function Gallery({
   }, [filter]);
 
   // Web: the gallery moved (folder picked / access granted) → reload in place.
+  // Both: a cloud result saved again from the history (CloudHistoryDialog).
   const [location, setLocation] = useState(0);
   useEffect(() => {
-    if (!isWeb) return;
     const onChange = () => {
       setLocation((n) => n + 1);
       refreshFacets();
@@ -492,7 +494,18 @@ export function Gallery({
       {/* Filters wrap among themselves; the column picker keeps its corner. */}
       <div className="flex items-start justify-between gap-2">
         <FilterBar facets={facets} filter={filter} onChange={setFilter} />
-        <ColumnPicker cols={cols} onChange={setCols} />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.dispatchEvent(new Event(OPEN_HISTORY_EVENT))}
+            title={t("history.title")}
+          >
+            <History />
+            {t("history.button")}
+          </Button>
+          <ColumnPicker cols={cols} onChange={setCols} />
+        </div>
       </div>
 
       {initialLoading ? (

@@ -141,7 +141,8 @@ async function savedImages(offset: number, limit: number) {
       numSteps: 28,
       guidanceScale: 5,
       seed: 4242 + i * 17,
-      createdAt: new Date(Date.now() - i * 3600_000).toISOString(),
+      // Fixed dates: captures must not change from one day to the next.
+      createdAt: new Date(Date.UTC(2026, 9, 14, 18, 30) - i * 3600_000).toISOString(),
     },
   }));
   return list.slice(offset, offset + limit);
@@ -270,7 +271,7 @@ async function handle(name: string, args: any[]): Promise<any> {
       // A believable run: progress events, then a catalog image as the result.
       const req = args[0] || {};
       const { models } = await loadCatalog();
-      const m = models.find((x) => x.model_code === (req.modelCode || req.cloudModel)) || models[(Math.random() * models.length) | 0];
+      const m = models.find((x) => x.model_code === (req.modelCode || req.cloudModel)) || models[(req.prompt || "").length % models.length];
       for (let s = 1; s <= 12; s++) {
         await new Promise((r) => setTimeout(r, 180));
         emit("generate:progress", { jobId: req.jobId, step: s, total: 12, percent: Math.round((s / 12) * 100) });

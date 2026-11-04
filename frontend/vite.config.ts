@@ -45,6 +45,12 @@ export default defineConfig(({ mode }) => {
     // npm run build:web -> dist-web/, embedded by the Go web build (web_main.go).
     // Relative asset URLs: the same build is served at "/" or under "/app/".
     base: web ? "./" : undefined,
-    build: web ? { outDir: "dist-web", emptyOutDir: true } : undefined,
+    // Design preview build (visual regression): never into dist/, which the
+    // desktop binary embeds.
+    build: web
+      ? { outDir: "dist-web", emptyOutDir: true }
+      : preview
+        ? { outDir: "dist-preview", emptyOutDir: true }
+        : undefined,
   };
 });

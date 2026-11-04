@@ -9,7 +9,8 @@
     "build:dev": "tsc -b && vite build --mode development --minify false",
     "build:web": "tsc -b && vite build --mode web",
     "preview": "vite preview",
-    "dev:preview": "vite --mode preview"
+    "dev:preview": "vite --mode preview",
+    "build:preview": "vite build --mode preview"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

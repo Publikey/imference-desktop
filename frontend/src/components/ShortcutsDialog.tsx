@@ -71,7 +71,7 @@ export function ShortcutsDialog({
                     <dd className="flex shrink-0 items-center gap-1">
                       {r.keys.map((k) => (
                         <Fragment key={k}>
-                          <kbd className="bg-muted text-foreground inline-flex h-5 min-w-5 items-center justify-center rounded border px-1.5 text-[11px] font-medium">
+                          <kbd className="bg-muted text-foreground inline-flex h-5 min-w-5 items-center justify-center rounded border px-1.5 text-2xs font-medium">
                             {k}
                           </kbd>
                         </Fragment>

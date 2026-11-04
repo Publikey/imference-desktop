@@ -185,7 +185,7 @@ export function CropFrame({
         )}
       </div>
       {rect && (
-        <p className="text-muted-foreground text-[11px] tabular-nums">
+        <p className="text-muted-foreground text-2xs tabular-nums">
           {Math.round(rect.w)} × {Math.round(rect.h)} px
         </p>
       )}

@@ -72,7 +72,7 @@ function ToastRow({ toast, onDone }: { toast: Toast; onDone: () => void }) {
       <Icon
         className={cn(
           "size-3.5 shrink-0",
-          toast.variant === "success" && "text-emerald-400",
+          toast.variant === "success" && "text-success",
           toast.variant === "default" && "opacity-80"
         )}
       />

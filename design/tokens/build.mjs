@@ -2,6 +2,7 @@
 //
 //   node design/tokens/build.mjs            write the outputs
 //   node design/tokens/build.mjs --check    exit 1 if an output is stale
+//   ... --app-only                           skip the site output (either mode)
 //
 // Outputs (the site path is skipped when the imference repo is not a sibling):
 //   frontend/src/styles/tokens.css   Desktop + Web: light on :root, dark on .dark
@@ -85,7 +86,8 @@ const site =
 
 const outputs = [[path.join(repo, "frontend/src/styles/tokens.css"), app]];
 const siteDir = path.resolve(repo, "../imference/app/web");
-if (fs.existsSync(siteDir)) outputs.push([path.join(siteDir, "tokens.css"), site]);
+// --app-only: leave the site's copy alone (a change rolled out to the app first).
+if (fs.existsSync(siteDir) && !process.argv.includes("--app-only")) outputs.push([path.join(siteDir, "tokens.css"), site]);
 
 // ---- Contrast guard: text tokens must pass WCAG AA on every surface --------
 const failures = [];

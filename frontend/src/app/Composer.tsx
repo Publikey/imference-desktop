@@ -73,7 +73,7 @@ export function Composer({
       action={
         prompt.length > 0 && (
           <>
-            <span className="text-muted-foreground/60 text-[10px] tabular-nums">
+            <span className="text-muted-foreground/60 text-2xs tabular-nums">
               {t("composer.charCount", { count: prompt.length })}
             </span>
             <button
@@ -212,12 +212,12 @@ export function PrimaryAction({
             )}
             {action.label}
             {action.kind === "generate" && !action.disabled && (
-              <kbd className="run-kbd hidden shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex">
+              <kbd className="run-kbd hidden shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-2xs font-medium sm:inline-flex">
                 <CornerDownLeft className="size-2.5" />
               </kbd>
             )}
           </span>
-          <span className="run-hint max-w-full truncate text-[11px] font-medium" title={contextHint}>
+          <span className="run-hint max-w-full truncate text-2xs font-medium" title={contextHint}>
             {contextHint}
           </span>
         </Button>

@@ -204,7 +204,7 @@ export function WalletSection({ onChanged }: Props) {
         />
       )}
 
-      <p className="text-muted-foreground/70 mt-3 text-[11px] leading-snug italic">
+      <p className="text-muted-foreground/70 mt-3 text-2xs leading-snug italic">
         {t("wallet.keychainNote")}
       </p>
     </section>
@@ -278,9 +278,9 @@ function SummaryView({
           </Button>
         </div>
         {info.error && (
-          <p className="text-destructive text-[11px]">{t("wallet.rpcError", { error: info.error })}</p>
+          <p className="text-destructive text-2xs">{t("wallet.rpcError", { error: info.error })}</p>
         )}
-        <p className="text-muted-foreground text-[11px]">{t("wallet.fundHint")}</p>
+        <p className="text-muted-foreground text-2xs">{t("wallet.fundHint")}</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -322,7 +322,7 @@ function ImportView({
         className="font-mono text-xs"
         rows={3}
       />
-      <p className="text-muted-foreground text-[11px]">{t("wallet.importWarning")}</p>
+      <p className="text-muted-foreground text-2xs">{t("wallet.importWarning")}</p>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel} disabled={busy} size="sm">
           {t("common.cancel")}
@@ -389,7 +389,7 @@ function ExportView({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="grid gap-3 rounded border border-yellow-500/40 bg-yellow-500/5 p-3">
+    <div className="grid gap-3 rounded border border-warning/40 bg-warning/5 p-3">
       <p className="text-sm font-medium">{t("wallet.yourKey")}</p>
       <p className="text-muted-foreground text-xs">{t("wallet.exportWarning")}</p>
       <div className="flex items-center gap-2">

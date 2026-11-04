@@ -83,7 +83,7 @@ export function WebGalleryBanner() {
   }, []);
   if (!need) return null;
   return (
-    <div className="bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-100 flex flex-wrap items-center justify-center gap-3 border-b px-4 py-2 text-sm">
+    <div className="bg-warning text-warning flex flex-wrap items-center justify-center gap-3 border-b px-4 py-2 text-sm">
       <span>{t("web.gallery.bannerText")}</span>
       <Button
         size="sm"

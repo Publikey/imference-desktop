@@ -113,7 +113,7 @@ export function FormatSelector({
                 <span className="flex h-5 items-center">
                   <AspectGlyph width={f.width} height={f.height} active={active} size={18} />
                 </span>
-                <span className="w-full truncate text-center text-[11px] font-medium capitalize sm:text-xs">{formatName(f, t)}</span>
+                <span className="w-full truncate text-center text-2xs font-medium capitalize sm:text-xs">{formatName(f, t)}</span>
               </button>
             );
           })}
@@ -128,7 +128,7 @@ export function FormatSelector({
               <span className="flex h-5 items-center">
                 <AspectGlyph width={params.customWidth} height={params.customHeight} active={isCustom} size={18} />
               </span>
-              <span className="w-full truncate text-center text-[11px] font-medium sm:text-xs">{t("formats.custom")}</span>
+              <span className="w-full truncate text-center text-2xs font-medium sm:text-xs">{t("formats.custom")}</span>
             </button>
           )}
         </div>

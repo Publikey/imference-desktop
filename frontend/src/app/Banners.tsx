@@ -12,7 +12,7 @@ export function UpdateBanner({ info, onDismiss }: { info: UpdateInfo; onDismiss:
   const { t } = useTranslation();
   const url = info.url ?? "https://github.com/Publikey/imference-desktop/releases/latest";
   return (
-    <div className="animate-in fade-in slide-in-from-top-1 flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-300">
+    <div className="animate-in fade-in slide-in-from-top-1 flex items-center gap-2.5 rounded-xl border border-warning/30 bg-warning/10 px-4 py-2.5 text-sm text-warning">
       <Download className="size-4 shrink-0" />
       <p className="flex-1 leading-relaxed">
         {/* Split around the bolded version so both word orders (en/zh) work. */}
@@ -24,7 +24,7 @@ export function UpdateBanner({ info, onDismiss }: { info: UpdateInfo; onDismiss:
       </p>
       <Button
         size="sm"
-        className="h-7 shrink-0 rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white hover:bg-amber-400"
+        className="h-7 shrink-0 rounded-lg bg-warning px-3 text-xs font-semibold text-white hover:bg-warning"
         onClick={() => void Browser.OpenURL(url)}
       >
         {t("common.download")}

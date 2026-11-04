@@ -92,6 +92,12 @@
   --ease-standard: var(--im-ease-standard);
   --ease-out: var(--im-ease-out);
   --ease-spring: var(--im-ease-spring);
+  /* The small step of the type scale (captions, badges, counts). */
+  --text-2xs: var(--im-text-2xs);
+  --text-2xs--line-height: var(--im-leading-2xs);
+  /* A bare `transition` moves on the system's timing, not Tailwind's 150ms ease. */
+  --default-transition-duration: var(--im-duration-fast);
+  --default-transition-timing-function: var(--im-ease-standard);
 }
 
 @layer base {
@@ -363,7 +369,13 @@
   .run-dock {
     margin-top: -1.25rem;
     padding-top: 1.75rem;
-    background: linear-gradient(to bottom, transparent, var(--background) 1.75rem);
+    /* Frosted, not a solid band: the canvas (and its aurora) shows through,
+       blurred; the mask fades the glass in over the top 1.75rem. */
+    background: color-mix(in oklch, var(--background) 72%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 1.75rem);
+    mask-image: linear-gradient(to bottom, transparent, black 1.75rem);
   }
   /* Lightbox image (md+): as tall as the window allows, and no wider than the
      viewer row leaves beside the 20rem details panel. --ar = width / height. */
@@ -549,14 +561,14 @@
   @keyframes blocker-ring {
     0%,
     50% {
-      box-shadow: 0 0 0 0 rgb(245 158 11 / 0.7);
+      box-shadow: 0 0 0 0 color-mix(in oklch, var(--im-warning) 70%, transparent);
     }
     25%,
     75% {
-      box-shadow: 0 0 0 4px rgb(245 158 11 / 0.55);
+      box-shadow: 0 0 0 4px color-mix(in oklch, var(--im-warning) 55%, transparent);
     }
     100% {
-      box-shadow: 0 0 0 0 rgb(245 158 11 / 0);
+      box-shadow: 0 0 0 0 color-mix(in oklch, var(--im-warning) 0%, transparent);
     }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -1575,4 +1587,92 @@
   .welcome-dots span {
     transition: none;
   }
+}
+
+/* ==========================================================================
+   Identity — "studio nocturne"
+   Imference's own look on top of the neutral system: ink-blue surfaces (the
+   tokens), the brand's blue→cyan as the one signature, display type for
+   titles, a fine grain over the canvas. One block, so the character can be
+   tuned in one place.
+   ========================================================================== */
+
+/* Titles in the display face, a touch larger and tighter. */
+.ds-panel-title {
+  font-family: var(--im-font-display);
+  font-size: 0.9375rem;
+  letter-spacing: -0.012em;
+}
+.ds-label {
+  font-family: var(--im-font-display);
+  letter-spacing: -0.006em;
+}
+/* Panel icons carry the brand gradient's blue. */
+.panel-icon {
+  color: color-mix(in oklch, var(--brand-to) 70%, var(--brand-from));
+}
+
+/* Film grain over the canvas: breaks the flat digital fill, the way a print
+   or a screen-printed poster would. Under the content, never over images. */
+.app-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.dark .app-frame::before {
+  opacity: 0.05;
+}
+:root:not(.dark) .app-frame::before {
+  filter: invert(1);
+}
+
+/* The aurora, a little more present in the dark. */
+.dark .aurora-blob {
+  opacity: 0.28;
+}
+
+/* Chosen states speak the brand: a segmented "on" thumb gets a cyan hairline. */
+.ds-seg-item[aria-pressed="true"],
+.ds-seg-item[aria-checked="true"],
+.ds-seg-item[data-state="on"] {
+  box-shadow:
+    var(--im-shadow-sm),
+    inset 0 0 0 1px color-mix(in oklch, var(--brand-to) 32%, var(--im-border));
+}
+
+/* Generate: the signature. A brighter gradient with a light sweep on hover
+   and a coloured glow that lifts it off the column. */
+.btn-run:not([aria-disabled="true"]) {
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.22),
+    inset 0 0 0 1px rgb(255 255 255 / 0.08),
+    0 10px 30px -10px color-mix(in oklch, var(--run-to) 75%, transparent),
+    0 2px 8px -2px color-mix(in oklch, var(--run-from) 60%, transparent);
+}
+.btn-run:not([aria-disabled="true"])::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.18) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 0.7s var(--im-ease-out);
+}
+.btn-run:not([aria-disabled="true"]):hover::after {
+  transform: translateX(120%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-run::after {
+    display: none;
+  }
+}
+/* Cloud's run button: brand blue into a deep cyan, not a muted teal. White
+   text stays readable on both ends. */
+.btn-run[data-mode="cloud"] {
+  --run-from: color-mix(in oklch, var(--brand-from) 70%, var(--cloud-from));
+  --run-to: color-mix(in oklch, var(--cloud-from) 78%, black);
 }

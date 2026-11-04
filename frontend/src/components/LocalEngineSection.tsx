@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress";
 import { api } from "@/lib/wails-bridge";
 import type { EngineInfo, InstallPhase, InstallProgress, PythonInfo } from "@/lib/types";
+import { Badge } from "@/components/ds";
 
 // i18n keys per install phase, resolved at render.
 const PHASE_KEY: Record<InstallPhase, string> = {
@@ -133,13 +134,10 @@ export function LocalEngineSection({ onInstallDone }: Props) {
             </span>
             {engineInfo.dev ? (
               // Editable dev checkout — make it unmistakable this is NOT a release.
-              <span
-                className="bg-warning/10 text-warning inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
-                title={engineInfo.devPath || undefined}
-              >
-                <FlaskConical className="size-3" />
+              <Badge tone="warning" title={engineInfo.devPath || undefined}>
+                <FlaskConical />
                 {t("engineSection.devBadge")}
-              </span>
+              </Badge>
             ) : (
               engineInfo.outdated && engineInfo.pinnedVersion && (
                 <span className="text-warning">
@@ -234,11 +232,11 @@ function ProgressView({ p }: { p: InstallProgress }) {
       </div>
       <ProgressBar percent={p.percentEstimate > 0 ? p.percentEstimate : null} />
       {detail && (
-        <p className="text-muted-foreground truncate font-mono text-[11px]" title={detail}>
+        <p className="text-muted-foreground truncate font-mono text-2xs" title={detail}>
           {detail}
         </p>
       )}
-      <p className="text-muted-foreground/70 text-[11px]">
+      <p className="text-muted-foreground/70 text-2xs">
         {t("engineSection.pipHint")}
       </p>
     </div>
@@ -252,14 +250,14 @@ function renderStatusPill(
 ) {
   if (installing) {
     return (
-      <Badge color="yellow">
+      <Badge tone="warning">
         <Loader2 className="size-3 animate-spin" /> <BadgeText k="engineSection.badgeInstalling" />
       </Badge>
     );
   }
   if (p?.phase === "error") {
     return (
-      <Badge color="red">
+      <Badge tone="danger">
         <XCircle className="size-3" /> <BadgeText k="engineSection.badgeError" />
       </Badge>
     );
@@ -271,20 +269,20 @@ function renderStatusPill(
   // meanwhile rather than lying).
   if (info?.installed && !info.engineVersion && !info.dev) {
     return (
-      <Badge color="yellow">
+      <Badge tone="warning">
         <AlertTriangle className="size-3" /> <BadgeText k="engineSection.badgeIncomplete" />
       </Badge>
     );
   }
   if (info?.installed) {
     return (
-      <Badge color="green">
+      <Badge tone="success">
         <CheckCircle2 className="size-3" /> <BadgeText k="engineSection.badgeInstalled" />
       </Badge>
     );
   }
   return (
-    <Badge color="gray">
+    <Badge tone="neutral">
       <Circle className="size-3" /> <BadgeText k="engineSection.badgeNotInstalled" />
     </Badge>
   );
@@ -296,22 +294,3 @@ function BadgeText({ k }: { k: string }) {
   return <>{t(k)}</>;
 }
 
-function Badge({
-  color,
-  children,
-}: {
-  color: "green" | "yellow" | "red" | "gray";
-  children: React.ReactNode;
-}) {
-  const cls = {
-    green: "bg-success/12 text-success",
-    yellow: "bg-warning/12 text-warning",
-    red: "bg-destructive/15 text-destructive",
-    gray: "bg-muted text-muted-foreground",
-  }[color];
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>
-      {children}
-    </span>
-  );
-}

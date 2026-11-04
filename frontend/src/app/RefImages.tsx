@@ -88,7 +88,7 @@ export function RefImageCard({
               <button
                 type="button"
                 onClick={() => onImagesChange([])}
-                className="text-muted-foreground/70 hover:text-foreground text-[11px]"
+                className="text-muted-foreground/70 hover:text-foreground text-2xs"
               >
                 {t("common.clear")}
               </button>
@@ -119,7 +119,7 @@ export function RefImageCard({
           {showStrength && (
           <label className="min-w-0 flex-1 pt-0.5">
             <HoverPopover content={t("refImage.strengthHint")} always className="inline-flex">
-              <span className="text-muted-foreground cursor-help text-[11px]">
+              <span className="text-muted-foreground cursor-help text-2xs">
                 {t("refImage.strength", { strength: strength.toFixed(2) })}
               </span>
             </HoverPopover>
@@ -212,11 +212,11 @@ export function RefImageSlot({
             className="text-primary/80 hover:text-primary hover:bg-primary/10 bg-primary/5 flex size-full flex-col items-center justify-center gap-1 transition-colors"
           >
             <Plus className="size-4" strokeWidth={2.5} />
-            <span className="text-[10px] font-medium leading-none">{t("refImage.add")}</span>
+            <span className="text-2xs font-medium leading-none">{t("refImage.add")}</span>
           </button>
         )}
       </div>
-      {label && <span className="text-muted-foreground/70 text-[10px]">{label}</span>}
+      {label && <span className="text-muted-foreground/70 text-2xs">{label}</span>}
     </div>
   );
 }

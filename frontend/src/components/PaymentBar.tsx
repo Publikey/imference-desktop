@@ -119,7 +119,7 @@ export function PaymentRow({
     <div className="grid gap-2" role="group" aria-label={t("payment.title")}>
       <div className="flex items-center justify-between gap-2">
         <span className="ds-sublabel">{t("payment.title")}</span>
-        <Segmented size="sm" value={method} onChange={onMethodChange} items={methods} />
+        <Segmented size="sm" label={t("payment.title")} value={method} onChange={onMethodChange} items={methods} />
       </div>
       <div className="flex items-center gap-1">
         <button

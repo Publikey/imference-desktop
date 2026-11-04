@@ -82,10 +82,10 @@ export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
         </DialogHeader>
 
         <div className="bg-muted/40 flex items-center gap-2.5 rounded-xl border px-3 py-2.5">
-          <FileBox className="size-4 shrink-0 text-amber-600 dark:text-amber-300" />
+          <FileBox className="size-4 shrink-0 text-warning" />
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{fileName}</p>
-            <p className="text-muted-foreground truncate text-[11px]" title={path ?? ""}>
+            <p className="text-muted-foreground truncate text-2xs" title={path ?? ""}>
               {path}
             </p>
           </div>
@@ -116,7 +116,7 @@ export function CustomModelDialog({ path, onClose, onConfirm }: Props) {
               onChange={(e) => setBaseModel(e.target.value)}
               placeholder={selected.base}
             />
-            <p className="text-muted-foreground text-[11px]">
+            <p className="text-muted-foreground text-2xs">
               {t("customModel.baseModelHint", { base: selected.base })}
             </p>
           </div>

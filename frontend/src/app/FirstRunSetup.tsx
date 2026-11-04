@@ -37,7 +37,7 @@ export function FirstRunSetup({
 
         {/* Path A — install the local engine (self-contained install UI). */}
         <div className="grid gap-1.5">
-          <span className="text-muted-foreground/70 text-[10px] font-medium uppercase tracking-wide">
+          <span className="text-muted-foreground/70 text-2xs font-medium">
             {t("onboarding.localLabel")}
           </span>
           <LocalEngineSection onInstallDone={onInstallDone} />
@@ -45,7 +45,7 @@ export function FirstRunSetup({
 
         {/* Path B — use the cloud (opens Settings → Cloud payment). */}
         <div className="grid gap-1.5">
-          <span className="text-muted-foreground/70 text-[10px] font-medium uppercase tracking-wide">
+          <span className="text-muted-foreground/70 text-2xs font-medium">
             {t("onboarding.cloudLabel")}
           </span>
           <button
@@ -67,7 +67,7 @@ export function FirstRunSetup({
         <button
           type="button"
           onClick={onSkip}
-          className="text-muted-foreground hover:text-foreground justify-self-start text-[11px] font-medium transition-colors"
+          className="text-muted-foreground hover:text-foreground justify-self-start text-2xs font-medium transition-colors"
         >
           {t("onboarding.skip")}
         </button>

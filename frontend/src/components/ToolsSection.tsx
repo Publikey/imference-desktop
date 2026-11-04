@@ -49,7 +49,7 @@ export function ToolsSection({
             <option value="rocm">ROCm (AMD)</option>
             <option value="mps">Core ML (Apple)</option>
           </Select>
-          <p className="text-muted-foreground text-[11px]">{t("tools.settings.deviceHint")}</p>
+          <p className="text-muted-foreground text-2xs">{t("tools.settings.deviceHint")}</p>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="tools-idle" className="text-xs">
@@ -67,7 +67,7 @@ export function ToolsSection({
               </option>
             ))}
           </Select>
-          <p className="text-muted-foreground text-[11px]">{t("tools.settings.idleHint")}</p>
+          <p className="text-muted-foreground text-2xs">{t("tools.settings.idleHint")}</p>
         </div>
       </div>
 
@@ -79,7 +79,7 @@ export function ToolsSection({
         </label>
         <p className="text-muted-foreground text-xs leading-relaxed">{t("tools.settings.apiHint")}</p>
         {info && (
-          <p className="text-muted-foreground font-mono text-[11px] break-all">
+          <p className="text-muted-foreground font-mono text-2xs break-all">
             {info.running
               ? t("tools.settings.apiRunning", { port: info.port, path: info.discoveryPath })
               : t("tools.settings.apiStopped")}

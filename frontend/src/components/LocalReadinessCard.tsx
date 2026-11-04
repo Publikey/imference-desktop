@@ -304,7 +304,7 @@ function Row({
         className={cn(
           "flex size-5 shrink-0 items-center justify-center rounded-full border",
           ok
-            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+            ? "border-success/40 bg-success/10 text-success"
             : busy
               ? "border-primary/40 text-primary"
               : "border-muted-foreground/30 text-muted-foreground"
@@ -364,7 +364,7 @@ function BusyLine({
 }) {
   return (
     <div className="grid gap-1">
-      <div className="flex items-center justify-between gap-2 text-[11px]">
+      <div className="flex items-center justify-between gap-2 text-2xs">
         <span className="text-muted-foreground min-w-0 truncate" title={text}>
           {text}
         </span>

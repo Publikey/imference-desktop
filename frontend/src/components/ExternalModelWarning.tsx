@@ -12,7 +12,7 @@ export function ExternalModelWarning({ model, className }: { model?: ModelInfo |
   return (
     <div
       className={cn(
-        "flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs leading-snug text-amber-800 dark:text-amber-200",
+        "flex gap-2 rounded-xl border border-warning/30 bg-warning/10 p-2.5 text-xs leading-snug text-warning",
         className
       )}
     >

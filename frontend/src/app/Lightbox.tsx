@@ -212,7 +212,7 @@ export function Lightbox({
           </div>
           {current.name && (
             <div className={group}>
-              <button type="button" className={cn(iconBtn, "hover:bg-red-600/80")} title={t("gallery.ctxDelete")} aria-label={t("gallery.ctxDelete")} onClick={() => onDelete(current.name!)}>
+              <button type="button" className={cn(iconBtn, "hover:bg-destructive/80")} title={t("gallery.ctxDelete")} aria-label={t("gallery.ctxDelete")} onClick={() => onDelete(current.name!)}>
                 <Trash2 />
               </button>
             </div>
@@ -311,7 +311,7 @@ export function Lightbox({
 
       {/* Keyboard-hint footer — discoverable navigation + zoom affordance. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center pointer-coarse:hidden">
-        <div className="flex items-center gap-3 rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/70 backdrop-blur">
+        <div className="flex items-center gap-3 rounded-full bg-white/10 px-3 py-1 text-2xs text-white/70 backdrop-blur">
           {total > 1 && (
             <span className="flex items-center gap-1">
               <kbd className="rounded bg-white/15 px-1">←</kbd>

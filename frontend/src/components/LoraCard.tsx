@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/wails-bridge";
 import { cn, coarsePointer } from "@/lib/utils";
 import type { AppSettings, CatalogLora, CloudLoraRef, LoraEntry, LoraRef } from "@/lib/types";
+import { Badge } from "@/components/ds";
 
 /** Backends whose local engine applies user LoRAs. Mirrors the Go gate
  *  (internal/loras.BackendSupports) — flip both when a family is enabled. */
@@ -480,7 +481,7 @@ function SelectedLoraRow({
               type="button"
               onClick={() => onInsertTrigger(word)}
               title={triggersNeeded ? t("lora.triggerNeeded") : t("lora.triggerOptional")}
-              className="bg-muted hover:bg-accent rounded px-1.5 py-0.5 font-mono text-[10px]"
+              className="bg-muted hover:bg-accent rounded px-1.5 py-0.5 font-mono text-2xs"
             >
               + {word}
             </button>
@@ -745,15 +746,15 @@ function LoraPickerCard({ item }: { item: PickerItem }) {
           )}
           <div className="absolute top-1.5 left-1.5 flex flex-wrap gap-1">
             {!item.compatible ? (
-              <Badge className="bg-black/70 text-white">{t("loraPicker.badgeOtherFamily")}</Badge>
+              <Badge overlay className="bg-black/70 text-white">{t("loraPicker.badgeOtherFamily")}</Badge>
             ) : item.custom ? (
-              <Badge className="bg-amber-500/90 text-white">{t("loraPicker.badgeCustom")}</Badge>
+              <Badge overlay className="bg-warning/90 text-white">{t("loraPicker.badgeCustom")}</Badge>
             ) : item.downloaded && !item.active ? (
-              <Badge className="bg-emerald-600/90 text-white">{t("loraPicker.badgeDownloaded")}</Badge>
+              <Badge overlay className="bg-success/90 text-white">{t("loraPicker.badgeDownloaded")}</Badge>
             ) : null}
           </div>
           {downloading ? (
-            <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-black/60 px-2 py-1 text-[11px] text-white">
+            <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-black/60 px-2 py-1 text-2xs text-white">
               <Loader2 className="size-3 animate-spin" />
               {t("loraPicker.downloading", { percent: item.progress })}
             </div>
@@ -763,7 +764,7 @@ function LoraPickerCard({ item }: { item: PickerItem }) {
             !item.downloaded &&
             item.sizeBytes !== undefined &&
             item.sizeBytes > 0 && (
-              <Badge className="bg-background/85 text-foreground absolute right-1.5 bottom-1.5">
+              <Badge overlay className="bg-background/85 text-foreground absolute right-1.5 bottom-1.5">
                 {formatSize(item.sizeBytes)}
               </Badge>
             )
@@ -773,7 +774,7 @@ function LoraPickerCard({ item }: { item: PickerItem }) {
           <div className="truncate text-sm font-medium" title={item.name}>
             {item.name}
           </div>
-          <div className="text-muted-foreground truncate text-[11px]" title={item.description}>
+          <div className="text-muted-foreground truncate text-2xs" title={item.description}>
             {item.description || " "}
           </div>
         </div>
@@ -813,7 +814,7 @@ function LoraThumb({
     <span
       className={cn(
         "flex items-center justify-center",
-        custom ? "bg-amber-500/15 text-amber-600 dark:text-amber-300" : "brand-surface text-white",
+        custom ? "bg-warning/15 text-warning" : "brand-surface text-white",
         className
       )}
     >
@@ -847,10 +848,3 @@ function Chip({
   );
 }
 
-function Badge({ className, children }: { className?: string; children: React.ReactNode }) {
-  return (
-    <span className={cn("rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide shadow-sm", className)}>
-      {children}
-    </span>
-  );
-}

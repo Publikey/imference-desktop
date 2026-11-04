@@ -653,7 +653,7 @@ function Panel({
     >
       <header className="flex h-6 select-none items-center gap-1.5 px-1">
         {grip}
-        <span className="text-muted-foreground [&_svg]:size-3.5">{spec.icon}</span>
+        <span className="panel-icon [&_svg]:size-3.5">{spec.icon}</span>
         <h2 className="ds-panel-title">
           {spec.title}
         </h2>

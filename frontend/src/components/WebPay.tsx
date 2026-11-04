@@ -177,11 +177,11 @@ function PayDialog() {
           <div className="grid gap-4 p-6 md:grid-cols-[1.25fr_1fr]">
             {/* 1. The pack — recommended. */}
             <section className="border-primary/40 bg-primary/[0.03] relative grid content-start gap-4 rounded-2xl border-2 p-5">
-              <span className="bg-primary text-primary-foreground absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
+              <span className="bg-primary text-primary-foreground absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-2xs font-semibold">
                 {t("webpay.recommended")}
               </span>
               <div>
-                <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{t("webpay.pack.title")}</div>
+                <div className="text-muted-foreground text-xs font-medium">{t("webpay.pack.title")}</div>
                 <div className="mt-1 flex items-baseline justify-between gap-3">
                   <span className="text-2xl font-semibold">{t("webpay.pack.amount", { credits: num(PACK_CREDITS) })}</span>
                   <span className="text-2xl font-semibold">{usd(PACK_USD)}</span>
@@ -221,7 +221,7 @@ function PayDialog() {
             {/* 2. Per run, in USDC — no account at all. */}
             <section className="grid content-start gap-4 rounded-2xl border p-5">
               <div>
-                <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{t("webpay.perRun.title")}</div>
+                <div className="text-muted-foreground text-xs font-medium">{t("webpay.perRun.title")}</div>
                 <div className="mt-1 text-2xl font-semibold">
                   {q ? usd(q.credits / 1000) : t("webpay.perRun.exact")}
                 </div>
@@ -389,7 +389,7 @@ function WalletIcon({ w }: { w: BrowserWallet }) {
   return w.icon ? (
     <img src={w.icon} alt="" className="size-4 rounded" />
   ) : (
-    <span className="size-1.5 rounded-full bg-emerald-500" />
+    <span className="size-1.5 rounded-full bg-success" />
   );
 }
 
@@ -475,7 +475,7 @@ function CardPane({
           {paid === "waiting" ? (
             <Loader2 className="text-primary size-10 animate-spin" />
           ) : (
-            <CheckCircle2 className="size-10 text-emerald-500" />
+            <CheckCircle2 className="size-10 text-success" />
           )}
           <p className="font-medium">
             {paid === "waiting"
@@ -533,7 +533,7 @@ export function WebPayNotice() {
         : t("webpay.notice.cancelled");
   const tone =
     notice.kind === "credits-added"
-      ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-100"
+      ? "bg-success text-success"
       : "bg-muted text-foreground";
   return (
     <div className={`${tone} flex items-center justify-center gap-3 border-b px-4 py-2 text-sm`}>
@@ -866,7 +866,7 @@ function ModeCard({
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold">{title}</span>
             {active && (
-              <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[11px] font-medium">
+              <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-2xs font-medium">
                 {t("webpay.settings.inUse")}
               </span>
             )}

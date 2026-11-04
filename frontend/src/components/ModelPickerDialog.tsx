@@ -13,6 +13,7 @@ import {
 import { Segmented } from "@/components/ds";
 import { cn, coarsePointer, creditsToUSD } from "@/lib/utils";
 import type { ModelInfo, PaymentMode } from "@/lib/types";
+import { Badge } from "@/components/ds";
 
 // Display label + ordering for the LOCAL backends — the fallback grouping for
 // entries without a catalog family (user checkpoints). Keys are the normalized
@@ -397,18 +398,18 @@ function ModelCard({
           )}
           <div className="absolute top-1.5 left-1.5 flex gap-1">
             {m.localPath ? (
-              <Badge className="bg-amber-500/90 text-white">{t("modelPicker.badgeCustom")}</Badge>
+              <Badge overlay className="bg-warning/90 text-white">{t("modelPicker.badgeCustom")}</Badge>
             ) : !m.modelUrl && !isCloud ? (
-              <Badge className="bg-black/60 text-white">{t("modelPicker.badgeCloudOnly")}</Badge>
+              <Badge overlay className="bg-black/60 text-white">{t("modelPicker.badgeCloudOnly")}</Badge>
             ) : cached ? (
               // Weights already downloaded: picking this is a reload, not a
               // multi-GB pull. Hidden on the active card — the check mark
               // already says more than "on disk" does.
-              !active && <Badge className="bg-emerald-600/90 text-white">{t("modelPicker.badgeCached")}</Badge>
+              !active && <Badge overlay className="bg-success/90 text-white">{t("modelPicker.badgeCached")}</Badge>
             ) : null}
           </div>
           {isCloud && m.cost > 0 && (
-            <Badge className="bg-background/85 text-foreground absolute right-1.5 bottom-1.5">
+            <Badge overlay className="bg-background/85 text-foreground absolute right-1.5 bottom-1.5">
               {paymentMode === "x402"
                 ? t("modelPicker.costUsd", { usd: creditsToUSD(m.cost) })
                 : t("modelPicker.cost", { cost: m.cost })}
@@ -420,7 +421,7 @@ function ModelCard({
             {m.name}
           </div>
           <div
-            className="text-muted-foreground truncate text-[11px]"
+            className="text-muted-foreground truncate text-2xs"
             title={m.shortDescription || m.localPath || undefined}
           >
             {m.shortDescription || m.localPath || " "}
@@ -474,7 +475,7 @@ export function ModelThumb({
       className={cn(
         "flex items-center justify-center",
         isCustom
-          ? "bg-amber-500/15 text-amber-600 dark:text-amber-300"
+          ? "bg-warning/15 text-warning"
           : isCloud
             ? "bg-[linear-gradient(135deg,var(--cloud-from),var(--cloud-to))] text-white"
             : "brand-surface text-white",
@@ -486,15 +487,3 @@ export function ModelThumb({
   );
 }
 
-function Badge({ className, children }: { className?: string; children: React.ReactNode }) {
-  return (
-    <span
-      className={cn(
-        "rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide shadow-sm",
-        className
-      )}
-    >
-      {children}
-    </span>
-  );
-}

@@ -82,7 +82,7 @@ export function ParamsPanel({
           <span className="ds-label">
             {t("params.title")}
           </span>
-          <span className="text-muted-foreground/60 truncate text-[11px]">{summary}</span>
+          <span className="text-muted-foreground/60 truncate text-2xs">{summary}</span>
         </div>
         <ChevronDown
           className={cn("text-muted-foreground size-4 shrink-0 transition", open && "rotate-180")}
@@ -119,7 +119,7 @@ export function ParamsPanel({
                       say it, or users will "match the recipe" and double their
                       step time re-enabling guidance. */}
                   {model.backendType === "krea2" && (
-                    <p className="text-muted-foreground text-[11px] leading-snug">
+                    <p className="text-muted-foreground text-2xs leading-snug">
                       {t("params.cfgZeroOffHint")}
                     </p>
                   )}
@@ -129,7 +129,7 @@ export function ParamsPanel({
             <div className="grid gap-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium">{t("params.seed")}</span>
-                <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-[11px]">
+                <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-2xs">
                   <Checkbox
                     checked={params.seedMode === "random"}
                     onCheckedChange={(c) => set({ seedMode: c ? "random" : "fixed" })}
@@ -187,7 +187,7 @@ export function ParamsPanel({
                   <span className="text-xs font-medium">{t("params.scheduler")}</span>
                   {/* Informational (no scheduler list yet) — a value chip, not a
                       disabled input, so it doesn't read as interactive. */}
-                  <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-[11px] font-medium">
+                  <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-2xs font-medium">
                     {params.scheduler || t("params.modelDefault")}
                   </span>
                 </div>
@@ -197,7 +197,7 @@ export function ParamsPanel({
             <button
               type="button"
               onClick={() => onChange(defaultParams(model))}
-              className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 justify-self-start text-[11px]"
+              className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 justify-self-start text-2xs"
             >
               <RotateCcw className="size-3" /> {t("params.reset")}
             </button>
@@ -217,7 +217,7 @@ export function FixedRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-2">
       <span className="text-xs font-medium">{label}</span>
       <span
-        className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-[11px] font-medium tabular-nums"
+        className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-2xs font-medium tabular-nums"
         title={t("params.fixedByModel")}
       >
         {value}

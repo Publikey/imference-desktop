@@ -604,7 +604,7 @@ export function ToolEditor({
                     </div>
                   ) : localBlocked ? (
                     <div className="space-y-1.5">
-                      <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+                      <p className="rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-2xs leading-snug text-warning">
                         {t(`tools.reason.${tool.reason ?? "no_device"}`, { defaultValue: t("tools.reason.no_device") })}
                       </p>
                       {cloudOnce}
@@ -614,7 +614,7 @@ export function ToolEditor({
                       <div className="space-y-1.5">
                         <ProgressBar percent={weightsDl.percent || null} />
                         <div className="flex items-center gap-2">
-                          <p className="text-muted-foreground flex-1 text-[11px]">
+                          <p className="text-muted-foreground flex-1 text-2xs">
                             {t("tools.downloading", { percent: weightsDl.percent, mb: Math.round(downloadMb) })}
                           </p>
                           <Button size="sm" variant="ghost" onClick={() => void api.cancelToolWeights()}>
@@ -637,7 +637,7 @@ export function ToolEditor({
                           {t("tools.downloadModel", { mb: Math.max(1, Math.round(downloadMb)) })}
                         </Button>
                         {weightsDl?.error && (
-                          <p className="text-destructive text-[11px] break-words">{weightsDl.error}</p>
+                          <p className="text-destructive text-2xs break-words">{weightsDl.error}</p>
                         )}
                       </>
                     )
@@ -663,7 +663,7 @@ export function ToolEditor({
                     </span>
                   )}
                   {queuedNote && (
-                    <p className="flex items-center justify-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
+                    <p className="flex items-center justify-center gap-1.5 text-2xs text-success">
                       <Check className="size-3.5" /> {t("tools.queued")}
                     </p>
                   )}
@@ -789,7 +789,7 @@ function ParamField({
       return (
         <div className="grid gap-1">
           {control}
-          {hint && <p className="text-muted-foreground text-[11px] leading-snug">{hint}</p>}
+          {hint && <p className="text-muted-foreground text-2xs leading-snug">{hint}</p>}
         </div>
       );
     case "int":
@@ -830,7 +830,7 @@ function ParamField({
         </div>
         {bounded && (lowEnd || highEnd) && (
           // What the two ends mean ("Close to the image" … "More different").
-          <div className="text-muted-foreground mr-22 flex justify-between text-[10px]">
+          <div className="text-muted-foreground mr-22 flex justify-between text-2xs">
             <span>{lowEnd}</span>
             <span>{highEnd}</span>
           </div>
@@ -877,7 +877,7 @@ function ParamField({
             onClick={() => onChange(undefined)}
             title={autoMeans}
             className={cn(
-              "rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors",
+              "rounded-md border px-2 py-0.5 text-2xs font-medium transition-colors",
               autoOn
                 ? "border-primary/40 bg-primary/10 text-foreground"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -888,8 +888,8 @@ function ParamField({
         )}
       </div>
       {control}
-      {autoOn && autoMeans && <p className="text-muted-foreground text-[11px] leading-snug">{autoMeans}</p>}
-      {hint && <p className="text-muted-foreground text-[11px] leading-snug">{hint}</p>}
+      {autoOn && autoMeans && <p className="text-muted-foreground text-2xs leading-snug">{autoMeans}</p>}
+      {hint && <p className="text-muted-foreground text-2xs leading-snug">{hint}</p>}
     </div>
   );
 }
@@ -952,7 +952,7 @@ function WhereNotice({
     // The price is on the Run button; the privacy note can be dismissed for good.
     if (privacySeen) return null;
     return (
-      <div className="flex gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs leading-relaxed text-sky-800 dark:text-sky-200">
+      <div className="flex gap-2 rounded-xl border border-info/30 bg-info/10 p-3 text-xs leading-relaxed text-info">
         <ShieldAlert className="mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="font-medium">{t("tools.privacyTitle")}</p>
@@ -1012,7 +1012,7 @@ function ErrorPanel({
       </div>
 
       {error.cloudRetry && (
-        <div className="space-y-2 rounded-lg border border-sky-500/30 bg-sky-500/10 p-2.5 text-sky-800 dark:text-sky-200">
+        <div className="space-y-2 rounded-lg border border-info/30 bg-info/10 p-2.5 text-info">
           <p>{t("tools.cloudRetryBody")}</p>
           <p className="font-medium">
             {t("tools.priceLine", { price: formatToolPrice(t, error.cloudRetry.credits, rail) })}
@@ -1115,7 +1115,7 @@ function InstructEditForm({
           disabled={disabled}
           className="min-h-24 text-sm"
         />
-        <p className="text-muted-foreground text-[11px] leading-snug">{t("tools.instruct.hint")}</p>
+        <p className="text-muted-foreground text-2xs leading-snug">{t("tools.instruct.hint")}</p>
       </div>
 
       {/* Optional reference images ("image 2", "image 3" in the instruction). */}
@@ -1133,7 +1133,7 @@ function InstructEditForm({
                   title={r.label}
                   className="size-16 rounded-lg border object-cover"
                 />
-                <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 text-[10px] text-white">
+                <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 text-2xs text-white">
                   {t("tools.instruct.imageN", { n: i + 2 })}
                 </span>
                 <button
@@ -1177,7 +1177,7 @@ function InstructEditForm({
             }}
           />
         )}
-        {refError && <p className="text-destructive text-[11px]">{refError}</p>}
+        {refError && <p className="text-destructive text-2xs">{refError}</p>}
       </div>
 
       {/* Model: the loaded local edit model, or a cloud edit model. */}
@@ -1325,7 +1325,7 @@ function OutpaintSides({
       <span className="text-xs font-medium">{t("tools.outpaint.title")}</span>
       <div className="grid grid-cols-2 gap-2">
         {SIDES.map((s) => (
-          <label key={s} className="grid gap-1 text-[11px]">
+          <label key={s} className="grid gap-1 text-2xs">
             <span className="text-muted-foreground">{t(`tools.outpaint.${s}`)}</span>
             <Input
               type="number"
@@ -1345,12 +1345,12 @@ function OutpaintSides({
             key={n}
             type="button"
             onClick={() => all(n)}
-            className="hover:bg-muted rounded-md border px-2 py-0.5 text-[11px]"
+            className="hover:bg-muted rounded-md border px-2 py-0.5 text-2xs"
           >
             {t("tools.outpaint.allSides", { px: n })}
           </button>
         ))}
-        <button type="button" onClick={() => all(0)} className="hover:bg-muted rounded-md border px-2 py-0.5 text-[11px]">
+        <button type="button" onClick={() => all(0)} className="hover:bg-muted rounded-md border px-2 py-0.5 text-2xs">
           {t("common.clear")}
         </button>
       </div>
@@ -1394,7 +1394,7 @@ function OutpaintFrame({ src, params }: { src: string; params: Record<string, un
           }}
         />
       </div>
-      <span className="text-muted-foreground text-[11px] tabular-nums">
+      <span className="text-muted-foreground text-2xs tabular-nums">
         {dims.w}×{dims.h} → {W}×{H}
       </span>
     </div>
@@ -1522,12 +1522,12 @@ function SwitchProgress({ sw }: { sw: ReturnType<typeof useModelSwitch> }) {
       {sw.busy && sw.progress && (
         <div className="space-y-1">
           <ProgressBar percent={sw.progress.percentEstimate || null} />
-          <p className="text-muted-foreground truncate text-[11px]">
+          <p className="text-muted-foreground truncate text-2xs">
             {sw.progress.messageKey ? t(sw.progress.messageKey, sw.progress.messageArgs ?? {}) : sw.progress.message}
           </p>
         </div>
       )}
-      {sw.error && <p className="text-destructive text-[11px]">{t("tools.instruct.switchFailed", { error: sw.error })}</p>}
+      {sw.error && <p className="text-destructive text-2xs">{t("tools.instruct.switchFailed", { error: sw.error })}</p>}
     </>
   );
 }
@@ -1578,7 +1578,7 @@ function GenModelBox({
         )
       ) : editLoaded ? (
         <>
-          <p className="leading-snug text-amber-700 dark:text-amber-300">{t("tools.gen.editLoaded", { name: name(local) })}</p>
+          <p className="leading-snug text-warning">{t("tools.gen.editLoaded", { name: name(local) })}</p>
         </>
       ) : local ? (
         <>

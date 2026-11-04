@@ -17,7 +17,7 @@ type LightboxItem = { src: string; meta?: GenerationMeta | null };
 type PulseKind = "start" | "done" | "error";
 type Pulse = { kind: PulseKind; id: number; color: string; plus?: number };
 const MODE_COLOR = { local: "var(--brand-from)", cloud: "var(--cloud-from)" } as const;
-const DONE_COLOR = "#22c55e";
+const DONE_COLOR = "var(--im-success)";
 const ERROR_COLOR = "var(--destructive)";
 
 // ActivityDock — a persistent bottom-right widget summarising in-flight
@@ -149,7 +149,7 @@ export function ActivityDock({
               <Activity className="text-muted-foreground size-4" />
               <h2 className="text-sm font-semibold">{t("panels.queue")}</h2>
               {busy && (
-                <span className="brand-surface flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums text-white">
+                <span className="brand-surface flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-2xs font-semibold tabular-nums text-white">
                   {active.length}
                 </span>
               )}
@@ -159,7 +159,7 @@ export function ActivityDock({
                     type="button"
                     onClick={onRecheck}
                     title={t("queue.recheck")}
-                    className="text-muted-foreground/60 hover:text-foreground inline-flex items-center gap-1 text-[11px] font-medium transition-colors"
+                    className="text-muted-foreground/60 hover:text-foreground inline-flex items-center gap-1 text-2xs font-medium transition-colors"
                   >
                     <RefreshCw className="size-3" />
                     {t("queue.recheck")}
@@ -172,7 +172,7 @@ export function ActivityDock({
                     openCloudHistory();
                   }}
                   title={t("history.title")}
-                  className="text-muted-foreground/60 hover:text-foreground inline-flex items-center gap-1 text-[11px] font-medium transition-colors"
+                  className="text-muted-foreground/60 hover:text-foreground inline-flex items-center gap-1 text-2xs font-medium transition-colors"
                 >
                   <History className="size-3" />
                   {t("history.button")}
@@ -181,7 +181,7 @@ export function ActivityDock({
                   <button
                     type="button"
                     onClick={onClear}
-                    className="text-muted-foreground/60 hover:text-foreground text-[11px] font-medium transition-colors"
+                    className="text-muted-foreground/60 hover:text-foreground text-2xs font-medium transition-colors"
                   >
                     {t("queue.clearFinished")}
                   </button>
@@ -295,7 +295,7 @@ export function ActivityDock({
         {/* Outside the pill: its overflow-hidden (for the flash) clipped the
             badge to a sliver with no number. */}
         {errors > 0 && (
-          <span className="bg-destructive ring-card absolute -right-1.5 -top-1.5 z-10 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold text-white ring-2">
+          <span className="bg-destructive ring-card absolute -right-1.5 -top-1.5 z-10 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-2xs font-semibold text-white ring-2">
             {errors}
           </span>
         )}
@@ -396,8 +396,8 @@ function FinishNotice({ job, onOpen, onDismiss }: { job: Job; onOpen: () => void
         <span className="min-w-0 flex-1">
           <span
             className={cn(
-              "block text-[11px] font-semibold",
-              failed ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
+              "block text-2xs font-semibold",
+              failed ? "text-destructive" : "text-success"
             )}
           >
             {failed ? t("activity.noticeFailed") : t("activity.noticeDone")}
@@ -405,7 +405,7 @@ function FinishNotice({ job, onOpen, onDismiss }: { job: Job; onOpen: () => void
           <span className="block truncate text-xs font-medium" title={job.prompt}>
             {job.prompt}
           </span>
-          <span className="text-muted-foreground line-clamp-2 text-[11px] leading-snug">{sub}</span>
+          <span className="text-muted-foreground line-clamp-2 text-2xs leading-snug">{sub}</span>
         </span>
       </button>
       <button

@@ -673,7 +673,7 @@ export function FilterBar({
             <SlidersHorizontal className="size-3.5" />
             <span className="max-sm:sr-only">{t("gallery.filters")}</span>
             {count > 0 && (
-              <span className="bg-primary text-primary-foreground grid size-4 place-items-center rounded-full text-[10px] font-semibold tabular-nums">
+              <span className="bg-primary text-primary-foreground grid size-4 place-items-center rounded-full text-2xs font-semibold tabular-nums">
                 {count}
               </span>
             )}
@@ -1023,12 +1023,12 @@ export function SavedTile({
             onDelete(image.name);
           }}
           aria-label={t("gallery.deleteImage")}
-          className="hidden rounded-full bg-black/50 p-1.5 text-white hover:bg-red-600/80 group-hover:block"
+          className="hidden rounded-full bg-black/50 p-1.5 text-white hover:bg-destructive/80 group-hover:block"
         >
           <Trash2 className="size-3.5" />
         </button>
       </div>
-      <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+      <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 text-2xs text-white opacity-0 transition-opacity group-hover:opacity-100">
         {image.source && (
           <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-1.5 py-0.5 font-medium capitalize">
             {image.source === "tool" && <Wand2 className="size-2.5" />}

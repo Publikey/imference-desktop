@@ -67,7 +67,7 @@ export function QueuePanel({
           <Sparkles className="size-5" strokeWidth={1.75} />
         </div>
         <p className="relative text-xs font-medium">{t("queue.empty")}</p>
-        <p className="text-muted-foreground/60 relative text-[11px] leading-snug">{t("queue.emptyHint")}</p>
+        <p className="text-muted-foreground/60 relative text-2xs leading-snug">{t("queue.emptyHint")}</p>
       </div>
     );
   }
@@ -199,7 +199,7 @@ function QueueRow({
           </p>
           <p
             className={cn(
-              "mt-0.5 flex items-center gap-1.5 text-[11px] tabular-nums",
+              "mt-0.5 flex items-center gap-1.5 text-2xs tabular-nums",
               job.status === "error" ? "text-destructive" : "text-muted-foreground"
             )}
           >

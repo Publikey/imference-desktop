@@ -226,7 +226,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
               );
             })}
           </div>
-          <div className="text-muted-foreground border-t px-4 py-2.5 text-[11px] max-sm:hidden">
+          <div className="text-muted-foreground border-t px-4 py-2.5 text-2xs max-sm:hidden">
             {isWeb ? "Imference Web" : "Imference Desktop"}{" "}
             {appVersion === "dev" ? t("settings.devBuild") : appVersion ? `v${appVersion}` : ""}
           </div>
@@ -394,7 +394,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                 savedAt > 0 ? "opacity-100" : "opacity-0"
               )}
             >
-              <Check className="size-3.5 text-green-600" /> {t("settings.saved")}
+              <Check className="size-3.5 text-success" /> {t("settings.saved")}
             </span>
             <Button onClick={() => onOpenChange(false)}>{t("common.done")}</Button>
           </footer>

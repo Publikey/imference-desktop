@@ -213,17 +213,17 @@ export function ModelBar({
       {!isCloud && selected && !loading && !listError && (
         downloading || engineState === "starting" ? (
           // A model is being loaded into the engine (a swap, a Load now…).
-          <p className="text-primary mt-2 flex items-center gap-1.5 text-[11px]">
+          <p className="text-primary mt-2 flex items-center gap-1.5 text-2xs">
             <Loader2 className="size-3 animate-spin" />
             {t("modelBar.loading")}
           </p>
         ) : loadedHere ? (
-          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300">
-            <span className="size-1.5 rounded-full bg-emerald-500" />
+          <p className="mt-2 flex items-center gap-1.5 text-2xs text-success">
+            <span className="size-1.5 rounded-full bg-success" />
             {engineState === "ready" ? t("modelBar.loaded") : t("modelBar.loadedWhenStarted")}
           </p>
         ) : (
-          <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-800 dark:text-amber-200">
+          <div className="mt-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-2xs text-warning">
             <span className="min-w-0 flex-1">
               {engineModel
                 ? t("modelBar.notLoadedHolds", { name: engineModel.name || engineModel.modelCode })
@@ -235,7 +235,7 @@ export function ModelBar({
                 type="button"
                 disabled={busy || downloading}
                 onClick={onLoadNow}
-                className="shrink-0 rounded-md border border-amber-500/40 px-2 py-0.5 font-medium hover:bg-amber-500/15 disabled:opacity-50"
+                className="shrink-0 rounded-md border border-warning/40 px-2 py-0.5 font-medium hover:bg-warning/15 disabled:opacity-50"
               >
                 {t("modelBar.loadNow")}
               </button>

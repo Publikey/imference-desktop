@@ -437,7 +437,7 @@
   },
   "payment": {
     "title": "支付",
-    "apiKey": "API 密钥",
+    "apiKey": "积分",
     "apiKeyNotSet": "未设置 API 密钥",
     "notConfigured": "未配置",
     "credits": "{{count}} 积分",
@@ -446,7 +446,8 @@
     "usdc": "{{balance}} USDC",
     "checkFailed": "检查失败",
     "manageTitle": "在设置中管理",
-    "configureTitle": "在设置中配置"
+    "configureTitle": "在设置中配置",
+    "payg": "按次付费"
   },
   "settings": {
     "title": "设置",
@@ -456,19 +457,16 @@
     "navRuntime": "高级运行时",
     "navImage": "图像",
     "navWan": "WAN 视频",
-    "navPayment": "云端支付",
-    "navApiKey": "API 密钥",
-    "navWallet": "x402 钱包",
+    "navPayment": "付款",
     "navPaths": "路径",
     "language": "语言 · Language",
     "languageSystem": "跟随系统",
     "languageHint": "立即生效。“跟随系统”使用操作系统的语言。",
-    "cloudPayment": "云端支付",
     "activeMethod": "当前方式",
-    "apiKeyCredit": "API 密钥（积分）",
-    "x402Wallet": "x402（USDC 钱包）",
+    "apiKeyCredit": "积分",
+    "x402Wallet": "按次付费",
     "apiKeyPlaceholder": "粘贴你在 imference.com 获取的 API 密钥",
-    "x402WalletLabel": "x402 钱包（Base 链 USDC）",
+    "x402WalletLabel": "按次付费（USDC）",
     "paths": "路径",
     "pathsHint": "云端和本地模型在主界面提示词上方的表单中选择。",
     "pythonPath": "Python 路径",
@@ -479,7 +477,7 @@
     "saved": "已保存",
     "engineDesc": "在本机安装和管理本地生成引擎。",
     "runtimeDesc": "引擎的本机调优 — 设备、内存与量化。",
-    "cloudDesc": "云端生成的付费方式 — 积分 API 密钥或链上 USDC 钱包。",
+    "cloudDesc": "云端运行可用积分支付（推荐），也可从钱包按次支付 USDC。",
     "pathsDesc": "Python 所在位置以及生成图像的保存位置。",
     "languageDesc": "应用界面的语言。",
     "navStorage": "存储",
@@ -588,21 +586,21 @@
   },
   "wallet": {
     "loading": "正在加载钱包…",
-    "title": "钱包（Base 主网 · USDC）",
-    "keychainNote": "该钱包的私钥保存在本机的系统密钥库中（Windows 凭据管理器 / macOS 登录钥匙串）。请将其视为一次性钱包：只存入你可以承受损失的金额。在依赖它之前，请先用“导出私钥”进行备份。",
-    "intro": "x402 需要一个 Base 主网上的 EVM 钱包来按次付费（费用因模型而异 —— 在每个云端模型上标注）。建议：在此生成一个一次性钱包，再从你的 MetaMask 转入几美元。",
+    "title": "应用内钱包",
+    "keychainNote": "钱包私钥保存在这台电脑的系统钥匙串中。请只存放少量资金；如需备份，请导出私钥。",
+    "intro": "不购买积分，而是按次支付 USDC。应用会为你创建一个钱包；向其中转入少量 USDC，每次运行都会按准确价格从中扣款。",
     "generate": "生成新钱包",
     "importExisting": "导入已有私钥",
     "address": "地址",
     "balance": "USDC 余额",
     "rpcError": "RPC 错误：{{error}}",
-    "fundHint": "从 MetaMask（或任意钱包）向该地址转入 Base 链上的 USDC。余额每 30 秒刷新一次。",
+    "fundHint": "从交易所或其他钱包向此地址转入 Base 网络上的 USDC。余额每 30 秒更新一次。",
     "exportKey": "导出私钥",
     "replaceWallet": "更换钱包",
     "privateKeyLabel": "私钥（64 位十六进制字符，可带或不带 0x 前缀）",
-    "importWarning": "这将覆盖凭据管理器中已有的钱包。如需保留当前钱包，请确认已导出其私钥。",
+    "importWarning": "这将替换系统钥匙串中保存的钱包。如需保留当前钱包，请先导出。",
     "replaceTitle": "确定更换当前钱包？",
-    "replaceWarning": "当前私钥将在凭据管理器中被覆盖，除非已导出，否则无法恢复。当前地址上的 USDC 将无法再通过本应用访问。",
+    "replaceWarning": "当前私钥将从系统钥匙串中删除，除非你已导出，否则无法恢复。当前地址中剩余的 USDC 将无法再通过本应用使用。",
     "replaceImport": "通过导入更换",
     "replaceGenerate": "生成新钱包并更换",
     "yourKey": "你的私钥",
@@ -1234,8 +1232,8 @@
     "button": "记录",
     "desc": "使用您的 API 密钥或钱包支付的所有云端运行。服务器从不保存提示词和设置。结果可在 {{hours}} 小时内重新下载。",
     "rail": {
-      "credits": "API 密钥",
-      "x402": "钱包"
+      "credits": "积分",
+      "x402": "按次付费"
     },
     "kind": {
       "image": "图像",
@@ -1322,5 +1320,13 @@
     "progress": "第 {{step}} 步，共 {{total}} 步",
     "mapBar": "本地 · 云端",
     "mapBarWeb": "Imference Web"
+  },
+  "payErrors": {
+    "insufficient_credits": "积分不足，无法完成此次运行。请充值后继续。",
+    "insufficient_usdc": "钱包中的 USDC 不足，无法完成此次运行。请充值后继续。",
+    "needs_key": "请先设置付款方式，才能在云端运行。",
+    "needs_wallet": "请创建或导入钱包，以便按次付费。",
+    "invalid_key": "无法识别此 API 密钥。请在“设置 > 付款”中检查。",
+    "payment_cancelled": "付款已取消，未产生任何费用。"
   }
 }

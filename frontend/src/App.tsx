@@ -112,6 +112,7 @@ import {
   tileClickGuard,
   writeWebDraft,
 } from "./app/shared";
+import { friendlyPayError } from "@/lib/pay-errors";
 
 // Module-load side effect: install console + window error hooks before any
 // component renders. The api wrapping itself happens inside wails-bridge.ts
@@ -802,7 +803,8 @@ export default function App() {
           setJobs((js) => js.map((j) => (j.id === id ? { ...j, status: "error", hidden: true } : j)));
           return;
         }
-        const msg = e instanceof Error ? e.message : String(e);
+        // Payment failures in plain words (not enough credits, no wallet…).
+        const msg = friendlyPayError(t, e instanceof Error ? e.message : String(e));
         setJobs((js) =>
           js.map((j) => (j.id === id ? { ...j, status: "error", error: msg, endedAt: Date.now() } : j))
         );
@@ -820,7 +822,7 @@ export default function App() {
       if (r.error) {
         if (!exists) return js;
         return js.map((j) =>
-          j.id === r.jobId ? { ...j, status: "error", error: r.error, endedAt: Date.now() } : j
+          j.id === r.jobId ? { ...j, status: "error", error: (r.error ? friendlyPayError(t, r.error) : r.error), endedAt: Date.now() } : j
         );
       }
       if (!r.result) return js;
@@ -1166,7 +1168,7 @@ export default function App() {
           if (res.error) {
             const cancelled = res.error.code === "cancelled";
             settle((j) => ({
-              status: "error", error: res.error!.message, hidden: cancelled || j.hidden, mode,
+              status: "error", error: friendlyPayError(t, res.error!.message), hidden: cancelled || j.hidden, mode,
               tool: { ...j.tool!, result: res, stage: undefined },
             }));
             return;

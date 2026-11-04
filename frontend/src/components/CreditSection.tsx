@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/wails-bridge";
 import type { CreditInfo } from "@/lib/types";
+import { friendlyPayError } from "@/lib/pay-errors";
 
 type Props = {
   /** The API key currently in the Settings draft. May be unsaved — Go falls
@@ -88,7 +89,7 @@ export function CreditSection({ apiKey }: Props) {
       {info?.configured && info.error && (
         <p className="text-destructive flex items-start gap-1.5 text-xs">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-          <span>{info.error}</span>
+          <span>{friendlyPayError(t, info.error)}</span>
         </p>
       )}
 

@@ -443,7 +443,7 @@
   },
   "payment": {
     "title": "Payment",
-    "apiKey": "API key",
+    "apiKey": "Credits",
     "apiKeyNotSet": "API key not set",
     "notConfigured": "Not configured",
     "credits": "{{count}} credits",
@@ -452,7 +452,8 @@
     "usdc": "{{balance}} USDC",
     "checkFailed": "Check failed",
     "manageTitle": "Manage in Settings",
-    "configureTitle": "Configure in Settings"
+    "configureTitle": "Configure in Settings",
+    "payg": "Pay as you go"
   },
   "settings": {
     "title": "Settings",
@@ -462,19 +463,16 @@
     "navRuntime": "Advanced runtime",
     "navImage": "Image",
     "navWan": "WAN video",
-    "navPayment": "Cloud payment",
-    "navApiKey": "API key",
-    "navWallet": "x402 wallet",
+    "navPayment": "Payment",
     "navPaths": "Paths",
     "language": "Language",
     "languageSystem": "System",
     "languageHint": "Applies immediately. \"System\" follows your OS language.",
-    "cloudPayment": "Cloud payment",
     "activeMethod": "Active method",
-    "apiKeyCredit": "API key (credit)",
-    "x402Wallet": "x402 (USDC wallet)",
+    "apiKeyCredit": "Credits",
+    "x402Wallet": "Pay as you go",
     "apiKeyPlaceholder": "Paste your API key from imference.com",
-    "x402WalletLabel": "x402 wallet (USDC on Base)",
+    "x402WalletLabel": "Pay as you go (USDC)",
     "paths": "Paths",
     "pathsHint": "The cloud and local models are chosen from the form, above the prompt.",
     "pythonPath": "Python path",
@@ -485,7 +483,7 @@
     "saved": "Saved",
     "engineDesc": "Install and manage the local generation engine on this machine.",
     "runtimeDesc": "Host-machine tuning for the engine — device, memory, and quantization.",
-    "cloudDesc": "How cloud generations are paid for — a credit API key or an on-chain USDC wallet.",
+    "cloudDesc": "Cloud runs are paid with credits (recommended) or, per run, in USDC from a wallet.",
     "pathsDesc": "Where Python lives and where finished images are saved.",
     "languageDesc": "The language of the app interface.",
     "navStorage": "Storage",
@@ -596,21 +594,21 @@
   },
   "wallet": {
     "loading": "Loading wallet…",
-    "title": "Wallet (Base mainnet · USDC)",
-    "keychainNote": "This wallet's private key lives in your OS keychain on this machine (Windows Credential Manager / macOS login keychain). Treat it as a burner: only fund what you're OK losing. Use \"Export private key\" to back it up before relying on it.",
-    "intro": "x402 needs an EVM wallet on Base mainnet to pay per generation (cost varies by model — shown on each cloud model). Recommended: generate a burner wallet here and fund it with a few dollars from your MetaMask.",
+    "title": "Wallet in this app",
+    "keychainNote": "The wallet's private key stays in your system keychain on this computer. Keep only small amounts in it, and export the key if you want a backup.",
+    "intro": "Pay each run in USDC instead of buying credits. The app creates a wallet for you; send it a few dollars of USDC and every run is paid from it, at its exact price.",
     "generate": "Generate new wallet",
     "importExisting": "Import existing private key",
     "address": "Address",
     "balance": "USDC balance",
     "rpcError": "RPC error: {{error}}",
-    "fundHint": "Fund this address with USDC on Base from your MetaMask (or any wallet). Balance refreshes every 30 s.",
+    "fundHint": "Send USDC on the Base network to this address, from an exchange or another wallet. The balance updates every 30 s.",
     "exportKey": "Export private key",
     "replaceWallet": "Replace wallet",
     "privateKeyLabel": "Private key (64 hex chars, with or without 0x prefix)",
-    "importWarning": "This will overwrite any existing wallet in your Credential Manager. Make sure you've exported the current one if you want to keep it.",
+    "importWarning": "This replaces the wallet saved in your system keychain. Export the current one first if you want to keep it.",
     "replaceTitle": "Replace the current wallet?",
-    "replaceWarning": "The current private key will be overwritten in Credential Manager and is unrecoverable unless you've exported it. Any USDC at the current address will become inaccessible from this app.",
+    "replaceWarning": "The current private key is erased from your system keychain and cannot be recovered unless you exported it. USDC left at the current address will no longer be reachable from this app.",
     "replaceImport": "Replace by importing",
     "replaceGenerate": "Replace with new burner",
     "yourKey": "Your private key",
@@ -1246,8 +1244,8 @@
     "button": "History",
     "desc": "Every cloud run paid with your API key or your wallet. Prompts and settings are never kept on the server. Results can be downloaded again for {{hours}} h.",
     "rail": {
-      "credits": "API key",
-      "x402": "Wallet"
+      "credits": "Credits",
+      "x402": "Pay as you go"
     },
     "kind": {
       "image": "Image",
@@ -1334,5 +1332,13 @@
     "progress": "Step {{step}} of {{total}}",
     "mapBar": "Local · Cloud",
     "mapBarWeb": "Imference Web"
+  },
+  "payErrors": {
+    "insufficient_credits": "Not enough credits for this run. Top up to continue.",
+    "insufficient_usdc": "Not enough USDC in the wallet for this run. Add funds to continue.",
+    "needs_key": "Set up a payment method to run in the cloud.",
+    "needs_wallet": "Create or import a wallet to pay as you go.",
+    "invalid_key": "This API key isn't recognised. Check it in Settings > Payment.",
+    "payment_cancelled": "Payment cancelled, nothing was charged."
   }
 }

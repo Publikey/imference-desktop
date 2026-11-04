@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, Wallet, AlertTriangle, Loader2, ChevronRight, History } from "lucide-react";
 import { openCloudHistory } from "@/lib/target";
+import { friendlyPayError } from "@/lib/pay-errors";
 import { Segmented } from "@/components/ui/segmented";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
@@ -38,7 +39,8 @@ export function PaymentBar({
           return;
         }
         const c = await api.getCreditBalance("");
-        if (!c.configured || c.error) setStatus({ ok: false, label: c.error || t("payment.notConfigured") });
+        if (!c.configured || c.error)
+          setStatus({ ok: false, label: c.error ? friendlyPayError(t, c.error) : t("payment.notConfigured") });
         else setStatus({ ok: c.credits > 0, label: t("payment.credits", { count: c.credits }) });
       } else {
         const w = await api.getWalletInfo();
@@ -66,7 +68,7 @@ export function PaymentBar({
       method={mode}
       methods={[
         { value: "bearer", label: t("payment.apiKey") },
-        { value: "x402", label: "x402" },
+        { value: "x402", label: t("payment.payg") },
       ]}
       onMethodChange={(m) => onModeChange(m as PaymentMode)}
       icon={<Icon className="size-3.5 shrink-0" />}

@@ -21,6 +21,7 @@ import { EditEmpty, ToolEditor, defaultToolFor, type ToolSource } from "@/compon
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm";
 import { useToast } from "@/components/ui/toast";
+import { useWebPay } from "@/lib/web-pay";
 import { WebGalleryBanner } from "@/components/WebGallerySection";
 import { WebPayNotice, WebPaymentBar } from "@/components/WebPay";
 import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
@@ -82,6 +83,7 @@ import { FirstRunSetup } from "./app/FirstRunSetup";
 import { FormatSelector } from "./app/FormatSelector";
 import { Gallery, type LightboxItem } from "./app/Gallery";
 import { Header } from "./app/Header";
+import { Welcome, welcomeDone } from "./app/Welcome";
 import { Lightbox } from "./app/Lightbox";
 import {
   CUSTOM_FORMAT,
@@ -125,6 +127,10 @@ export default function App() {
   const [sidecar, setSidecar] = useState<SidecarStatus>({ state: "idle" });
   // Web: the prompt survives the trip to Stripe and the reload after signing in.
   const [prompt, setPrompt] = useState(() => (isWeb ? readWebDraft() : ""));
+  // Welcome tour (app/Welcome.tsx): opened once on a fresh install, and from
+  // the command palette.
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const webSession = useWebPay().session;
   useEffect(() => {
     if (isWeb) writeWebDraft(prompt);
   }, [prompt]);
@@ -522,6 +528,20 @@ export default function App() {
   // Web: no onboarding — the app opens on the composer, and the first run asks
   // how to pay (WebPay.tsx).
   const firstRun = !isWeb && !engineInstalled && !cloudConfigured && !onboardingSkipped;
+
+  // A fresh install opens the welcome tour once: desktop with nothing set up
+  // yet (no engine, no cloud payment; settings and the engine probe known),
+  // web with no way to pay yet. Existing users updating never see it.
+  const freshInstall = isWeb
+    ? !webSession.hasKey && !webSession.payMode
+    : settings !== null && !engineInstalled && !cloudConfigured;
+  useEffect(() => {
+    if (freshInstall && !welcomeDone()) setWelcomeOpen(true);
+  }, [freshInstall]);
+  const applySamplePrompt = useCallback((p: string) => {
+    setPrompt(p);
+    window.setTimeout(() => document.getElementById("composer-prompt")?.focus(), 50);
+  }, []);
 
   // Refresh wallet-configured state whenever x402 is (or becomes) the mode, or a
   // wallet is generated/imported (walletAddress changes). Reads the keychain.
@@ -1555,6 +1575,7 @@ export default function App() {
     cmds.push({ id: "settings", group: gApp, label: t("palette.settings"), icon: <Settings />, keywords: "preferences", run: () => openSettings() });
     cmds.push({ id: "logs", group: gApp, label: t("palette.logs"), icon: <ScrollText />, keywords: "console debug", run: () => setLogsOpen((o) => !o) });
     cmds.push({ id: "shortcuts", group: gApp, label: t("shortcuts.title"), icon: <Keyboard />, keywords: "keyboard keys help", run: () => setShortcutsOpen(true) });
+    cmds.push({ id: "welcome", group: gApp, label: t("palette.welcome"), icon: <Sparkles />, keywords: "welcome tour onboarding help start guide", run: () => setWelcomeOpen(true) });
 
     return cmds;
   }, [
@@ -2009,6 +2030,16 @@ export default function App() {
       />
       <LogPanel open={logsOpen} onOpenChange={setLogsOpen} />
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} commands={commands} />
+      <Welcome
+        open={welcomeOpen}
+        onOpenChange={setWelcomeOpen}
+        mode={mode}
+        onModeChange={setMode}
+        engineInstalled={engineInstalled}
+        onInstallDone={() => void api.getSettings().then(setSettings)}
+        onOpenCloudSettings={() => openSettings("cloud")}
+        onUsePrompt={applySamplePrompt}
+      />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );

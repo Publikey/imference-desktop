@@ -23,7 +23,7 @@ func TestStartCardCheckout(t *testing.T) {
 	defer srv.Close()
 
 	// A buyer without a key: none is sent, the API's new key comes back.
-	co, err := StartCardCheckout(context.Background(), nil, srv.URL, "")
+	co, err := StartCardCheckout(context.Background(), nil, srv.URL, "", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,11 +38,21 @@ func TestStartCardCheckout(t *testing.T) {
 	}
 
 	// A top-up: the key goes as a Bearer token.
-	if _, err := StartCardCheckout(context.Background(), nil, srv.URL, "im_old"); err != nil {
+	if _, err := StartCardCheckout(context.Background(), nil, srv.URL, "im_old", 4); err != nil {
 		t.Fatal(err)
 	}
 	if gotAuth != "Bearer im_old" {
 		t.Fatalf("Authorization = %q", gotAuth)
+	}
+	if gotBody["quantity"] != float64(4) {
+		t.Fatalf("quantity = %v, want 4", gotBody["quantity"])
+	}
+	// Out of range: clamped to the API's bounds.
+	if _, err := StartCardCheckout(context.Background(), nil, srv.URL, "im_old", 1000); err != nil {
+		t.Fatal(err)
+	}
+	if gotBody["quantity"] != float64(MaxPacks) {
+		t.Fatalf("quantity = %v, want %d", gotBody["quantity"], MaxPacks)
 	}
 }
 
@@ -52,7 +62,7 @@ func TestStartCardCheckoutError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":"checkout unavailable"}`))
 	}))
 	defer srv.Close()
-	if _, err := StartCardCheckout(context.Background(), nil, srv.URL, ""); err == nil || err.Error() != "checkout unavailable" {
+	if _, err := StartCardCheckout(context.Background(), nil, srv.URL, "", 1); err == nil || err.Error() != "checkout unavailable" {
 		t.Fatalf("err = %v, want the API's message", err)
 	}
 }

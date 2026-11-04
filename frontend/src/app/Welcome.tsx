@@ -280,7 +280,7 @@ export function Welcome({
   const next = () => {
     if (step === 1 && !isWeb) onModeChange(picked);
     if (step < steps - 1) return go(step + 1);
-    // Desktop, cloud chosen and not paid for yet: land on the payment settings.
+    // Desktop, cloud chosen and not paid for yet: open the credits purchase.
     const needsCloudSetup = !isWeb && picked === "cloud";
     close(needsCloudSetup ? onOpenCloudSettings : () => document.getElementById("composer-prompt")?.focus());
   };

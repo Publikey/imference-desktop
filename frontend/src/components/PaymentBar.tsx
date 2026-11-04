@@ -59,12 +59,13 @@ export function PaymentBar({
         : credits ? t("payNotice.shortCredits.action") : t("payNotice.shortUsdc.action");
     const fix = () =>
       credits ? void openPayDialog(problem === "no_method" ? "needs_key" : "insufficient_credits") : onConfigure("wallet");
-    const other = credits ? t("payNotice.orWallet") : t("payNotice.orCredits");
+    const other = t(credits ? "payNotice.orWalletSwitch" : "payNotice.orCreditsSwitch");
     return (
       <div className="grid gap-2.5" role="group" aria-label={t("payment.title")}>
+        {/* Always switchable: picking a way not set up yet says how to set it up. */}
         <div className="flex items-center justify-between gap-2">
-          <span className="ds-sublabel">{t("payment.title")}</span>
-          <Segmented size="sm" label={t("payment.title")} value={mode} onChange={(m) => onModeChange(m as PaymentMode)} items={methods} />
+          <span className="ds-sublabel">{t("payment.payWith")}</span>
+          <Segmented size="sm" label={t("payment.payWith")} value={mode} onChange={(m) => onModeChange(m as PaymentMode)} items={methods} />
         </div>
         <div className="ds-callout ds-callout-warning grid gap-2 p-3" role="status">
           <p className="flex items-center gap-2 text-sm font-semibold">
@@ -111,6 +112,7 @@ export function PaymentBar({
       title={t("payment.manageTitle")}
       onClick={() => onConfigure(mode === "bearer" ? "credits" : "wallet")}
       onHistory={openCloudHistory}
+      switchLabel={t("payment.payWith")}
     />
   );
 }
@@ -132,6 +134,8 @@ export function PaymentRow({
   title,
   onClick,
   onHistory,
+  showSwitch = true,
+  switchLabel,
 }: {
   method: string;
   methods: { value: string; label: string }[];
@@ -145,16 +149,21 @@ export function PaymentRow({
   onClick: () => void;
   /** The cloud calls billed to this account (CloudHistoryDialog). */
   onHistory?: () => void;
+  /** Show the method switch (desktop: only when both ways are set up). */
+  showSwitch?: boolean;
+  switchLabel?: string;
 }) {
   const { t } = useTranslation();
   // Two lines: how you pay (label + method switch), then where that stands
   // (balance → its settings) and the run history.
   return (
     <div className="grid gap-2" role="group" aria-label={t("payment.title")}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="ds-sublabel">{t("payment.title")}</span>
-        <Segmented size="sm" label={t("payment.title")} value={method} onChange={onMethodChange} items={methods} />
-      </div>
+      {showSwitch && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="ds-sublabel">{switchLabel ?? t("payment.title")}</span>
+          <Segmented size="sm" label={switchLabel ?? t("payment.title")} value={method} onChange={onMethodChange} items={methods} />
+        </div>
+      )}
       <div className="flex items-center gap-1">
         <button
           type="button"

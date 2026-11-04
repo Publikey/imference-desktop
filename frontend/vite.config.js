@@ -6,7 +6,7 @@ import wails from "@wailsio/runtime/plugins/vite";
 export default defineConfig(({ mode }) => {
     const web = mode === "web";
     // Design preview: the desktop UI in a plain browser, every Go binding
-    // answered from fixtures (src/lib/preview-runtime.ts, design/bench).
+    // answered from fixtures (src/lib/preview-runtime.ts).
     const preview = mode === "preview";
     return {
         // Bind the dev server to 127.0.0.1 (IPv4). Wails' dev asset proxy dials

@@ -141,6 +141,9 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
   const savedRef = useRef<string>("");
 
   useEffect(() => {
+    // Nothing may be saved until the real settings are in the draft: the
+    // placeholder draft (empty API key…) must never reach the disk.
+    savedRef.current = "";
     if (!open) return;
     void api.getSettings().then((s) => {
       setDraft(s);
@@ -169,6 +172,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
   // button. Server-side, SaveSettings only restarts a *running* engine.
   useEffect(() => {
     if (!open) return;
+    if (!savedRef.current) return; // not loaded yet
     if (JSON.stringify(draft) === savedRef.current) return; // unchanged vs disk
     const timer = window.setTimeout(() => {
       savedRef.current = JSON.stringify(draft); // mark sent so we don't re-fire

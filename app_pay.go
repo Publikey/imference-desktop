@@ -9,13 +9,13 @@ import (
 	"imference-desktop-go/internal/wallet"
 )
 
-// StartCardCheckout starts an in-app card purchase of one credit pack (Stripe
+// StartCardCheckout starts an in-app card purchase of `packs` credit packs (Stripe
 // Embedded Checkout, mounted by the frontend). It tops up the saved API key,
 // or — for a buyer without one — the imference API creates a key for this
 // purchase, returned in APIKey: the frontend adopts it (AdoptAPIKey) once
 // Stripe reports the payment done, so an abandoned checkout changes nothing.
-func (a *App) StartCardCheckout() (types.CardCheckout, error) {
-	co, err := a.cloud.StartCardCheckout(a.ctx, a.settings.Get().APIKey)
+func (a *App) StartCardCheckout(packs int) (types.CardCheckout, error) {
+	co, err := a.cloud.StartCardCheckout(a.ctx, a.settings.Get().APIKey, packs)
 	if err != nil {
 		a.bus.Warn("app", "StartCardCheckout failed", map[string]any{"err": err.Error()})
 		return types.CardCheckout{}, err

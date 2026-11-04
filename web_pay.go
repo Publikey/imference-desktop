@@ -334,7 +334,11 @@ func (s *webServer) payCard(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 		return
 	}
-	co, err := cloud.StartCardCheckout(r.Context(), nil, s.api(), u.apiKey)
+	var body struct {
+		Quantity int `json:"quantity"`
+	}
+	_ = json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&body)
+	co, err := cloud.StartCardCheckout(r.Context(), nil, s.api(), u.apiKey, body.Quantity)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return

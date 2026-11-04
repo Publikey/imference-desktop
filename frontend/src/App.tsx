@@ -28,7 +28,7 @@ import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { prepareRefImage } from "@/lib/image";
 import { installLogCapture } from "@/lib/log-capture";
 import { beginPointerDrag } from "@/lib/pointer-drag";
-import { isWeb, OPEN_HISTORY_EVENT, OPEN_SETTINGS_EVENT, SETTINGS_CHANGED_EVENT, notifyBalanceChanged } from "@/lib/target";
+import { isWeb, OPEN_HISTORY_EVENT, OPEN_SETTINGS_EVENT, SETTINGS_CHANGED_EVENT, notifyBalanceChanged, onBalanceMaybeChanged } from "@/lib/target";
 import { setThemePref } from "@/lib/theme";
 import { isEditModel, refreshTools } from "@/lib/tools";
 import type {
@@ -575,8 +575,10 @@ export default function App() {
   // Refresh wallet-configured state whenever x402 is (or becomes) the mode, or a
   // wallet is generated/imported (walletAddress changes). Reads the keychain.
   useEffect(() => {
-    if (settings?.paymentMode !== "x402") return;
-    void api.getWalletInfo().then((w) => setWalletConfigured(w.configured)).catch(() => {});
+    if (isWeb) return;
+    const read = () => void api.getWalletInfo().then((w) => setWalletConfigured(w.configured)).catch(() => {});
+    read();
+    return onBalanceMaybeChanged(read);
   }, [settings?.paymentMode, settings?.walletAddress]);
 
   // Seed the pending local selection from the persisted (downloaded) model, and
@@ -1832,7 +1834,7 @@ export default function App() {
                          composer until the engine is installed or cloud is set up. */
                       <FirstRunSetup
                         onInstallDone={() => void api.getSettings().then(setSettings)}
-                        onOpenCloudSettings={() => openSettings("cloud")}
+                        onOpenCloudSettings={() => void openPayDialog("needs_key")}
                         onSkip={skipOnboarding}
                       />
                     ) : (
@@ -2046,7 +2048,7 @@ export default function App() {
         onModeChange={setMode}
         engineInstalled={engineInstalled}
         onInstallDone={() => void api.getSettings().then(setSettings)}
-        onOpenCloudSettings={() => openSettings("cloud")}
+        onOpenCloudSettings={() => void openPayDialog("needs_key")}
         onUsePrompt={applySamplePrompt}
       />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />

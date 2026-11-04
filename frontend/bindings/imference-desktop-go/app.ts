@@ -659,14 +659,14 @@ export function SetToolsSettings(ts: types$0.ToolsSettings): $CancellablePromise
 }
 
 /**
- * StartCardCheckout starts an in-app card purchase of one credit pack (Stripe
+ * StartCardCheckout starts an in-app card purchase of `packs` credit packs (Stripe
  * Embedded Checkout, mounted by the frontend). It tops up the saved API key,
  * or — for a buyer without one — the imference API creates a key for this
  * purchase, returned in APIKey: the frontend adopts it (AdoptAPIKey) once
  * Stripe reports the payment done, so an abandoned checkout changes nothing.
  */
-export function StartCardCheckout(): $CancellablePromise<types$0.CardCheckout> {
-    return $Call.ByID(3854876613);
+export function StartCardCheckout(packs: number): $CancellablePromise<types$0.CardCheckout> {
+    return $Call.ByID(3854876613, packs);
 }
 
 /**

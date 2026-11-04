@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import {
   PACK_CREDITS,
   PACK_USD,
+  PACK_CHOICES,
   finishCardCheckout,
   loadStripe,
   showNewKey,
@@ -77,6 +78,8 @@ function PayDialog() {
   // Paying by card: Stripe's form replaces the options, then the credits land.
   const [card, setCard] = useState<CardCheckout | null>(null);
   const [paid, setPaid] = useState<null | "waiting" | number>(null);
+  // How many packs this card payment buys (one Stripe checkout).
+  const [packs, setPacks] = useState<number>(1);
 
   useEffect(() => {
     setBusy("");
@@ -84,6 +87,7 @@ function PayDialog() {
     setKey("");
     setCard(null);
     setPaid(null);
+    setPacks(1);
   }, [dialog]);
 
   useEffect(() => {
@@ -133,10 +137,10 @@ function PayDialog() {
   };
 
   const title = {
-    needs_key: t("webpay.title.needsKey"),
+    needs_key: t(isWeb ? "webpay.title.needsKey" : "webpay.title.buy"),
     insufficient_credits: t("webpay.title.insufficient"),
     needs_wallet: t("webpay.title.wallet"),
-    manual: t("webpay.title.manual"),
+    manual: t(isWeb ? "webpay.title.manual" : "webpay.title.buy"),
   }[dialog.reason];
   const subtitle =
     dialog.reason === "insufficient_credits" && balance !== null
@@ -149,7 +153,7 @@ function PayDialog() {
 
   return (
     <Dialog open onOpenChange={(open) => !open && closePayDialog(false)}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-3xl">
+      <DialogContent className={cn("max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-0", isWeb || card ? "sm:max-w-3xl" : "sm:max-w-lg")}>
         {/* Header: what is being paid for. */}
         <div className="flex items-start gap-4 border-b p-6 pr-12">
           {q?.image ? (
@@ -176,23 +180,33 @@ function PayDialog() {
         {card && <CardPane c={card} paid={paid} onBack={() => setCard(null)} onComplete={() => void onCardComplete()} />}
 
         {!card && (
-          <div className="grid gap-4 p-6 md:grid-cols-[1.25fr_1fr]">
-            {/* 1. The pack — recommended. */}
-            <section className="border-primary/40 bg-primary/[0.03] relative grid content-start gap-4 rounded-2xl border-2 p-5">
-              <span className="bg-primary text-primary-foreground absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-2xs font-semibold">
-                {t("webpay.recommended")}
-              </span>
+          <div className={cn("grid gap-4 p-6", isWeb && "md:grid-cols-[1.25fr_1fr]")}>
+            {/* 1. The pack — recommended (on the web, next to pay-as-you-go). */}
+            <section className={cn("relative grid content-start gap-4 rounded-2xl p-5", isWeb ? "border-primary/40 bg-primary/[0.03] border-2" : "ds-card")}>
+              {isWeb && (
+                <span className="bg-primary text-primary-foreground absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-2xs font-semibold">
+                  {t("webpay.recommended")}
+                </span>
+              )}
               <div>
                 <div className="text-muted-foreground text-xs font-medium">{t("webpay.pack.title")}</div>
                 <div className="mt-1 flex items-baseline justify-between gap-3">
-                  <span className="text-2xl font-semibold">{t("webpay.pack.amount", { credits: num(PACK_CREDITS) })}</span>
-                  <span className="text-2xl font-semibold">{usd(PACK_USD)}</span>
+                  <span className="text-2xl font-semibold">{t("webpay.pack.amount", { credits: num(PACK_CREDITS * packs) })}</span>
+                  <span className="text-2xl font-semibold">{usd(PACK_USD * packs)}</span>
                 </div>
+                {/* How much to buy: 1, 2, 4 or 10 packs, one card payment. */}
+                <Segmented
+                  label={t("webpay.pack.howMany")}
+                  value={String(packs)}
+                  onChange={(v) => setPacks(Number(v))}
+                  items={PACK_CHOICES.map((n) => ({ value: String(n), label: usd(PACK_USD * n) }))}
+                  className="mt-3 w-full"
+                />
                 {q && q.credits > 0 && (
-                  <p className="text-primary mt-1 text-sm font-medium">
+                  <p className="text-primary mt-2 text-sm font-medium">
                     {t(`webpay.pack.runs.${kind}`, {
-                      count: Math.floor(PACK_CREDITS / q.credits),
-                      n: num(Math.floor(PACK_CREDITS / q.credits)),
+                      count: Math.floor((PACK_CREDITS * packs) / q.credits),
+                      n: num(Math.floor((PACK_CREDITS * packs) / q.credits)),
                       what: q.label,
                     })}
                   </p>
@@ -203,11 +217,12 @@ function PayDialog() {
                 <Point>{t(isWeb ? "webpay.pack.point2" : "webpay.pack.point2Desktop")}</Point>
               </ul>
               <div className="grid gap-2">
-                <Button size="lg" variant="brand" className="h-11" onClick={act("card", async () => setCard(await startCardCheckout()), false)} disabled={!!busy}>
+                <Button size="lg" variant="brand" className="h-11" onClick={act("card", async () => setCard(await startCardCheckout(packs)), false)} disabled={!!busy}>
                   {busy === "card" ? <Loader2 className="size-4 animate-spin" /> : <CreditCard className="size-4" />}
-                  {t("webpay.pack.card", { usd: usd(PACK_USD) })}
+                  {t("webpay.pack.card", { usd: usd(PACK_USD * packs) })}
                 </Button>
-                {isWeb && (
+                {/* One pack only: the USDC pack is signed for exactly that amount. */}
+                {isWeb && packs === 1 && (
                   <Button
                     size="lg"
                     variant="outline"
@@ -222,7 +237,8 @@ function PayDialog() {
               </div>
             </section>
 
-            {/* 2. Per run, in USDC — no account at all. */}
+            {/* 2. Per run, in USDC — no account at all (web only). */}
+            {isWeb && (
             <section className="grid content-start gap-4 rounded-2xl border p-5">
               <div>
                 <div className="text-muted-foreground text-xs font-medium">{t("webpay.perRun.title")}</div>
@@ -289,6 +305,7 @@ function PayDialog() {
               )}
               {isWeb && <WalletPicker wallets={wallets} chosen={chosen} disabled={!!busy} />}
             </section>
+            )}
           </div>
         )}
 
@@ -316,7 +333,7 @@ function PayDialog() {
             }}
           >
             <label className="text-sm font-medium" htmlFor="webpay-key">
-              {t("webpay.haveKey")}
+              {t(isWeb ? "webpay.haveKey" : "webpay.haveAccountKey")}
             </label>
             <div className="flex min-w-[min(16rem,100%)] flex-1 gap-2">
               <Input
@@ -341,10 +358,12 @@ function PayDialog() {
             <Lock className="mt-0.5 size-3.5 shrink-0" />
             <span>{t("webpay.trust.card")}</span>
           </p>
-          <p className="flex items-start gap-2">
-            <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
-            <span>{t(isWeb ? "webpay.trust.wallet" : "webpay.trust.walletDesktop")}</span>
-          </p>
+          {isWeb && (
+            <p className="flex items-start gap-2">
+              <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
+              <span>{t("webpay.trust.wallet")}</span>
+            </p>
+          )}
           <p className="pl-5.5">
             {t("webpay.trust.unit")} ·{" "}
             <a className="underline hover:text-foreground" href="https://imference.com/terms" target="_blank" rel="noopener noreferrer">

@@ -455,7 +455,8 @@
     "checkFailed": "Check failed",
     "manageTitle": "Manage in Settings",
     "configureTitle": "Configure in Settings",
-    "payg": "Pay as you go"
+    "payg": "Pay as you go",
+    "payWith": "Pay with"
   },
   "settings": {
     "title": "Settings",
@@ -1097,7 +1098,8 @@
       "needsKey": "Choose how to pay",
       "insufficient": "Top up your credits",
       "wallet": "Reconnect your wallet",
-      "manual": "Credits"
+      "manual": "Credits",
+      "buy": "Buy credits"
     },
     "subtitle": {
       "needsKey": "Your prompt and settings stay as they are while you pay.",
@@ -1113,7 +1115,7 @@
     },
     "recommended": "Recommended",
     "pack": {
-      "title": "Credit pack",
+      "title": "Credits",
       "amount": "{{credits}} credits",
       "runs": {
         "image_one": "About {{n}} image with {{what}}",
@@ -1127,7 +1129,8 @@
       "point2": "Your key also works in Imference Desktop, in Claude (MCP) and through the API",
       "card": "Pay {{usd}} by card",
       "usdc": "Pay {{usd}} in USDC",
-      "point2Desktop": "Your key also works on imference.com, in Claude (MCP) and through the API"
+      "point2Desktop": "Your key also works on imference.com, in Claude (MCP) and through the API",
+      "howMany": "How many credits"
     },
     "perRun": {
       "title": "Pay as you go",
@@ -1224,7 +1227,8 @@
       "late": "Payment received. Your credits will appear in a moment."
     },
     "signHistoryTitle": "Sign in with your wallet to see your history",
-    "signHistoryHint": "A signature only, no payment: {{address}} ({{name}})."
+    "signHistoryHint": "A signature only, no payment: {{address}} ({{name}}).",
+    "haveAccountKey": "Already have an account key?"
   },
   "engine": {
     "machine": "This computer",
@@ -1437,7 +1441,9 @@
       "body": "This run costs {{cost}} and the wallet holds {{have}}. Send USDC on the Base network to its address.",
       "action": "Add funds"
     },
-    "orWallet": "or pay per run in USDC",
-    "orCredits": "or use credits instead"
+    "orWallet": "or set up a USDC wallet",
+    "orCredits": "or use credits (buy a pack or enter your account key)",
+    "orWalletSwitch": "or pay with the USDC wallet",
+    "orCreditsSwitch": "or pay with credits"
   }
 }

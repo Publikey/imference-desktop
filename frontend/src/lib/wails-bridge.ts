@@ -120,7 +120,7 @@ const raw = {
   // when "" is given. The key arg is redacted from logs in sanitize() below.
   getCreditBalance: GetCreditBalance as (apiKey: string) => Promise<CreditInfo>,
   /** In-app card purchase of one credit pack (Stripe Embedded Checkout). */
-  startCardCheckout: StartCardCheckout as () => Promise<{ clientSecret: string; publishableKey: string; apiKey: string }>,
+  startCardCheckout: StartCardCheckout as (packs: number) => Promise<{ clientSecret: string; publishableKey: string; apiKey: string }>,
   /** Saves a key (bought or pasted) as the credits key; credits become the method. */
   adoptAPIKey: AdoptAPIKey as unknown as (key: string) => Promise<AppSettings>,
   /** Native "Save as" for the API key (the account); "" when cancelled. */

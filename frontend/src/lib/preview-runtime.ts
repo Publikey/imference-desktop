@@ -1,7 +1,7 @@
 // Design preview replacement for "@wailsio/runtime" (vite --mode preview or
 // preview-web, see vite.config.ts). Every Go binding answers from fixtures so
 // the real UI renders in a plain browser, in realistic states, with no engine,
-// no GPU and no network but the catalog mock (design/bench/mock-api.mjs).
+// no GPU and no network but a local catalog mock (?api=, default :8799).
 //
 // Scenario: ?scenario=ready (default) | empty | firstrun
 // Catalog:  ?api=http://127.0.0.1:8799 (default)

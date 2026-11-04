@@ -11,8 +11,23 @@ import (
 	"time"
 )
 
-// PackCredits is one credit pack (what a card checkout buys): $5.
+// PackCredits is one credit pack: $5.
 const PackCredits = 5000
+
+// MaxPacks is how many packs one checkout may buy (the imference API's own
+// cap, models.MaxPacksPerCheckout): 100 packs = $500.
+const MaxPacks = 100
+
+// ClampPacks keeps a requested pack count within 1..MaxPacks.
+func ClampPacks(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > MaxPacks {
+		return MaxPacks
+	}
+	return n
+}
 
 // CardCheckout is a Stripe Embedded Checkout for one credit pack. The page
 // mounts Stripe's form with ClientSecret / PublishableKey; nobody leaves the
@@ -25,17 +40,17 @@ type CardCheckout struct {
 	APIKey         string `json:"apiKey"`
 }
 
-// StartCardCheckout asks the imference API at base for a card checkout of one
-// pack, topping up apiKey (or creating a key when it is empty). The credits
+// StartCardCheckout asks the imference API at base for a card checkout of
+// `packs` packs, topping up apiKey (or creating a key when it is empty). The credits
 // themselves arrive later, from Stripe's webhook on imference.com: the caller
 // polls the balance once Stripe reports the payment done.
-func StartCardCheckout(ctx context.Context, httpc *http.Client, base, apiKey string) (CardCheckout, error) {
+func StartCardCheckout(ctx context.Context, httpc *http.Client, base, apiKey string, packs int) (CardCheckout, error) {
 	if httpc == nil {
 		httpc = http.DefaultClient
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	body, _ := json.Marshal(map[string]any{"quantity": 1, "ui": "embedded"})
+	body, _ := json.Marshal(map[string]any{"quantity": ClampPacks(packs), "ui": "embedded"})
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+"/credits/add", strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")
 	if apiKey != "" {
@@ -63,6 +78,6 @@ func StartCardCheckout(ctx context.Context, httpc *http.Client, base, apiKey str
 }
 
 // StartCardCheckout runs the package function against this client's API.
-func (c *Client) StartCardCheckout(ctx context.Context, apiKey string) (CardCheckout, error) {
-	return StartCardCheckout(ctx, c.http, c.base, apiKey)
+func (c *Client) StartCardCheckout(ctx context.Context, apiKey string, packs int) (CardCheckout, error) {
+	return StartCardCheckout(ctx, c.http, c.base, apiKey, packs)
 }

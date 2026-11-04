@@ -370,16 +370,19 @@ export type CardCheckout = {
   before: number; // balance before paying
 };
 
-/** Pack by card, step 1: the session Stripe's form is mounted with. */
-export async function startCardCheckout(): Promise<CardCheckout> {
+/** Pack choices offered in the dialog (the API caps a checkout at 100). */
+export const PACK_CHOICES = [1, 2, 4, 10] as const;
+
+/** Packs by card, step 1: the session Stripe's form is mounted with. */
+export async function startCardCheckout(packs = 1): Promise<CardCheckout> {
   if (!isWeb) await refreshSession(); // the settings may have changed meanwhile
   const hadKey = state.session.hasKey;
   const before = hadKey ? (state.balance ?? 0) : 0;
   if (!isWeb) {
-    const out = await api.startCardCheckout();
+    const out = await api.startCardCheckout(packs);
     return { clientSecret: out.clientSecret, publishableKey: out.publishableKey, apiKey: out.apiKey, hadKey, before };
   }
-  const out = await post("web/pay/card", {});
+  const out = await post("web/pay/card", { quantity: packs });
   // A payment method that redirects comes back to /app/?checkout=success:
   // remember what to finish then.
   try {

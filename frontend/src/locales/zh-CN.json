@@ -449,7 +449,8 @@
     "checkFailed": "检查失败",
     "manageTitle": "在设置中管理",
     "configureTitle": "在设置中配置",
-    "payg": "按次付费"
+    "payg": "按次付费",
+    "payWith": "支付方式"
   },
   "settings": {
     "title": "设置",
@@ -1085,7 +1086,8 @@
       "needsKey": "选择支付方式",
       "insufficient": "充值积分",
       "wallet": "重新连接钱包",
-      "manual": "积分"
+      "manual": "积分",
+      "buy": "购买积分"
     },
     "subtitle": {
       "needsKey": "支付期间，你的提示词和设置都会保留。",
@@ -1101,7 +1103,7 @@
     },
     "recommended": "推荐",
     "pack": {
-      "title": "积分包",
+      "title": "积分",
       "amount": "{{credits}} 积分",
       "runs": {
         "image_one": "约可用 {{what}} 生成 {{n}} 张图片",
@@ -1115,7 +1117,8 @@
       "point2": "你的密钥也可用于 Imference Desktop、Claude（MCP）和 API",
       "card": "用银行卡支付 {{usd}}",
       "usdc": "用 USDC 支付 {{usd}}",
-      "point2Desktop": "你的密钥也可用于 imference.com、Claude（MCP）和 API"
+      "point2Desktop": "你的密钥也可用于 imference.com、Claude（MCP）和 API",
+      "howMany": "购买数量"
     },
     "perRun": {
       "title": "按次支付",
@@ -1212,7 +1215,8 @@
       "late": "已收到付款，积分稍后到账。"
     },
     "signHistoryTitle": "使用钱包登录以查看历史",
-    "signHistoryHint": "仅签名，不付款：{{address}}（{{name}}）。"
+    "signHistoryHint": "仅签名，不付款：{{address}}（{{name}}）。",
+    "haveAccountKey": "已有账户密钥？"
   },
   "engine": {
     "machine": "本机",
@@ -1425,7 +1429,9 @@
       "body": "此次运行需要 {{cost}}，钱包中有 {{have}}。请向其地址转入 Base 网络上的 USDC。",
       "action": "充值"
     },
-    "orWallet": "或以 USDC 按次付费",
-    "orCredits": "或改用积分"
+    "orWallet": "或设置 USDC 钱包",
+    "orCredits": "或使用积分（购买积分包或输入账户密钥）",
+    "orWalletSwitch": "或使用 USDC 钱包支付",
+    "orCreditsSwitch": "或使用积分支付"
   }
 }

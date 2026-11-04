@@ -74,6 +74,12 @@ type App struct {
 	// x402Signer signs x402 payments; nil = the wallet in the OS keychain.
 	// The web version sets the user's browser wallet here.
 	x402Signer func() (x402.Signer, error)
+	// historySigner signs the call-history sign-in; nil = the keychain wallet.
+	// historyTTL is how long one sign-in is used (web: a day, one wallet prompt).
+	historySigner func() (historySigner, error)
+	historyTTL    time.Duration
+	historyAuth   historyAuthCache
+
 	outboxPath string
 	outboxMu   sync.Mutex
 

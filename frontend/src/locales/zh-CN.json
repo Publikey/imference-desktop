@@ -1193,7 +1193,9 @@
       "secure": "由 Stripe 提供安全支付",
       "unavailable": "无法加载 Stripe。请检查网络连接或广告拦截插件后重试。",
       "late": "已收到付款，积分稍后到账。"
-    }
+    },
+    "signHistoryTitle": "使用钱包登录以查看历史",
+    "signHistoryHint": "仅签名，不付款：{{address}}（{{name}}）。"
   },
   "engine": {
     "machine": "本机",
@@ -1215,6 +1217,40 @@
       "stopped": "已停止"
     },
     "engineName": "引擎：{{engine}}"
+  },
+  "history": {
+    "title": "云端历史",
+    "button": "历史",
+    "desc": "使用您的 API 密钥或钱包支付的所有云端调用。服务器从不保存提示词和设置。结果可在 {{hours}} 小时内重新下载。",
+    "rail": {
+      "credits": "API 密钥",
+      "x402": "钱包"
+    },
+    "kind": {
+      "image": "图像",
+      "video": "视频",
+      "tool": "工具",
+      "mask": "蒙版",
+      "text": "文本",
+      "json": "数据"
+    },
+    "status": {
+      "done": "完成",
+      "failed": "失败",
+      "pending": "进行中"
+    },
+    "credits_one": "{{count}} 积分",
+    "credits_other": "{{count}} 积分",
+    "paidWallet": "以 USDC 支付",
+    "refunded": "已退款",
+    "until": "可用至 {{date}}",
+    "expired": "已过期：文件不再可用",
+    "save": "保存到图库",
+    "saved": "已保存到图库",
+    "saveFailed": "无法下载结果：{{error}}",
+    "empty": "暂无云端调用",
+    "more": "加载更多",
+    "noRail": "添加 API 密钥或钱包以查看其支付的调用。"
   },
   "welcome": {
     "dialogTitle": "欢迎使用 Imference",

@@ -46,6 +46,8 @@ import {
   StopLocalGeneration,
   StopSidecar,
   UseCustomModel,
+  ListCloudHistory,
+  RedownloadCloudOutput,
 } from "../../bindings/imference-desktop-go/app";
 import { Events, Call } from "@wailsio/runtime";
 import type {
@@ -85,6 +87,8 @@ import type {
   ToolProgress,
   ToolsSettings,
   LocalApiInfo,
+  CloudHistoryItem,
+  CloudHistoryPage,
 } from "./types";
 
 // Wails-generated functions are typed as (anyOfTheArgs) => Promise<any>.
@@ -111,6 +115,14 @@ const raw = {
   // Pass the (possibly unsaved draft) API key; Go falls back to the saved one
   // when "" is given. The key arg is redacted from logs in sanitize() below.
   getCreditBalance: GetCreditBalance as (apiKey: string) => Promise<CreditInfo>,
+  // Cloud call history (GET /history): rail "" = the payment mode's; cursor =
+  // the previous page's next_cursor. A result within its 24 h comes back to
+  // the gallery with redownloadCloudOutput(item, outputIndex).
+  listCloudHistory: ListCloudHistory as unknown as (rail: string, cursor: string) => Promise<CloudHistoryPage>,
+  redownloadCloudOutput: RedownloadCloudOutput as unknown as (
+    item: CloudHistoryItem,
+    index: number
+  ) => Promise<GenerationResult>,
 
   getLogs: GetLogs as () => Promise<LogEntry[]>,
   clearLogs: ClearLogs as () => Promise<void>,

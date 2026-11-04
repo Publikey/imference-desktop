@@ -611,3 +611,43 @@ type InstallProgress struct {
 	Done            bool   `json:"done"`
 	Error           string `json:"error,omitempty"`
 }
+
+// CloudHistoryOutput is one file a past cloud call produced (GET /history).
+// URL is "" once the output has expired: the file may be gone.
+type CloudHistoryOutput struct {
+	Name   string `json:"name,omitempty"`
+	Kind   string `json:"kind"`
+	Format string `json:"format,omitempty"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
+	Text   string `json:"text,omitempty"`
+	URL    string `json:"url,omitempty"`
+}
+
+// CloudHistoryItem is one past cloud call. The server keeps the call and its
+// results only: never the prompt or the settings.
+type CloudHistoryItem struct {
+	RequestID      string               `json:"request_id"`
+	CreatedAt      string               `json:"created_at"`
+	Rail           string               `json:"rail"` // "credits" | "x402"
+	Kind           string               `json:"kind"` // "image" | "video" | "tool"
+	ToolID         string               `json:"tool_id,omitempty"`
+	Status         string               `json:"status"` // "pending" | "done" | "failed"
+	Error          string               `json:"error,omitempty"`
+	ErrorCode      string               `json:"error_code,omitempty"`
+	CreditsCharged int                  `json:"credits_charged"`
+	Outputs        []CloudHistoryOutput `json:"outputs"`
+	AvailableUntil *string              `json:"available_until"`
+	Expired        bool                 `json:"expired"`
+}
+
+// CloudHistoryPage is one page of the call history, for one rail.
+type CloudHistoryPage struct {
+	Data           []CloudHistoryItem `json:"data"`
+	NextCursor     string             `json:"next_cursor,omitempty"`
+	RetentionHours int                `json:"retention_hours"`
+	// Rail is whose calls these are; Rails lists the ones this user can read
+	// (an API key: "credits", a wallet: "x402").
+	Rail  string   `json:"rail"`
+	Rails []string `json:"rails"`
+}

@@ -12,6 +12,8 @@ import {
   GenerateLocal,
   GenerateWallet,
   GetCreditBalance,
+  StartCardCheckout,
+  AdoptAPIKey,
   GetEngineInfo,
   GetLogs,
   GetSettings,
@@ -115,6 +117,10 @@ const raw = {
   // Pass the (possibly unsaved draft) API key; Go falls back to the saved one
   // when "" is given. The key arg is redacted from logs in sanitize() below.
   getCreditBalance: GetCreditBalance as (apiKey: string) => Promise<CreditInfo>,
+  /** In-app card purchase of one credit pack (Stripe Embedded Checkout). */
+  startCardCheckout: StartCardCheckout as () => Promise<{ clientSecret: string; publishableKey: string; apiKey: string }>,
+  /** Saves a key (bought or pasted) as the credits key; credits become the method. */
+  adoptAPIKey: AdoptAPIKey as unknown as (key: string) => Promise<AppSettings>,
   // Cloud call history (GET /history): rail "" = the payment mode's; cursor =
   // the previous page's next_cursor. A result within its 24 h comes back to
   // the gallery with redownloadCloudOutput(item, outputIndex).

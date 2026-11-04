@@ -17,7 +17,6 @@ package main
 // signature is checked against the authorization before it is used.
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,13 +30,14 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 
+	"imference-desktop-go/internal/cloud"
 	"imference-desktop-go/internal/wallet"
 	"imference-desktop-go/internal/x402"
 )
 
 // packCredits is the one pack sold in the app: 5000 credits for $5
 // (1 credit = $0.001 = 1000 atomic USDC).
-const packCredits = 5000
+const packCredits = cloud.PackCredits
 
 // Error codes the frontend turns into the payment dialog.
 const (
@@ -334,37 +334,13 @@ func (s *webServer) payCard(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	defer cancel()
-	body, _ := json.Marshal(map[string]any{"quantity": 1, "ui": "embedded"})
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, s.api()+"/credits/add", strings.NewReader(string(body)))
-	req.Header.Set("Content-Type", "application/json")
-	if u.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+u.apiKey)
-	}
-	resp, err := http.DefaultClient.Do(req)
+	co, err := cloud.StartCardCheckout(r.Context(), nil, s.api(), u.apiKey)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "cannot reach the imference API: " + err.Error()})
-		return
-	}
-	defer resp.Body.Close()
-	var out struct {
-		ClientSecret   string `json:"client_secret"`
-		PublishableKey string `json:"publishable_key"`
-		APIKey         string `json:"api_key"`
-		Error          string `json:"error"`
-	}
-	_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&out)
-	if resp.StatusCode != http.StatusOK || out.ClientSecret == "" || out.PublishableKey == "" || out.APIKey == "" {
-		msg := out.Error
-		if msg == "" {
-			msg = fmt.Sprintf("the imference API answered %d", resp.StatusCode)
-		}
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": msg})
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{
-		"clientSecret": out.ClientSecret, "publishableKey": out.PublishableKey, "apiKey": out.APIKey})
+		"clientSecret": co.ClientSecret, "publishableKey": co.PublishableKey, "apiKey": co.APIKey})
 }
 
 // payPack buys one pack in USDC with the browser wallet at body.address: x402

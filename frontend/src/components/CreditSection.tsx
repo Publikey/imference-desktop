@@ -1,28 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, Coins, AlertTriangle, ExternalLink } from "lucide-react";
-import { Browser } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/wails-bridge";
 import type { CreditInfo } from "@/lib/types";
 import { friendlyPayError } from "@/lib/pay-errors";
+import { openPayDialog } from "@/lib/web-pay";
+import { onBalanceMaybeChanged } from "@/lib/target";
 
 type Props = {
   /** The API key currently in the Settings draft. May be unsaved — Go falls
    *  back to the saved key when this is empty. */
   apiKey: string;
 };
-
-// The payments page prefills its key inputs from this param, so the user tops
-// up the balance the app is already configured with — no retyping, and no
-// confusion about which account the credits land on.
-function buyCreditsURL(apiKey: string): string {
-  const key = apiKey.trim();
-  return key
-    ? `https://imference.com/payments?api_key=${encodeURIComponent(key)}`
-    : "https://imference.com/payments";
-}
 
 // Mirrors the imference web app's credit readout: shows the remaining balance
 // for the configured Bearer key. Auto-checks on mount and (debounced) whenever
@@ -49,6 +40,9 @@ export function CreditSection({ apiKey }: Props) {
     }
   }, []);
 
+  // A purchase, a paid run, the window regaining focus: read it again.
+  useEffect(() => onBalanceMaybeChanged(() => void check()), [check]);
+
   // Debounce so editing/pasting the key doesn't fire a request per keystroke.
   useEffect(() => {
     const t = window.setTimeout(() => void check(), 600);
@@ -63,7 +57,7 @@ export function CreditSection({ apiKey }: Props) {
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => void Browser.OpenURL(buyCreditsURL(apiKey))}
+          onClick={() => void openPayDialog("manual")}
           className="text-muted-foreground hover:text-foreground ml-auto h-6 gap-1 px-2 text-xs"
           title={t("credit.buyTitle")}
         >

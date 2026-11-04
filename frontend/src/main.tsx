@@ -38,7 +38,7 @@ async function main() {
       <ToastProvider>
         <ConfirmProvider>
           <App />
-          {isWeb && <WebPayLayer />}
+          <WebPayLayer />
         </ConfirmProvider>
       </ToastProvider>
     </React.StrictMode>

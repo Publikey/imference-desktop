@@ -1,3 +1,8 @@
+// Desktop uses the same store and dialog: a card purchase goes through the Go
+// bindings (StartCardCheckout, AdoptAPIKey) instead of web/pay/card and
+// web/login, the session is read from the settings, and per-run payment uses
+// the app's own wallet (Settings > Payment), not a browser one.
+//
 // Paying in the web version (web_pay.go on the server). The app opens without
 // a key; when a run needs one, the payment dialog (components/WebPay.tsx)
 // offers three ways to pay:
@@ -12,6 +17,8 @@
 import { useSyncExternalStore } from "react";
 import { api } from "@/lib/wails-bridge";
 import type { AppSettings, ToolInfo } from "@/lib/types";
+import { isWeb, notifyBalanceChanged, notifySettingsChanged } from "@/lib/target";
+import { payErrorCode } from "@/lib/pay-errors";
 
 const CSRF = { "X-Imference-Web": "1" };
 const KEY_STORAGE = "imference_api_key"; // shared with imference.com/payments
@@ -106,8 +113,24 @@ async function web(method: string, ...args: unknown[]): Promise<any> {
   return (await post("web/call", { methodName: "web." + method, args })).result;
 }
 
+/** Desktop: the session as the settings and the app's wallet describe it. */
+async function desktopSession(): Promise<Session> {
+  const s = await api.getSettings();
+  let payer = "";
+  if (s.paymentMode === "x402") {
+    try {
+      const w = await api.getWalletInfo();
+      payer = w.configured ? w.address : "";
+    } catch {
+      /* no wallet readable: per-run mode without a payer */
+    }
+  }
+  const key = s.apiKey ?? "";
+  return { hasKey: !!key, keyHint: key.length >= 8 ? key.slice(-4) : "", payMode: s.paymentMode === "x402" ? "wallet" : "", payer };
+}
+
 export async function refreshSession(): Promise<Session> {
-  const s = (await web("Session")) as Session;
+  const s = isWeb ? ((await web("Session")) as Session) : await desktopSession();
   set({ session: s });
   if (s.hasKey) void refreshBalance();
   else set({ balance: null });
@@ -291,6 +314,9 @@ async function quote(method: string, args: any[]): Promise<PayQuote> {
 
 /** Opens the payment dialog; resolves true when the run should be retried. */
 export function openPayDialog(reason: PayReason, q: PayQuote = null): Promise<boolean> {
+  if (!isWeb) {
+    void refreshSession();
+  }
   return new Promise((resolve) => {
     state.dialog?.resolve(false);
     set({ dialog: { reason, quote: q, resolve } });
@@ -346,8 +372,13 @@ export type CardCheckout = {
 
 /** Pack by card, step 1: the session Stripe's form is mounted with. */
 export async function startCardCheckout(): Promise<CardCheckout> {
+  if (!isWeb) await refreshSession(); // the settings may have changed meanwhile
   const hadKey = state.session.hasKey;
   const before = hadKey ? (state.balance ?? 0) : 0;
+  if (!isWeb) {
+    const out = await api.startCardCheckout();
+    return { clientSecret: out.clientSecret, publishableKey: out.publishableKey, apiKey: out.apiKey, hadKey, before };
+  }
   const out = await post("web/pay/card", {});
   // A payment method that redirects comes back to /app/?checkout=success:
   // remember what to finish then.
@@ -383,6 +414,12 @@ export async function loadStripe(publishableKey: string): Promise<any> {
 
 /** Signs a guest in with the key a purchase created (the session and its tabs move to it). */
 async function adoptKey(apiKey: string) {
+  if (!isWeb) {
+    await api.adoptAPIKey(apiKey);
+    notifySettingsChanged();
+    await refreshSession();
+    return;
+  }
   await post("web/login", { apiKey });
   try {
     localStorage.setItem(KEY_STORAGE, apiKey);
@@ -407,9 +444,13 @@ export async function finishCardCheckout(c: CardCheckout): Promise<number> {
   if (!c.hadKey) await adoptKey(c.apiKey);
   for (let i = 0; i < 60; i++) {
     const b = await refreshBalance();
-    if (b !== null && b > c.before) return b - c.before;
+    if (b !== null && b > c.before) {
+      notifyBalanceChanged();
+      return b - c.before;
+    }
     await new Promise((r) => setTimeout(r, 2000));
   }
+  notifyBalanceChanged();
   return 0;
 }
 
@@ -428,8 +469,21 @@ export async function buyPackWithWallet(): Promise<void> {
   await refreshBalance();
 }
 
+/** Desktop: the payment method, saved in the settings. */
+async function setDesktopMode(mode: "bearer" | "x402") {
+  const s = await api.getSettings();
+  await api.saveSettings({ ...s, paymentMode: mode });
+  notifySettingsChanged();
+  await refreshSession();
+}
+
 /** Per-run mode: every run asks the wallet to sign its own price. */
 export async function payPerRun(): Promise<void> {
+  if (!isWeb) {
+    const w = await api.getWalletInfo();
+    if (!w.configured) throw new PayError("no wallet in this app yet", "needs_wallet");
+    return setDesktopMode("x402");
+  }
   const address = await connectWallet();
   await web("SetPayMode", { mode: "wallet", address });
   await refreshSession();
@@ -437,12 +491,19 @@ export async function payPerRun(): Promise<void> {
 
 /** Back to credits (the key) after per-run mode. */
 export async function switchToCredits(): Promise<void> {
+  if (!isWeb) return setDesktopMode("bearer");
   await web("SetPayMode", { mode: "" });
   await refreshSession();
 }
 
 /** Signs in with a key the user pasted. Throws PayError("invalid_key"). */
 export async function signInWithKey(key: string): Promise<void> {
+  if (!isWeb) {
+    // Checked against the API first: a mistyped key never replaces a good one.
+    const info = await api.getCreditBalance(key.trim());
+    if (info.error) throw new PayError(info.error, payErrorCode(info.error) === "invalid_key" ? "invalid_key" : "");
+    return adoptKey(key.trim());
+  }
   await post("web/login", { apiKey: key.trim() });
   reloadInto(key.trim(), false);
 }

@@ -26,6 +26,18 @@ export interface CachedModel {
 }
 
 /**
+ * CardCheckout is an in-app card purchase of one credit pack (Stripe Embedded
+ * Checkout): the frontend mounts Stripe's form with ClientSecret and
+ * PublishableKey. APIKey is the key the credits land on — a new one when the
+ * buyer had none — adopted by the app once the payment is done.
+ */
+export interface CardCheckout {
+    "clientSecret": string;
+    "publishableKey": string;
+    "apiKey": string;
+}
+
+/**
  * CatalogLora is one curated LoRA from the imference catalog (GET /api/loras).
  */
 export interface CatalogLora {

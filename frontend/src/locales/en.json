@@ -1124,7 +1124,8 @@
       "point1": "One payment, no subscription",
       "point2": "Your key also works in Imference Desktop, in Claude (MCP) and through the API",
       "card": "Pay {{usd}} by card",
-      "usdc": "Pay {{usd}} in USDC"
+      "usdc": "Pay {{usd}} in USDC",
+      "point2Desktop": "Your key also works on imference.com, in Claude (MCP) and through the API"
     },
     "perRun": {
       "title": "Pay as you go",
@@ -1139,7 +1140,10 @@
       "button": "Pay with my wallet",
       "on": "Paying per run with {{address}}.",
       "reconnect": "Reconnect the wallet",
-      "backToCredits": "Use my credits instead"
+      "backToCredits": "Use my credits instead",
+      "point1Desktop": "Paid in USDC from a wallet in this app",
+      "point2Desktop": "Set it up once in Settings > Payment",
+      "buttonDesktop": "Pay with the app wallet"
     },
     "wallet": {
       "detected": "{{name}} detected",
@@ -1151,7 +1155,8 @@
       "card": "Card payments are processed by Stripe. Imference never sees your card number.",
       "wallet": "USDC payments are confirmed in your own wallet. Imference never holds your keys or your funds.",
       "unit": "1 credit = $0.001, prices in US dollars",
-      "terms": "Terms"
+      "terms": "Terms",
+      "walletDesktop": "USDC payments come from this app's wallet; its key never leaves this computer."
     },
     "noWallet": "No wallet found in this browser. Install MetaMask or Coinbase Wallet to pay in USDC, or pay by card.",
     "haveKey": "Already have an API key?",
@@ -1172,7 +1177,8 @@
       "copy": "Copy",
       "copied": "Copied",
       "download": "Download",
-      "done": "I saved it"
+      "done": "I saved it",
+      "textDesktop": "There is no email or password. This key is the only way back to your credits, here, on imference.com, in Claude (MCP) or through the API. The app keeps it in its settings, but save a copy somewhere safe."
     },
     "chip": {
       "getCredits": "Get credits",

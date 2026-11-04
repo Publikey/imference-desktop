@@ -25,7 +25,7 @@ import { WalletSection } from "@/components/WalletSection";
 import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
 import { CreditSection } from "@/components/CreditSection";
 import { StorageSection } from "@/components/StorageSection";
-import { isWeb } from "@/lib/target";
+import { isWeb, SETTINGS_CHANGED_EVENT } from "@/lib/target";
 import { WebPaymentSettings } from "@/components/WebPay";
 import { WebGallerySection } from "@/components/WebGallerySection";
 import { ToolsSection } from "@/components/ToolsSection";
@@ -138,6 +138,20 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
     // Re-read the persisted language choice: the header toggle may have
     // changed it since this dialog last opened.
     setLangChoice(storedLanguage());
+  }, [open]);
+
+  // Settings changed outside this dialog (a key adopted by the payment dialog,
+  // opened from here): reload the draft, or a later edit would save the old
+  // values back over them.
+  useEffect(() => {
+    if (!open) return;
+    const reload = () =>
+      void api.getSettings().then((s) => {
+        setDraft(s);
+        savedRef.current = JSON.stringify(s);
+      });
+    window.addEventListener(SETTINGS_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(SETTINGS_CHANGED_EVENT, reload);
   }, [open]);
 
   // Auto-save: every change to the draft is persisted (debounced) — no Save

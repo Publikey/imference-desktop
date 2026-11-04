@@ -31,7 +31,9 @@ import {
   useWebPay,
   chooseWallet,
   type BrowserWallet,
+  PayError,
 } from "@/lib/web-pay";
+import { isWeb, openSettingsAt } from "@/lib/target";
 
 function useUsd() {
   const { i18n } = useTranslation();
@@ -198,23 +200,25 @@ function PayDialog() {
               </div>
               <ul className="text-muted-foreground grid gap-1.5 text-sm">
                 <Point>{t("webpay.pack.point1")}</Point>
-                <Point>{t("webpay.pack.point2")}</Point>
+                <Point>{t(isWeb ? "webpay.pack.point2" : "webpay.pack.point2Desktop")}</Point>
               </ul>
               <div className="grid gap-2">
-                <Button size="lg" className="h-11" onClick={act("card", async () => setCard(await startCardCheckout()), false)} disabled={!!busy}>
+                <Button size="lg" variant="brand" className="h-11" onClick={act("card", async () => setCard(await startCardCheckout()), false)} disabled={!!busy}>
                   {busy === "card" ? <Loader2 className="size-4 animate-spin" /> : <CreditCard className="size-4" />}
                   {t("webpay.pack.card", { usd: usd(PACK_USD) })}
                 </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="h-11"
-                  onClick={act("pack", buyPackWithWallet, true)}
-                  disabled={!!busy || !wallet}
-                >
-                  {busy === "pack" ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />}
-                  {t("webpay.pack.usdc", { usd: usd(PACK_USD) })}
-                </Button>
+                {isWeb && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="h-11"
+                    onClick={act("pack", buyPackWithWallet, true)}
+                    disabled={!!busy || !wallet}
+                  >
+                    {busy === "pack" ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />}
+                    {t("webpay.pack.usdc", { usd: usd(PACK_USD) })}
+                  </Button>
+                )}
               </div>
             </section>
 
@@ -228,8 +232,8 @@ function PayDialog() {
                 <p className="text-muted-foreground mt-1 text-sm">{t(`webpay.perRun.unit.${kind}`)}</p>
               </div>
               <ul className="text-muted-foreground grid gap-1.5 text-sm">
-                <Point>{t("webpay.perRun.point1")}</Point>
-                <Point>{t("webpay.perRun.point2")}</Point>
+                <Point>{t(isWeb ? "webpay.perRun.point1" : "webpay.perRun.point1Desktop")}</Point>
+                <Point>{t(isWeb ? "webpay.perRun.point2" : "webpay.perRun.point2Desktop")}</Point>
               </ul>
               {session.payMode === "wallet" ? (
                 <div className="grid gap-2">
@@ -245,7 +249,7 @@ function PayDialog() {
                     </Button>
                   )}
                 </div>
-              ) : (
+              ) : isWeb ? (
                 <Button
                   size="lg"
                   variant="outline"
@@ -256,8 +260,34 @@ function PayDialog() {
                   {busy === "run" ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />}
                   {t("webpay.perRun.button")}
                 </Button>
+              ) : (
+                // Desktop: the app's own wallet. None yet: set it up in Settings.
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-11"
+                  disabled={!!busy}
+                  onClick={async () => {
+                    setBusy("run");
+                    setErr("");
+                    try {
+                      await payPerRun();
+                      closePayDialog(true);
+                    } catch (e) {
+                      if (e instanceof PayError && e.code === "needs_wallet") {
+                        closePayDialog(false);
+                        openSettingsAt("x402");
+                      } else setErr(failure(e));
+                    } finally {
+                      setBusy("");
+                    }
+                  }}
+                >
+                  {busy === "run" ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />}
+                  {t("webpay.perRun.buttonDesktop")}
+                </Button>
               )}
-              <WalletPicker wallets={wallets} chosen={chosen} disabled={!!busy} />
+              {isWeb && <WalletPicker wallets={wallets} chosen={chosen} disabled={!!busy} />}
             </section>
           </div>
         )}
@@ -313,7 +343,7 @@ function PayDialog() {
           </p>
           <p className="flex items-start gap-2">
             <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
-            <span>{t("webpay.trust.wallet")}</span>
+            <span>{t(isWeb ? "webpay.trust.wallet" : "webpay.trust.walletDesktop")}</span>
           </p>
           <p className="pl-5.5">
             {t("webpay.trust.unit")} ·{" "}
@@ -566,7 +596,7 @@ function KeepKeyDialog() {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("webpay.keep.title")}</DialogTitle>
-          <DialogDescription>{t("webpay.keep.text")}</DialogDescription>
+          <DialogDescription>{t(isWeb ? "webpay.keep.text" : "webpay.keep.textDesktop")}</DialogDescription>
         </DialogHeader>
         <Input readOnly value={newKey} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
         <div className="flex flex-wrap gap-2">
@@ -579,10 +609,12 @@ function KeepKeyDialog() {
             <Copy className="size-4" />
             {copied ? t("webpay.keep.copied") : t("webpay.keep.copy")}
           </Button>
-          <Button variant="outline" onClick={download}>
-            <Download className="size-4" />
-            {t("webpay.keep.download")}
-          </Button>
+          {isWeb && (
+            <Button variant="outline" onClick={download}>
+              <Download className="size-4" />
+              {t("webpay.keep.download")}
+            </Button>
+          )}
           <Button className="ml-auto" onClick={dismissNewKey}>
             {t("webpay.keep.done")}
           </Button>

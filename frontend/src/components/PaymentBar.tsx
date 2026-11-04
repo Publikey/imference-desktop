@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, Wallet, AlertTriangle, Loader2, ChevronRight, History } from "lucide-react";
-import { openCloudHistory } from "@/lib/target";
+import { onBalanceMaybeChanged, openCloudHistory } from "@/lib/target";
 import { friendlyPayError } from "@/lib/pay-errors";
 import { Segmented } from "@/components/ui/segmented";
 import { api } from "@/lib/wails-bridge";
@@ -59,6 +59,8 @@ export function PaymentBar({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  // A purchase, a paid run, the window regaining focus: read it again.
+  useEffect(() => onBalanceMaybeChanged(() => void refresh()), [refresh]);
 
   const section = mode === "bearer" ? "apikey" : "x402";
   const Icon = mode === "bearer" ? KeyRound : Wallet;

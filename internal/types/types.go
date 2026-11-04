@@ -373,6 +373,16 @@ type CreditInfo struct {
 	Error      string  `json:"error,omitempty"` // populated on a failed lookup (bad key, network)
 }
 
+// CardCheckout is an in-app card purchase of one credit pack (Stripe Embedded
+// Checkout): the frontend mounts Stripe's form with ClientSecret and
+// PublishableKey. APIKey is the key the credits land on — a new one when the
+// buyer had none — adopted by the app once the payment is done.
+type CardCheckout struct {
+	ClientSecret   string `json:"clientSecret"`
+	PublishableKey string `json:"publishableKey"`
+	APIKey         string `json:"apiKey"`
+}
+
 // GenerationRequest is the unified frontend → Go payload for both modes.
 // Mirrors imference-desktop/src/renderer/src/lib/types.ts GenerationParams.
 type GenerationRequest struct {

@@ -1112,7 +1112,8 @@
       "point1": "一次付款，无需订阅",
       "point2": "你的密钥也可用于 Imference Desktop、Claude（MCP）和 API",
       "card": "用银行卡支付 {{usd}}",
-      "usdc": "用 USDC 支付 {{usd}}"
+      "usdc": "用 USDC 支付 {{usd}}",
+      "point2Desktop": "你的密钥也可用于 imference.com、Claude（MCP）和 API"
     },
     "perRun": {
       "title": "按次支付",
@@ -1127,7 +1128,10 @@
       "button": "用我的钱包支付",
       "on": "正在使用 {{address}} 按次支付。",
       "reconnect": "重新连接钱包",
-      "backToCredits": "改用我的积分"
+      "backToCredits": "改用我的积分",
+      "point1Desktop": "从本应用的钱包中以 USDC 支付",
+      "point2Desktop": "在“设置 > 付款”中设置一次即可",
+      "buttonDesktop": "使用应用钱包支付"
     },
     "wallet": {
       "detected": "已检测到 {{name}}",
@@ -1139,7 +1143,8 @@
       "card": "银行卡支付由 Stripe 处理，Imference 不会看到你的卡号。",
       "wallet": "USDC 付款在你自己的钱包中确认，Imference 从不持有你的密钥或资金。",
       "unit": "1 积分 = $0.001，价格以美元计",
-      "terms": "条款"
+      "terms": "条款",
+      "walletDesktop": "USDC 付款来自本应用的钱包，其私钥不会离开这台电脑。"
     },
     "noWallet": "此浏览器中未检测到钱包。安装 MetaMask 或 Coinbase Wallet 即可用 USDC 支付，也可以用银行卡支付。",
     "haveKey": "已有 API 密钥？",
@@ -1160,7 +1165,8 @@
       "copy": "复制",
       "copied": "已复制",
       "download": "下载",
-      "done": "我已保存"
+      "done": "我已保存",
+      "textDesktop": "没有邮箱或密码。这个密钥是找回积分的唯一方式，可用于本应用、imference.com、Claude（MCP）和 API。应用会把它保存在设置中，但请另外妥善保存一份。"
     },
     "chip": {
       "getCredits": "获取积分",

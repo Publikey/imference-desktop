@@ -28,7 +28,7 @@ import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { prepareRefImage } from "@/lib/image";
 import { installLogCapture } from "@/lib/log-capture";
 import { beginPointerDrag } from "@/lib/pointer-drag";
-import { isWeb, OPEN_HISTORY_EVENT } from "@/lib/target";
+import { isWeb, OPEN_HISTORY_EVENT, OPEN_SETTINGS_EVENT, SETTINGS_CHANGED_EVENT, notifyBalanceChanged } from "@/lib/target";
 import { setThemePref } from "@/lib/theme";
 import { isEditModel, refreshTools } from "@/lib/tools";
 import type {
@@ -380,6 +380,18 @@ export default function App() {
     setSettingsSection(section);
     setSettingsOpen(true);
   }, []);
+  // The payment dialog lives outside App (main.tsx): it asks for Settings at a
+  // section, and reports a key it adopted so the settings are read again.
+  useEffect(() => {
+    const onOpen = (e: Event) => openSettings((e as CustomEvent<string>).detail);
+    const onChanged = () => void api.getSettings().then(setSettings).catch(() => {});
+    window.addEventListener(OPEN_SETTINGS_EVENT, onOpen);
+    window.addEventListener(SETTINGS_CHANGED_EVENT, onChanged);
+    return () => {
+      window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen);
+      window.removeEventListener(SETTINGS_CHANGED_EVENT, onChanged);
+    };
+  }, [openSettings]);
 
   // --- Custom user checkpoints (.safetensors referenced in place) ---------
   // Two-step add flow: native picker first, then a small dialog to pick the
@@ -794,6 +806,7 @@ export default function App() {
         setJobs((js) =>
           js.map((j) => (j.id === id ? { ...j, status: "done", image: result, endedAt: Date.now() } : j))
         );
+        if (result.source === "cloud") notifyBalanceChanged();
       })
       .catch((e) => {
         // User-stopped run: the sidecar was killed out from under it. Hide the
@@ -817,6 +830,7 @@ export default function App() {
   // promise. Updates the hydrated Activity row, or adds one if the result landed
   // before its row was hydrated.
   const applyCloudResolved = useCallback((r: CloudResolved) => {
+    if (r.result) notifyBalanceChanged(); // a resumed run was paid
     setJobs((js) => {
       const exists = js.some((j) => j.id === r.jobId);
       if (r.error) {
@@ -1177,6 +1191,7 @@ export default function App() {
           const first = res.outputs.find((o) => o.savedName && o.type !== "text");
           const preview = first?.savedName ? await api.getSavedImage(first.savedName).catch(() => undefined) : undefined;
           settle((j) => ({ status: "done", mode, tool: { ...j.tool!, result: res, preview, stage: undefined } }));
+          if (mode === "cloud") notifyBalanceChanged(); // a paid run: balances moved
           // Its weights are on disk now: the panels stop announcing the download.
           if (mode === "local") void refreshTools().catch(() => {});
           if (saved.length) setToolOutputs((o) => [...o, ...saved]);

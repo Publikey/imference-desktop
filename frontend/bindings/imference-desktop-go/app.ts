@@ -40,6 +40,15 @@ export function AddLora(path: string): $CancellablePromise<types$0.Settings> {
 }
 
 /**
+ * AdoptAPIKey saves key as the credits key and makes credits the payment
+ * method: after a purchase (the key the API created), or a key the user
+ * pasted ("I already have a key").
+ */
+export function AdoptAPIKey(key: string): $CancellablePromise<types$0.Settings> {
+    return $Call.ByID(28862922, key);
+}
+
+/**
  * CancelModelDownload aborts an in-flight local model download (if any). The
  * download goroutine sees context.Canceled, cleans up the partial file, and
  * emits a "cancelled" progress event; a no-op when nothing is downloading.
@@ -627,6 +636,17 @@ export function SetAppearance(dark: boolean): $CancellablePromise<void> {
  */
 export function SetToolsSettings(ts: types$0.ToolsSettings): $CancellablePromise<types$0.ToolsSettings> {
     return $Call.ByID(262164407, ts);
+}
+
+/**
+ * StartCardCheckout starts an in-app card purchase of one credit pack (Stripe
+ * Embedded Checkout, mounted by the frontend). It tops up the saved API key,
+ * or — for a buyer without one — the imference API creates a key for this
+ * purchase, returned in APIKey: the frontend adopts it (AdoptAPIKey) once
+ * Stripe reports the payment done, so an abandoned checkout changes nothing.
+ */
+export function StartCardCheckout(): $CancellablePromise<types$0.CardCheckout> {
+    return $Call.ByID(3854876613);
 }
 
 /**

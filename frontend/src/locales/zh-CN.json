@@ -107,7 +107,7 @@
     "extrasHide": "收起"
   },
   "hint": {
-    "configurePayment": "请先在上方配置支付方式",
+    "configurePayment": "尚无付款方式：请在上方设置",
     "pickCloudModel": "请在上方选择云端模型",
     "creditsPerRun": "{{name}} · 每次生成 {{cost}} 积分",
     "engineNotInstalled": "本地引擎未安装 — 请点击“安装引擎”",
@@ -124,7 +124,9 @@
     "usdPerRun": "{{name}} · ${{usd}} / 次",
     "editModel": "编辑模型：请使用指令编辑",
     "editModelLong": "此模型用于编辑图片，不能根据提示词生成。请在图库中打开图片，选择“编辑 > 指令编辑”；或选择文生图模型进行生成。",
-    "writePrompt": "请先输入提示词"
+    "writePrompt": "请先输入提示词",
+    "notEnoughCredits": "积分不足：请在上方充值",
+    "notEnoughUsdc": "USDC 不足：请在上方充值"
   },
   "progress": {
     "preparing": "正在准备 {{name}}",
@@ -462,11 +464,7 @@
     "language": "语言 · Language",
     "languageSystem": "跟随系统",
     "languageHint": "立即生效。“跟随系统”使用操作系统的语言。",
-    "activeMethod": "当前方式",
-    "apiKeyCredit": "积分",
-    "x402Wallet": "按次付费",
     "apiKeyPlaceholder": "粘贴你在 imference.com 获取的 API 密钥",
-    "x402WalletLabel": "按次付费（USDC）",
     "paths": "路径",
     "pathsHint": "云端和本地模型在主界面提示词上方的表单中选择。",
     "pythonPath": "Python 路径",
@@ -483,7 +481,11 @@
     "navStorage": "存储",
     "storageDesc": "应用在磁盘上保留了什么，以及占用多少。",
     "navTools": "编辑工具",
-    "toolsDesc": "放大、去背景、橡皮擦等 — 在本机或云端运行。"
+    "toolsDesc": "放大、去背景、橡皮擦等 — 在本机或云端运行。",
+    "navCredits": "积分与账户",
+    "creditsDesc": "用于云端运行的预付积分，存放在你的 Imference 账户中。",
+    "navWallet": "USDC 钱包",
+    "walletDesc": "从本应用的钱包中以 USDC 按次支付云端运行。"
   },
   "storage": {
     "usageTitle": "模型缓存",
@@ -587,7 +589,7 @@
   "wallet": {
     "loading": "正在加载钱包…",
     "title": "应用内钱包",
-    "keychainNote": "钱包私钥保存在这台电脑的系统钥匙串中。请只存放少量资金；如需备份，请导出私钥。",
+    "keychainNote": "钱包私钥保存在这台电脑的系统钥匙串中。请只存放少量资金。",
     "intro": "不购买积分，而是按次支付 USDC。应用会为你创建一个钱包；向其中转入少量 USDC，每次运行都会按准确价格从中扣款。",
     "generate": "生成新钱包",
     "importExisting": "导入已有私钥",
@@ -1334,5 +1336,96 @@
     "needs_wallet": "请创建或导入钱包，以便按次付费。",
     "invalid_key": "无法识别此 API 密钥。请在“设置 > 付款”中检查。",
     "payment_cancelled": "付款已取消，未产生任何费用。"
+  },
+  "credits": {
+    "unit": "积分",
+    "buy": "购买积分",
+    "balance": "余额",
+    "runsLeft_one": "使用 {{model}} 约可运行 {{n}} 次",
+    "runsLeft_other": "使用 {{model}} 约可运行 {{n}} 次",
+    "haveKey": "我已有密钥",
+    "haveKeyHint": "粘贴你购买积分时获得的账户密钥（在本应用、imference.com 或 Claude 中）。",
+    "useKey": "使用此密钥",
+    "useAnother": "使用其他密钥",
+    "empty": {
+      "title": "积分用于支付云端运行",
+      "lead": "一次购买一个积分包，之后每张图片或视频消耗少量积分。1 积分 = 0.001 美元。",
+      "point1": "首次购买会创建你的 Imference 账户",
+      "point2": "账户就是一个密钥：无需邮箱或密码",
+      "point3": "可用于本应用、imference.com、Claude（MCP）和 API"
+    },
+    "key": {
+      "title": "你的账户密钥",
+      "lead": "这个密钥就是你的 Imference 账户，积分属于它。请妥善保存一份副本，这是找回积分的唯一方式。",
+      "saveFile": "保存到文件",
+      "saved": "密钥已保存到 {{path}}",
+      "where": "在 imference.com、Claude（MCP）或 API 中使用同一个密钥，消耗的是同一份积分。"
+    },
+    "signOut": {
+      "action": "退出此账户",
+      "title": "退出此账户？",
+      "body": "密钥将从本应用中移除。积分仍保留在账户中：再次使用需要该密钥，请确认已保存。",
+      "confirm": "退出"
+    }
+  },
+  "walletPane": {
+    "title": "以 USDC 按次付费",
+    "forWho": "适合持有 USDC 的用户",
+    "lead": "无需购买积分，每次运行都会从本应用为你保管的钱包中按准确价格扣款。无需账户。",
+    "stepsLabel": "设置步骤",
+    "s1": "创建",
+    "s2": "充值",
+    "s3": "就绪",
+    "step1": "创建你的钱包",
+    "step1Hint": "一键完成。私钥保存在这台电脑的系统钥匙串中。",
+    "importTitle": "导入私钥",
+    "importHint": "64 位十六进制私钥，可带或不带 0x。请使用只存少量资金的钱包。",
+    "step2": "充值",
+    "ready": "已可支付你的运行",
+    "fundHint": "从交易所或其他钱包向此地址转入 USDC。几美元就足够了。",
+    "topUpHint": "如需充值，请向此地址转入更多 USDC。",
+    "network": "仅限 Base 网络上的 USDC。转入其他资产将会丢失。",
+    "balanceError": "暂时无法读取余额，将自动重试。",
+    "qr": "钱包地址二维码",
+    "backup": {
+      "title": "备份此钱包的私钥",
+      "lead": "私钥掌管此钱包中的 USDC。保存一份副本，即可在其他电脑上恢复，或在 MetaMask、Rabby 中打开此钱包。",
+      "saveFile": "保存到文件",
+      "copy": "复制私钥",
+      "copied": "已复制",
+      "saved": "钱包私钥已保存到 {{path}}",
+      "warning": "任何持有此私钥的人都能花掉其中的 USDC。请妥善保管文件，切勿分享。"
+    },
+    "replace": {
+      "title": "使用其他钱包",
+      "lead": "这将替换本应用中的钱包。请先保存其私钥：钱包中剩余的 USDC 只能凭该私钥取回。",
+      "import": "导入其他私钥",
+      "create": "创建新钱包"
+    }
+  },
+  "payNotice": {
+    "noCredits": {
+      "title": "尚无积分：云端运行需要付款方式",
+      "body_one": "购买一个积分包（{{usd}}，使用 {{model}} 约可运行 {{runs}} 次）。首次购买会创建你的账户。",
+      "body_other": "购买一个积分包（{{usd}}，使用 {{model}} 约可运行 {{runs}} 次）。首次购买会创建你的账户。",
+      "action": "购买积分"
+    },
+    "noWallet": {
+      "title": "尚无 USDC 钱包：无法支付此次运行",
+      "body": "按次付费需要本应用中有一个存有 USDC 的钱包。一键创建，然后向其转入 Base 网络上的 USDC。",
+      "action": "设置钱包"
+    },
+    "shortCredits": {
+      "title": "积分不足，无法完成此次运行",
+      "body": "此次运行需要 {{cost}} 积分，你还剩 {{have}}。",
+      "action": "充值"
+    },
+    "shortUsdc": {
+      "title": "USDC 不足，无法完成此次运行",
+      "body": "此次运行需要 {{cost}}，钱包中有 {{have}}。请向其地址转入 Base 网络上的 USDC。",
+      "action": "充值"
+    },
+    "orWallet": "或以 USDC 按次付费",
+    "orCredits": "或改用积分"
   }
 }

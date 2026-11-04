@@ -17,6 +17,10 @@ export { Create, CancellablePromise };
 const q = new URLSearchParams(location.search);
 const scenario = q.get("scenario") || "ready";
 const API = q.get("api") || "http://127.0.0.1:8799";
+const wallet = {
+  address: q.get("wallet") ? "0x7a3C9f1b2E4d5A6b7C8d9E0f1A2b3C4d5E6f7081" : "",
+  usdc: q.get("usdc") ?? "0",
+};
 
 // Method IDs are FNV-32a of "main.App.<Method>" (same as the Go side).
 function bindingID(fqn: string): number {
@@ -28,7 +32,7 @@ function bindingID(fqn: string): number {
   return h >>> 0;
 }
 const METHODS =
-  "AddLora AdoptAPIKey CancelModelDownload CancelTool CancelToolWeights CheckForUpdate CheckModelReadiness ClearLogs DeleteCachedModel DeleteSavedImage DetectPython DownloadCatalogLora DownloadModelComponents DownloadToolWeights DropPendingCloudJob EngineStatus EnsureLocalModel ExportWalletPrivateKey GalleryFacets GenerateCloud GenerateLocal GenerateWallet GetCreditBalance GetEngineInfo GetFolderSizes GetLocalAPIInfo GetLogs GetSavedImage GetSettings GetSidecarStatus GetStorageInfo GetToolsSettings GetVersion GetWalletInfo ImportWallet InstallEngine ListCachedModels ListCatalogLoras ListCloudHistory ListCloudLoras ListCloudModels ListEditModels ListLocalModels ListPendingCloudJobs ListSavedImages ListTools LogFromFrontend OpenCacheFolder PickLoraFile PickModelFile ProbeTools PurgeBaseComponentsCache RecheckPendingCloud RedownloadCloudOutput RefreshWalletBalance ReleaseTools RemoveCustomModel RemoveLora RestartSidecar RevealInFolder RunTool SaveSettings SelectCloudModel SelectLocalModel SetToolsSettings StartCardCheckout StartSidecar StopLocalGeneration StopSidecar SwitchBackFromEditModel SwitchToEditModel TakeClientGalleryOutbox ToolGenModels UseCustomModel".split(
+  "AddLora AdoptAPIKey CancelModelDownload CancelTool CancelToolWeights CheckForUpdate CheckModelReadiness ClearLogs DeleteCachedModel DeleteSavedImage DetectPython DownloadCatalogLora DownloadModelComponents DownloadToolWeights DropPendingCloudJob EngineStatus EnsureLocalModel ExportWalletPrivateKey GalleryFacets GenerateCloud GenerateLocal GenerateWallet GetCreditBalance GetEngineInfo GetFolderSizes GetLocalAPIInfo GetLogs GetSavedImage GetSettings GetSidecarStatus GetStorageInfo GetToolsSettings GetVersion GetWalletInfo ImportWallet InstallEngine ListCachedModels ListCatalogLoras ListCloudHistory ListCloudLoras ListCloudModels ListEditModels ListLocalModels ListPendingCloudJobs ListSavedImages ListTools LogFromFrontend OpenCacheFolder PickLoraFile PickModelFile ProbeTools PurgeBaseComponentsCache RecheckPendingCloud RedownloadCloudOutput RefreshWalletBalance ReleaseTools RemoveCustomModel RemoveLora RestartSidecar RevealInFolder RunTool SaveAPIKeyFile SaveSettings SaveWalletKeyFile SelectCloudModel SelectLocalModel SetToolsSettings StartCardCheckout StartSidecar StopLocalGeneration StopSidecar SwitchBackFromEditModel SwitchToEditModel TakeClientGalleryOutbox ToolGenModels UseCustomModel".split(
     " ",
   );
 const nameByID = new Map(METHODS.map((n) => [bindingID("main.App." + n), n]));
@@ -237,6 +241,9 @@ async function handle(name: string, args: any[]): Promise<any> {
     case "StartCardCheckout":
       // No Stripe in the preview: the dialog shows its error state.
       throw new Error("Card payment is not available in the preview.");
+    case "SaveAPIKeyFile":
+    case "SaveWalletKeyFile":
+      return "";
     case "AdoptAPIKey":
       return { ...(await handle("GetSettings", [])), apiKey: args[0], paymentMode: "bearer" };
     case "ListCloudHistory":
@@ -244,8 +251,20 @@ async function handle(name: string, args: any[]): Promise<any> {
       return { data: [], retention_hours: 24, rail: "credits", rails: ["credits"] };
     case "GetCreditBalance":
       return { configured: scenario !== "firstrun", credits: 4496 };
+    // A wallet that can be created (or comes with ?wallet=1), funded with
+    // ?usdc=<amount>: the USDC wallet pane's three steps.
     case "GetWalletInfo":
-      return { configured: false, address: "", balanceUSDC: "0", network: "base" };
+      return wallet.address
+        ? { configured: true, address: wallet.address, balanceUSDC: wallet.usdc, network: "base" }
+        : { configured: false, address: "", balanceUSDC: "0", network: "base" };
+    case "GenerateWallet":
+    case "ImportWallet":
+      wallet.address = "0x7a3C9f1b2E4d5A6b7C8d9E0f1A2b3C4d5E6f7081";
+      return wallet.address;
+    case "RefreshWalletBalance":
+      return wallet.usdc;
+    case "ExportWalletPrivateKey":
+      return "0x" + "ab".repeat(32);
     case "ListPendingCloudJobs":
     case "ListCachedModels":
     case "GetLogs":

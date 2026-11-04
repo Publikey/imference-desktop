@@ -14,6 +14,8 @@ import {
   GetCreditBalance,
   StartCardCheckout,
   AdoptAPIKey,
+  SaveAPIKeyFile,
+  SaveWalletKeyFile,
   GetEngineInfo,
   GetLogs,
   GetSettings,
@@ -121,6 +123,10 @@ const raw = {
   startCardCheckout: StartCardCheckout as () => Promise<{ clientSecret: string; publishableKey: string; apiKey: string }>,
   /** Saves a key (bought or pasted) as the credits key; credits become the method. */
   adoptAPIKey: AdoptAPIKey as unknown as (key: string) => Promise<AppSettings>,
+  /** Native "Save as" for the API key (the account); "" when cancelled. */
+  saveAPIKeyFile: SaveAPIKeyFile as () => Promise<string>,
+  /** Native "Save as" for the app wallet's private key; "" when cancelled. */
+  saveWalletKeyFile: SaveWalletKeyFile as () => Promise<string>,
   // Cloud call history (GET /history): rail "" = the payment mode's; cursor =
   // the previous page's next_cursor. A result within its 24 h comes back to
   // the gallery with redownloadCloudOutput(item, outputIndex).

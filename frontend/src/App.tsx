@@ -113,6 +113,8 @@ import {
   writeWebDraft,
 } from "./app/shared";
 import { friendlyPayError } from "@/lib/pay-errors";
+import { openPayDialog } from "@/lib/web-pay";
+import { payProblem, usePayState } from "@/lib/pay-state";
 
 // Module-load side effect: install console + window error hooks before any
 // component renders. The api wrapping itself happens inside wails-bridge.ts
@@ -540,7 +542,14 @@ export default function App() {
   // refuses it and the payment dialog opens (WebPay.tsx).
   const cloudConfigured =
     isWeb || (settings?.paymentMode === "x402" ? walletConfigured : !!settings?.apiKey);
-  const cloudReady = cloudConfigured && !!settings?.cloudModel;
+  // Desktop: can the chosen method pay THIS run (set up, and enough on it)?
+  // Checked before sending: an empty wallet used to start the run and fail.
+  const pay = usePayState(settings, !isWeb && mode === "cloud");
+  const cloudRunCost = settings?.cloudModelInfo
+    ? runCost(settings.cloudModelInfo, params?.formatCode ?? "", params?.durationS ?? null)
+    : 0;
+  const cloudPayProblem = isWeb || mode !== "cloud" ? null : payProblem(pay, cloudRunCost);
+  const cloudReady = cloudConfigured && !cloudPayProblem && !!settings?.cloudModel;
 
   // First run: nothing is usable yet (no local engine AND no cloud payment).
   // The Create panel shows a guided setup instead of the (non-functional)
@@ -1408,8 +1417,13 @@ export default function App() {
         const b: Blocker[] = [];
         if (editModelActive) b.push("edit-model");
         else if (mode === "cloud") {
-          if (!cloudConfigured) b.push("payment");
-          else if (!settings?.cloudModel) b.push("model");
+          if (!cloudConfigured || cloudPayProblem) {
+            b.push("payment");
+            // Open the fix right away: buy / top up credits, or the wallet.
+            if (pay.method === "bearer")
+              void openPayDialog(cloudPayProblem === "short" ? "insufficient_credits" : "needs_key");
+            else openSettings("wallet");
+          } else if (!settings?.cloudModel) b.push("model");
         } else if (!localCanRun) {
           b.push(pendingLocalModel || settings?.localModel ? "readiness" : "model");
         }
@@ -1418,7 +1432,7 @@ export default function App() {
         toast.toast(b[0] === "prompt" ? t("hint.writePrompt") : contextHintRef.current);
       },
     };
-  }, [editModelActive, cloudConfigured, settings?.cloudModel, localCanRun, prompt, toast, mode, localNeedsActivation, pendingSwitch, pendingLocalModel, settings?.localModel?.modelCode, activateLocalModel, selectCustomModel, canGenerate, localQueueActive, run, t]);
+  }, [editModelActive, cloudConfigured, cloudPayProblem, pay.method, openSettings, settings?.cloudModel, localCanRun, prompt, toast, mode, localNeedsActivation, pendingSwitch, pendingLocalModel, settings?.localModel?.modelCode, activateLocalModel, selectCustomModel, canGenerate, localQueueActive, run, t]);
 
   // Global ⌘/Ctrl+Enter → run the primary action from anywhere in the app, not
   // only when the prompt field has focus. Suppressed while a modal that captures
@@ -1461,7 +1475,9 @@ export default function App() {
   const contextHint = useMemo(() => {
     if (editModelActive) return t("hint.editModel");
     if (mode === "cloud") {
-      if (!cloudConfigured) return t("hint.configurePayment");
+      if (cloudPayProblem === "short")
+        return t(pay.method === "x402" ? "hint.notEnoughUsdc" : "hint.notEnoughCredits");
+      if (!cloudConfigured || cloudPayProblem) return t("hint.configurePayment");
       const c = settings?.cloudModelInfo;
       if (!c) return t("hint.pickCloudModel");
       if (!(c.cost > 0)) return c.name;
@@ -1487,7 +1503,7 @@ export default function App() {
     if (sidecar.state === "starting") return t("hint.engineStarting");
     if (sidecar.state !== "ready") return t("hint.startEngine");
     return settings?.localModel?.name ?? t("hint.pickModel");
-  }, [editModelActive, mode, cloudConfigured, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, componentsBlocked, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, params?.formatCode, params?.durationS, engineInstalled, t]);
+  }, [editModelActive, mode, cloudConfigured, cloudPayProblem, pay.method, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, componentsBlocked, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, params?.formatCode, params?.durationS, engineInstalled, t]);
   contextHintRef.current = contextHint;
 
   // Activity-panel derivations: in-flight count (running + queued) for the badge,
@@ -1637,7 +1653,7 @@ export default function App() {
           footer={
             !isWeb && mode === "cloud" ? (
               <div data-blocker="payment" className="rounded-lg">
-                <PaymentBar settings={settings} onModeChange={setPaymentMode} onConfigure={openSettings} />
+                <PaymentBar settings={settings} pay={pay} costCredits={cloudRunCost} onModeChange={setPaymentMode} onConfigure={openSettings} />
               </div>
             ) : isWeb ? (
               <div data-blocker="payment" className="rounded-lg">

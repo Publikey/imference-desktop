@@ -109,7 +109,7 @@
     "extrasHide": "Hide"
   },
   "hint": {
-    "configurePayment": "Configure a payment method above",
+    "configurePayment": "No way to pay yet: set one up above",
     "pickCloudModel": "Pick a cloud model above",
     "creditsPerRun": "{{name}} · {{cost}} credits / run",
     "engineNotInstalled": "Local engine not installed — click Install engine",
@@ -126,7 +126,9 @@
     "usdPerRun": "{{name}} · ${{usd}} / run",
     "editModel": "Edit model: use Edit with instructions",
     "editModelLong": "This model edits images: it can't generate from a prompt. Open an image in the gallery and use Edit > Edit with instructions, or pick a text-to-image model to generate.",
-    "writePrompt": "Write a prompt first"
+    "writePrompt": "Write a prompt first",
+    "notEnoughCredits": "Not enough credits for this run: top up above",
+    "notEnoughUsdc": "Not enough USDC for this run: add funds above"
   },
   "progress": {
     "preparing": "Preparing {{name}}",
@@ -468,11 +470,7 @@
     "language": "Language",
     "languageSystem": "System",
     "languageHint": "Applies immediately. \"System\" follows your OS language.",
-    "activeMethod": "Active method",
-    "apiKeyCredit": "Credits",
-    "x402Wallet": "Pay as you go",
     "apiKeyPlaceholder": "Paste your API key from imference.com",
-    "x402WalletLabel": "Pay as you go (USDC)",
     "paths": "Paths",
     "pathsHint": "The cloud and local models are chosen from the form, above the prompt.",
     "pythonPath": "Python path",
@@ -489,7 +487,11 @@
     "navStorage": "Storage",
     "storageDesc": "What the app keeps on disk, and how much of it.",
     "navTools": "Editing tools",
-    "toolsDesc": "Upscale, remove background, eraser and more — on this computer or in the cloud."
+    "toolsDesc": "Upscale, remove background, eraser and more — on this computer or in the cloud.",
+    "navCredits": "Credits & account",
+    "creditsDesc": "Prepaid credits for cloud runs, on your Imference account.",
+    "navWallet": "USDC wallet",
+    "walletDesc": "Pay each cloud run in USDC, from a wallet in this app."
   },
   "storage": {
     "usageTitle": "Model cache",
@@ -595,7 +597,7 @@
   "wallet": {
     "loading": "Loading wallet…",
     "title": "Wallet in this app",
-    "keychainNote": "The wallet's private key stays in your system keychain on this computer. Keep only small amounts in it, and export the key if you want a backup.",
+    "keychainNote": "The wallet's private key stays in your system keychain on this computer. Keep only small amounts in it.",
     "intro": "Pay each run in USDC instead of buying credits. The app creates a wallet for you; send it a few dollars of USDC and every run is paid from it, at its exact price.",
     "generate": "Generate new wallet",
     "importExisting": "Import existing private key",
@@ -1346,5 +1348,96 @@
     "needs_wallet": "Create or import a wallet to pay as you go.",
     "invalid_key": "This API key isn't recognised. Check it in Settings > Payment.",
     "payment_cancelled": "Payment cancelled, nothing was charged."
+  },
+  "credits": {
+    "unit": "credits",
+    "buy": "Buy credits",
+    "balance": "Balance",
+    "runsLeft_one": "About {{n}} run left with {{model}}",
+    "runsLeft_other": "About {{n}} runs left with {{model}}",
+    "haveKey": "I already have a key",
+    "haveKeyHint": "Paste the account key you got when you bought credits (here, on imference.com or for Claude).",
+    "useKey": "Use this key",
+    "useAnother": "Use another key",
+    "empty": {
+      "title": "Credits pay for your cloud runs",
+      "lead": "Buy a pack once, then each image or video takes a few credits. 1 credit = $0.001.",
+      "point1": "Your first purchase creates your Imference account",
+      "point2": "The account is a key: no email, no password",
+      "point3": "Works here, on imference.com, in Claude (MCP) and through the API"
+    },
+    "key": {
+      "title": "Your account key",
+      "lead": "This key is your Imference account: your credits belong to it. Keep a copy somewhere safe, it is the only way back to them.",
+      "saveFile": "Save to a file",
+      "saved": "Key saved to {{path}}",
+      "where": "Use the same key on imference.com, in Claude (MCP) or through the API: it spends the same credits."
+    },
+    "signOut": {
+      "action": "Sign out of this account",
+      "title": "Sign out of this account?",
+      "body": "The key is removed from this app. Your credits stay on the account: you will need the key to use them again, so make sure you saved it.",
+      "confirm": "Sign out"
+    }
+  },
+  "walletPane": {
+    "title": "Pay per run in USDC",
+    "forWho": "For USDC holders",
+    "lead": "Instead of buying credits, each run is paid at its exact price from a wallet this app keeps for you. No account needed.",
+    "stepsLabel": "Setup steps",
+    "s1": "Create",
+    "s2": "Add funds",
+    "s3": "Ready",
+    "step1": "Create your wallet",
+    "step1Hint": "One click. The private key stays in your system keychain on this computer.",
+    "importTitle": "Import a private key",
+    "importHint": "A 64-character hex key, with or without 0x. Use a wallet kept for small amounts.",
+    "step2": "Add funds",
+    "ready": "Ready to pay your runs",
+    "fundHint": "Send USDC to this address from an exchange or another wallet. A few dollars is plenty.",
+    "topUpHint": "To top up, send more USDC to this address.",
+    "network": "Only USDC on the Base network. Anything else sent here is lost.",
+    "balanceError": "The balance couldn't be read right now. It will retry.",
+    "qr": "QR code of the wallet address",
+    "backup": {
+      "title": "Back up this wallet's key",
+      "lead": "The private key is what holds the USDC in this wallet. Save a copy to get it back on another computer, or to open the wallet in MetaMask or Rabby.",
+      "saveFile": "Save to a file",
+      "copy": "Copy private key",
+      "copied": "Copied",
+      "saved": "Wallet key saved to {{path}}",
+      "warning": "Anyone with this key can spend the USDC. Keep the file private, never share it."
+    },
+    "replace": {
+      "title": "Use a different wallet",
+      "lead": "Replaces this wallet in the app. Save its key first: USDC left in it is only reachable with that key.",
+      "import": "Import another key",
+      "create": "Create a new wallet"
+    }
+  },
+  "payNotice": {
+    "noCredits": {
+      "title": "No credits yet: cloud runs need a way to pay",
+      "body_one": "Buy a credit pack ({{usd}}, about {{runs}} run with {{model}}). Your first purchase creates your account.",
+      "body_other": "Buy a credit pack ({{usd}}, about {{runs}} runs with {{model}}). Your first purchase creates your account.",
+      "action": "Buy credits"
+    },
+    "noWallet": {
+      "title": "No USDC wallet yet: this run cannot be paid",
+      "body": "Pay as you go needs a wallet in this app with some USDC in it. Create one in a click, then send it USDC on the Base network.",
+      "action": "Set up the wallet"
+    },
+    "shortCredits": {
+      "title": "Not enough credits for this run",
+      "body": "This run costs {{cost}} credits and you have {{have}} left.",
+      "action": "Top up"
+    },
+    "shortUsdc": {
+      "title": "Not enough USDC for this run",
+      "body": "This run costs {{cost}} and the wallet holds {{have}}. Send USDC on the Base network to its address.",
+      "action": "Add funds"
+    },
+    "orWallet": "or pay per run in USDC",
+    "orCredits": "or use credits instead"
   }
 }

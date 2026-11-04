@@ -586,6 +586,16 @@ export function RunTool(req: $models.ToolRunRequest): $CancellablePromise<$model
 }
 
 /**
+ * SaveAPIKeyFile writes the saved API key to a text file the user picks (a
+ * native "Save as" dialog): the key is the account, a copy outside the app is
+ * the only way back to the credits if this computer is lost. Returns the path,
+ * or "" when the dialog was cancelled.
+ */
+export function SaveAPIKeyFile(): $CancellablePromise<string> {
+    return $Call.ByID(896931921);
+}
+
+/**
  * SaveSettings overwrites settings on disk and restarts the sidecar in the
  * background if a sidecar-affecting field changed — but ONLY when the engine is
  * currently running. When it's stopped (the default now — the engine starts on
@@ -594,6 +604,16 @@ export function RunTool(req: $models.ToolRunRequest): $CancellablePromise<$model
  */
 export function SaveSettings(next: types$0.Settings): $CancellablePromise<types$0.Settings> {
     return $Call.ByID(1949631069, next);
+}
+
+/**
+ * SaveWalletKeyFile writes the app wallet's private key to a text file the
+ * user picks (native "Save as"), the same way the account key is backed up.
+ * Anyone holding that file can spend the wallet's USDC: the file says so.
+ * Returns the path, or "" when cancelled.
+ */
+export function SaveWalletKeyFile(): $CancellablePromise<string> {
+    return $Call.ByID(1190035546);
 }
 
 /**

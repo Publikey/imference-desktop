@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
-  Cloud,
+  Sparkles,
   FolderOpen,
   HardDrive,
   Languages,
   Server,
   SlidersHorizontal,
+  Wallet,
   Wand2,
 } from "lucide-react";
 import {
@@ -21,9 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
-import { WalletSection } from "@/components/WalletSection";
 import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
-import { CreditSection } from "@/components/CreditSection";
 import { StorageSection } from "@/components/StorageSection";
 import { isWeb, SETTINGS_CHANGED_EVENT } from "@/lib/target";
 import { WebPaymentSettings } from "@/components/WebPay";
@@ -34,6 +33,8 @@ import { cn } from "@/lib/utils";
 import { SUPPORTED_LANGUAGES, setLanguage, storedLanguage } from "@/i18n";
 import logoUrl from "@/assets/logo.svg";
 import type { AppSettings, EngineRuntimeSettings, PaymentMode } from "@/lib/types";
+import { CreditsPane } from "@/components/pay/CreditsPane";
+import { WalletPane } from "@/components/pay/WalletPane";
 
 type Props = {
   open: boolean;
@@ -43,7 +44,7 @@ type Props = {
   initialSection?: string;
 };
 
-type PaneId = "engine" | "runtime" | "tools" | "cloud" | "paths" | "storage" | "gallery" | "language";
+type PaneId = "engine" | "runtime" | "tools" | "credits" | "wallet" | "paths" | "storage" | "gallery" | "language";
 
 // Top-level categories. Each is a full pane (icon + title + one-line purpose);
 // only the selected pane renders, so the dialog never becomes one long scroll.
@@ -56,7 +57,10 @@ const PANES: {
   { id: "engine", labelKey: "settings.navEngine", descKey: "settings.engineDesc", icon: Server },
   { id: "runtime", labelKey: "settings.navRuntime", descKey: "settings.runtimeDesc", icon: SlidersHorizontal },
   { id: "tools", labelKey: "settings.navTools", descKey: "settings.toolsDesc", icon: Wand2 },
-  { id: "cloud", labelKey: "settings.navPayment", descKey: "settings.cloudDesc", icon: Cloud },
+  // Paying for cloud runs: two separate stories, two panes. Which one pays a
+  // run is chosen on the payment line in Create, not here.
+  { id: "credits", labelKey: "settings.navCredits", descKey: "settings.creditsDesc", icon: Sparkles },
+  { id: "wallet", labelKey: "settings.navWallet", descKey: "settings.walletDesc", icon: Wallet },
   { id: "paths", labelKey: "settings.navPaths", descKey: "settings.pathsDesc", icon: FolderOpen },
   { id: "storage", labelKey: "settings.navStorage", descKey: "settings.storageDesc", icon: HardDrive },
   { id: "language", labelKey: "settings.navLanguage", descKey: "settings.languageDesc", icon: Languages },
@@ -64,23 +68,30 @@ const PANES: {
 
 // The web build has no local engine, disk or wallet: only cloud panes remain,
 // plus "gallery" (where the browser keeps the user's images).
-const WEB_PANES: PaneId[] = ["cloud", "gallery", "language"];
+const WEB_PANES: PaneId[] = ["credits", "gallery", "language"];
 const GALLERY_PANE = { id: "gallery" as PaneId, labelKey: "web.gallery.nav", descKey: "web.gallery.desc", icon: FolderOpen };
+// On the web, the credits pane still holds both ways to pay (its own
+// WebPaymentSettings), under the earlier "Payment" name.
 const VISIBLE_PANES = isWeb
-  ? [...PANES, GALLERY_PANE].filter((p) => WEB_PANES.includes(p.id)).sort((a, b) => WEB_PANES.indexOf(a.id) - WEB_PANES.indexOf(b.id))
+  ? [...PANES, GALLERY_PANE]
+      .filter((p) => WEB_PANES.includes(p.id))
+      .sort((a, b) => WEB_PANES.indexOf(a.id) - WEB_PANES.indexOf(b.id))
+      .map((p) => (p.id === "credits" ? { ...p, labelKey: "settings.navPayment", descKey: "settings.cloudDesc" } : p))
   : PANES;
 
 // Map a deep-link section id (from the palette / payment bar) to its pane, plus
 // an optional element to scroll to once the pane is mounted.
 function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
   switch (section) {
+    // "apikey" / "payment" / "cloud" are the older names of the credits pane.
+    case "credits":
     case "apikey":
-      return { pane: "cloud", scrollTo: "settings-apikey" };
-    case "x402":
-      return { pane: "cloud", scrollTo: "settings-x402" };
     case "payment":
     case "cloud":
-      return { pane: "cloud" };
+      return { pane: "credits" };
+    case "wallet":
+    case "x402":
+      return { pane: isWeb ? "credits" : "wallet" };
     case "runtime":
     case "runtime-image":
     case "runtime-wan":
@@ -98,7 +109,7 @@ function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
     case "gallery":
       return { pane: "gallery" };
     default:
-      return { pane: isWeb ? "cloud" : "engine" };
+      return { pane: isWeb ? "credits" : "engine" };
   }
 }
 
@@ -269,77 +280,10 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
               />
             )}
 
-            {pane === "cloud" && (
-              <div className="space-y-5">
-                <div className={isWeb ? "hidden" : "grid gap-2"}>
-                  <Label className="text-xs">{t("settings.activeMethod")}</Label>
-                  <div className="bg-muted/60 grid grid-cols-2 gap-1 rounded-lg p-1">
-                    {(
-                      [
-                        ["bearer", t("settings.apiKeyCredit")],
-                        ["x402", t("settings.x402Wallet")],
-                      ] as const
-                    ).map(([m, label]) => {
-                      const on = (m === "x402") === (draft.paymentMode === "x402");
-                      return (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setDraft({ ...draft, paymentMode: m as PaymentMode })}
-                          className={cn(
-                            "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                            on
-                              ? "bg-background text-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+            {pane === "credits" && (isWeb ? <WebPaymentSettings /> : <CreditsPane draft={draft} setDraft={setDraft} />)}
 
-                {isWeb ? (
-                  <WebPaymentSettings />
-                ) : (
-                  <div
-                    id="settings-apikey"
-                    className={cn(
-                      "ds-card scroll-mt-4 grid gap-2 p-4 transition-opacity",
-                      draft.paymentMode === "x402" && "opacity-55"
-                    )}
-                  >
-                    <Label htmlFor="apiKey">{t("settings.apiKeyCredit")}</Label>
-                    <Input
-                      id="apiKey"
-                      type="password"
-                      value={draft.apiKey}
-                      onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
-                      placeholder={t("settings.apiKeyPlaceholder")}
-                    />
-                    <CreditSection apiKey={draft.apiKey} />
-                  </div>
-                )}
-
-                <div
-                  id="settings-x402"
-                  hidden={isWeb}
-                  className={cn(
-                    "ds-card scroll-mt-4 p-4 transition-opacity",
-                    draft.paymentMode !== "x402" && "opacity-55"
-                  )}
-                >
-                  <Label className="text-xs">{t("settings.x402WalletLabel")}</Label>
-                  <div className="mt-2">
-                    <WalletSection
-                      onChanged={(newAddress) =>
-                        setDraft((prev) => ({ ...prev, walletAddress: newAddress }))
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
+            {pane === "wallet" && !isWeb && (
+              <WalletPane onAddressChange={(address) => setDraft((prev) => ({ ...prev, walletAddress: address }))} />
             )}
 
             {pane === "paths" && (

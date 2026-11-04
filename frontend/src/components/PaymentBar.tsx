@@ -1,85 +1,115 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { KeyRound, Wallet, AlertTriangle, Loader2, ChevronRight, History } from "lucide-react";
-import { onBalanceMaybeChanged, openCloudHistory } from "@/lib/target";
+import { KeyRound, Wallet, AlertTriangle, Loader2, ChevronRight, History, Sparkles } from "lucide-react";
+import { openCloudHistory } from "@/lib/target";
 import { friendlyPayError } from "@/lib/pay-errors";
 import { Segmented } from "@/components/ui/segmented";
-import { api } from "@/lib/wails-bridge";
-import { cn } from "@/lib/utils";
+import { cn, creditsToUSD } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { payProblem, type PayState } from "@/lib/pay-state";
+import { PACK_CREDITS, openPayDialog } from "@/lib/web-pay";
 import type { AppSettings, PaymentMode } from "@/lib/types";
 
-type Status = { ok: boolean; label: string };
-
-// PaymentBar — cloud-mode payment (desktop): the live status of the active
-// method ("API key (credit)" or "x402 (USDC wallet)") and a switch between
-// them. When it can't pay (no key / no wallet / 0 USDC) the status turns into
-// an amber warning that deep-links to Settings → Cloud payment.
+// PaymentBar — cloud-mode payment (desktop), under the model. With a way to
+// pay: the balance, Manage and History. Without one, or without enough for
+// THIS run: a notice that says so in plain words, what the run costs, and the
+// one button that fixes it — Generate is blocked until then.
 export function PaymentBar({
   settings,
+  pay,
+  costCredits,
   onModeChange,
   onConfigure,
 }: {
   settings: AppSettings | null;
+  pay: PayState;
+  costCredits: number;
   onModeChange: (mode: PaymentMode) => void;
   onConfigure: (section: string) => void;
 }) {
-  const { t } = useTranslation();
-  const mode: PaymentMode = settings?.paymentMode === "x402" ? "x402" : "bearer";
-  const [status, setStatus] = useState<Status | null>(null);
-  const [loading, setLoading] = useState(false);
+  const { t, i18n } = useTranslation();
+  const mode = pay.method;
+  const problem = payProblem(pay, costCredits);
+  const num = (n: number) => new Intl.NumberFormat(i18n.language).format(n);
+  const usd = (credits: number) => `$${creditsToUSD(credits)}`;
+  const model = settings?.cloudModelInfo?.name ?? "";
 
-  // `t` in the deps re-runs the check on language switch so the cached label
-  // is re-rendered in the new language.
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (mode === "bearer") {
-        if (!settings?.apiKey) {
-          setStatus({ ok: false, label: t("payment.apiKeyNotSet") });
-          return;
-        }
-        const c = await api.getCreditBalance("");
-        if (!c.configured || c.error)
-          setStatus({ ok: false, label: c.error ? friendlyPayError(t, c.error) : t("payment.notConfigured") });
-        else setStatus({ ok: c.credits > 0, label: t("payment.credits", { count: c.credits }) });
-      } else {
-        const w = await api.getWalletInfo();
-        const bal = parseFloat(w.balanceUSDC || "0");
-        if (!w.configured) setStatus({ ok: false, label: t("payment.walletNotConfigured") });
-        else if (!(bal > 0)) setStatus({ ok: false, label: t("payment.fundWallet") });
-        else setStatus({ ok: true, label: t("payment.usdc", { balance: w.balanceUSDC }) });
-      }
-    } catch {
-      setStatus({ ok: false, label: t("payment.checkFailed") });
-    } finally {
-      setLoading(false);
-    }
-  }, [mode, settings?.apiKey, t]);
+  const methods = [
+    { value: "bearer", label: t("payment.apiKey") },
+    { value: "x402", label: t("payment.payg") },
+  ];
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-  // A purchase, a paid run, the window regaining focus: read it again.
-  useEffect(() => onBalanceMaybeChanged(() => void refresh()), [refresh]);
+  if (problem) {
+    const credits = mode === "bearer";
+    const title =
+      problem === "no_method"
+        ? credits ? t("payNotice.noCredits.title") : t("payNotice.noWallet.title")
+        : credits ? t("payNotice.shortCredits.title") : t("payNotice.shortUsdc.title");
+    const body =
+      problem === "no_method"
+        ? credits
+          ? t("payNotice.noCredits.body", { usd: usd(PACK_CREDITS), runs: costCredits > 0 ? num(Math.floor(PACK_CREDITS / costCredits)) : "", model, count: costCredits > 0 ? Math.floor(PACK_CREDITS / costCredits) : 0 })
+          : t("payNotice.noWallet.body")
+        : credits
+          ? t("payNotice.shortCredits.body", { cost: num(costCredits), have: num(pay.credits ?? 0) })
+          : t("payNotice.shortUsdc.body", { cost: usd(costCredits), have: `$${(pay.usd ?? 0).toFixed(2)}` });
+    const action =
+      problem === "no_method"
+        ? credits ? t("payNotice.noCredits.action") : t("payNotice.noWallet.action")
+        : credits ? t("payNotice.shortCredits.action") : t("payNotice.shortUsdc.action");
+    const fix = () =>
+      credits ? void openPayDialog(problem === "no_method" ? "needs_key" : "insufficient_credits") : onConfigure("wallet");
+    const other = credits ? t("payNotice.orWallet") : t("payNotice.orCredits");
+    return (
+      <div className="grid gap-2.5" role="group" aria-label={t("payment.title")}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="ds-sublabel">{t("payment.title")}</span>
+          <Segmented size="sm" label={t("payment.title")} value={mode} onChange={(m) => onModeChange(m as PaymentMode)} items={methods} />
+        </div>
+        <div className="ds-callout ds-callout-warning grid gap-2 p-3" role="status">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <AlertTriangle className="size-4 shrink-0" />
+            {title}
+          </p>
+          <p className="text-foreground/80 text-xs leading-relaxed">{body}</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <Button size="sm" variant={credits ? "brand" : "default"} onClick={fix}>
+              {credits ? <Sparkles className="size-4" /> : <Wallet className="size-4" />}
+              {action}
+            </Button>
+            <button
+              type="button"
+              onClick={() => onModeChange(credits ? "x402" : "bearer")}
+              className="text-foreground/70 hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
+            >
+              {other}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const section = mode === "bearer" ? "apikey" : "x402";
   const Icon = mode === "bearer" ? KeyRound : Wallet;
-
+  const label = pay.loading
+    ? t("common.checking")
+    : pay.error
+      ? friendlyPayError(t, pay.error)
+      : mode === "bearer"
+        ? t("payment.credits", { count: pay.credits ?? 0 })
+        : t("payment.usdc", { balance: (pay.usd ?? 0).toFixed(2) });
   return (
     <PaymentRow
       method={mode}
-      methods={[
-        { value: "bearer", label: t("payment.apiKey") },
-        { value: "x402", label: t("payment.payg") },
-      ]}
+      methods={methods}
       onMethodChange={(m) => onModeChange(m as PaymentMode)}
       icon={<Icon className="size-3.5 shrink-0" />}
-      ok={!status || status.ok}
-      busy={loading}
-      label={loading ? t("common.checking") : status?.label ?? ""}
-      action={status && !status.ok ? t("common.configure") : t("common.manage")}
-      title={status?.ok ? t("payment.manageTitle") : t("payment.configureTitle")}
-      onClick={() => onConfigure(section)}
+      ok={!pay.error}
+      busy={pay.loading}
+      label={label}
+      action={t("common.manage")}
+      title={t("payment.manageTitle")}
+      onClick={() => onConfigure(mode === "bearer" ? "credits" : "wallet")}
       onHistory={openCloudHistory}
     />
   );

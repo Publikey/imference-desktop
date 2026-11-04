@@ -316,6 +316,8 @@ export function ToolEditor({
   // Vary / outpaint in the cloud with no model that starts from an image
   // (e.g. a Krea 2 image and a Krea 2 selection): the API would refuse it.
   const noCloudGenModel = isGenTool && effectiveCloud && !!genModels && !genModels.cloud;
+  const runDisabled =
+    !srcData || tool?.badge === "unavailable" || (isMaskTool && !hasMask) || instructionMissing || noCloudGenModel;
   // Local mode, a different generation model needed: load it (replacing the
   // engine's model, after a confirmation), never silently.
   const [swapping, setSwapping] = useState(false);
@@ -642,13 +644,20 @@ export function ToolEditor({
                       </>
                     )
                   ) : (
-                    <span className="relative block rounded-md" data-mode={mode}>
+                    <span className="relative block rounded-xl" data-mode={mode}>
                     <LaunchBurst burst={runBurst} />
+                    {/* The editor's run button wears Generate's signature (.btn-run),
+                        in the colour of where this tool actually runs. */}
                     <Button
-                      className={cn("relative w-full overflow-hidden", runBurst > 0 && "btn-launch")}
+                      className={cn(
+                        "btn-run relative h-10 w-full overflow-hidden rounded-xl bg-[var(--run-bg)] font-semibold text-[color:var(--run-fg)] hover:bg-[var(--run-bg)] disabled:opacity-100",
+                        runBurst > 0 && "btn-launch"
+                      )}
                       key={`run-${runBurst}`}
                       data-launch="tool"
-                      disabled={!srcData || tool.badge === "unavailable" || (isMaskTool && !hasMask) || instructionMissing || noCloudGenModel}
+                      data-mode={effectiveCloud ? "cloud" : "local"}
+                      disabled={runDisabled}
+                      aria-disabled={runDisabled}
                       onClick={() => void run()}
                     >
                       {runBurst > 0 && <span aria-hidden className="launch-shine pointer-events-none absolute inset-0" />}

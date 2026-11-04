@@ -475,7 +475,7 @@ export function PanelBoard({
         // A collapsed rail keeps its fixed slim width; otherwise the manual /
         // default width drives the column via a CSS var (only applied at xl).
         const columnClass = cn(
-          "flex flex-col gap-4 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain xl:pb-6 xl:[scrollbar-gutter:stable]",
+          "flex flex-col gap-4 xl:min-h-0 xl:overflow-y-auto xl:overflow-x-hidden xl:overscroll-contain xl:pb-6 xl:[scrollbar-gutter:stable]",
           grow
             ? "min-w-0 xl:flex-1"
             : rail

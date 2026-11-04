@@ -812,7 +812,7 @@
       filter: brightness(1.35);
     }
     50% {
-      transform: scale(1.07);
+      transform: scale(1.03);
     }
     100% {
       transform: scale(1);
@@ -846,9 +846,11 @@
       opacity: 0.9;
       transform: scale(1);
     }
+    /* Grows mostly upward/downward: the button spans its column, and a wide
+       ring would only be clipped by the column's edges. */
     100% {
       opacity: 0;
-      transform: scale(1.35, 1.9);
+      transform: scale(1.06, 1.9);
     }
   }
   .launch-orb {
@@ -1720,4 +1722,19 @@
 .model-banner:hover:not(:disabled) .model-banner-veil,
 .model-banner:focus-visible .model-banner-veil {
   box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--brand-to) 75%, transparent);
+}
+
+/* A panel brought forward (an image sent to Edit): a brand halo that fades. */
+.panel-flash {
+  border-radius: var(--im-radius-2xl);
+  animation: panel-flash 1.2s var(--im-ease-out) both;
+}
+@keyframes panel-flash {
+  0%,
+  35% {
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--brand-to) 65%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+  }
 }

@@ -1112,8 +1112,8 @@ export default function App() {
         const el = document.querySelector<HTMLElement>(`[data-panel-id="${id}"]`);
         if (!el) return;
         el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-        el.classList.add("ring-2", "ring-primary/60", "rounded-2xl");
-        window.setTimeout(() => el.classList.remove("ring-2", "ring-primary/60", "rounded-2xl"), 1200);
+        el.classList.add("panel-flash");
+        window.setTimeout(() => el.classList.remove("panel-flash"), 1200);
       }, 60);
     },
     [setPanelHidden]
@@ -1723,7 +1723,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="relative z-10 min-h-0 flex-1 overflow-y-auto xl:overflow-hidden">
+      <main className="relative z-10 min-h-0 flex-1 overflow-y-auto overflow-x-hidden xl:overflow-hidden">
         <h1 className="sr-only">{isWeb ? "Imference Web" : "Imference Desktop"}</h1>
         {/* Three drag-reorderable panels — Create / Activity / Gallery — side by
             side on desktop, stacked (in the same order) on narrow windows. */}

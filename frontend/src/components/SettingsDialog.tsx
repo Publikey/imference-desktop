@@ -25,7 +25,7 @@ import { LocalEngineSection } from "@/components/LocalEngineSection";
 import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
 import { StorageSection } from "@/components/StorageSection";
 import { isWeb, SETTINGS_CHANGED_EVENT } from "@/lib/target";
-import { WebPaymentSettings } from "@/components/WebPay";
+import { WebWalletSettings } from "@/components/WebPay";
 import { WebGallerySection } from "@/components/WebGallerySection";
 import { ToolsSection } from "@/components/ToolsSection";
 import { api } from "@/lib/wails-bridge";
@@ -68,15 +68,14 @@ const PANES: {
 
 // The web build has no local engine, disk or wallet: only cloud panes remain,
 // plus "gallery" (where the browser keeps the user's images).
-const WEB_PANES: PaneId[] = ["credits", "gallery", "language"];
+const WEB_PANES: PaneId[] = ["credits", "wallet", "gallery", "language"];
 const GALLERY_PANE = { id: "gallery" as PaneId, labelKey: "web.gallery.nav", descKey: "web.gallery.desc", icon: FolderOpen };
-// On the web, the credits pane still holds both ways to pay (its own
-// WebPaymentSettings), under the earlier "Payment" name.
+// On the web the wallet is the browser's own (no app wallet): its pane says so.
 const VISIBLE_PANES = isWeb
   ? [...PANES, GALLERY_PANE]
       .filter((p) => WEB_PANES.includes(p.id))
       .sort((a, b) => WEB_PANES.indexOf(a.id) - WEB_PANES.indexOf(b.id))
-      .map((p) => (p.id === "credits" ? { ...p, labelKey: "settings.navPayment", descKey: "settings.cloudDesc" } : p))
+      .map((p) => (p.id === "wallet" ? { ...p, labelKey: "settings.navWalletWeb", descKey: "settings.walletDescWeb" } : p))
   : PANES;
 
 // Map a deep-link section id (from the palette / payment bar) to its pane, plus
@@ -91,7 +90,7 @@ function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
       return { pane: "credits" };
     case "wallet":
     case "x402":
-      return { pane: isWeb ? "credits" : "wallet" };
+      return { pane: "wallet" };
     case "runtime":
     case "runtime-image":
     case "runtime-wan":
@@ -284,11 +283,14 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
               />
             )}
 
-            {pane === "credits" && (isWeb ? <WebPaymentSettings /> : <CreditsPane draft={draft} setDraft={setDraft} />)}
+            {pane === "credits" && <CreditsPane draft={draft} setDraft={setDraft} />}
 
-            {pane === "wallet" && !isWeb && (
-              <WalletPane onAddressChange={(address) => setDraft((prev) => ({ ...prev, walletAddress: address }))} />
-            )}
+            {pane === "wallet" &&
+              (isWeb ? (
+                <WebWalletSettings />
+              ) : (
+                <WalletPane onAddressChange={(address) => setDraft((prev) => ({ ...prev, walletAddress: address }))} />
+              ))}
 
             {pane === "paths" && (
               <div className="ds-card grid gap-4 p-4">

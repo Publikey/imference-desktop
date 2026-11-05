@@ -14,6 +14,7 @@ import { Segmented } from "@/components/ds";
 import { cn, coarsePointer, creditsToUSD } from "@/lib/utils";
 import type { ModelInfo, PaymentMode } from "@/lib/types";
 import { Badge } from "@/components/ds";
+import { runCost } from "@/app/model-params";
 
 // Display label + ordering for the LOCAL backends — the fallback grouping for
 // entries without a catalog family (user checkpoints). Keys are the normalized
@@ -411,8 +412,8 @@ function ModelCard({
           {isCloud && m.cost > 0 && (
             <Badge overlay className="bg-background/85 text-foreground absolute right-1.5 bottom-1.5">
               {paymentMode === "x402"
-                ? t("modelPicker.costUsd", { usd: creditsToUSD(m.cost) })
-                : t("modelPicker.cost", { cost: m.cost })}
+                ? t("modelPicker.costUsd", { usd: creditsToUSD(runCost(m, "", null)) })
+                : t("modelPicker.cost", { cost: runCost(m, "", null) })}
             </Badge>
           )}
         </div>

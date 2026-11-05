@@ -5,6 +5,7 @@ import { ToolMenuList } from "@/components/ToolBits";
 import type { ToolSource } from "@/components/ToolEditor";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/ui/popover";
+import { WebGalleryLocation } from "@/components/WebGallerySection";
 import { useConfirm } from "@/components/ui/confirm";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -497,6 +498,7 @@ export function Gallery({
       {/* One toolbar: search · filters | density. */}
       <div className="flex items-center gap-2">
         <FilterBar facets={facets} filter={filter} onChange={setFilter} />
+        {isWeb && <WebGalleryLocation />}
         <ColumnPicker cols={cols} onChange={setCols} />
       </div>
 

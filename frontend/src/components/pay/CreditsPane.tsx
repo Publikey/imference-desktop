@@ -9,7 +9,8 @@ import { api } from "@/lib/wails-bridge";
 import { creditsToUSD } from "@/lib/utils";
 import { friendlyPayError } from "@/lib/pay-errors";
 import { notifyBalanceChanged, onBalanceMaybeChanged } from "@/lib/target";
-import { openPayDialog, signInWithKey } from "@/lib/web-pay";
+import { openPayDialog, signInWithKey, signOut as webSignOut } from "@/lib/web-pay";
+import { isWeb } from "@/lib/target";
 import type { AppSettings, CreditInfo } from "@/lib/types";
 
 // Settings > Credits & account (desktop). Credits are prepaid and live on an
@@ -169,9 +170,20 @@ function Account({ apiKey, draft, setDraft }: { apiKey: string; draft: AppSettin
       cancelLabel: t("common.cancel"),
       destructive: true,
     });
-    if (ok) setDraft({ ...draft, apiKey: "" });
+    if (!ok) return;
+    if (isWeb) void webSignOut(); // the key lives in the browser session
+    else setDraft({ ...draft, apiKey: "" });
   };
   const saveFile = async () => {
+    if (isWeb) {
+      const blob = new Blob([`Imference API key (your account: it holds your credits)\n${apiKey}\n\nhttps://imference.com\n`], { type: "text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "imference-api-key.txt";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      return;
+    }
     try {
       const path = await api.saveAPIKeyFile();
       if (path) toast.success(t("credits.key.saved", { path }));

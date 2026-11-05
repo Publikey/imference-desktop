@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, Wallet, AlertTriangle, Loader2, ChevronRight, History, Sparkles } from "lucide-react";
 import { openCloudHistory } from "@/lib/target";
@@ -6,6 +6,7 @@ import { friendlyPayError } from "@/lib/pay-errors";
 import { Segmented } from "@/components/ui/segmented";
 import { cn, creditsToUSD } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ApiKeyDialog } from "@/components/pay/ApiKeyDialog";
 import { payProblem, type PayState } from "@/lib/pay-state";
 import { PACK_CREDITS, openPayDialog } from "@/lib/web-pay";
 import type { AppSettings, PaymentMode } from "@/lib/types";
@@ -59,7 +60,6 @@ export function PaymentBar({
         : credits ? t("payNotice.shortCredits.action") : t("payNotice.shortUsdc.action");
     const fix = () =>
       credits ? void openPayDialog(problem === "no_method" ? "needs_key" : "insufficient_credits") : onConfigure("wallet");
-    const other = t(credits ? "payNotice.orWalletSwitch" : "payNotice.orCreditsSwitch");
     return (
       <div className="grid gap-2.5" role="group" aria-label={t("payment.title")}>
         {/* Always switchable: picking a way not set up yet says how to set it up. */}
@@ -67,26 +67,14 @@ export function PaymentBar({
           <span className="ds-sublabel">{t("payment.payWith")}</span>
           <Segmented size="sm" label={t("payment.payWith")} value={mode} onChange={(m) => onModeChange(m as PaymentMode)} items={methods} />
         </div>
-        <div className="ds-callout ds-callout-warning grid gap-2 p-3" role="status">
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            <AlertTriangle className="size-4 shrink-0" />
-            {title}
-          </p>
-          <p className="text-foreground/80 text-xs leading-relaxed">{body}</p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <Button size="sm" variant={credits ? "brand" : "default"} onClick={fix}>
-              {credits ? <Sparkles className="size-4" /> : <Wallet className="size-4" />}
-              {action}
-            </Button>
-            <button
-              type="button"
-              onClick={() => onModeChange(credits ? "x402" : "bearer")}
-              className="text-foreground/70 hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
-            >
-              {other}
-            </button>
-          </div>
-        </div>
+        <PayNotice
+          title={title}
+          body={body}
+          action={action}
+          credits={credits}
+          onFix={fix}
+          withKeyButton={credits && problem === "no_method"}
+        />
       </div>
     );
   }
@@ -114,6 +102,51 @@ export function PaymentBar({
       onHistory={openCloudHistory}
       switchLabel={t("payment.payWith")}
     />
+  );
+}
+
+/** Why the next run can't be paid, in plain words, and the one button that
+ *  fixes it (+ a link to the other way to pay). Desktop and web. */
+export function PayNotice({
+  title,
+  body,
+  action,
+  credits,
+  onFix,
+  withKeyButton,
+}: {
+  title: string;
+  body: string;
+  action: string;
+  /** Credits (brand button, sparkles) or the wallet. */
+  credits: boolean;
+  onFix: () => void;
+  /** Credits with no account yet: "I have an API key" (opens the key dialog). */
+  withKeyButton?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [keyOpen, setKeyOpen] = useState(false);
+  return (
+    <div className="ds-callout ds-callout-warning grid gap-2 p-3" role="status">
+      <p className="flex items-center gap-2 text-sm font-semibold">
+        <AlertTriangle className="size-4 shrink-0" />
+        {title}
+      </p>
+      <p className="text-foreground/80 text-xs leading-relaxed">{body}</p>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <Button size="sm" variant={credits ? "brand" : "default"} onClick={onFix}>
+          {credits ? <Sparkles className="size-4" /> : <Wallet className="size-4" />}
+          {action}
+        </Button>
+        {withKeyButton && (
+          <Button size="sm" variant="outline" onClick={() => setKeyOpen(true)}>
+            <KeyRound className="size-4" />
+            {t("apiKeyDialog.button")}
+          </Button>
+        )}
+      </div>
+      {withKeyButton && <ApiKeyDialog open={keyOpen} onOpenChange={setKeyOpen} />}
+    </div>
   );
 }
 

@@ -29,7 +29,9 @@ const PENDING_KEY = "imference.web.pendingKey"; // a guest's new key, until its 
 export const PACK_CREDITS = 5000;
 export const PACK_USD = 5;
 
-export type PayReason = "needs_key" | "insufficient_credits" | "needs_wallet" | "manual";
+// "choose": the first "how do you want to pay?" (the welcome tour's button) —
+// the only time the web window offers pay-as-you-go next to credits.
+export type PayReason = "needs_key" | "insufficient_credits" | "needs_wallet" | "manual" | "choose";
 
 /** What the run that needs paying costs (credits; 1 credit = $0.001). */
 export type PayQuote = { credits: number; label: string; image?: string; kind: "image" | "video" | "tool" } | null;
@@ -489,6 +491,29 @@ export async function payPerRun(): Promise<void> {
   }
   const address = await connectWallet();
   await web("SetPayMode", { mode: "wallet", address });
+  await refreshSession();
+}
+
+/**
+ * Web: forget the browser wallet. Runs stop being paid from it, the wallet
+ * picked here is cleared, and the site's access to its accounts is revoked
+ * where the wallet supports it (EIP-2255 wallet_revokePermissions: MetaMask,
+ * Rabby…) — so the next "Pay with my wallet" asks to connect again.
+ */
+export async function forgetWallet(): Promise<void> {
+  const w = chosenWallet();
+  try {
+    await w?.provider.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] });
+  } catch {
+    /* not supported by this wallet: disconnect it from the wallet's own menu */
+  }
+  try {
+    localStorage.removeItem(WALLET_CHOICE);
+  } catch {
+    /* nothing stored */
+  }
+  set({ walletId: "" });
+  if (isWeb) await web("SetPayMode", { mode: "" });
   await refreshSession();
 }
 

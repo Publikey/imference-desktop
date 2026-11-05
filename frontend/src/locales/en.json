@@ -492,7 +492,9 @@
     "navCredits": "Credits & account",
     "creditsDesc": "Prepaid credits for cloud runs, on your Imference account.",
     "navWallet": "USDC wallet",
-    "walletDesc": "Pay each cloud run in USDC, from a wallet in this app."
+    "walletDesc": "Pay each cloud run in USDC, from a wallet in this app.",
+    "navWalletWeb": "Wallet",
+    "walletDescWeb": "Pay each cloud run in USDC from your browser wallet."
   },
   "storage": {
     "usageTitle": "Model cache",
@@ -1090,7 +1092,10 @@
       "reconnect": "Allow access to the folder",
       "unsupported": "This browser cannot write to a folder (Chrome, Edge or Brave can): images stay in the browser's storage.",
       "privacy": "Your images are never stored on our servers: a result is uploaded by the generator, handed to your browser, saved here, and the cloud copy expires within 24 hours.",
-      "bannerText": "Your gallery folder needs your permission again to be read."
+      "bannerText": "Your gallery folder needs your permission again to be read.",
+      "chipBrowser": "Saved in this browser",
+      "chipFolder": "Saved in {{name}}",
+      "chipNeedsAccess": "{{name}}: allow access"
     }
   },
   "webpay": {
@@ -1217,7 +1222,9 @@
         "none": "No wallet connected.",
         "use": "Pay with my wallet",
         "reconnect": "Reconnect",
-        "disconnect": "Stop paying with the wallet"
+        "forget": "Forget this wallet",
+        "forgetTitle": "Forget this wallet?",
+        "forgetBody": "Runs will no longer be paid from it, and the site's access to it is removed (if your wallet doesn't support that, disconnect the site from the wallet's own menu). You can connect it again at any time."
       }
     },
     "card": {
@@ -1441,9 +1448,17 @@
       "body": "This run costs {{cost}} and the wallet holds {{have}}. Send USDC on the Base network to its address.",
       "action": "Add funds"
     },
-    "orWallet": "or set up a USDC wallet",
-    "orCredits": "or use credits (buy a pack or enter your account key)",
-    "orWalletSwitch": "or pay with the USDC wallet",
-    "orCreditsSwitch": "or pay with credits"
+    "webNoCredits": "Buy credits by card, from $5 (your first purchase creates your account), or pay each run from your browser wallet.",
+    "webNoBalance": "Your account has no credits left. Top up by card to keep generating.",
+    "webNoWallet": {
+      "title": "No wallet connected",
+      "body": "Pay each run in USDC from your browser wallet (MetaMask, Coinbase Wallet, Rabby…). Your wallet asks you to confirm each payment.",
+      "action": "Connect my wallet"
+    }
+  },
+  "apiKeyDialog": {
+    "button": "I have an API key",
+    "title": "Use your API key",
+    "desc": "Paste the account key you got with your credits (here, on imference.com or for Claude). It is checked before it is used."
   }
 }

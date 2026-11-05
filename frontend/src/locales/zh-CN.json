@@ -486,7 +486,9 @@
     "navCredits": "积分与账户",
     "creditsDesc": "用于云端运行的预付积分，存放在你的 Imference 账户中。",
     "navWallet": "USDC 钱包",
-    "walletDesc": "从本应用的钱包中以 USDC 按次支付云端运行。"
+    "walletDesc": "从本应用的钱包中以 USDC 按次支付云端运行。",
+    "navWalletWeb": "钱包",
+    "walletDescWeb": "使用浏览器钱包以 USDC 按次支付云端运行。"
   },
   "storage": {
     "usageTitle": "模型缓存",
@@ -1078,7 +1080,10 @@
       "reconnect": "允许访问该文件夹",
       "unsupported": "此浏览器无法写入文件夹（Chrome、Edge 或 Brave 可以）：图片保存在浏览器存储中。",
       "privacy": "你的图片从不保存在我们的服务器上：生成结果交给你的浏览器并保存在这里，云端副本会在 24 小时内过期。",
-      "bannerText": "你的图库文件夹需要再次授权才能读取。"
+      "bannerText": "你的图库文件夹需要再次授权才能读取。",
+      "chipBrowser": "保存在此浏览器中",
+      "chipFolder": "保存在 {{name}}",
+      "chipNeedsAccess": "{{name}}：需要授权"
     }
   },
   "webpay": {
@@ -1205,7 +1210,9 @@
         "none": "未连接钱包。",
         "use": "用我的钱包支付",
         "reconnect": "重新连接",
-        "disconnect": "停止用钱包支付"
+        "forget": "忘记此钱包",
+        "forgetTitle": "忘记此钱包？",
+        "forgetBody": "运行将不再从该钱包扣款，并会移除本网站对它的访问权限（如果你的钱包不支持，请在钱包自己的菜单中断开本网站）。你可以随时重新连接。"
       }
     },
     "card": {
@@ -1429,9 +1436,17 @@
       "body": "此次运行需要 {{cost}}，钱包中有 {{have}}。请向其地址转入 Base 网络上的 USDC。",
       "action": "充值"
     },
-    "orWallet": "或设置 USDC 钱包",
-    "orCredits": "或使用积分（购买积分包或输入账户密钥）",
-    "orWalletSwitch": "或使用 USDC 钱包支付",
-    "orCreditsSwitch": "或使用积分支付"
+    "webNoCredits": "用银行卡购买积分，5 美元起（首次购买会创建你的账户），或使用浏览器钱包按次付费。",
+    "webNoBalance": "你的账户已没有积分。请用银行卡充值以继续生成。",
+    "webNoWallet": {
+      "title": "未连接钱包",
+      "body": "使用浏览器钱包（MetaMask、Coinbase Wallet、Rabby…）以 USDC 按次支付。每次付款都需在钱包中确认。",
+      "action": "连接我的钱包"
+    }
+  },
+  "apiKeyDialog": {
+    "button": "我有 API 密钥",
+    "title": "使用你的 API 密钥",
+    "desc": "粘贴你购买积分时获得的账户密钥（在本应用、imference.com 或 Claude 中）。使用前会先验证。"
   }
 }

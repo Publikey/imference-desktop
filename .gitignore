@@ -29,6 +29,8 @@ __pycache__/
 
 # Web build output (npm run build:web), embedded by the web binary
 frontend/dist-web
+# imference-web local data (sessions, guest galleries)
+web-data/
 frontend/dist-preview
 
 # Local design workbench (screenshots, fixtures, audits): kept out of the

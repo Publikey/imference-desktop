@@ -214,7 +214,9 @@ export function Welcome({
         <PayOption icon={<Wallet />} title={t("welcome.walletTitle")} text={t("welcome.walletText")} />
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-3">
-        <Button variant="outline" onClick={() => void openPayDialog("manual")}>
+        {/* Ends the tour first: the payment window opens over the app, not
+            behind this dialog. needs_key = the first choice (both ways). */}
+        <Button variant="outline" onClick={() => close(() => void openPayDialog(isWeb ? "choose" : "needs_key"))}>
           {t("welcome.payNow")}
         </Button>
         <span className="text-muted-foreground text-xs">{t("welcome.payLater")}</span>

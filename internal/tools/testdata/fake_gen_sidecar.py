@@ -3,8 +3,8 @@ tests: speaks the runqy stdio protocol without imference-engine.
 
 A payload with tool_id writes <output_dir>/<tool>-out.png containing the
 payload's inputs + params as JSON and answers {"tool": ToolResult}; a plain
-generation payload is answered with an error (tests never send one).
-Env: FAKE_GEN_LOG=<path> -> append each tool payload as one JSON line.
+generation payload gets a 1x1 PNG and seed 4242 (the agents' /v1/generate).
+Env: FAKE_GEN_LOG=<path> -> append each payload as one JSON line.
 """
 import json
 import os
@@ -27,13 +27,15 @@ for line in sys.stdin:
     req = json.loads(line)
     payload = req.get("payload") or {}
     tid = req.get("task_id")
-    if not payload.get("tool_id"):
-        out({"task_id": tid, "result": None, "error": "fake: plain generation not supported", "retry": False})
-        continue
     log = os.environ.get("FAKE_GEN_LOG")
     if log:
         with open(log, "a") as f:
             f.write(json.dumps(payload) + "\n")
+    if not payload.get("tool_id"):
+        # Plain generation (the agents' /v1/generate): a 1x1 PNG and seed 4242.
+        png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        out({"task_id": tid, "error": None, "retry": False, "result": {"images": [png], "seeds": [4242], "errors": []}})
+        continue
     params = dict(payload.get("params") or {})
     params["model"] = "local"
     os.makedirs(payload["output_dir"], exist_ok=True)

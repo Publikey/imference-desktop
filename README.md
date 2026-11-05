@@ -166,6 +166,22 @@ tool on it. Every tool shows where it will run before you start:
   unsupported_runtime` when this machine can't run the tool). Turn the API off
   in Settings → *Editing tools*.
 
+  Agents can also **generate** with your GPU (the MCP server's `generate` with
+  `run_on: local`):
+
+  ```bash
+  # the loaded model, the local models and which are downloaded
+  curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:47823/v1/generation
+  curl -H "Authorization: Bearer $TOKEN" -X POST http://127.0.0.1:47823/v1/generate \
+       -d '{"prompt": "a red fox in fresh snow", "format_code": "portrait"}'
+  ```
+
+  Empty fields take the model's defaults (format, steps, guidance, quality
+  tags). A `model` other than the loaded one is loaded first when it is already
+  downloaded (`400 model_not_cached` otherwise: agents never start a download);
+  the engine starts on demand (`503 engine_not_ready` when it isn't installed).
+  `source_image` + `strength` run image-to-image.
+
 ## Web version (prototype)
 
 The same app, cloud-only, in a browser: `task build:web` (or

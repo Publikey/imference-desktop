@@ -52,6 +52,8 @@ type APIOutput struct {
 	Format string `json:"format"`
 	Path   string `json:"path,omitempty"`
 	Text   string `json:"text,omitempty"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
 }
 
 // APIResult is a finished run.
@@ -201,6 +203,8 @@ func (s *APIServer) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/tools", s.handleList)
 	mux.HandleFunc("POST /v1/tools/{tool_id}", s.handleRun)
+	mux.HandleFunc("GET /v1/generation", s.handleGenerationInfo)
+	mux.HandleFunc("POST /v1/generate", s.handleGenerate)
 	mux.HandleFunc("GET /v1/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
@@ -417,9 +421,9 @@ func extFor(mimeType, fallback string) string {
 // statusFor maps a tool error code to the API's HTTP status.
 func statusFor(code string) int {
 	switch code {
-	case CodeInvalidInput, CodeTooLarge:
+	case CodeInvalidInput, CodeTooLarge, CodeModelNotCached:
 		return http.StatusBadRequest
-	case CodeUnsupportedRuntime, CodeWeightsMissing, CodeOOM:
+	case CodeUnsupportedRuntime, CodeWeightsMissing, CodeOOM, CodeEngineNotReady:
 		return http.StatusServiceUnavailable
 	}
 	return http.StatusInternalServerError

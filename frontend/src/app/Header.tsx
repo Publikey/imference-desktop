@@ -6,6 +6,7 @@ import type { PanelId } from "@/components/PanelBoard";
 import { PanelToggles } from "@/components/PanelToggles";
 import { Button } from "@/components/ui/button";
 import { isWeb } from "@/lib/target";
+import { api } from "@/lib/wails-bridge";
 import { isDark, setThemePref, subscribeTheme, type ThemePref } from "@/lib/theme";
 import type { ModelInfo, SidecarStatus } from "@/lib/types";
 import { EngineDetails } from "@/components/EnginePanel";
@@ -13,6 +14,7 @@ import { Popover } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { SegGroup, SegItem } from "@/components/ds";
 import {
+  Bot,
   ChevronDown,
   Cloud,
   Cpu,
@@ -26,7 +28,7 @@ import {
   Square,
   Sun,
 } from "lucide-react";
-import { useId, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import type { Mode } from "./shared";
 
@@ -49,6 +51,7 @@ export function Header({
   errorLogCount,
   onToggleLogs,
   onOpenSettings,
+  onOpenAgents,
   onOpenPalette,
   panelHidden,
   onTogglePanel,
@@ -69,6 +72,8 @@ export function Header({
   errorLogCount: number;
   onToggleLogs: () => void;
   onOpenSettings: () => void;
+  /** Settings › AI agents (desktop). */
+  onOpenAgents?: () => void;
   onOpenPalette: () => void;
   panelHidden: Partial<Record<PanelId, boolean>>;
   onTogglePanel: (id: PanelId) => void;
@@ -131,6 +136,8 @@ export function Header({
       <PanelToggles hidden={panelHidden} onToggle={onTogglePanel} modLabel={modLabel} />
 
       <div className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-1">
+        {/* AI agents: a headline feature, so named and set apart (desktop). */}
+        {!isWeb && onOpenAgents && <AgentsButton onClick={onOpenAgents} />}
         <Button
           variant="ghost"
           size="icon"
@@ -168,6 +175,36 @@ export function Header({
         </Button>
       </div>
     </header>
+  );
+}
+
+// AgentsButton — opens Settings › AI agents. A green dot once an AI app is
+// connected (checked at launch and when the window gets focus back).
+function AgentsButton({ onClick }: { onClick: () => void }) {
+  const { t } = useTranslation();
+  const [connected, setConnected] = useState(false);
+  useEffect(() => {
+    const check = () =>
+      void api
+        .mcpStatus(false)
+        .then((s) => setConnected(s.clients.some((c) => c.entries.some((e) => e.scope === "user"))))
+        .catch(() => {});
+    check();
+    window.addEventListener("focus", check);
+    return () => window.removeEventListener("focus", check);
+  }, []);
+  return (
+    <Button
+      variant="ghost"
+      onClick={onClick}
+      title={t(connected ? "header.agentsConnected" : "header.agentsTitle")}
+      data-testid="header-agents"
+      className="agents-btn relative mr-1 h-9 gap-2 rounded-lg px-3 font-medium max-sm:w-9 max-sm:px-0"
+    >
+      <Bot className="size-4" />
+      <span className="max-sm:sr-only">{t("header.agents")}</span>
+      {connected && <span className="bg-success ring-background absolute right-1 top-1 size-2 rounded-full ring-2" />}
+    </Button>
   );
 }
 

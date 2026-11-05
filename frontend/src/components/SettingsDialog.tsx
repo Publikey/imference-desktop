@@ -230,11 +230,11 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
       <DialogContent
         // Don't close on an accidental outside click — only the X / Done / Esc.
         onInteractOutside={(e) => e.preventDefault()}
-        className="ring-border/60 flex h-[86dvh] max-h-[640px] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-2xl ring-1 sm:max-w-3xl sm:flex-row"
+        className="ring-border/60 flex h-[88dvh] max-h-[760px] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-2xl ring-1 sm:max-w-[60rem] sm:flex-row"
       >
         {/* Rail — brand mark, category list, version. On a phone it becomes a
             strip of tabs above the pane (a side rail leaves the pane no room). */}
-        <nav className="bg-muted/30 flex shrink-0 flex-col border-b sm:w-52 sm:border-b-0 sm:border-r">
+        <nav className="bg-muted/30 flex shrink-0 flex-col border-b sm:w-56 sm:border-b-0 sm:border-r">
           <div className="flex items-center gap-2.5 px-4 pb-2 pt-4 sm:pb-3">
             <img src={logoUrl} alt="" className="size-6" />
             <DialogTitle className="text-sm font-semibold">{t("settings.title")}</DialogTitle>
@@ -269,16 +269,16 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
 
         {/* Pane — persistent header, scrollable body, footer. */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="flex items-start justify-between gap-3 border-b px-4 py-3 sm:px-6 sm:py-4">
-            <div className="space-y-0.5">
-              <h2 className="text-base font-semibold leading-tight">{t(active.labelKey)}</h2>
-              <p className="text-muted-foreground text-xs">{t(active.descKey)}</p>
+          <header className="flex items-start justify-between gap-3 border-b px-4 py-3 sm:px-8 sm:py-5">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold leading-tight">{t(active.labelKey)}</h2>
+              <p className="text-muted-foreground text-sm">{t(active.descKey)}</p>
             </div>
             {/* Radix a11y requirement; visually redundant with the header above. */}
             <DialogDescription className="sr-only">{t("settings.desc")}</DialogDescription>
           </header>
 
-          <div className="min-w-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+          <div className="min-w-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-8 sm:py-7">
             {pane === "engine" && <LocalEngineSection onInstallDone={handleInstallDone} />}
 
             {pane === "runtime" && (
@@ -359,7 +359,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             )}
           </div>
 
-          <footer className="flex items-center justify-between gap-2 border-t px-4 py-3 sm:px-6">
+          <footer className="flex items-center justify-between gap-2 border-t px-4 py-3 sm:px-8">
             <span
               className={cn(
                 "text-muted-foreground inline-flex items-center gap-1.5 text-xs transition-opacity duration-200",

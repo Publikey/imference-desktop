@@ -130,19 +130,19 @@ export function AgentsPane({
   const desktopCopy = status?.installs.find((i) => i.kind === "desktop");
 
   return (
-    <div className="grid gap-4">
-      {/* What it is, and the switch. */}
-      <section className="ds-card grid gap-4 p-5">
-        <div className="flex items-start gap-3">
-          <span className="brand-surface grid size-9 shrink-0 place-items-center rounded-xl text-white">
-            <Bot className="size-4" />
+    <div className="grid gap-6">
+      {/* What it is. */}
+      <section className="ds-card grid gap-5 p-6">
+        <div className="flex items-start gap-4">
+          <span className="brand-surface grid size-11 shrink-0 place-items-center rounded-xl text-white">
+            <Bot className="size-5" />
           </span>
-          <div>
-            <h3 className="font-display text-base font-semibold">{t("agents.title")}</h3>
-            <p className="text-muted-foreground mt-0.5 text-sm">{t("agents.lead")}</p>
+          <div className="grid gap-1.5">
+            <h3 className="font-display text-lg font-semibold leading-tight">{t("agents.title")}</h3>
+            <p className="text-muted-foreground text-sm leading-relaxed">{t("agents.lead")}</p>
           </div>
         </div>
-        <ul className="grid gap-2 text-sm sm:grid-cols-2">
+        <ul className="grid gap-x-8 gap-y-3.5 text-sm leading-relaxed sm:grid-cols-2">
           {(
             [
               ["point1", Cpu],
@@ -151,55 +151,46 @@ export function AgentsPane({
               ["point4", Lock],
             ] as const
           ).map(([k, Icon]) => (
-            <li key={k} className="flex items-start gap-2">
+            <li key={k} className="flex items-start gap-3">
               <Icon className="text-[var(--brand-from)] mt-0.5 size-4 shrink-0" />
               <span>{t(`agents.${k}`)}</span>
             </li>
           ))}
         </ul>
-        <div className="border-t pt-4">
-          <label className="flex items-center gap-2.5 text-sm font-medium">
-            <Checkbox
-              checked={apiOn}
-              onCheckedChange={(on) =>
-                setDraft((d) => ({ ...d, tools: { ...(d.tools ?? {}), localApiDisabled: !on || undefined } }))
-              }
-            />
-            {t("agents.allow")}
-          </label>
-          <p className="text-muted-foreground mt-1 pl-6.5 text-xs leading-relaxed">{t("agents.allowHint")}</p>
-          <label className="mt-3 flex items-start gap-2.5 text-sm font-medium">
-            <Checkbox
-              checked={!!ts.agentsCanSpend}
-              disabled={!apiOn}
-              onCheckedChange={(on) =>
-                setDraft((d) => ({ ...d, tools: { ...(d.tools ?? {}), agentsCanSpend: on || undefined } }))
-              }
-              className="mt-0.5"
-            />
-            <span>
-              {t("agents.spend")}
-              <span className="text-muted-foreground mt-0.5 block text-xs font-normal leading-relaxed">
-                {status && !status.apiKeySet ? t("agents.spendNoKey") : t("agents.spendHint")}
-              </span>
-            </span>
-          </label>
+      </section>
+
+      {/* What agents may do. */}
+      <section className="ds-card grid gap-0 p-0">
+        <h3 className="px-6 pb-1 pt-5 text-sm font-semibold">{t("agents.permissionsTitle")}</h3>
+        <PermissionRow
+          checked={apiOn}
+          onChange={(on) => setDraft((d) => ({ ...d, tools: { ...(d.tools ?? {}), localApiDisabled: !on || undefined } }))}
+          title={t("agents.allow")}
+          hint={t("agents.allowHint")}
+        >
           {apiInfo && (
-            <details className="text-muted-foreground mt-2 pl-6.5 text-2xs">
+            <details className="text-muted-foreground mt-2 text-xs">
               <summary className="hover:text-foreground cursor-pointer select-none">{t("agents.details")}</summary>
-              <p className="mt-1 break-all font-mono">
+              <p className="mt-1.5 break-all font-mono text-2xs leading-relaxed">
                 {apiInfo.running
                   ? t("tools.settings.apiRunning", { port: apiInfo.port, path: apiInfo.discoveryPath })
                   : t("tools.settings.apiStopped")}
               </p>
             </details>
           )}
-        </div>
+        </PermissionRow>
+        <PermissionRow
+          checked={!!ts.agentsCanSpend}
+          disabled={!apiOn}
+          onChange={(on) => setDraft((d) => ({ ...d, tools: { ...(d.tools ?? {}), agentsCanSpend: on || undefined } }))}
+          title={t("agents.spend")}
+          hint={status && !status.apiKeySet ? t("agents.spendNoKey") : t("agents.spendHint")}
+        />
       </section>
 
       {/* Connect an app. */}
-      <section className="ds-card grid gap-3 p-5">
-        <div className="flex items-center justify-between gap-2">
+      <section className="ds-card grid gap-4 p-6">
+        <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold">{t("agents.connectTitle")}</h3>
           <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={checking || busy !== null}>
             <RefreshCw className={cn("size-3.5", checking && "animate-spin")} />
@@ -207,11 +198,11 @@ export function AgentsPane({
           </Button>
         </div>
         {!apiOn && (
-          <p className="ds-callout ds-callout-warning px-3 py-2 text-xs">{t("agents.apiOffWarning")}</p>
+          <p className="ds-callout ds-callout-warning px-4 py-3 text-sm leading-relaxed">{t("agents.apiOffWarning")}</p>
         )}
 
         {status ? (
-          <ul className="grid gap-2">
+          <ul className="grid gap-3">
             {status.clients.map((c) => (
               <ClientRow
                 key={c.id}
@@ -221,13 +212,13 @@ export function AgentsPane({
                 onConnect={() => void connect(c.id)}
               />
             ))}
-            <li className="ds-card flex items-center gap-3 p-3">
-              <span className="bg-muted text-muted-foreground grid size-8 shrink-0 place-items-center rounded-lg">
+            <li className="ds-card flex items-center gap-4 px-4 py-3.5">
+              <span className="bg-muted text-muted-foreground grid size-9 shrink-0 place-items-center rounded-lg">
                 <Terminal className="size-4" />
               </span>
-              <div className="min-w-0 flex-1">
+              <div className="grid min-w-0 flex-1 gap-0.5">
                 <p className="text-sm font-medium">{t("agents.otherApp")}</p>
-                <p className="text-muted-foreground text-xs">{t("agents.otherHint")}</p>
+                <p className="text-muted-foreground text-xs leading-relaxed">{t("agents.otherHint")}</p>
               </div>
               <Button variant="outline" size="sm" disabled={busy !== null} onClick={() => void connect("other")}>
                 {busy === "other" ? <Loader2 className="size-3.5 animate-spin" /> : <ChevronRight className="size-3.5" />}
@@ -236,7 +227,7 @@ export function AgentsPane({
             </li>
           </ul>
         ) : (
-          <p className="text-muted-foreground flex items-center gap-2 text-xs">
+          <p className="text-muted-foreground flex items-center gap-2 text-sm">
             <Loader2 className="size-3.5 animate-spin" />
             {t("agents.detecting")}
           </p>
@@ -250,7 +241,7 @@ export function AgentsPane({
 
       {/* What's installed. */}
       {status && (
-        <section className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-2xs">
+        <section className="text-muted-foreground -mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 text-xs">
           <span>
             {t("agents.serverLine", {
               version: status.scriptVersion ? `v${status.scriptVersion}` : t("agents.notInstalled"),
@@ -274,6 +265,36 @@ export function AgentsPane({
           {busy === "update" && <DownloadProgress progress={progress} />}
         </section>
       )}
+    </div>
+  );
+}
+
+/** One permission: a switch, its name and what it means, on its own row. */
+function PermissionRow({
+  checked,
+  disabled,
+  onChange,
+  title,
+  hint,
+  children,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (on: boolean) => void;
+  title: string;
+  hint: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className={cn("flex items-start gap-3.5 border-t px-6 py-4 first-of-type:border-t-0", disabled && "opacity-60")}>
+      <Checkbox checked={checked} disabled={disabled} onCheckedChange={onChange} className="mt-0.5" />
+      <div className="grid min-w-0 flex-1 gap-1">
+        <label className="text-sm font-medium" onClick={() => !disabled && onChange(!checked)}>
+          {title}
+        </label>
+        <p className="text-muted-foreground text-[13px] leading-relaxed">{hint}</p>
+        {children}
+      </div>
     </div>
   );
 }
@@ -304,13 +325,13 @@ function ClientRow({
   else line = t(`agents.mode.${entry.mode}`, { version: entry.version ?? "" });
 
   return (
-    <li className="ds-card grid gap-2 p-3" data-testid={`mcp-client-${client.id}`}>
-      <div className="flex items-center gap-3">
-        <span className="bg-muted text-foreground grid size-8 shrink-0 place-items-center rounded-lg">
+    <li className="ds-card grid gap-3 px-4 py-3.5" data-testid={`mcp-client-${client.id}`}>
+      <div className="flex items-center gap-4">
+        <span className="bg-muted text-foreground grid size-9 shrink-0 place-items-center rounded-lg">
           <Bot className="size-4" />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-sm font-medium">
+        <div className="grid min-w-0 flex-1 gap-0.5">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
             {client.name}
             {ok && (
               <Badge tone="success">
@@ -325,7 +346,7 @@ function ClientRow({
               </Badge>
             )}
           </p>
-          <p className="text-muted-foreground truncate text-xs" title={entry?.healthError ?? line}>
+          <p className="text-muted-foreground text-xs leading-relaxed" title={entry?.healthError ?? line}>
             {line}
           </p>
         </div>
@@ -340,10 +361,10 @@ function ClientRow({
         </Button>
       </div>
       {failed && entry?.healthError && (
-        <p className="ds-callout ds-callout-warning break-words px-3 py-2 font-mono text-2xs">{entry.healthError}</p>
+        <p className="ds-callout ds-callout-warning break-words px-3 py-2.5 font-mono text-2xs leading-relaxed">{entry.healthError}</p>
       )}
       {projects.length > 0 && (
-        <p className="text-muted-foreground text-2xs">
+        <p className="text-muted-foreground text-xs leading-relaxed">
           {t("agents.projectEntries", { count: projects.length, projects: projects.map((p) => p.scope).join(", ") })}
         </p>
       )}
@@ -361,7 +382,7 @@ function DownloadProgress({ progress }: { progress: McpProgress | null }) {
         : t("agents.preparing");
   return (
     <div className="grid gap-1.5" aria-live="polite">
-      <p className="text-muted-foreground flex items-center justify-between text-xs">
+      <p className="text-muted-foreground flex items-center justify-between text-sm">
         <span>{label}</span>
         {progress && progress.percent > 0 && progress.stage !== "done" && <span className="tabular-nums">{progress.percent}%</span>}
       </p>
@@ -383,20 +404,20 @@ function ConnectOutcome({ result }: { result: { client: ClientId; res?: McpConne
     });
   };
   return (
-    <div className="grid gap-2" data-testid="mcp-outcome">
-      {error && <p className="ds-callout ds-callout-danger px-3 py-2 text-xs">{error}</p>}
+    <div className="grid gap-3" data-testid="mcp-outcome">
+      {error && <p className="ds-callout ds-callout-danger px-4 py-3 text-sm leading-relaxed">{error}</p>}
       {res?.done && (
-        <div className="ds-callout ds-callout-info grid gap-1 px-3 py-2 text-xs">
+        <div className="ds-callout ds-callout-info grid gap-1.5 px-4 py-3 text-sm leading-relaxed">
           <p className="font-medium">
             {t(result.client === "claude-desktop" ? "agents.doneClaudeDesktop" : "agents.doneClaudeCode")}
           </p>
           <p className="text-foreground/80">{t("agents.tryIt")}</p>
-          {res.backup && <p className="text-muted-foreground break-all text-2xs">{t("agents.backup", { path: res.backup })}</p>}
+          {res.backup && <p className="text-muted-foreground break-all text-xs">{t("agents.backup", { path: res.backup })}</p>}
         </div>
       )}
       {manual && (
         <div className="grid gap-1.5">
-          <p className="text-xs">{t(result.client === "other" ? "agents.manualOther" : "agents.manualClaudeCode")}</p>
+          <p className="text-sm leading-relaxed">{t(result.client === "other" ? "agents.manualOther" : "agents.manualClaudeCode")}</p>
           <div className="relative">
             <pre className="bg-muted max-h-48 overflow-auto rounded-lg p-3 pr-10 font-mono text-2xs leading-relaxed whitespace-pre-wrap break-all">
               {manual}

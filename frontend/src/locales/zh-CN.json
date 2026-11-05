@@ -29,7 +29,10 @@
     "errors_other": "{{count}} 个错误",
     "modeLocalTitle": "本地：全部在本机运行。",
     "modeCloudTitle": "云端：全部在 imference.com 上运行。",
-    "modeGroup": "运行位置"
+    "modeGroup": "运行位置",
+    "agents": "AI 智能体",
+    "agentsTitle": "将 Claude 或其他 AI 应用连接到 Imference Desktop",
+    "agentsConnected": "已连接 AI 应用 — 设置 › AI 智能体"
   },
   "engineControl": {
     "installing": "正在安装引擎…",
@@ -490,7 +493,7 @@
     "navWalletWeb": "钱包",
     "walletDescWeb": "使用浏览器钱包以 USDC 按次支付云端运行。",
     "navAgents": "AI 智能体",
-    "agentsDesc": "将 Claude 和其他 AI 应用连接到 Imference Desktop。"
+    "agentsDesc": "将 AI 智能体（Claude、Cursor…）连接到 Imference Desktop。"
   },
   "storage": {
     "usageTitle": "模型缓存",
@@ -1452,8 +1455,8 @@
     "desc": "粘贴你购买积分时获得的账户密钥（在本应用、imference.com 或 Claude 中）。使用前会先验证。"
   },
   "agents": {
-    "title": "让 Claude 在本机创作",
-    "lead": "将 Claude（或其他 AI 应用）连接到 Imference Desktop：在对话中请求一张图片，它会在本机用你的 GPU 生成。",
+    "title": "让 AI 智能体在本机创作",
+    "lead": "将 AI 智能体（Claude、Cursor…）连接到 Imference Desktop：在对话中请求一张图片，它会在本机用你的 GPU 生成。",
     "point1": "使用你的 GPU 和已下载的模型生成 — 免费",
     "point2": "也能编辑：去除背景、放大、描述…",
     "point3": "所有结果都会进入图库，并在“活动”中实时显示",
@@ -1511,6 +1514,7 @@
     "viaHint": "由 {{name}} 通过 Imference Desktop 的本地 API 启动（设置 › AI 智能体）。",
     "spend": "允许 AI 智能体使用我的点数进行云端运行",
     "spendHint": "关闭：它们只在本机免费运行。开启：当你要求使用云端时，它们会使用你的 Imference 账户 — 无需复制到它们的设置中，关闭后立即停止。",
-    "spendNoKey": "添加账户后才会生效（设置 › 点数与账户）。"
+    "spendNoKey": "添加账户后才会生效（设置 › 点数与账户）。",
+    "permissionsTitle": "AI 智能体可以做什么"
   }
 }

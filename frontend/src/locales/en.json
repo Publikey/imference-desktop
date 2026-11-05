@@ -30,7 +30,10 @@
     "errors_other": "{{count}} errors",
     "modeLocalTitle": "Local: everything runs on this computer.",
     "modeCloudTitle": "Cloud: everything runs on imference.com.",
-    "modeGroup": "Where things run"
+    "modeGroup": "Where things run",
+    "agents": "AI agents",
+    "agentsTitle": "Connect Claude or another AI app to Imference Desktop",
+    "agentsConnected": "An AI app is connected — Settings › AI agents"
   },
   "engineControl": {
     "installing": "Installing engine…",
@@ -496,7 +499,7 @@
     "navWalletWeb": "Wallet",
     "walletDescWeb": "Pay each cloud run in USDC from your browser wallet.",
     "navAgents": "AI agents",
-    "agentsDesc": "Connect Claude and other AI apps to Imference Desktop."
+    "agentsDesc": "Connect AI agents (Claude, Cursor…) to Imference Desktop."
   },
   "storage": {
     "usageTitle": "Model cache",
@@ -1464,8 +1467,8 @@
     "desc": "Paste the account key you got with your credits (here, on imference.com or for Claude). It is checked before it is used."
   },
   "agents": {
-    "title": "Let Claude create on this computer",
-    "lead": "Connect Claude (or another AI app) to Imference Desktop: ask for an image in the chat, it's made here, with your GPU.",
+    "title": "Let an AI agent create on this computer",
+    "lead": "Connect an AI agent (Claude, Cursor…) to Imference Desktop: ask for an image in the chat, it's made here, with your GPU.",
     "point1": "Generates with your GPU and your downloaded models — free",
     "point2": "Edits too: remove a background, upscale, describe…",
     "point3": "Everything lands in your gallery, shown live in Activity",
@@ -1523,6 +1526,7 @@
     "viaHint": "Started by {{name}} through Imference Desktop's local API (Settings › AI agents).",
     "spend": "Let AI agents spend my credits for cloud runs",
     "spendHint": "Off: they only work on this computer, for free. On: when you ask for the cloud, they use your Imference account — nothing to copy into their settings, and turning this off stops it at once.",
-    "spendNoKey": "Your Imference account is used once you add one (Settings › Credits & account)."
+    "spendNoKey": "Your Imference account is used once you add one (Settings › Credits & account).",
+    "permissionsTitle": "What AI agents may do"
   }
 }

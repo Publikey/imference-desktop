@@ -1788,6 +1788,7 @@ export default function App() {
         errorLogCount={errorLogCount}
         onToggleLogs={() => setLogsOpen((o) => !o)}
         onOpenSettings={() => openSettings()}
+        onOpenAgents={() => openSettings("agents")}
         onOpenPalette={() => setPaletteOpen(true)}
         panelHidden={panelHidden}
         onTogglePanel={togglePanel}

@@ -21,6 +21,10 @@ import (
 // load a model (a cold start or a model switch).
 const agentEngineWait = 10 * time.Minute
 
+// agentDefaultStrength is the img2img strength when the agent doesn't give
+// one (the composer's default).
+const agentDefaultStrength = 0.6
+
 // engineInstalled reports whether the local engine is installed (tests stub it).
 var engineInstalled = func(a *App) bool { return a.GetEngineInfo().Installed }
 
@@ -124,6 +128,9 @@ func (b toolsAPIBackend) Generate(ctx context.Context, body tools.GenerateBody, 
 		}
 		req.SourceImage = "data:" + mt + ";base64," + base64.StdEncoding.EncodeToString(data)
 		req.Strength = body.Strength
+		if req.Strength <= 0 || req.Strength > 1 {
+			req.Strength = agentDefaultStrength
+		}
 	}
 
 	res, err := a.GenerateLocal(req)

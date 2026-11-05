@@ -42,7 +42,7 @@ type GenModel struct {
 type GenerationInfo struct {
 	// Ready: the engine is installed and a model is selected (it starts on demand).
 	Ready bool `json:"ready"`
-	// EngineState is the sidecar state: stopped, starting, ready, error.
+	// EngineState is the sidecar state: idle (not started yet), starting, ready, stopped, error.
 	EngineState string     `json:"engine_state"`
 	Model       *GenModel  `json:"model"`
 	Models      []GenModel `json:"models"`

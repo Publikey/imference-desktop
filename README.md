@@ -96,6 +96,11 @@ available; code signing and silent in-app auto-update are on the roadmap.
   click-to-select, expand (outpaint), repaint, restore faces, describe, and
   quick utilities (resize, crop, convert, strip metadata, video trim/convert)
   right from the gallery — on your machine or in the cloud.
+- 🤖 **Driven by your AI agent** — connect **Claude Desktop, Claude Code,
+  Cursor** or any MCP app in one click (Settings → AI agents, or the *AI
+  agents* button in the header). Ask for an image in the chat: it's generated
+  on your GPU, for free, and shows up live in the app. See
+  [AI agents](#ai-agents-claude-cursor).
 
 <div align="center">
 
@@ -105,6 +110,42 @@ available; code signing and silent in-app auto-update are on the roadmap.
 -->
 
 </div>
+
+## AI agents (Claude, Cursor…)
+
+Imference Desktop can be driven by an AI agent through the open-source
+[Imference MCP server](https://github.com/Publikey/Imference-mcp) — ask Claude
+for an image and your own GPU makes it.
+
+1. Open **Settings → AI agents** (or click **AI agents** in the header).
+2. Click **Connect** next to Claude Desktop or Claude Code. Desktop looks at
+   what's already there (an MCP server set up before, an npm install, a
+   Node.js ≥ 20.10) and downloads only what's missing: the server
+   (`imference-mcp.js`, from the MCP's GitHub release) and, if no usable
+   Node.js is found, the official portable Node.js — both checked against
+   their published SHA-256. For any other MCP app, **Show setup** gives the
+   config snippet to paste.
+3. Restart the AI app and ask: *"Generate a lighthouse in a storm with
+   Imference."*
+
+What the agent can do, and how it shows:
+
+- **Generate locally, for free**, with the models you downloaded (a
+  downloaded model that isn't loaded is loaded first; an agent never starts a
+  multi-GB download), and run the **editing tools** on your machine.
+- **Everything is visible**: each run appears live in Activity, marked
+  *via Claude* (or the app's name) with its model, and lands in the gallery —
+  including the agent's cloud runs.
+- **Cloud only if you allow it**: *Let AI agents spend my credits for cloud
+  runs* (off by default) lets the MCP server use this app's Imference account
+  for cloud runs. The key is handed out on request and never written into the
+  agent's config; turning the option off stops it at once.
+- **Your call**: *Let AI agents use Imference Desktop* turns the whole local
+  API off. A local failure is reported to the agent, never silently retried
+  as a paid cloud run.
+
+The local API behind it is documented in [Editing tools](#editing-tools)
+below.
 
 ## Editing tools
 

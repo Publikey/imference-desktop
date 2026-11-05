@@ -1,8 +1,8 @@
-﻿import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ExternalModelWarning } from "@/components/ExternalModelWarning";
-import { ComposerCardHeader } from "@/components/ComposerCard";
+import { Section } from "@/components/ds";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronDown, Loader2, RefreshCw } from "lucide-react";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,6 +45,8 @@ type Props = {
   engineState?: string;
   selectionCached?: boolean;
   onLoadNow?: () => void;
+  /** Shown under the model, in the same card (the cloud payment line). */
+  footer?: ReactNode;
 };
 
 // ModelBar — the single model selector for the whole app. Shows the active
@@ -71,6 +73,7 @@ export function ModelBar({
   engineState,
   selectionCached,
   onLoadNow,
+  footer,
 }: Props) {
   const { t } = useTranslation();
   const [localModels, setLocalModels] = useState<ModelInfo[]>([]);
@@ -158,12 +161,9 @@ export function ModelBar({
   );
 
   return (
-    <section className="bg-card rounded-2xl border px-4 py-3 shadow-sm">
-      <ComposerCardHeader
-        title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
-        help={isCloud ? t("modelBar.cloudHelp") : t("modelBar.localHelp")}
-      />
-      <div className="mt-2 flex items-center">
+    // No section title: the banner itself says "Cloud model" / "Local model".
+    <Section className="p-2 [&>*:not(:first-child)]:mx-2 [&>*:last-child]:mb-1.5">
+      <div className="flex items-center">
         {listError ? (
           <div className="flex h-10 flex-1 items-center gap-2">
             <AlertTriangle className="text-destructive size-4 shrink-0" />
@@ -181,27 +181,36 @@ export function ModelBar({
         ) : loading ? (
           // Fixed-height skeleton matching the resolved button, so the card
           // doesn't reflow when the catalog arrives.
-          <div className="flex h-10 flex-1 items-center gap-2.5 rounded-xl border px-2.5">
-            <Skeleton className="size-7 rounded-lg" />
-            <Skeleton className="h-3.5 w-28" />
-          </div>
+          <Skeleton className="h-28 flex-1 rounded-xl" />
         ) : (
+          // The chosen model as a banner: its cover image fills the button, a
+          // veil on the left keeps the label and name readable over any art.
           <button
             type="button"
             disabled={busy}
             onClick={() => onPickerOpenChange(true)}
-            title={isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
-            className={cn(
-              "group flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-xl border px-2.5 text-left text-sm shadow-sm transition",
-              "bg-background/70 hover:border-primary/40 hover:bg-background",
-              "disabled:cursor-not-allowed disabled:opacity-60"
-            )}
+            title={isCloud ? t("modelBar.cloudHelp") : t("modelBar.localHelp")}
+            className="model-banner group relative flex h-28 min-w-0 flex-1 items-end overflow-hidden rounded-xl text-left disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <ModelThumb m={selected} isCloud={isCloud} className="size-7 rounded-lg" iconClassName="size-3.5" />
-            <span className="min-w-0 flex-1 truncate font-medium">
-              {selected?.name ?? (allModels.length ? t("modelBar.selectModel") : t("modelBar.noModels"))}
+            <ModelThumb
+              m={selected}
+              isCloud={isCloud}
+              className="absolute inset-0 size-full object-[center_30%] transition-transform duration-500 ease-[var(--im-ease-out)] group-hover:scale-[1.04]"
+              iconClassName="absolute right-6 size-10 opacity-40"
+            />
+            <span aria-hidden className="model-banner-veil absolute inset-0" />
+            <span className="relative flex min-w-0 flex-1 flex-col gap-0.5 p-3 pr-2">
+              <span className="text-2xs font-medium text-white/75">
+                {isCloud ? t("modelBar.cloudModel") : t("modelBar.localModel")}
+              </span>
+              <span className="font-display truncate text-lg font-semibold leading-tight text-white">
+                {selected?.name ?? (allModels.length ? t("modelBar.selectModel") : t("modelBar.noModels"))}
+              </span>
             </span>
-            {busy && <Loader2 className="size-4 shrink-0 animate-spin opacity-60" />}
+            <span className="relative m-3 inline-flex shrink-0 items-center gap-1 rounded-full bg-black/45 px-2.5 py-1 text-2xs font-medium text-white backdrop-blur transition-colors group-hover:bg-black/60">
+              {busy ? <Loader2 className="size-3 animate-spin" /> : <ChevronDown className="size-3" />}
+              {t("modelBar.change")}
+            </span>
           </button>
         )}
       </div>
@@ -211,17 +220,17 @@ export function ModelBar({
       {!isCloud && selected && !loading && !listError && (
         downloading || engineState === "starting" ? (
           // A model is being loaded into the engine (a swap, a Load now…).
-          <p className="text-primary mt-2 flex items-center gap-1.5 text-[11px]">
+          <p className="text-primary mt-2 flex items-center gap-1.5 text-2xs">
             <Loader2 className="size-3 animate-spin" />
             {t("modelBar.loading")}
           </p>
         ) : loadedHere ? (
-          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300">
-            <span className="size-1.5 rounded-full bg-emerald-500" />
+          <p className="mt-2 flex items-center gap-1.5 text-2xs text-success">
+            <span className="size-1.5 rounded-full bg-success" />
             {engineState === "ready" ? t("modelBar.loaded") : t("modelBar.loadedWhenStarted")}
           </p>
         ) : (
-          <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-800 dark:text-amber-200">
+          <div className="ds-callout ds-callout-warning mt-2 flex items-center gap-2 px-2.5 py-1.5 text-2xs">
             <span className="min-w-0 flex-1">
               {engineModel
                 ? t("modelBar.notLoadedHolds", { name: engineModel.name || engineModel.modelCode })
@@ -233,7 +242,7 @@ export function ModelBar({
                 type="button"
                 disabled={busy || downloading}
                 onClick={onLoadNow}
-                className="shrink-0 rounded-md border border-amber-500/40 px-2 py-0.5 font-medium hover:bg-amber-500/15 disabled:opacity-50"
+                className="shrink-0 rounded-md border border-warning/40 px-2 py-0.5 font-medium hover:bg-warning/15 disabled:opacity-50"
               >
                 {t("modelBar.loadNow")}
               </button>
@@ -247,6 +256,8 @@ export function ModelBar({
       {customError && mode === "local" && (
         <p className="text-destructive mt-2 text-xs">{customError}</p>
       )}
+
+      {footer && <div className="mt-3 border-t pt-3">{footer}</div>}
 
       <ModelPickerDialog
         open={pickerOpen}
@@ -271,6 +282,6 @@ export function ModelBar({
         }}
         onRemoveCustom={onRemoveCustom}
       />
-    </section>
+    </Section>
   );
 }

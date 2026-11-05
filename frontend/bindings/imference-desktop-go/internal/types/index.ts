@@ -3,6 +3,7 @@
 
 export type {
     CachedModel,
+    CardCheckout,
     CatalogLora,
     CloudHistoryItem,
     CloudHistoryOutput,

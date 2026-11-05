@@ -61,7 +61,7 @@ export function ShortcutsDialog({
         <div className="grid gap-5 sm:grid-cols-3">
           {sections.map((s) => (
             <div key={s.title} className="min-w-0">
-              <h3 className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-wide">
+              <h3 className="ds-label mb-2">
                 {s.title}
               </h3>
               <dl className="space-y-2">
@@ -71,7 +71,7 @@ export function ShortcutsDialog({
                     <dd className="flex shrink-0 items-center gap-1">
                       {r.keys.map((k) => (
                         <Fragment key={k}>
-                          <kbd className="bg-muted text-foreground inline-flex h-5 min-w-5 items-center justify-center rounded border px-1.5 text-[11px] font-medium">
+                          <kbd className="bg-muted text-foreground inline-flex h-5 min-w-5 items-center justify-center rounded border px-1.5 text-2xs font-medium">
                             {k}
                           </kbd>
                         </Fragment>

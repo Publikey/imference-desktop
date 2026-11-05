@@ -1,70 +1,45 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "@fontsource-variable/inter/index.css";
+@import "@fontsource-variable/inter-tight/index.css";
+@import "@fontsource-variable/jetbrains-mono/index.css";
+@import "./styles/tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
-/* Neutrals carry a whisper of the brand hue (blue, h≈250, matching the logo)
-   so surfaces feel intentional rather than gray-out-of-the-box — the chroma is
-   far below the threshold where anyone would call them "blue". */
-:root {
-  --background: oklch(0.985 0.003 250);
-  --foreground: oklch(0.155 0.008 252);
-  --card: oklch(0.999 0.001 250);
-  --card-foreground: oklch(0.155 0.008 252);
-  --popover: oklch(0.999 0.001 250);
-  --popover-foreground: oklch(0.155 0.008 252);
-  --primary: oklch(0.21 0.015 252);
-  --primary-foreground: oklch(0.985 0.002 250);
-  --secondary: oklch(0.965 0.004 250);
-  --secondary-foreground: oklch(0.21 0.015 252);
-  --muted: oklch(0.962 0.004 250);
-  --muted-foreground: oklch(0.545 0.014 252);
-  --accent: oklch(0.965 0.004 250);
-  --accent-foreground: oklch(0.21 0.015 252);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.915 0.006 250);
-  --input: oklch(0.915 0.006 250);
-  --ring: oklch(0.62 0.13 245);
-  --radius: 0.625rem;
-  /* Signature brand gradient, derived from the logo — deep royal blue → cyan.
-     The cyan end is nudged a touch deeper than the logo's #00D8FE so white
-     button text stays legible on it. */
-  --brand-from: oklch(0.52 0.18 256);
-  --brand-to: oklch(0.7 0.15 220);
-  /* Cloud-mode accent — brighter, cyan-forward so it reads distinct from the
-     deep-blue local brand (local = brand-surface, cloud = these). */
-  --cloud-from: oklch(0.72 0.13 218);
-  --cloud-to: oklch(0.82 0.11 205);
-  /* Motion vocabulary — one easing family for the whole app. */
-  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
-}
-
+/* Foundations come from the shared design tokens (design/tokens/tokens.json,
+   generated into styles/tokens.css — the same file feeds imference.com). This
+   block only maps the shadcn-style names the components use onto them. */
+:root,
 .dark {
-  --background: oklch(0.152 0.01 251);
-  --foreground: oklch(0.975 0.003 250);
-  --card: oklch(0.205 0.012 251);
-  --card-foreground: oklch(0.975 0.003 250);
-  --popover: oklch(0.205 0.012 251);
-  --popover-foreground: oklch(0.975 0.003 250);
-  --primary: oklch(0.925 0.006 250);
-  --primary-foreground: oklch(0.21 0.012 251);
-  --secondary: oklch(0.268 0.01 251);
-  --secondary-foreground: oklch(0.975 0.003 250);
-  --muted: oklch(0.268 0.01 251);
-  --muted-foreground: oklch(0.715 0.012 252);
-  --accent: oklch(0.268 0.01 251);
-  --accent-foreground: oklch(0.975 0.003 250);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 11%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.62 0.13 245);
-  /* Slightly brighter brand on dark so it still reads as vivid, not muddy. */
-  --brand-from: oklch(0.58 0.17 254);
-  --brand-to: oklch(0.76 0.14 218);
-  --cloud-from: oklch(0.76 0.13 216);
-  --cloud-to: oklch(0.85 0.11 203);
+  --background: var(--im-canvas);
+  --foreground: var(--im-fg);
+  --card: var(--im-surface);
+  --card-foreground: var(--im-fg);
+  --popover: var(--im-raised);
+  --popover-foreground: var(--im-fg);
+  --primary: var(--im-primary);
+  --primary-foreground: var(--im-primary-fg);
+  --secondary: var(--im-muted);
+  --secondary-foreground: var(--im-fg);
+  --muted: var(--im-muted);
+  --muted-foreground: var(--im-fg-muted);
+  --accent: var(--im-muted);
+  --accent-foreground: var(--im-fg);
+  --destructive: var(--im-danger);
+  --border: var(--im-border);
+  --input: var(--im-input);
+  --ring: var(--im-ring);
+  --radius: var(--im-radius-lg);
+  /* Signature brand gradient (the logo's royal blue → cyan); Cloud mode's
+     accent is the cyan end of the same family. */
+  --brand-from: var(--im-brand-from);
+  --brand-to: var(--im-brand-to);
+  --cloud-from: var(--im-cloud-from);
+  --cloud-to: var(--im-cloud-to);
+  /* Motion vocabulary — one easing family for the whole app. */
+  --ease-out-expo: var(--im-ease-out);
+  --ease-spring: var(--im-ease-spring);
 }
 
 @theme inline {
@@ -86,10 +61,43 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Design-system additions (tokens.json). */
+  --color-surface: var(--im-surface);
+  --color-raised: var(--im-raised);
+  --color-sunken: var(--im-sunken);
+  --color-subtle: var(--im-fg-subtle);
+  --color-border-strong: var(--im-border-strong);
+  --color-success: var(--im-success);
+  --color-warning: var(--im-warning);
+  --color-info: var(--im-info);
+  --color-brand: var(--im-brand-from);
+  --color-brand-to: var(--im-brand-to);
+  --color-cloud: var(--im-cloud-from);
+  --color-scrim: var(--im-scrim);
+  --font-sans: var(--im-font-sans);
+  --font-display: var(--im-font-display);
+  --font-mono: var(--im-font-mono);
+  --radius-xs: var(--im-radius-xs);
+  --radius-sm: var(--im-radius-sm);
+  --radius-md: var(--im-radius-md);
+  --radius-lg: var(--im-radius-lg);
+  --radius-xl: var(--im-radius-xl);
+  --radius-2xl: var(--im-radius-2xl);
+  --radius-3xl: var(--im-radius-3xl);
+  --shadow-xs: var(--im-shadow-xs);
+  --shadow-sm: var(--im-shadow-sm);
+  --shadow-md: var(--im-shadow-md);
+  --shadow-lg: var(--im-shadow-lg);
+  --shadow-xl: var(--im-shadow-xl);
+  --ease-standard: var(--im-ease-standard);
+  --ease-out: var(--im-ease-out);
+  --ease-spring: var(--im-ease-spring);
+  /* The small step of the type scale (captions, badges, counts). */
+  --text-2xs: var(--im-text-2xs);
+  --text-2xs--line-height: var(--im-leading-2xs);
+  /* A bare `transition` moves on the system's timing, not Tailwind's 150ms ease. */
+  --default-transition-duration: var(--im-duration-fast);
+  --default-transition-timing-function: var(--im-ease-standard);
 }
 
 @layer base {
@@ -103,13 +111,11 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family:
-      "Inter Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-      system-ui, sans-serif;
+    font-family: var(--im-font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    font-feature-settings: "cv11", "ss01";
+    font-feature-settings: var(--im-font-features);
     /* Neutral vignette only — the tinted brand aurora is an animated layer
        (.aurora) rendered in the app so its blooms can drift. */
     background-image: radial-gradient(
@@ -131,16 +137,210 @@
     width: 8px;
     height: 8px;
   }
+  /* Inset thumb (transparent border + padding-box): it floats off the edge
+     and reads as chrome, not as a line drawn around the column. */
   *::-webkit-scrollbar-thumb {
-    background: color-mix(in oklch, var(--foreground) 16%, transparent);
+    background: color-mix(in oklch, var(--foreground) 12%, transparent) padding-box;
+    border: 2px solid transparent;
     border-radius: 9999px;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklch, var(--foreground) 28%, transparent);
+    background: color-mix(in oklch, var(--foreground) 26%, transparent) padding-box;
   }
 }
 
 @layer components {
+  /* ======================================================================
+     Design-system primitives (shared vocabulary with imference.com).
+     One class per role, so a role restyles everywhere at once:
+       .ds-card     a section surface (the only bordered box in a panel)
+       .ds-field    text input / textarea well
+       .ds-label    a section title inside a card (sentence case)
+       .ds-sublabel a field label, one step quieter
+       .ds-seg / .ds-seg-item   segmented control (track + thumb)
+       .ds-chip-btn a small secondary pill action ("Add", "Refresh")
+       .ds-callout  a notice (+ .ds-callout-warning / -info / -danger)
+       .ds-panel-title          the title above a board panel
+     ====================================================================== */
+  .ds-card {
+    background-color: var(--im-surface);
+    border: 1px solid var(--im-border);
+    border-radius: var(--im-radius-xl);
+    box-shadow: var(--im-shadow-xs), var(--im-shadow-inset);
+  }
+  /* Related sections joined into one card: shared edges, a hairline between
+     them (Reference image + LoRAs, Format + Parameters). */
+  .ds-stack {
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--im-radius-xl);
+    box-shadow: var(--im-shadow-xs);
+  }
+  .ds-stack > .ds-card {
+    box-shadow: var(--im-shadow-inset);
+  }
+  .ds-stack > .ds-card:not(:first-child) {
+    border-top-color: color-mix(in oklch, var(--im-border) 70%, transparent);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+  .ds-stack > .ds-card:not(:last-child) {
+    border-bottom-width: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  /* A notice inside a panel or dialog (what blocks a run, a failure, a tip):
+     one shape, the tone sets the colour. Padding and text size stay with the
+     caller (an inline hint and a banner differ). */
+  .ds-callout {
+    border: 1px solid var(--callout-border);
+    border-radius: var(--im-radius-lg);
+    background-color: var(--callout-bg);
+    color: var(--callout-fg);
+  }
+  .ds-callout-warning {
+    --callout-fg: var(--im-warning);
+  }
+  .ds-callout-info {
+    --callout-fg: var(--im-info);
+  }
+  .ds-callout-danger {
+    --callout-fg: var(--im-danger);
+  }
+  .ds-callout-warning,
+  .ds-callout-info,
+  .ds-callout-danger {
+    --callout-border: color-mix(in oklch, var(--callout-fg) 30%, transparent);
+    --callout-bg: color-mix(in oklch, var(--callout-fg) 9%, transparent);
+  }
+  .ds-field {
+    background-color: var(--im-sunken);
+    border: 1px solid var(--im-input);
+    border-radius: var(--im-radius-lg);
+    color: var(--im-fg);
+    outline: none;
+    transition:
+      border-color var(--im-duration-fast) var(--im-ease-standard),
+      box-shadow var(--im-duration-fast) var(--im-ease-standard),
+      background-color var(--im-duration-fast) var(--im-ease-standard);
+  }
+  .ds-field::placeholder {
+    color: var(--im-fg-subtle);
+    opacity: 0.75;
+  }
+  .ds-field:hover {
+    border-color: var(--im-border-strong);
+  }
+  .ds-field:focus,
+  .ds-field:focus-visible {
+    background-color: var(--im-surface);
+    border-color: color-mix(in oklch, var(--im-ring) 70%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--im-ring) 22%, transparent);
+  }
+  .ds-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: var(--im-text-sm);
+    line-height: var(--im-leading-xs);
+    font-weight: 600;
+    letter-spacing: var(--im-tracking-snug);
+    color: var(--im-fg);
+  }
+  .ds-sublabel {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: var(--im-text-xs);
+    line-height: var(--im-leading-xs);
+    font-weight: 500;
+    color: var(--im-fg-muted);
+  }
+  .ds-hint {
+    font-weight: 400;
+    color: var(--im-fg-subtle);
+  }
+  .ds-seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--im-radius-lg);
+    background-color: var(--im-sunken);
+    border: 1px solid var(--im-border);
+  }
+  .ds-seg-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    height: 1.75rem;
+    padding-inline: 0.625rem;
+    border-radius: calc(var(--im-radius-lg) - 3px);
+    font-size: var(--im-text-xs);
+    font-weight: 500;
+    color: var(--im-fg-muted);
+    transition:
+      color var(--im-duration-fast) var(--im-ease-standard),
+      background-color var(--im-duration-fast) var(--im-ease-standard),
+      box-shadow var(--im-duration-fast) var(--im-ease-standard);
+  }
+  .ds-seg-item:hover:not(:disabled) {
+    color: var(--im-fg);
+  }
+  .ds-seg-item[aria-pressed="true"],
+  .ds-seg-item[aria-checked="true"],
+  .ds-seg-item[data-state="on"] {
+    color: var(--im-fg);
+    background-color: var(--im-raised);
+    box-shadow: var(--im-shadow-sm), inset 0 0 0 1px var(--im-border);
+  }
+  .ds-seg-item:focus-visible {
+    outline: var(--im-focus-width) solid var(--im-ring);
+    outline-offset: 1px;
+  }
+  .ds-chip-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    height: 1.75rem;
+    padding-inline: 0.625rem;
+    border-radius: var(--im-radius-pill);
+    border: 1px solid var(--im-border-strong);
+    background-color: var(--im-surface);
+    font-size: var(--im-text-xs);
+    font-weight: 600;
+    color: var(--im-fg);
+    box-shadow: var(--im-shadow-xs);
+    transition:
+      background-color var(--im-duration-fast) var(--im-ease-standard),
+      border-color var(--im-duration-fast) var(--im-ease-standard),
+      transform var(--im-duration-fast) var(--im-ease-spring);
+  }
+  .ds-chip-btn:hover:not(:disabled) {
+    background-color: var(--im-muted);
+    border-color: color-mix(in oklch, var(--im-ring) 45%, var(--im-border-strong));
+  }
+  .ds-chip-btn:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+  .ds-chip-btn:disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .ds-panel-title {
+    font-size: var(--im-text-sm);
+    line-height: var(--im-leading-xs);
+    font-weight: 600;
+    letter-spacing: var(--im-tracking-snug);
+    color: var(--im-fg);
+  }
+  /* Global keyboard focus: one ring for the whole product (same as the site). */
+  :where(button, a, [role="button"], [role="radio"], [role="tab"], summary):focus-visible {
+    outline: var(--im-focus-width) solid var(--im-ring);
+    outline-offset: var(--im-focus-offset);
+  }
+
   /* Brand gradient fill — app mark, primary CTA. */
   .brand-surface {
     background-image: linear-gradient(135deg, var(--brand-from), var(--brand-to));
@@ -159,9 +359,9 @@
     color: white;
     box-shadow: 0 8px 24px -8px color-mix(in oklch, var(--brand-to) 65%, transparent);
     transition:
-      filter 0.15s ease,
-      box-shadow 0.2s ease,
-      transform 0.14s var(--ease-spring);
+      filter var(--im-duration-fast) var(--im-ease-standard),
+      box-shadow var(--im-duration-base) var(--im-ease-standard),
+      transform var(--im-duration-fast) var(--ease-spring);
   }
   /* Hover: clearly lifts and brightens with a bigger colored glow, so it reads
      as interactive well before the click. */
@@ -176,7 +376,7 @@
     filter: brightness(0.94) saturate(1.05);
     box-shadow: 0 2px 8px -6px color-mix(in oklch, var(--brand-to) 70%, transparent);
     transform: translateY(1px) scale(0.96);
-    transition-duration: 0.04s;
+    transition-duration: var(--im-duration-instant);
   }
   /* Composer surface: layered shadow at rest, brand focus glow when active. */
   .composer {
@@ -184,14 +384,55 @@
       0 1px 2px rgba(0, 0, 0, 0.04),
       0 12px 36px -16px rgba(0, 0, 0, 0.18);
     transition:
-      box-shadow 0.25s ease,
-      border-color 0.25s ease;
+      box-shadow var(--im-duration-base) var(--im-ease-standard),
+      border-color var(--im-duration-base) var(--im-ease-standard);
   }
+  /* The pinned Generate: the column fades out behind it instead of showing
+     half-cut cards above and around the button. */
+  /* xl: the column scrolls with a 24px bottom padding, which a sticky child
+     can't cover — the dock sits 24px lower (-bottom-6) and pads it back. */
+  .run-dock {
+    margin-top: -1.25rem;
+    padding-top: 1.75rem;
+    /* Frosted, not a solid band: the canvas (and its aurora) shows through,
+       blurred; the mask fades the glass in over the top 1.75rem. */
+    background: color-mix(in oklch, var(--background) 72%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 1.75rem);
+    mask-image: linear-gradient(to bottom, transparent, black 1.75rem);
+  }
+  /* Lightbox image (md+): as tall as the window allows, and no wider than the
+     viewer row leaves beside the 20rem details panel. --ar = width / height. */
+  @media (min-width: 768px) {
+    .lightbox-img {
+      width: auto;
+      max-height: none;
+      height: min(calc(100dvh - 8rem), calc((min(100vw - 3rem, 72rem) - 21rem) / var(--ar, 1)));
+    }
+  }
+  .composer-input::placeholder {
+    color: var(--im-fg-subtle);
+  }
+  /* Focus ring drawn inside the border: the Create column scrolls, and an
+     outer ring was clipped at its edges. */
   .composer:focus-within {
-    border-color: transparent;
+    border-color: color-mix(in oklch, var(--brand-from) 70%, transparent);
     box-shadow:
-      0 0 0 2px color-mix(in oklch, var(--brand-from) 50%, transparent),
-      0 16px 44px -18px color-mix(in oklch, var(--brand-to) 45%, rgba(0, 0, 0, 0.22));
+      inset 0 0 0 1px color-mix(in oklch, var(--brand-from) 70%, transparent),
+      0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+  /* Empty gallery: three ghost tiles fanned behind the brand mark. */
+  .empty-fan-tile {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 5.5rem;
+    height: 7rem;
+    border-radius: var(--im-radius-xl);
+    background: linear-gradient(160deg, var(--im-raised), var(--im-surface));
+    border: 1px solid var(--im-border);
+    box-shadow: var(--im-shadow-md);
   }
   /* Soft brand bloom behind the empty-canvas icon. */
   .canvas-glow {
@@ -207,25 +448,13 @@
      (blue for Local, cyan for Cloud) so the current mode is felt, not just read
      off the toggle. Kept very low-alpha; cross-fades on mode switch. */
   .create-surface {
-    border: 1px solid transparent;
-    border-radius: 1.5rem;
-    transition:
-      background-color 0.35s var(--ease-out-expo),
-      border-color 0.35s var(--ease-out-expo);
-  }
-  .create-surface[data-mode="local"] {
-    background-color: color-mix(in oklch, var(--brand-from) 5%, transparent);
-    border-color: color-mix(in oklch, var(--brand-from) 12%, transparent);
-  }
-  .create-surface[data-mode="cloud"] {
-    background-color: color-mix(in oklch, var(--cloud-from) 7%, transparent);
-    border-color: color-mix(in oklch, var(--cloud-from) 16%, transparent);
+    border-radius: var(--im-radius-2xl);
   }
   /* ---- The global mode, visible everywhere -----------------------------
      Local = the brand blue, Cloud = cyan (the Create surface's accents). */
   .mode-accent {
     height: 2px;
-    transition: background 0.35s var(--ease-out-expo);
+    transition: background var(--im-duration-slow) var(--ease-out-expo);
   }
   .mode-accent[data-mode="local"] {
     background: linear-gradient(90deg, var(--brand-from), var(--brand-to));
@@ -234,14 +463,20 @@
     background: linear-gradient(90deg, var(--cloud-from), var(--cloud-to));
   }
   .mode-chip[data-mode="local"] {
-    color: var(--brand-from);
-    background-color: color-mix(in oklch, var(--brand-from) 14%, transparent);
-    border-color: color-mix(in oklch, var(--brand-from) 35%, transparent);
+    --chip: var(--brand-from);
   }
   .mode-chip[data-mode="cloud"] {
-    color: var(--cloud-from);
-    background-color: color-mix(in oklch, var(--cloud-from) 14%, transparent);
-    border-color: color-mix(in oklch, var(--cloud-from) 35%, transparent);
+    --chip: var(--cloud-from);
+  }
+  .mode-chip[data-mode] {
+    color: color-mix(in oklch, var(--chip) 88%, var(--im-fg));
+    background-color: color-mix(in oklch, var(--chip) 14%, var(--im-surface));
+    border-color: color-mix(in oklch, var(--chip) 35%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--chip) 38%, transparent);
+  }
+  /* Text stays AA on the dark canvas: the accent is lifted toward white. */
+  .dark .mode-chip[data-mode] {
+    color: color-mix(in oklch, var(--chip) 62%, white);
   }
   .mode-edge[data-mode="local"] {
     border-left-color: var(--brand-from);
@@ -249,21 +484,10 @@
   .mode-edge[data-mode="cloud"] {
     border-left-color: var(--cloud-from);
   }
-  /* The same mode-tinted outline for the other mode-bound panels (Engine). */
+  /* Mode-bound panels (Engine, Edit): plain layout, no tint — the mode is shown
+     once, in the header, not repeated as a wash on every surface. */
   .mode-surface {
-    border: 1px solid transparent;
-    border-radius: 1.5rem;
-    transition:
-      background-color 0.35s var(--ease-out-expo),
-      border-color 0.35s var(--ease-out-expo);
-  }
-  .mode-surface[data-mode="local"] {
-    background-color: color-mix(in oklch, var(--brand-from) 5%, transparent);
-    border-color: color-mix(in oklch, var(--brand-from) 12%, transparent);
-  }
-  .mode-surface[data-mode="cloud"] {
-    background-color: color-mix(in oklch, var(--cloud-from) 7%, transparent);
-    border-color: color-mix(in oklch, var(--cloud-from) 16%, transparent);
+    border-radius: var(--im-radius-2xl);
   }
   /* The run capsule — the Create panel's terminal action, floating over the
      cards it scrolls above. It should read as a layer ON TOP of the panel
@@ -279,15 +503,16 @@
   .btn-run {
     --run-from: var(--brand-from);
     --run-to: color-mix(in oklch, var(--brand-to) 80%, var(--brand-from));
+    --run-bg: var(--run-from);
+    --run-fg: white;
     background-image: linear-gradient(135deg, var(--run-from), var(--run-to));
-    color: white;
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / 0.18),
       0 8px 22px -10px color-mix(in oklch, var(--run-from) 80%, transparent);
     transition:
-      filter 0.15s ease,
-      box-shadow 0.2s ease,
-      transform 0.14s var(--ease-spring);
+      filter var(--im-duration-fast) var(--im-ease-standard),
+      box-shadow var(--im-duration-base) var(--im-ease-standard),
+      transform var(--im-duration-fast) var(--ease-spring);
   }
   .btn-run[data-mode="cloud"] {
     --run-from: color-mix(in oklch, var(--cloud-from) 72%, black);
@@ -310,16 +535,28 @@
     filter: brightness(0.94);
     box-shadow: 0 2px 8px -6px color-mix(in oklch, var(--run-from) 70%, transparent);
     transform: translateY(1px) scale(0.97);
-    transition-duration: 0.04s;
+    transition-duration: var(--im-duration-instant);
   }
-  /* Disabled: the active look (same gradient, same text), just see-through —
-     no shadow, no lift — and a "not allowed" cursor on hover. */
+  /* Disabled: opaque and readable — a quiet surface in the mode's hue with a
+     dashed hairline, not a see-through gradient (whose hint fell under 3:1).
+     A click still lands (aria-disabled) and points at what is missing. */
   .btn-run[aria-disabled="true"] {
-    opacity: 0.5;
+    --run-bg: color-mix(in oklch, var(--run-from) 9%, var(--im-surface));
+    --run-fg: var(--im-fg-muted);
+    background-image: none;
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--run-from) 30%, transparent);
+    outline: 1px dashed color-mix(in oklch, var(--run-from) 45%, transparent);
+    outline-offset: -1px;
     cursor: not-allowed;
-    box-shadow: none;
     filter: none;
     transform: none;
+  }
+  .btn-run[aria-disabled="true"] .run-hint {
+    opacity: 1;
+    color: var(--im-fg-muted);
+  }
+  .btn-run[aria-disabled="true"] svg {
+    opacity: 0.7;
   }
   /* What blocks Generate, pointed at on a click of the disabled button: a
      quick shake and two amber ring pulses. */
@@ -349,14 +586,14 @@
   @keyframes blocker-ring {
     0%,
     50% {
-      box-shadow: 0 0 0 0 rgb(245 158 11 / 0.7);
+      box-shadow: 0 0 0 0 color-mix(in oklch, var(--im-warning) 70%, transparent);
     }
     25%,
     75% {
-      box-shadow: 0 0 0 4px rgb(245 158 11 / 0.55);
+      box-shadow: 0 0 0 4px color-mix(in oklch, var(--im-warning) 55%, transparent);
     }
     100% {
-      box-shadow: 0 0 0 0 rgb(245 158 11 / 0);
+      box-shadow: 0 0 0 0 color-mix(in oklch, var(--im-warning) 0%, transparent);
     }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -366,7 +603,9 @@
   }
   /* An image is being dragged over the panel (drop → img2img). */
   .create-drop-active {
-    border-color: color-mix(in oklch, var(--brand-from) 55%, transparent) !important;
+    outline: 2px dashed color-mix(in oklch, var(--brand-from) 60%, transparent);
+    outline-offset: 4px;
+    background-color: color-mix(in oklch, var(--brand-from) 6%, transparent);
   }
   @media (prefers-reduced-motion: reduce) {
     .create-surface {
@@ -380,6 +619,21 @@
     color: var(--foreground);
     background-color: color-mix(in oklch, var(--brand-from) 12%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--brand-from) 22%, transparent);
+  }
+
+  /* Header › AI agents: a headline feature, set apart from the icon buttons —
+     a brand tint and ring, the icon in the brand colour. */
+  .agents-btn {
+    color: var(--foreground);
+    background-color: color-mix(in oklch, var(--brand-from) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--brand-from) 30%, transparent);
+  }
+  .agents-btn:hover {
+    background-color: color-mix(in oklch, var(--brand-from) 18%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--brand-from) 45%, transparent);
+  }
+  .agents-btn svg {
+    color: var(--brand-from);
   }
 
   /* ---- Panel system ------------------------------------------------------
@@ -417,6 +671,16 @@
   /* Entrance for list rows / tiles: a short rise + fade. */
   .rise-in {
     animation: rise-in 0.35s var(--ease-out-expo) both;
+  }
+  /* A board column appearing (launch, or a panel switched back on). */
+  .panel-enter {
+    animation: panel-enter var(--im-duration-slower) var(--im-ease-out) var(--enter-delay, 0ms) both;
+  }
+  @keyframes panel-enter {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.995);
+    }
   }
   @keyframes rise-in {
     from {
@@ -563,7 +827,7 @@
       filter: brightness(1.35);
     }
     50% {
-      transform: scale(1.07);
+      transform: scale(1.03);
     }
     100% {
       transform: scale(1);
@@ -597,9 +861,11 @@
       opacity: 0.9;
       transform: scale(1);
     }
+    /* Grows mostly upward/downward: the button spans its column, and a wide
+       ring would only be clipped by the column's edges. */
     100% {
       opacity: 0;
-      transform: scale(1.35, 1.9);
+      transform: scale(1.06, 1.9);
     }
   }
   .launch-orb {
@@ -764,7 +1030,7 @@
     background-image: linear-gradient(135deg, var(--brand-from), var(--brand-to));
     border: 2px solid var(--background);
     box-shadow: 0 1px 4px -1px color-mix(in oklch, var(--brand-to) 70%, transparent);
-    transition: transform 0.12s var(--ease-spring);
+    transition: transform var(--im-duration-fast) var(--ease-spring);
   }
   input[type="range"].range::-webkit-slider-thumb:hover {
     transform: scale(1.15);
@@ -782,7 +1048,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .rise-in {
+    .rise-in,
+    .panel-enter {
       animation: none;
     }
     .bar-indeterminate {
@@ -840,11 +1107,11 @@
 .theme-transition *::before,
 .theme-transition *::after {
   transition:
-    background-color 0.28s var(--ease-out-expo),
-    border-color 0.28s var(--ease-out-expo),
-    color 0.28s var(--ease-out-expo),
-    fill 0.28s var(--ease-out-expo),
-    stroke 0.28s var(--ease-out-expo) !important;
+    background-color var(--im-duration-slow) var(--ease-out-expo),
+    border-color var(--im-duration-slow) var(--ease-out-expo),
+    color var(--im-duration-slow) var(--ease-out-expo),
+    fill var(--im-duration-slow) var(--ease-out-expo),
+    stroke var(--im-duration-slow) var(--ease-out-expo) !important;
 }
 /* The aurora keeps its own long drift; don't let the cross-fade retime it. */
 .theme-transition .aurora-blob {
@@ -878,7 +1145,7 @@
    the whole window and a thin frame in the mode's colour complete it: subtle,
    but visible wherever the eye is. */
 .app-frame {
-  transition: box-shadow 0.5s var(--ease-out-expo);
+  transition: box-shadow var(--im-duration-slower) var(--ease-out-expo);
 }
 .app-frame::after {
   content: "";
@@ -886,19 +1153,16 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  transition: background 0.5s var(--ease-out-expo);
+  transition: background var(--im-duration-slower) var(--ease-out-expo);
 }
-.app-frame[data-mode="local"] {
-  box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--brand-from) 45%, transparent);
-}
+/* No frame around the window (it read as a focus ring): the mode is told by
+   the header switch, its accent line and the run button. A faint top wash in
+   the mode's hue is all that remains here. */
 .app-frame[data-mode="local"]::after {
-  background: linear-gradient(180deg, color-mix(in oklch, var(--brand-from) 5%, transparent), transparent 40%);
-}
-.app-frame[data-mode="cloud"] {
-  box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--cloud-from) 50%, transparent);
+  background: linear-gradient(180deg, color-mix(in oklch, var(--brand-from) 3%, transparent), transparent 30%);
 }
 .app-frame[data-mode="cloud"]::after {
-  background: linear-gradient(180deg, color-mix(in oklch, var(--cloud-from) 7%, transparent), transparent 40%);
+  background: linear-gradient(180deg, color-mix(in oklch, var(--cloud-from) 3%, transparent), transparent 30%);
 }
 .aurora[data-mode="cloud"] .aurora-blob-1 {
   background: radial-gradient(circle, color-mix(in oklch, var(--cloud-from) 60%, transparent), transparent 70%);
@@ -913,12 +1177,14 @@
   position: absolute;
   border-radius: 9999px;
   filter: blur(90px);
-  opacity: 0.5;
+  opacity: 0;
   will-change: transform;
 }
+/* Dark only: a low brand bloom behind the chrome. The light theme stays a
+   neutral canvas (a tinted one made cards float without edges). */
 .dark .aurora-blob {
-  opacity: 0.42;
-  filter: blur(100px);
+  opacity: 0.2;
+  filter: blur(110px);
 }
 .aurora-blob-1 {
   width: 42rem;
@@ -954,9 +1220,11 @@
     color-mix(in oklch, var(--brand-from) 38%, var(--brand-to)),
     transparent 70%
   );
-  /* Quieter than the corner blobs — it sits behind the gallery's content. */
-  opacity: 0.16;
   animation: aurora-3 38s ease-in-out infinite alternate;
+}
+/* Quieter than the corner blobs — it sits behind the gallery's content. */
+.dark .aurora-blob-3 {
+  opacity: 0.08;
 }
 @keyframes aurora-1 {
   from {
@@ -985,5 +1253,503 @@
 @media (prefers-reduced-motion: reduce) {
   .aurora-blob {
     animation: none;
+  }
+}
+
+/* ---- Welcome (first run, app/Welcome.tsx) ----------------------------------
+   A two-pane dialog: the catalog fanned on the brand stage (left), the step
+   (right). Steps slide in from the side they come from; the cards re-fan on
+   each step. Everything collapses to one column on a phone. */
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: color-mix(in oklch, var(--im-scrim) 100%, transparent);
+  backdrop-filter: blur(6px);
+  animation: welcome-fade var(--im-duration-slow) var(--im-ease-out) both;
+}
+.welcome {
+  position: fixed;
+  z-index: 51;
+  inset: 0;
+  margin: auto;
+  width: min(960px, calc(100vw - 2rem));
+  height: min(680px, calc(100dvh - 2rem));
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  overflow: hidden;
+  border-radius: var(--im-radius-3xl);
+  background: var(--im-surface);
+  border: 1px solid var(--im-border);
+  box-shadow: var(--im-shadow-xl);
+  outline: none;
+  animation: welcome-in var(--im-duration-slower) var(--im-ease-out) both;
+}
+@keyframes welcome-fade {
+  from { opacity: 0; }
+}
+@keyframes welcome-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+}
+.welcome-stage {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in oklch, var(--im-brand-from) 55%, transparent), transparent 60%),
+    radial-gradient(110% 90% at 100% 100%, color-mix(in oklch, var(--im-brand-to) 45%, transparent), transparent 60%),
+    #0a0d11;
+}
+.welcome-stage-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(50% 40% at 50% 55%, rgb(255 255 255 / 0.08), transparent 70%);
+}
+.welcome-logo {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  height: 22px;
+  width: auto;
+  filter: brightness(0) invert(1);
+  opacity: 0.92;
+}
+.welcome-fan {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.welcome-card {
+  --i: 0;
+  --spread: calc(var(--i) - 2);
+  position: absolute;
+  margin: 0;
+  width: 42%;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--im-radius-xl);
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow: 0 24px 48px -16px rgb(0 0 0 / 0.6);
+  transform: translateX(calc(var(--spread) * 26%)) translateY(calc(var(--spread) * var(--spread) * 3%)) rotate(calc(var(--spread) * 7deg));
+  z-index: calc(10 - var(--spread) * var(--spread));
+  transition: transform var(--im-duration-slower) var(--im-ease-out);
+  animation: welcome-deal var(--im-duration-slower) var(--im-ease-out) calc(120ms + var(--i) * 70ms) both;
+}
+.welcome-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.welcome-card figcaption {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 18px 10px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.65));
+}
+/* Only the front card names its model; the fanned ones stay pictures. */
+.welcome-card:not([data-front]) figcaption {
+  display: none;
+}
+.welcome-card.is-ghost {
+  background: linear-gradient(160deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.03));
+}
+/* Each step re-fans the deck: wider on step 2, tighter on step 3. */
+.welcome-fan[data-step="1"] .welcome-card {
+  transform: translateX(calc(var(--spread) * 30%)) translateY(calc(var(--spread) * var(--spread) * 4% - 4%)) rotate(calc(var(--spread) * 9deg));
+}
+.welcome-fan[data-step="2"] .welcome-card {
+  transform: translateX(calc(var(--spread) * 18%)) translateY(calc(var(--spread) * var(--spread) * 2% + 2%)) rotate(calc(var(--spread) * 4deg));
+}
+@keyframes welcome-deal {
+  from { opacity: 0; transform: translateY(40px) rotate(0deg) scale(0.9); }
+}
+.welcome-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.welcome-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 40px 40px 16px;
+  animation: welcome-step var(--im-duration-slow) var(--im-ease-out) both;
+}
+.welcome-body[data-dir="-1"] {
+  animation-name: welcome-step-back;
+}
+@keyframes welcome-step {
+  from { opacity: 0; transform: translateX(16px); }
+}
+@keyframes welcome-step-back {
+  from { opacity: 0; transform: translateX(-16px); }
+}
+.ds-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--im-text-xs);
+  font-weight: 500;
+  color: var(--im-fg-muted);
+}
+.ds-eyebrow::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: linear-gradient(135deg, var(--im-brand-from), var(--im-brand-to));
+}
+.welcome-title {
+  margin-top: 10px;
+  font-family: var(--im-font-display);
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  outline: none;
+}
+.welcome-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--im-radius-lg);
+  color: var(--im-brand-from);
+  background: color-mix(in oklch, var(--im-brand-from) 12%, var(--im-surface));
+  border: 1px solid color-mix(in oklch, var(--im-brand-from) 22%, transparent);
+}
+.dark .welcome-icon {
+  color: color-mix(in oklch, var(--im-brand-to) 80%, white);
+}
+.welcome-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.welcome-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--im-radius-xl);
+  border: 1px solid var(--im-border);
+  background: var(--im-surface);
+  transition:
+    border-color var(--im-duration-fast) var(--im-ease-standard),
+    background-color var(--im-duration-fast) var(--im-ease-standard),
+    box-shadow var(--im-duration-fast) var(--im-ease-standard);
+}
+.welcome-choice:hover {
+  border-color: var(--im-border-strong);
+}
+.welcome-choice[aria-checked="true"] {
+  border-color: color-mix(in oklch, var(--im-ring) 70%, transparent);
+  background: color-mix(in oklch, var(--im-ring) 6%, var(--im-surface));
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--im-ring) 18%, transparent);
+}
+.welcome-radio {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border-radius: 99px;
+  border: 1.5px solid var(--im-border-strong);
+  color: white;
+}
+.welcome-choice[aria-checked="true"] .welcome-radio {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--im-brand-from), var(--im-brand-to));
+}
+.welcome-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 99px;
+  color: var(--im-success);
+  background: color-mix(in oklch, var(--im-success) 12%, transparent);
+}
+.welcome-map {
+  display: grid;
+  grid-template-columns: 1fr 1.8fr;
+  grid-template-rows: auto 1fr;
+  gap: 6px;
+  height: 92px;
+  padding: 6px;
+  border-radius: var(--im-radius-xl);
+  background: var(--im-sunken);
+  border: 1px solid var(--im-border);
+}
+.welcome-map span {
+  display: flex;
+  align-items: flex-start;
+  padding: 7px 8px;
+  border-radius: var(--im-radius-md);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--im-fg-muted);
+  background: var(--im-surface);
+  border: 1px solid var(--im-border);
+}
+.welcome-map span.is-bar {
+  grid-column: 1 / -1;
+  padding-block: 4px;
+  font-weight: 500;
+}
+.welcome-map span.is-main {
+  color: var(--im-fg);
+  border-color: color-mix(in oklch, var(--im-ring) 55%, transparent);
+  box-shadow: inset 0 -22px 0 -16px color-mix(in oklch, var(--im-brand-from) 40%, transparent);
+}
+.welcome-map span.is-wide {
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(33% - 3px), var(--im-border) calc(33% - 3px) 33%);
+  background-origin: content-box;
+}
+.welcome-step-n {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--im-fg);
+  background: var(--im-muted);
+}
+.welcome-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 7px 12px;
+  border-radius: var(--im-radius-pill);
+  border: 1px solid var(--im-border-strong);
+  background: var(--im-surface);
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--im-fg);
+  transition:
+    border-color var(--im-duration-fast) var(--im-ease-standard),
+    background-color var(--im-duration-fast) var(--im-ease-standard),
+    transform var(--im-duration-fast) var(--im-ease-spring);
+}
+.welcome-prompt svg {
+  color: var(--im-brand-from);
+}
+.welcome-prompt span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.welcome-prompt:hover {
+  border-color: color-mix(in oklch, var(--im-ring) 55%, transparent);
+  background: color-mix(in oklch, var(--im-ring) 6%, var(--im-surface));
+}
+.welcome-prompt:active {
+  transform: scale(0.97);
+}
+.welcome-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 24px 20px 40px;
+  border-top: 1px solid var(--im-border);
+}
+.welcome-dots {
+  display: flex;
+  gap: 6px;
+}
+.welcome-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--im-border-strong);
+  transition:
+    width var(--im-duration-slow) var(--im-ease-out),
+    background-color var(--im-duration-slow) var(--im-ease-out);
+}
+.welcome-dots span[data-done] {
+  background: color-mix(in oklch, var(--im-brand-from) 55%, transparent);
+}
+.welcome-dots span[data-on] {
+  width: 22px;
+  background: linear-gradient(90deg, var(--im-brand-from), var(--im-brand-to));
+}
+@media (max-width: 760px) {
+  .welcome {
+    grid-template-columns: 1fr;
+    grid-template-rows: 150px minmax(0, 1fr);
+    height: min(760px, calc(100dvh - 1.5rem));
+    width: calc(100vw - 1.5rem);
+  }
+  .welcome-card {
+    width: 22%;
+  }
+  .welcome-card figcaption {
+    display: none;
+  }
+  .welcome-body {
+    padding: 24px 20px 12px;
+  }
+  .welcome-title {
+    font-size: 24px;
+  }
+  .welcome-footer {
+    padding: 12px 16px 16px 20px;
+  }
+}
+/* Touch screens: no keyboard, no shortcuts to teach. */
+@media (pointer: coarse) {
+  .welcome-keys {
+    display: none !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome,
+  .welcome-overlay,
+  .welcome-body,
+  .welcome-card {
+    animation: none;
+  }
+  .welcome-card,
+  .welcome-dots span {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Identity — "studio nocturne"
+   Imference's own look on top of the neutral system: ink-blue surfaces (the
+   tokens), the brand's blue→cyan as the one signature, display type for
+   titles, a fine grain over the canvas. One block, so the character can be
+   tuned in one place.
+   ========================================================================== */
+
+/* Titles in the display face, a touch larger and tighter. */
+.ds-panel-title {
+  font-family: var(--im-font-display);
+  font-size: 0.9375rem;
+  letter-spacing: -0.012em;
+}
+.ds-label {
+  font-family: var(--im-font-display);
+  letter-spacing: -0.006em;
+}
+/* Panel icons carry the brand gradient's blue. */
+.panel-icon {
+  color: color-mix(in oklch, var(--brand-to) 70%, var(--brand-from));
+}
+
+/* Film grain over the canvas: breaks the flat digital fill, the way a print
+   or a screen-printed poster would. Under the content, never over images. */
+.app-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.dark .app-frame::before {
+  opacity: 0.05;
+}
+:root:not(.dark) .app-frame::before {
+  filter: invert(1);
+}
+
+/* The aurora, a little more present in the dark. */
+.dark .aurora-blob {
+  opacity: 0.28;
+}
+
+/* Chosen states speak the brand: a segmented "on" thumb gets a cyan hairline. */
+.ds-seg-item[aria-pressed="true"],
+.ds-seg-item[aria-checked="true"],
+.ds-seg-item[data-state="on"] {
+  box-shadow:
+    var(--im-shadow-sm),
+    inset 0 0 0 1px color-mix(in oklch, var(--brand-to) 32%, var(--im-border));
+}
+
+/* Generate: the signature. A brighter gradient with a light sweep on hover
+   and a coloured glow that lifts it off the column. */
+.btn-run:not([aria-disabled="true"]) {
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.22),
+    inset 0 0 0 1px rgb(255 255 255 / 0.08),
+    0 10px 30px -10px color-mix(in oklch, var(--run-to) 75%, transparent),
+    0 2px 8px -2px color-mix(in oklch, var(--run-from) 60%, transparent);
+}
+.btn-run:not([aria-disabled="true"])::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.18) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 0.7s var(--im-ease-out);
+}
+.btn-run:not([aria-disabled="true"]):hover::after {
+  transform: translateX(120%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-run::after {
+    display: none;
+  }
+}
+/* Cloud's run button: brand blue into a deep cyan, not a muted teal. White
+   text stays readable on both ends. */
+.btn-run[data-mode="cloud"] {
+  --run-from: color-mix(in oklch, var(--brand-from) 70%, var(--cloud-from));
+  --run-to: color-mix(in oklch, var(--cloud-from) 78%, black);
+}
+
+/* The chosen model as a banner (ModelBar): its art fills the button; the veil
+   darkens the left and bottom so white text reads over any image, and a brand
+   hairline answers hover and focus. */
+.model-banner {
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--im-fg) 10%, transparent);
+  isolation: isolate;
+}
+.model-banner-veil {
+  background:
+    linear-gradient(90deg, rgb(4 8 20 / 0.78) 0%, rgb(4 8 20 / 0.45) 45%, rgb(4 8 20 / 0.05) 80%),
+    linear-gradient(0deg, rgb(4 8 20 / 0.45), transparent 60%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  border-radius: inherit;
+  transition: box-shadow var(--im-duration-fast) var(--im-ease-standard);
+}
+.model-banner:hover:not(:disabled) .model-banner-veil,
+.model-banner:focus-visible .model-banner-veil {
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--brand-to) 75%, transparent);
+}
+
+/* A panel brought forward (an image sent to Edit): a brand halo that fades. */
+.panel-flash {
+  border-radius: var(--im-radius-2xl);
+  animation: panel-flash 1.2s var(--im-ease-out) both;
+}
+@keyframes panel-flash {
+  0%,
+  35% {
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--brand-to) 65%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
   }
 }

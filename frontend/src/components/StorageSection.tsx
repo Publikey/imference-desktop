@@ -144,7 +144,7 @@ export function StorageSection({
   return (
     <div className="grid gap-4">
       {/* Usage against the quota */}
-      <section className="bg-card grid gap-3 rounded-2xl border p-4 shadow-sm">
+      <section className="ds-card grid gap-3 p-4">
         <div className="flex items-baseline justify-between gap-2">
           <Label>{t("storage.usageTitle")}</Label>
           <span className="text-muted-foreground text-xs tabular-nums">
@@ -171,7 +171,7 @@ export function StorageSection({
                 }))
               }
             />
-            <p className="text-muted-foreground text-[11px]">{t("storage.quotaHint")}</p>
+            <p className="text-muted-foreground text-2xs">{t("storage.quotaHint")}</p>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="minfree">{t("storage.minFreeLabel")}</Label>
@@ -187,13 +187,13 @@ export function StorageSection({
                 }))
               }
             />
-            <p className="text-muted-foreground text-[11px]">{t("storage.minFreeHint")}</p>
+            <p className="text-muted-foreground text-2xs">{t("storage.minFreeHint")}</p>
           </div>
         </div>
       </section>
 
       {/* Cached checkpoints */}
-      <section className="bg-card grid gap-2 rounded-2xl border p-4 shadow-sm">
+      <section className="ds-card grid gap-2 p-4">
         <Label>{t("storage.modelsTitle")}</Label>
         <p className="text-muted-foreground text-xs">{t("storage.modelsHint")}</p>
 
@@ -207,13 +207,13 @@ export function StorageSection({
                   <p className="flex items-center gap-1.5 truncate text-xs font-medium" title={m.key}>
                     {m.modelName || m.modelCode || m.key}
                     {m.active && (
-                      <span className="bg-primary/10 text-primary rounded px-1.5 py-0.5 text-[10px] font-medium">
+                      <span className="bg-primary/10 text-primary rounded px-1.5 py-0.5 text-2xs font-medium">
                         {t("storage.badgeActive")}
                       </span>
                     )}
                     {m.orphan && (
                       <span
-                        className="text-muted-foreground/70 inline-flex items-center gap-1 text-[10px]"
+                        className="text-muted-foreground/70 inline-flex items-center gap-1 text-2xs"
                         title={t("storage.orphanHint")}
                       >
                         <AlertTriangle className="size-3" />
@@ -221,7 +221,7 @@ export function StorageSection({
                       </span>
                     )}
                   </p>
-                  <p className="text-muted-foreground text-[11px] tabular-nums">
+                  <p className="text-muted-foreground text-2xs tabular-nums">
                     {humanBytes(m.bytes)} · {relativeTime(m.lastUsedAt, t)}
                   </p>
                 </div>
@@ -242,7 +242,7 @@ export function StorageSection({
       </section>
 
       {/* Folders on disk */}
-      <section className="bg-card grid gap-2 rounded-2xl border p-4 shadow-sm">
+      <section className="ds-card grid gap-2 p-4">
         <Label>{t("storage.foldersTitle")}</Label>
 
         <FolderRow
@@ -302,7 +302,7 @@ function FolderRow({
       <span className="text-muted-foreground shrink-0">{icon}</span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium">{name}</p>
-        <p className="text-muted-foreground truncate text-[11px]" title={path}>
+        <p className="text-muted-foreground truncate text-2xs" title={path}>
           {hint}
         </p>
       </div>

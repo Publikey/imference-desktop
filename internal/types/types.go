@@ -72,6 +72,10 @@ type ToolsSettings struct {
 	// LocalAPIDisabled turns off the 127.0.0.1 HTTP API agents use to run
 	// tools locally (enabled by default; the zero value keeps it on).
 	LocalAPIDisabled bool `json:"localApiDisabled,omitempty"`
+	// AgentsCanSpend lets AI agents (the Imference MCP server) use this
+	// account's API key for cloud runs: the local API hands it out on request
+	// (GET /v1/cloud-credentials). Off by default.
+	AgentsCanSpend bool `json:"agentsCanSpend,omitempty"`
 	// IdleMinutes stops the tools sidecar (releasing its models) after this
 	// many idle minutes. 0 = default (10).
 	IdleMinutes int `json:"idleMinutes,omitempty"`
@@ -371,6 +375,16 @@ type CreditInfo struct {
 	Configured bool    `json:"configured"`      // true when an API key was available to query
 	Credits    float64 `json:"credits"`         // remaining credit balance
 	Error      string  `json:"error,omitempty"` // populated on a failed lookup (bad key, network)
+}
+
+// CardCheckout is an in-app card purchase of one credit pack (Stripe Embedded
+// Checkout): the frontend mounts Stripe's form with ClientSecret and
+// PublishableKey. APIKey is the key the credits land on — a new one when the
+// buyer had none — adopted by the app once the payment is done.
+type CardCheckout struct {
+	ClientSecret   string `json:"clientSecret"`
+	PublishableKey string `json:"publishableKey"`
+	APIKey         string `json:"apiKey"`
 }
 
 // GenerationRequest is the unified frontend → Go payload for both modes.

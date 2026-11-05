@@ -121,8 +121,9 @@ export function LogPanel({ open, onOpenChange }: Props) {
           open ? "translate-x-0" : "translate-x-full"
         )}
         // Don't unmount on close — keep the subscription alive so the panel
-        // doesn't miss entries when hidden.
-        aria-hidden={!open}
+        // doesn't miss entries when hidden. inert (not aria-hidden): off-screen
+        // it must also drop out of the Tab order.
+        inert={!open}
       >
       <div className="flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-3">
@@ -221,14 +222,14 @@ function LogRow({ entry }: { entry: LogEntry }) {
     >
       <div className="flex items-baseline gap-2">
         <span className="text-muted-foreground shrink-0 tabular-nums">{time}</span>
-        <span className={"shrink-0 font-semibold uppercase " + levelText(entry.level)}>
+        <span className={"shrink-0 font-semibold " + levelText(entry.level)}>
           {entry.level}
         </span>
         <span className="text-muted-foreground shrink-0">[{entry.source}]</span>
         <span className="whitespace-pre-wrap break-words">{entry.message}</span>
       </div>
       {hasData && expanded && (
-        <pre className="bg-muted/40 mt-1 overflow-x-auto rounded p-2 text-[11px]">
+        <pre className="bg-muted/40 mt-1 overflow-x-auto rounded p-2 text-2xs">
           {JSON.stringify(entry.data, null, 2)}
         </pre>
       )}
@@ -243,9 +244,9 @@ function levelRank(l: LogLevel): number {
 function levelBg(l: LogLevel): string {
   switch (l) {
     case "error":
-      return "bg-red-500/10";
+      return "bg-destructive/10";
     case "warn":
-      return "bg-amber-500/10";
+      return "bg-warning/10";
     case "trace":
       return "opacity-70";
     default:
@@ -257,11 +258,11 @@ function levelBg(l: LogLevel): string {
 function levelText(l: LogLevel): string {
   switch (l) {
     case "error":
-      return "text-red-600 dark:text-red-400";
+      return "text-destructive";
     case "warn":
-      return "text-amber-600 dark:text-amber-400";
+      return "text-warning";
     case "info":
-      return "text-blue-600 dark:text-blue-400";
+      return "text-info";
     default:
       return "text-muted-foreground";
   }

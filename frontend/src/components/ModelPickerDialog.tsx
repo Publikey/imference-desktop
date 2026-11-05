@@ -10,8 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Segmented } from "@/components/ds";
 import { cn, coarsePointer, creditsToUSD } from "@/lib/utils";
 import type { ModelInfo, PaymentMode } from "@/lib/types";
+import { Badge } from "@/components/ds";
+import { runCost } from "@/app/model-params";
 
 // Display label + ordering for the LOCAL backends — the fallback grouping for
 // entries without a catalog family (user checkpoints). Keys are the normalized
@@ -191,28 +194,21 @@ export function ModelPickerDialog({
             {isCloud ? t("modelPicker.cloudDesc") : t("modelPicker.localDesc")}
           </DialogDescription>
 
-          {/* Local: Catalog / My models tabs */}
+          {/* Local: Catalog / My models */}
           {!isCloud && (
-            <div className="mt-1 flex gap-1">
-              {(["catalog", "mine"] as const).map((tabId) => (
-                <button
-                  key={tabId}
-                  type="button"
-                  onClick={() => setTab(tabId)}
-                  className={cn(
-                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-                    tab === tabId
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "hover:bg-accent border-transparent text-muted-foreground"
-                  )}
-                >
-                  {tabId === "catalog" ? t("modelPicker.catalogTab") : t("modelPicker.mineTab")}
-                  {tabId === "mine" && customModels.length > 0 && (
-                    <span className="ml-1.5 opacity-70">{customModels.length}</span>
-                  )}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              label={t("modelPicker.localTitle")}
+              value={tab}
+              onChange={(v) => setTab(v as "catalog" | "mine")}
+              options={[
+                { value: "catalog", label: t("modelPicker.catalogTab") },
+                {
+                  value: "mine",
+                  label: customModels.length > 0 ? `${t("modelPicker.mineTab")} · ${customModels.length}` : t("modelPicker.mineTab"),
+                },
+              ]}
+              className="mt-2 self-start"
+            />
           )}
 
           {/* Search + type filter */}
@@ -224,28 +220,32 @@ export function ModelPickerDialog({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("modelPicker.searchPlaceholder")}
-                className="border-input bg-background h-9 w-full rounded-md border pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                className="ds-field h-9 w-full pl-8 pr-3 text-sm"
               />
             </div>
-            {showMedia && (
-              <div className="flex flex-wrap gap-1.5">
-                {MEDIA_FILTERS.map((f) => (
-                  <Chip key={f} active={mediaFilter === f} onClick={() => setMediaFilter(f)}>
-                    {t(`modelPicker.media.${f}`)}
-                  </Chip>
-                ))}
-              </div>
-            )}
-            {presentGroups.length > 1 && (
-              <div className="flex flex-wrap gap-1.5">
-                <Chip active={typeFilter === "all"} onClick={() => setTypeFilter("all")}>
-                  {t("common.all")}
-                </Chip>
-                {presentGroups.map((g) => (
-                  <Chip key={g.key} active={typeFilter === g.key} onClick={() => setTypeFilter(g.key)}>
-                    {g.label}
-                  </Chip>
-                ))}
+            {/* Kind (All / Image / Video) as a switch, then the families as
+                toggles: a second "All" chip read as a duplicate. */}
+            {(showMedia || presentGroups.length > 1) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {showMedia && (
+                  <Segmented
+                    label={t("modelPicker.mediaLabel")}
+                    value={mediaFilter}
+                    onChange={(v) => setMediaFilter(v as (typeof MEDIA_FILTERS)[number])}
+                    options={MEDIA_FILTERS.map((f) => ({ value: f, label: t(`modelPicker.media.${f}`) }))}
+                    className="mr-1.5"
+                  />
+                )}
+                {presentGroups.length > 1 &&
+                  presentGroups.map((g) => (
+                    <Chip
+                      key={g.key}
+                      active={typeFilter === g.key}
+                      onClick={() => setTypeFilter(typeFilter === g.key ? "all" : g.key)}
+                    >
+                      {g.label}
+                    </Chip>
+                  ))}
               </div>
             )}
           </div>
@@ -296,7 +296,7 @@ export function ModelPickerDialog({
           ) : (
             groups.map((g) => (
               <section key={g.key} className="mb-5 last:mb-0">
-                <h4 className="text-muted-foreground mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                <h4 className="ds-label mb-2 flex gap-2">
                   {g.label}
                   <span className="bg-border h-px flex-1" />
                   <span className="opacity-70">{g.items.length}</span>
@@ -338,6 +338,7 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         "rounded-full border px-2.5 py-1 text-xs font-medium transition",
         active
@@ -398,21 +399,21 @@ function ModelCard({
           )}
           <div className="absolute top-1.5 left-1.5 flex gap-1">
             {m.localPath ? (
-              <Badge className="bg-amber-500/90 text-white">{t("modelPicker.badgeCustom")}</Badge>
+              <Badge overlay className="bg-warning/90 text-white">{t("modelPicker.badgeCustom")}</Badge>
             ) : !m.modelUrl && !isCloud ? (
-              <Badge className="bg-black/60 text-white">{t("modelPicker.badgeCloudOnly")}</Badge>
+              <Badge overlay className="bg-black/60 text-white">{t("modelPicker.badgeCloudOnly")}</Badge>
             ) : cached ? (
               // Weights already downloaded: picking this is a reload, not a
               // multi-GB pull. Hidden on the active card — the check mark
               // already says more than "on disk" does.
-              !active && <Badge className="bg-emerald-600/90 text-white">{t("modelPicker.badgeCached")}</Badge>
+              !active && <Badge overlay className="bg-success/90 text-white">{t("modelPicker.badgeCached")}</Badge>
             ) : null}
           </div>
           {isCloud && m.cost > 0 && (
-            <Badge className="bg-background/85 text-foreground absolute right-1.5 bottom-1.5">
+            <Badge overlay className="bg-background/85 text-foreground absolute right-1.5 bottom-1.5">
               {paymentMode === "x402"
-                ? t("modelPicker.costUsd", { usd: creditsToUSD(m.cost) })
-                : t("modelPicker.cost", { cost: m.cost })}
+                ? t("modelPicker.costUsd", { usd: creditsToUSD(runCost(m, "", null)) })
+                : t("modelPicker.cost", { cost: runCost(m, "", null) })}
             </Badge>
           )}
         </div>
@@ -421,7 +422,7 @@ function ModelCard({
             {m.name}
           </div>
           <div
-            className="text-muted-foreground truncate text-[11px]"
+            className="text-muted-foreground truncate text-2xs"
             title={m.shortDescription || m.localPath || undefined}
           >
             {m.shortDescription || m.localPath || " "}
@@ -475,7 +476,7 @@ export function ModelThumb({
       className={cn(
         "flex items-center justify-center",
         isCustom
-          ? "bg-amber-500/15 text-amber-600 dark:text-amber-300"
+          ? "bg-warning/15 text-warning"
           : isCloud
             ? "bg-[linear-gradient(135deg,var(--cloud-from),var(--cloud-to))] text-white"
             : "brand-surface text-white",
@@ -487,15 +488,3 @@ export function ModelThumb({
   );
 }
 
-function Badge({ className, children }: { className?: string; children: React.ReactNode }) {
-  return (
-    <span
-      className={cn(
-        "rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide shadow-sm",
-        className
-      )}
-    >
-      {children}
-    </span>
-  );
-}

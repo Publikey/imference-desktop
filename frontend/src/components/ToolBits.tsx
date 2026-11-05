@@ -33,6 +33,7 @@ import { api } from "@/lib/wails-bridge";
 import { EDIT_TOOL_IDS, UTILITY_TOOL_IDS, VIDEO_TOOL_IDS, toolById, useTools } from "@/lib/tools";
 import { cn, creditsToUSD } from "@/lib/utils";
 import type { PaymentMode, ToolBadge as Badge, ToolInfo } from "@/lib/types";
+import { Badge as DsBadge, type BadgeTone } from "@/components/ds";
 
 const ICONS: Record<string, typeof Wand2> = {
   upscale: ImageUpscale,
@@ -68,24 +69,18 @@ export function toolName(t: TFunction, tool: Pick<ToolInfo, "id" | "name">): str
 /** "Local" / "Local (slow)" / "Cloud" / "Unavailable" chip. */
 export function ToolBadgeChip({ badge, className }: { badge: Badge; className?: string }) {
   const { t } = useTranslation();
-  const style: Record<Badge, string> = {
-    local: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    local_slow: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    cloud: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-    unavailable: "border-border bg-muted text-muted-foreground",
+  const tone: Record<Badge, BadgeTone> = {
+    local: "success",
+    local_slow: "warning",
+    cloud: "info",
+    unavailable: "neutral",
   };
   const Icon = badge === "cloud" ? Cloud : badge === "local_slow" ? Gauge : Cpu;
   return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium leading-4",
-        style[badge],
-        className
-      )}
-    >
+    <DsBadge tone={tone[badge]} className={cn("px-1.5", className)}>
       {badge !== "unavailable" && <Icon className="size-2.5" />}
       {t(`tools.badge.${badge}`)}
-    </span>
+    </DsBadge>
   );
 }
 

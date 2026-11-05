@@ -6,6 +6,7 @@ import { HoverPopover } from "@/components/ui/hover-popover";
 import { cn } from "@/lib/utils";
 import { ToolIcon } from "@/components/ToolBits";
 import { KNOWN_STAGES } from "@/lib/tools";
+import { AgentBadge } from "@/components/AgentBadge";
 import type { GenerationMeta, Job } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -67,7 +68,7 @@ export function QueuePanel({
           <Sparkles className="size-5" strokeWidth={1.75} />
         </div>
         <p className="relative text-xs font-medium">{t("queue.empty")}</p>
-        <p className="text-muted-foreground/60 relative text-[11px] leading-snug">{t("queue.emptyHint")}</p>
+        <p className="text-muted-foreground/60 relative text-2xs leading-snug">{t("queue.emptyHint")}</p>
       </div>
     );
   }
@@ -141,7 +142,7 @@ function QueueRow({
       data-mode={job.mode}
       className={cn(
         // The mode the job ran in, as a left edge (Local blue / Cloud cyan).
-        "rise-in bg-card mode-edge group relative rounded-2xl border border-l-[3px] p-2.5 shadow-sm transition-colors",
+        "ds-card rise-in mode-edge group relative border-l-[3px] p-2.5 transition-colors",
         job.status === "error" && "border-destructive/30 bg-destructive/5",
         queued && "border-dashed"
       )}
@@ -199,7 +200,7 @@ function QueueRow({
           </p>
           <p
             className={cn(
-              "mt-0.5 flex items-center gap-1.5 text-[11px] tabular-nums",
+              "mt-0.5 flex items-center gap-1.5 text-2xs tabular-nums",
               job.status === "error" ? "text-destructive" : "text-muted-foreground"
             )}
           >
@@ -213,6 +214,16 @@ function QueueRow({
               <span className="text-muted-foreground/60 ml-auto shrink-0">{elapsed}</span>
             )}
           </p>
+          {job.via !== undefined && (
+            <div className="mt-1 flex min-w-0 items-center gap-1.5">
+              <AgentBadge via={job.via} />
+              {job.modelName && (
+                <span className="text-muted-foreground truncate text-2xs" title={job.modelName}>
+                  {job.modelName}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Trailing action: STOP a running local run (hard-restarts the engine),

@@ -30,20 +30,25 @@
     "errors_other": "{{count}} errors",
     "modeLocalTitle": "Local: everything runs on this computer.",
     "modeCloudTitle": "Cloud: everything runs on imference.com.",
-    "modeGroup": "Where things run"
+    "modeGroup": "Where things run",
+    "agents": "AI agents",
+    "agentsTitle": "Connect Claude or another AI app to Imference Desktop",
+    "agentsConnected": "An AI app is connected — Settings › AI agents"
   },
   "engineControl": {
     "installing": "Installing engine…",
     "install": "Install engine",
     "starting": "Starting…",
-    "runningTitle": "Local engine running · {{device}} — click to stop",
-    "on": "Local engine on",
+    "on": "Engine on",
     "stop": "Stop",
     "selectModelTitle": "Pick a local model — that's what the engine loads and runs",
     "selectModel": "Select a model",
     "startTitle": "Start the local engine (loads the selected model)",
     "restart": "Restart engine",
-    "start": "Start local engine"
+    "start": "Start local engine",
+    "off": "Engine off",
+    "error": "Engine error",
+    "detailsTitle": "Local engine: status and details"
   },
   "mode": {
     "local": "Local",
@@ -81,7 +86,8 @@
     "theme": "Theme: {{mode}}",
     "language": "Language: {{lang}}",
     "settings": "Open Settings",
-    "logs": "Toggle Logs"
+    "logs": "Toggle Logs",
+    "welcome": "Welcome tour"
   },
   "composer": {
     "qualityTags": "Quality tags",
@@ -100,10 +106,13 @@
     "prompt": "Prompt",
     "promptHelp": "Describe the image you want: subject, setting, style, lighting. Ctrl+Enter (⌘+Enter) generates.",
     "negativeHelp": "What the model should avoid. Pre-filled with the model's own recommendation.",
-    "qualityTagsHelp": "Added in front of your prompt. Pre-filled with the tags this model responds to best."
+    "qualityTagsHelp": "Added in front of your prompt. Pre-filled with the tags this model responds to best.",
+    "extras": "Negative prompt & quality tags",
+    "extrasSet": "in use",
+    "extrasHide": "Hide"
   },
   "hint": {
-    "configurePayment": "Configure a payment method above",
+    "configurePayment": "No way to pay yet: set one up above",
     "pickCloudModel": "Pick a cloud model above",
     "creditsPerRun": "{{name}} · {{cost}} credits / run",
     "engineNotInstalled": "Local engine not installed — click Install engine",
@@ -120,7 +129,9 @@
     "usdPerRun": "{{name}} · ${{usd}} / run",
     "editModel": "Edit model: use Edit with instructions",
     "editModelLong": "This model edits images: it can't generate from a prompt. Open an image in the gallery and use Edit > Edit with instructions, or pick a text-to-image model to generate.",
-    "writePrompt": "Write a prompt first"
+    "writePrompt": "Write a prompt first",
+    "notEnoughCredits": "Not enough credits for this run: top up above",
+    "notEnoughUsdc": "Not enough USDC for this run: add funds above"
   },
   "progress": {
     "preparing": "Preparing {{name}}",
@@ -276,6 +287,7 @@
     "deleteSelectedConfirm": "{{count}} images will be permanently removed from disk.",
     "emptyFiltered": "No images match this filter",
     "empty": "Your generations will appear here",
+    "emptyHint": "Write a prompt in Create, then Generate",
     "filterModel": "Model",
     "filterEngine": "Engine",
     "filterSource": "Source",
@@ -309,7 +321,9 @@
     "lbNav": "Navigate",
     "lbZoom": "Click image to zoom",
     "fullscreen": "Fullscreen",
-    "exitFullscreen": "Exit fullscreen"
+    "exitFullscreen": "Exit fullscreen",
+    "filters": "Filters",
+    "all": "All"
   },
   "meta": {
     "model": "Model",
@@ -384,7 +398,8 @@
     "notLoaded": "Selected, not loaded yet. It loads when you generate.",
     "downloadBelow": "Download it in Local setup below first.",
     "loadNow": "Load now",
-    "loading": "Loading a model into the engine…"
+    "loading": "Loading a model into the engine…",
+    "change": "Change"
   },
   "modelPicker": {
     "cloudTitle": "Cloud models",
@@ -411,7 +426,8 @@
     },
     "typeCloudApi": "Cloud API",
     "costUsd": "${{usd}}",
-    "badgeCached": "On disk"
+    "badgeCached": "On disk",
+    "mediaLabel": "Kind"
   },
   "customModel": {
     "title": "Add custom model",
@@ -432,7 +448,7 @@
   },
   "payment": {
     "title": "Payment",
-    "apiKey": "API key",
+    "apiKey": "Credits",
     "apiKeyNotSet": "API key not set",
     "notConfigured": "Not configured",
     "credits": "{{count}} credits",
@@ -441,7 +457,9 @@
     "usdc": "{{balance}} USDC",
     "checkFailed": "Check failed",
     "manageTitle": "Manage in Settings",
-    "configureTitle": "Configure in Settings"
+    "configureTitle": "Configure in Settings",
+    "payg": "Pay as you go",
+    "payWith": "Pay with"
   },
   "settings": {
     "title": "Settings",
@@ -451,19 +469,12 @@
     "navRuntime": "Advanced runtime",
     "navImage": "Image",
     "navWan": "WAN video",
-    "navPayment": "Cloud payment",
-    "navApiKey": "API key",
-    "navWallet": "x402 wallet",
+    "navPayment": "Payment",
     "navPaths": "Paths",
     "language": "Language",
     "languageSystem": "System",
     "languageHint": "Applies immediately. \"System\" follows your OS language.",
-    "cloudPayment": "Cloud payment",
-    "activeMethod": "Active method",
-    "apiKeyCredit": "API key (credit)",
-    "x402Wallet": "x402 (USDC wallet)",
     "apiKeyPlaceholder": "Paste your API key from imference.com",
-    "x402WalletLabel": "x402 wallet (USDC on Base)",
     "paths": "Paths",
     "pathsHint": "The cloud and local models are chosen from the form, above the prompt.",
     "pythonPath": "Python path",
@@ -474,13 +485,21 @@
     "saved": "Saved",
     "engineDesc": "Install and manage the local generation engine on this machine.",
     "runtimeDesc": "Host-machine tuning for the engine — device, memory, and quantization.",
-    "cloudDesc": "How cloud generations are paid for — a credit API key or an on-chain USDC wallet.",
+    "cloudDesc": "Cloud runs are paid with credits (recommended) or, per run, in USDC from a wallet.",
     "pathsDesc": "Where Python lives and where finished images are saved.",
     "languageDesc": "The language of the app interface.",
     "navStorage": "Storage",
     "storageDesc": "What the app keeps on disk, and how much of it.",
     "navTools": "Editing tools",
-    "toolsDesc": "Upscale, remove background, eraser and more — on this computer or in the cloud."
+    "toolsDesc": "Upscale, remove background, eraser and more — on this computer or in the cloud.",
+    "navCredits": "Credits & account",
+    "creditsDesc": "Prepaid credits for cloud runs, on your Imference account.",
+    "navWallet": "USDC wallet",
+    "walletDesc": "Pay each cloud run in USDC, from a wallet in this app.",
+    "navWalletWeb": "Wallet",
+    "walletDescWeb": "Pay each cloud run in USDC from your browser wallet.",
+    "navAgents": "AI agents",
+    "agentsDesc": "Connect AI agents (Claude, Cursor…) to Imference Desktop."
   },
   "storage": {
     "usageTitle": "Model cache",
@@ -543,7 +562,9 @@
     "devBadge": "dev · editable",
     "devSource": "source",
     "updatingTo": " — updating to v{{version}}…",
-    "pipHint": "Detailed pip output streams to the Logs panel (open it from the header)."
+    "pipHint": "Detailed pip output streams to the Logs panel (open it from the header).",
+    "version": "Version",
+    "environment": "Environment"
   },
   "runtime": {
     "title": "Engine / machine",
@@ -583,21 +604,21 @@
   },
   "wallet": {
     "loading": "Loading wallet…",
-    "title": "Wallet (Base mainnet · USDC)",
-    "keychainNote": "This wallet's private key lives in your OS keychain on this machine (Windows Credential Manager / macOS login keychain). Treat it as a burner: only fund what you're OK losing. Use \"Export private key\" to back it up before relying on it.",
-    "intro": "x402 needs an EVM wallet on Base mainnet to pay per generation (cost varies by model — shown on each cloud model). Recommended: generate a burner wallet here and fund it with a few dollars from your MetaMask.",
+    "title": "Wallet in this app",
+    "keychainNote": "The wallet's private key stays in your system keychain on this computer. Keep only small amounts in it.",
+    "intro": "Pay each run in USDC instead of buying credits. The app creates a wallet for you; send it a few dollars of USDC and every run is paid from it, at its exact price.",
     "generate": "Generate new wallet",
     "importExisting": "Import existing private key",
     "address": "Address",
     "balance": "USDC balance",
     "rpcError": "RPC error: {{error}}",
-    "fundHint": "Fund this address with USDC on Base from your MetaMask (or any wallet). Balance refreshes every 30 s.",
+    "fundHint": "Send USDC on the Base network to this address, from an exchange or another wallet. The balance updates every 30 s.",
     "exportKey": "Export private key",
     "replaceWallet": "Replace wallet",
     "privateKeyLabel": "Private key (64 hex chars, with or without 0x prefix)",
-    "importWarning": "This will overwrite any existing wallet in your Credential Manager. Make sure you've exported the current one if you want to keep it.",
+    "importWarning": "This replaces the wallet saved in your system keychain. Export the current one first if you want to keep it.",
     "replaceTitle": "Replace the current wallet?",
-    "replaceWarning": "The current private key will be overwritten in Credential Manager and is unrecoverable unless you've exported it. Any USDC at the current address will become inaccessible from this app.",
+    "replaceWarning": "The current private key is erased from your system keychain and cannot be recovered unless you exported it. USDC left at the current address will no longer be reachable from this app.",
     "replaceImport": "Replace by importing",
     "replaceGenerate": "Replace with new burner",
     "yourKey": "Your private key",
@@ -1036,7 +1057,7 @@
     "swap": {
       "button": "Load {{model}} (replaces {{current}} in the engine)",
       "confirmTitle": "Load {{model}}?",
-      "confirmBody": "{{model}} replaces {{current}} in the local engine. Loading takes a moment; switch back from the Engine panel or the model list when you are done.",
+      "confirmBody": "{{model}} replaces {{current}} in the local engine. Loading takes a moment; switch back from the model list when you are done.",
       "confirm": "Load it",
       "nothing": "nothing"
     },
@@ -1076,7 +1097,10 @@
       "reconnect": "Allow access to the folder",
       "unsupported": "This browser cannot write to a folder (Chrome, Edge or Brave can): images stay in the browser's storage.",
       "privacy": "Your images are never stored on our servers: a result is uploaded by the generator, handed to your browser, saved here, and the cloud copy expires within 24 hours.",
-      "bannerText": "Your gallery folder needs your permission again to be read."
+      "bannerText": "Your gallery folder needs your permission again to be read.",
+      "chipBrowser": "Saved in this browser",
+      "chipFolder": "Saved in {{name}}",
+      "chipNeedsAccess": "{{name}}: allow access"
     }
   },
   "webpay": {
@@ -1084,7 +1108,8 @@
       "needsKey": "Choose how to pay",
       "insufficient": "Top up your credits",
       "wallet": "Reconnect your wallet",
-      "manual": "Credits"
+      "manual": "Credits",
+      "buy": "Buy credits"
     },
     "subtitle": {
       "needsKey": "Your prompt and settings stay as they are while you pay.",
@@ -1100,7 +1125,7 @@
     },
     "recommended": "Recommended",
     "pack": {
-      "title": "Credit pack",
+      "title": "Credits",
       "amount": "{{credits}} credits",
       "runs": {
         "image_one": "About {{n}} image with {{what}}",
@@ -1113,7 +1138,9 @@
       "point1": "One payment, no subscription",
       "point2": "Your key also works in Imference Desktop, in Claude (MCP) and through the API",
       "card": "Pay {{usd}} by card",
-      "usdc": "Pay {{usd}} in USDC"
+      "usdc": "Pay {{usd}} in USDC",
+      "point2Desktop": "Your key also works on imference.com, in Claude (MCP) and through the API",
+      "howMany": "How many credits"
     },
     "perRun": {
       "title": "Pay as you go",
@@ -1128,7 +1155,10 @@
       "button": "Pay with my wallet",
       "on": "Paying per run with {{address}}.",
       "reconnect": "Reconnect the wallet",
-      "backToCredits": "Use my credits instead"
+      "backToCredits": "Use my credits instead",
+      "point1Desktop": "Paid in USDC from a wallet in this app",
+      "point2Desktop": "Set it up once in Settings > Payment",
+      "buttonDesktop": "Pay with the app wallet"
     },
     "wallet": {
       "detected": "{{name}} detected",
@@ -1140,7 +1170,8 @@
       "card": "Card payments are processed by Stripe. Imference never sees your card number.",
       "wallet": "USDC payments are confirmed in your own wallet. Imference never holds your keys or your funds.",
       "unit": "1 credit = $0.001, prices in US dollars",
-      "terms": "Terms"
+      "terms": "Terms",
+      "walletDesktop": "USDC payments come from this app's wallet; its key never leaves this computer."
     },
     "noWallet": "No wallet found in this browser. Install MetaMask or Coinbase Wallet to pay in USDC, or pay by card.",
     "haveKey": "Already have an API key?",
@@ -1161,7 +1192,8 @@
       "copy": "Copy",
       "copied": "Copied",
       "download": "Download",
-      "done": "I saved it"
+      "done": "I saved it",
+      "textDesktop": "There is no email or password. This key is the only way back to your credits, here, on imference.com, in Claude (MCP) or through the API. The app keeps it in its settings, but save a copy somewhere safe."
     },
     "chip": {
       "getCredits": "Get credits",
@@ -1195,7 +1227,9 @@
         "none": "No wallet connected.",
         "use": "Pay with my wallet",
         "reconnect": "Reconnect",
-        "disconnect": "Stop paying with the wallet"
+        "forget": "Forget this wallet",
+        "forgetTitle": "Forget this wallet?",
+        "forgetBody": "Runs will no longer be paid from it, and the site's access to it is removed (if your wallet doesn't support that, disconnect the site from the wallet's own menu). You can connect it again at any time."
       }
     },
     "card": {
@@ -1205,7 +1239,8 @@
       "late": "Payment received. Your credits will appear in a moment."
     },
     "signHistoryTitle": "Sign in with your wallet to see your history",
-    "signHistoryHint": "A signature only, no payment: {{address}} ({{name}})."
+    "signHistoryHint": "A signature only, no payment: {{address}} ({{name}}).",
+    "haveAccountKey": "Already have an account key?"
   },
   "engine": {
     "machine": "This computer",
@@ -1223,17 +1258,18 @@
       "idle": "Stopped",
       "starting": "Loading…",
       "ready": "Ready",
-      "error": "Error"
+      "error": "Error",
+      "stopped": "Stopped"
     },
     "engineName": "Engine: {{engine}}"
   },
   "history": {
-    "title": "Cloud history",
+    "title": "Run history",
     "button": "History",
-    "desc": "Every cloud call paid with your API key or your wallet. Prompts and settings are never kept on the server. Results can be downloaded again for {{hours}} h.",
+    "desc": "Every cloud run paid with your API key or your wallet. Prompts and settings are never kept on the server. Results can be downloaded again for {{hours}} h.",
     "rail": {
-      "credits": "API key",
-      "x402": "Wallet"
+      "credits": "Credits",
+      "x402": "Pay as you go"
     },
     "kind": {
       "image": "Image",
@@ -1257,8 +1293,240 @@
     "save": "Save to gallery",
     "saved": "Saved to the gallery",
     "saveFailed": "Could not download the result: {{error}}",
-    "empty": "No cloud calls yet",
+    "empty": "No cloud runs yet",
     "more": "Load more",
     "noRail": "Add an API key or a wallet to see the calls they paid for."
+  },
+  "welcome": {
+    "dialogTitle": "Welcome to Imference",
+    "eyebrow": "Welcome to Imference",
+    "titleDesktop": "Your image studio, on your GPU or in the cloud",
+    "titleWeb": "AI images and video, right in your browser",
+    "leadDesktop": "{{count}} models, editing tools and a gallery in one window. Free on your own graphics card, pay per image in the cloud.",
+    "leadDesktopNoCount": "Models, editing tools and a gallery in one window. Free on your own graphics card, pay per image in the cloud.",
+    "leadWeb": "{{count}} cloud models and editing tools. Nothing to install, no account: you pay only for what you generate.",
+    "leadWebNoCount": "Cloud models and editing tools. Nothing to install, no account: you pay only for what you generate.",
+    "f1Title": "Create",
+    "f1Text": "Describe an image, pick a model and a format, press Generate.",
+    "f2Title": "Edit",
+    "f2Text": "Change an image with plain words, remove a background, upscale, erase.",
+    "f3Title": "Keep",
+    "f3TextDesktop": "Every result is saved to your Pictures folder, with its prompt and settings.",
+    "f3TextWeb": "Results are saved in this browser, or in a folder on your disk you choose.",
+    "step2Eyebrow": "Step 2 of 3",
+    "step3Eyebrow": "Step 3 of 3",
+    "whereTitle": "Where should your images be made?",
+    "whereLead": "You can switch any time from the header. Both use the same models and the same gallery.",
+    "localTitle": "On this computer",
+    "localPrice": "Free and private: images never leave your machine.",
+    "gpuFound": "{{name}} · {{vram}} GB of video memory",
+    "gpuNone": "No compatible graphics card found: the cloud will be faster.",
+    "gpuChecking": "Checking your graphics card…",
+    "localInstallNote": "The local engine is a one-time download (a few GB). It installs in the background; you can keep going.",
+    "cloudTitle": "In the cloud",
+    "cloudPrice": "From $0.002 per image, video too. No install.",
+    "cloudNeeds": "Needs an API key with credits, or a wallet that pays per image.",
+    "recommended": "Recommended",
+    "payTitle": "How would you like to pay?",
+    "payLead": "There is no account to create. Choose now, or simply generate: you will be asked at your first image.",
+    "creditsTitle": "Credits, by card",
+    "creditsText": "{{credits}} credits for ${{usd}}. A key is kept in this browser; a typical image costs 2 to 40 credits.",
+    "walletTitle": "Pay per image, with USDC",
+    "walletText": "Connect a wallet (Base network) and approve each image's exact price. Nothing is prepaid.",
+    "payNow": "Choose a payment method",
+    "payLater": "or decide at your first image",
+    "tourTitle": "Your workspace",
+    "tour1Desktop": "Top bar: run on this computer or in the cloud. In local mode, the engine button shows its state and your GPU.",
+    "tour1Web": "Top of Create: the model, and under it how you pay (credits or a wallet).",
+    "tour2": "Create: the model, your prompt, a format, then Generate. Running jobs show in Activity.",
+    "tour3": "Gallery: your results. Click to view, drag one onto Create or Edit to reuse it.",
+    "keyGenerate": "Generate",
+    "keyCommands": "Commands",
+    "keyPanels": "Show or hide panels",
+    "tryPrompt": "Start from an example",
+    "sample1": "A rainy train window at dusk, film grain, soft city lights",
+    "sample2": "A cozy reading nook with warm lamp light, watercolor",
+    "sample3": "A red fox in fresh snow at sunrise, sharp focus, 85mm",
+    "start": "Get started",
+    "continue": "Continue",
+    "finish": "Start creating",
+    "finishCloud": "Set up cloud payment",
+    "skip": "Skip",
+    "back": "Back",
+    "progress": "Step {{step}} of {{total}}",
+    "mapBar": "Local · Cloud",
+    "mapBarWeb": "Imference Web"
+  },
+  "payErrors": {
+    "insufficient_credits": "Not enough credits for this run. Top up to continue.",
+    "insufficient_usdc": "Not enough USDC in the wallet for this run. Add funds to continue.",
+    "needs_key": "Set up a payment method to run in the cloud.",
+    "needs_wallet": "Create or import a wallet to pay as you go.",
+    "invalid_key": "This API key isn't recognised. Check it in Settings > Payment.",
+    "payment_cancelled": "Payment cancelled, nothing was charged."
+  },
+  "credits": {
+    "unit": "credits",
+    "buy": "Buy credits",
+    "balance": "Balance",
+    "runsLeft_one": "About {{n}} run left with {{model}}",
+    "runsLeft_other": "About {{n}} runs left with {{model}}",
+    "haveKey": "I already have a key",
+    "haveKeyHint": "Paste the account key you got when you bought credits (here, on imference.com or for Claude).",
+    "useKey": "Use this key",
+    "useAnother": "Use another key",
+    "empty": {
+      "title": "Credits pay for your cloud runs",
+      "lead": "Buy a pack once, then each image or video takes a few credits. 1 credit = $0.001.",
+      "point1": "Your first purchase creates your Imference account",
+      "point2": "The account is a key: no email, no password",
+      "point3": "Works here, on imference.com, in Claude (MCP) and through the API"
+    },
+    "key": {
+      "title": "Your account key",
+      "lead": "This key is your Imference account: your credits belong to it. Keep a copy somewhere safe, it is the only way back to them.",
+      "saveFile": "Save to a file",
+      "saved": "Key saved to {{path}}",
+      "where": "Use the same key on imference.com, in Claude (MCP) or through the API: it spends the same credits."
+    },
+    "signOut": {
+      "action": "Sign out of this account",
+      "title": "Sign out of this account?",
+      "body": "The key is removed from this app. Your credits stay on the account: you will need the key to use them again, so make sure you saved it.",
+      "confirm": "Sign out"
+    }
+  },
+  "walletPane": {
+    "title": "Pay per run in USDC",
+    "forWho": "For USDC holders",
+    "lead": "Instead of buying credits, each run is paid at its exact price from a wallet this app keeps for you. No account needed.",
+    "stepsLabel": "Setup steps",
+    "s1": "Create",
+    "s2": "Add funds",
+    "s3": "Ready",
+    "step1": "Create your wallet",
+    "step1Hint": "One click. The private key stays in your system keychain on this computer.",
+    "importTitle": "Import a private key",
+    "importHint": "A 64-character hex key, with or without 0x. Use a wallet kept for small amounts.",
+    "step2": "Add funds",
+    "ready": "Ready to pay your runs",
+    "fundHint": "Send USDC to this address from an exchange or another wallet. A few dollars is plenty.",
+    "topUpHint": "To top up, send more USDC to this address.",
+    "network": "Only USDC on the Base network. Anything else sent here is lost.",
+    "balanceError": "The balance couldn't be read right now. It will retry.",
+    "qr": "QR code of the wallet address",
+    "backup": {
+      "title": "Back up this wallet's key",
+      "lead": "The private key is what holds the USDC in this wallet. Save a copy to get it back on another computer, or to open the wallet in MetaMask or Rabby.",
+      "saveFile": "Save to a file",
+      "copy": "Copy private key",
+      "copied": "Copied",
+      "saved": "Wallet key saved to {{path}}",
+      "warning": "Anyone with this key can spend the USDC. Keep the file private, never share it."
+    },
+    "replace": {
+      "title": "Use a different wallet",
+      "lead": "Replaces this wallet in the app. Save its key first: USDC left in it is only reachable with that key.",
+      "import": "Import another key",
+      "create": "Create a new wallet"
+    }
+  },
+  "payNotice": {
+    "noCredits": {
+      "title": "No credits yet: cloud runs need a way to pay",
+      "body_one": "Buy a credit pack ({{usd}}, about {{runs}} run with {{model}}). Your first purchase creates your account.",
+      "body_other": "Buy a credit pack ({{usd}}, about {{runs}} runs with {{model}}). Your first purchase creates your account.",
+      "action": "Buy credits"
+    },
+    "noWallet": {
+      "title": "No USDC wallet yet: this run cannot be paid",
+      "body": "Pay as you go needs a wallet in this app with some USDC in it. Create one in a click, then send it USDC on the Base network.",
+      "action": "Set up the wallet"
+    },
+    "shortCredits": {
+      "title": "Not enough credits for this run",
+      "body": "This run costs {{cost}} credits and you have {{have}} left.",
+      "action": "Top up"
+    },
+    "shortUsdc": {
+      "title": "Not enough USDC for this run",
+      "body": "This run costs {{cost}} and the wallet holds {{have}}. Send USDC on the Base network to its address.",
+      "action": "Add funds"
+    },
+    "webNoCredits": "Buy credits by card, from $5 (your first purchase creates your account), or pay each run from your browser wallet.",
+    "webNoBalance": "Your account has no credits left. Top up by card to keep generating.",
+    "webNoWallet": {
+      "title": "No wallet connected",
+      "body": "Pay each run in USDC from your browser wallet (MetaMask, Coinbase Wallet, Rabby…). Your wallet asks you to confirm each payment.",
+      "action": "Connect my wallet"
+    }
+  },
+  "apiKeyDialog": {
+    "button": "I have an API key",
+    "title": "Use your API key",
+    "desc": "Paste the account key you got with your credits (here, on imference.com or for Claude). It is checked before it is used."
+  },
+  "agents": {
+    "title": "Let an AI agent create on this computer",
+    "lead": "Connect an AI agent (Claude, Cursor…) to Imference Desktop: ask for an image in the chat, it's made here, with your GPU.",
+    "point1": "Generates with your GPU and your downloaded models — free",
+    "point2": "Edits too: remove a background, upscale, describe…",
+    "point3": "Everything lands in your gallery, shown live in Activity",
+    "point4": "Local runs never leave this computer",
+    "allow": "Let AI agents use Imference Desktop",
+    "allowHint": "A local API only this computer can reach (127.0.0.1, token-protected). The Imference MCP server uses it to generate and edit here.",
+    "details": "Technical details",
+    "apiOffWarning": "AI agents are turned off above: a connected app can only use the cloud until you turn them back on.",
+    "connectTitle": "Connect an AI app",
+    "recheck": "Check again",
+    "detecting": "Looking for AI apps on this computer…",
+    "otherApp": "Another app",
+    "otherHint": "Cursor, VS Code, Windsurf… any app that supports MCP",
+    "showSetup": "Show setup",
+    "connect": "Connect",
+    "reconnect": "Reconnect",
+    "repair": "Repair",
+    "connectedBadge": "Connected",
+    "failedBadge": "Doesn't start",
+    "outdatedBadge": "Update needed",
+    "notConnected": "Not connected yet",
+    "notFound": "{{name}} wasn't found on this computer — you can still set it up",
+    "failed": "Its Imference server doesn't start — Repair sets it up again",
+    "outdated": "Imference server v{{version}} can't generate with Desktop yet — Repair updates it",
+    "mode": {
+      "desktop": "Runs the server Imference Desktop installed (v{{version}})",
+      "npm-global": "Runs your npm install of the server (v{{version}})",
+      "npx": "Runs the latest server from npm (npx)",
+      "other": "Runs a server from a custom path (v{{version}})"
+    },
+    "projectEntries_one": "Also set up in a Claude Code project: {{projects}}",
+    "projectEntries_other": "Also set up in {{count}} Claude Code projects: {{projects}}",
+    "preparing": "Preparing…",
+    "downloadingServer": "Downloading the Imference server…",
+    "downloadingNode": "Downloading Node.js (needed to run it)…",
+    "connected": "Connected",
+    "updated": "Imference server updated",
+    "doneClaudeDesktop": "Done. Quit Claude Desktop completely (tray icon › Quit) and open it again.",
+    "doneClaudeCode": "Done. Start a new Claude Code session to use it.",
+    "tryIt": "Then try: “Generate a lighthouse in a storm with Imference.”",
+    "backup": "Previous settings saved to {{path}}",
+    "manualClaudeCode": "The claude command isn't available here: run this in a terminal.",
+    "manualOther": "Add this to the app's MCP settings (paths are for this computer):",
+    "serverLine": "Imference server: {{version}}",
+    "notInstalled": "not installed",
+    "desktopCopy": "installed by Desktop",
+    "nodeLine": "Node.js {{version}} ({{source}})",
+    "nodeSystem": "yours",
+    "nodeDesktop": "installed by Desktop",
+    "nodeNone": "Node.js: none found — downloaded when you connect",
+    "update": "Update to v{{version}}",
+    "via": "via {{name}}",
+    "viaAgent": "via an AI agent",
+    "anAgent": "an AI agent",
+    "viaHint": "Started by {{name}} through Imference Desktop's local API (Settings › AI agents).",
+    "spend": "Let AI agents spend my credits for cloud runs",
+    "spendHint": "Off: they only work on this computer, for free. On: when you ask for the cloud, they use your Imference account — nothing to copy into their settings, and turning this off stops it at once.",
+    "spendNoKey": "Your Imference account is used once you add one (Settings › Credits & account).",
+    "permissionsTitle": "What AI agents may do"
   }
 }

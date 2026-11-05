@@ -66,9 +66,12 @@ import (
 //
 // v0.5.1: tools recover from GPU OOM (tiled upscale), image tools write WebP
 // by default (format=png on request), interpolate is 2x / 10 s.
+// v0.5.2: an interrupted range download no longer leaves zero-filled holes in
+// weight files (LoRAs, Qwen-Edit lite, CDN base components fetched by the
+// engine), and a flat single-colour image is an error, not a result.
 //
-// Pinned to the imference-engine release v0.5.1.
-const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.1.tar.gz"
+// Pinned to the imference-engine release v0.5.2.
+const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.2.tar.gz"
 
 // EngineExtras is the extras list installed with the engine: the eight image
 // backends, the Qwen-Image-Edit GGUF lite build (gguf + bitsandbytes for its

@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Bot,
   Check,
-  Cloud,
+  Sparkles,
   FolderOpen,
   HardDrive,
   Languages,
   Server,
   SlidersHorizontal,
+  Wallet,
   Wand2,
 } from "lucide-react";
 import {
@@ -21,19 +23,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { LocalEngineSection } from "@/components/LocalEngineSection";
-import { WalletSection } from "@/components/WalletSection";
 import { EngineRuntimeSection } from "@/components/EngineRuntimeSection";
-import { CreditSection } from "@/components/CreditSection";
 import { StorageSection } from "@/components/StorageSection";
-import { isWeb } from "@/lib/target";
-import { WebPaymentSettings } from "@/components/WebPay";
+import { isWeb, SETTINGS_CHANGED_EVENT } from "@/lib/target";
+import { WebWalletSettings } from "@/components/WebPay";
 import { WebGallerySection } from "@/components/WebGallerySection";
 import { ToolsSection } from "@/components/ToolsSection";
+import { AgentsPane } from "@/components/AgentsPane";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
 import { SUPPORTED_LANGUAGES, setLanguage, storedLanguage } from "@/i18n";
 import logoUrl from "@/assets/logo.svg";
 import type { AppSettings, EngineRuntimeSettings, PaymentMode } from "@/lib/types";
+import { CreditsPane } from "@/components/pay/CreditsPane";
+import { WalletPane } from "@/components/pay/WalletPane";
 
 type Props = {
   open: boolean;
@@ -43,7 +46,7 @@ type Props = {
   initialSection?: string;
 };
 
-type PaneId = "engine" | "runtime" | "tools" | "cloud" | "paths" | "storage" | "gallery" | "language";
+type PaneId = "engine" | "runtime" | "tools" | "agents" | "credits" | "wallet" | "paths" | "storage" | "gallery" | "language";
 
 // Top-level categories. Each is a full pane (icon + title + one-line purpose);
 // only the selected pane renders, so the dialog never becomes one long scroll.
@@ -56,7 +59,12 @@ const PANES: {
   { id: "engine", labelKey: "settings.navEngine", descKey: "settings.engineDesc", icon: Server },
   { id: "runtime", labelKey: "settings.navRuntime", descKey: "settings.runtimeDesc", icon: SlidersHorizontal },
   { id: "tools", labelKey: "settings.navTools", descKey: "settings.toolsDesc", icon: Wand2 },
-  { id: "cloud", labelKey: "settings.navPayment", descKey: "settings.cloudDesc", icon: Cloud },
+  // Claude & co. driving Desktop (the local API + the Imference MCP server).
+  { id: "agents", labelKey: "settings.navAgents", descKey: "settings.agentsDesc", icon: Bot },
+  // Paying for cloud runs: two separate stories, two panes. Which one pays a
+  // run is chosen on the payment line in Create, not here.
+  { id: "credits", labelKey: "settings.navCredits", descKey: "settings.creditsDesc", icon: Sparkles },
+  { id: "wallet", labelKey: "settings.navWallet", descKey: "settings.walletDesc", icon: Wallet },
   { id: "paths", labelKey: "settings.navPaths", descKey: "settings.pathsDesc", icon: FolderOpen },
   { id: "storage", labelKey: "settings.navStorage", descKey: "settings.storageDesc", icon: HardDrive },
   { id: "language", labelKey: "settings.navLanguage", descKey: "settings.languageDesc", icon: Languages },
@@ -64,23 +72,29 @@ const PANES: {
 
 // The web build has no local engine, disk or wallet: only cloud panes remain,
 // plus "gallery" (where the browser keeps the user's images).
-const WEB_PANES: PaneId[] = ["cloud", "gallery", "language"];
+const WEB_PANES: PaneId[] = ["credits", "wallet", "gallery", "language"];
 const GALLERY_PANE = { id: "gallery" as PaneId, labelKey: "web.gallery.nav", descKey: "web.gallery.desc", icon: FolderOpen };
+// On the web the wallet is the browser's own (no app wallet): its pane says so.
 const VISIBLE_PANES = isWeb
-  ? [...PANES, GALLERY_PANE].filter((p) => WEB_PANES.includes(p.id)).sort((a, b) => WEB_PANES.indexOf(a.id) - WEB_PANES.indexOf(b.id))
+  ? [...PANES, GALLERY_PANE]
+      .filter((p) => WEB_PANES.includes(p.id))
+      .sort((a, b) => WEB_PANES.indexOf(a.id) - WEB_PANES.indexOf(b.id))
+      .map((p) => (p.id === "wallet" ? { ...p, labelKey: "settings.navWalletWeb", descKey: "settings.walletDescWeb" } : p))
   : PANES;
 
 // Map a deep-link section id (from the palette / payment bar) to its pane, plus
 // an optional element to scroll to once the pane is mounted.
 function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
   switch (section) {
+    // "apikey" / "payment" / "cloud" are the older names of the credits pane.
+    case "credits":
     case "apikey":
-      return { pane: "cloud", scrollTo: "settings-apikey" };
-    case "x402":
-      return { pane: "cloud", scrollTo: "settings-x402" };
     case "payment":
     case "cloud":
-      return { pane: "cloud" };
+      return { pane: "credits" };
+    case "wallet":
+    case "x402":
+      return { pane: "wallet" };
     case "runtime":
     case "runtime-image":
     case "runtime-wan":
@@ -91,6 +105,9 @@ function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
       return { pane: "paths" };
     case "tools":
       return { pane: "tools" };
+    case "agents":
+    case "mcp":
+      return { pane: "agents" };
     case "storage":
       return { pane: "storage" };
     case "language":
@@ -98,7 +115,7 @@ function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
     case "gallery":
       return { pane: "gallery" };
     default:
-      return { pane: isWeb ? "cloud" : "engine" };
+      return { pane: isWeb ? "credits" : "engine" };
   }
 }
 
@@ -130,6 +147,9 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
   const savedRef = useRef<string>("");
 
   useEffect(() => {
+    // Nothing may be saved until the real settings are in the draft: the
+    // placeholder draft (empty API key…) must never reach the disk.
+    savedRef.current = "";
     if (!open) return;
     void api.getSettings().then((s) => {
       setDraft(s);
@@ -140,10 +160,25 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
     setLangChoice(storedLanguage());
   }, [open]);
 
+  // Settings changed outside this dialog (a key adopted by the payment dialog,
+  // opened from here): reload the draft, or a later edit would save the old
+  // values back over them.
+  useEffect(() => {
+    if (!open) return;
+    const reload = () =>
+      void api.getSettings().then((s) => {
+        setDraft(s);
+        savedRef.current = JSON.stringify(s);
+      });
+    window.addEventListener(SETTINGS_CHANGED_EVENT, reload);
+    return () => window.removeEventListener(SETTINGS_CHANGED_EVENT, reload);
+  }, [open]);
+
   // Auto-save: every change to the draft is persisted (debounced) — no Save
   // button. Server-side, SaveSettings only restarts a *running* engine.
   useEffect(() => {
     if (!open) return;
+    if (!savedRef.current) return; // not loaded yet
     if (JSON.stringify(draft) === savedRef.current) return; // unchanged vs disk
     const timer = window.setTimeout(() => {
       savedRef.current = JSON.stringify(draft); // mark sent so we don't re-fire
@@ -195,11 +230,11 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
       <DialogContent
         // Don't close on an accidental outside click — only the X / Done / Esc.
         onInteractOutside={(e) => e.preventDefault()}
-        className="ring-border/60 flex h-[86dvh] max-h-[720px] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-2xl ring-1 sm:max-w-3xl sm:flex-row"
+        className="ring-border/60 flex h-[88dvh] max-h-[760px] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-2xl ring-1 sm:max-w-[60rem] sm:flex-row"
       >
         {/* Rail — brand mark, category list, version. On a phone it becomes a
             strip of tabs above the pane (a side rail leaves the pane no room). */}
-        <nav className="bg-muted/30 flex shrink-0 flex-col border-b sm:w-52 sm:border-b-0 sm:border-r">
+        <nav className="bg-muted/30 flex shrink-0 flex-col border-b sm:w-56 sm:border-b-0 sm:border-r">
           <div className="flex items-center gap-2.5 px-4 pb-2 pt-4 sm:pb-3">
             <img src={logoUrl} alt="" className="size-6" />
             <DialogTitle className="text-sm font-semibold">{t("settings.title")}</DialogTitle>
@@ -226,7 +261,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
               );
             })}
           </div>
-          <div className="text-muted-foreground border-t px-4 py-2.5 text-[11px] max-sm:hidden">
+          <div className="text-muted-foreground border-t px-4 py-2.5 text-2xs max-sm:hidden">
             {isWeb ? "Imference Web" : "Imference Desktop"}{" "}
             {appVersion === "dev" ? t("settings.devBuild") : appVersion ? `v${appVersion}` : ""}
           </div>
@@ -234,16 +269,16 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
 
         {/* Pane — persistent header, scrollable body, footer. */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="flex items-start justify-between gap-3 border-b px-4 py-3 sm:px-6 sm:py-4">
-            <div className="space-y-0.5">
-              <h2 className="text-base font-semibold leading-tight">{t(active.labelKey)}</h2>
-              <p className="text-muted-foreground text-xs">{t(active.descKey)}</p>
+          <header className="flex items-start justify-between gap-3 border-b px-4 py-3 sm:px-8 sm:py-5">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold leading-tight">{t(active.labelKey)}</h2>
+              <p className="text-muted-foreground text-sm">{t(active.descKey)}</p>
             </div>
             {/* Radix a11y requirement; visually redundant with the header above. */}
             <DialogDescription className="sr-only">{t("settings.desc")}</DialogDescription>
           </header>
 
-          <div className="min-w-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+          <div className="min-w-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-8 sm:py-7">
             {pane === "engine" && <LocalEngineSection onInstallDone={handleInstallDone} />}
 
             {pane === "runtime" && (
@@ -255,81 +290,17 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
               />
             )}
 
-            {pane === "cloud" && (
-              <div className="space-y-5">
-                <div className={isWeb ? "hidden" : "grid gap-2"}>
-                  <Label className="text-xs">{t("settings.activeMethod")}</Label>
-                  <div className="bg-muted/60 grid grid-cols-2 gap-1 rounded-lg p-1">
-                    {(
-                      [
-                        ["bearer", t("settings.apiKeyCredit")],
-                        ["x402", t("settings.x402Wallet")],
-                      ] as const
-                    ).map(([m, label]) => {
-                      const on = (m === "x402") === (draft.paymentMode === "x402");
-                      return (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setDraft({ ...draft, paymentMode: m as PaymentMode })}
-                          className={cn(
-                            "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                            on
-                              ? "bg-background text-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+            {pane === "credits" && <CreditsPane draft={draft} setDraft={setDraft} />}
 
-                {isWeb ? (
-                  <WebPaymentSettings />
-                ) : (
-                  <div
-                    id="settings-apikey"
-                    className={cn(
-                      "bg-card scroll-mt-4 grid gap-2 rounded-2xl border p-4 shadow-sm transition-opacity",
-                      draft.paymentMode === "x402" && "opacity-55"
-                    )}
-                  >
-                    <Label htmlFor="apiKey">{t("settings.apiKeyCredit")}</Label>
-                    <Input
-                      id="apiKey"
-                      type="password"
-                      value={draft.apiKey}
-                      onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
-                      placeholder={t("settings.apiKeyPlaceholder")}
-                    />
-                    <CreditSection apiKey={draft.apiKey} />
-                  </div>
-                )}
-
-                <div
-                  id="settings-x402"
-                  hidden={isWeb}
-                  className={cn(
-                    "bg-card scroll-mt-4 rounded-2xl border p-4 shadow-sm transition-opacity",
-                    draft.paymentMode !== "x402" && "opacity-55"
-                  )}
-                >
-                  <Label className="text-xs">{t("settings.x402WalletLabel")}</Label>
-                  <div className="mt-2">
-                    <WalletSection
-                      onChanged={(newAddress) =>
-                        setDraft((prev) => ({ ...prev, walletAddress: newAddress }))
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
+            {pane === "wallet" &&
+              (isWeb ? (
+                <WebWalletSettings />
+              ) : (
+                <WalletPane onAddressChange={(address) => setDraft((prev) => ({ ...prev, walletAddress: address }))} />
+              ))}
 
             {pane === "paths" && (
-              <div className="bg-card grid gap-4 rounded-2xl border p-4 shadow-sm">
+              <div className="ds-card grid gap-4 p-4">
                 <p className="text-muted-foreground text-xs">{t("settings.pathsHint")}</p>
                 <div className="grid gap-2">
                   <Label htmlFor="pythonPath">
@@ -361,9 +332,10 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             {pane === "gallery" && isWeb && <WebGallerySection />}
 
             {pane === "tools" && <ToolsSection draft={draft} setDraft={setDraft} />}
+            {pane === "agents" && !isWeb && <AgentsPane draft={draft} setDraft={setDraft} />}
 
             {pane === "language" && (
-              <div className="bg-card grid gap-2 rounded-2xl border p-4 shadow-sm">
+              <div className="ds-card grid gap-2 p-4">
                 <Label htmlFor="lang">{t("settings.language")}</Label>
                 <Select
                   id="lang"
@@ -387,14 +359,14 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             )}
           </div>
 
-          <footer className="flex items-center justify-between gap-2 border-t px-4 py-3 sm:px-6">
+          <footer className="flex items-center justify-between gap-2 border-t px-4 py-3 sm:px-8">
             <span
               className={cn(
                 "text-muted-foreground inline-flex items-center gap-1.5 text-xs transition-opacity duration-200",
                 savedAt > 0 ? "opacity-100" : "opacity-0"
               )}
             >
-              <Check className="size-3.5 text-green-600" /> {t("settings.saved")}
+              <Check className="size-3.5 text-success" /> {t("settings.saved")}
             </span>
             <Button onClick={() => onOpenChange(false)}>{t("common.done")}</Button>
           </footer>

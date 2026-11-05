@@ -29,20 +29,25 @@
     "errors_other": "{{count}} 个错误",
     "modeLocalTitle": "本地：全部在本机运行。",
     "modeCloudTitle": "云端：全部在 imference.com 上运行。",
-    "modeGroup": "运行位置"
+    "modeGroup": "运行位置",
+    "agents": "AI 智能体",
+    "agentsTitle": "将 Claude 或其他 AI 应用连接到 Imference Desktop",
+    "agentsConnected": "已连接 AI 应用 — 设置 › AI 智能体"
   },
   "engineControl": {
     "installing": "正在安装引擎…",
     "install": "安装引擎",
     "starting": "启动中…",
-    "runningTitle": "本地引擎运行中 · {{device}} — 点击停止",
-    "on": "本地引擎已启动",
+    "on": "引擎运行中",
     "stop": "停止",
     "selectModelTitle": "请选择一个本地模型 — 引擎将加载并运行它",
     "selectModel": "选择模型",
     "startTitle": "启动本地引擎（加载所选模型）",
     "restart": "重启引擎",
-    "start": "启动本地引擎"
+    "start": "启动本地引擎",
+    "off": "引擎已停止",
+    "error": "引擎出错",
+    "detailsTitle": "本地引擎：状态与详情"
   },
   "mode": {
     "local": "本地",
@@ -80,7 +85,8 @@
     "theme": "主题：{{mode}}",
     "language": "语言：{{lang}}",
     "settings": "打开设置",
-    "logs": "切换日志"
+    "logs": "切换日志",
+    "welcome": "欢迎导览"
   },
   "composer": {
     "qualityTags": "质量标签",
@@ -98,10 +104,13 @@
     "prompt": "提示词",
     "promptHelp": "描述你想要的图像：主体、场景、风格、光线。Ctrl+Enter（⌘+Enter）生成。",
     "negativeHelp": "模型应避免的内容。已预填该模型推荐的内容。",
-    "qualityTagsHelp": "添加在提示词之前。已预填该模型效果最佳的标签。"
+    "qualityTagsHelp": "添加在提示词之前。已预填该模型效果最佳的标签。",
+    "extras": "反向提示词与质量标签",
+    "extrasSet": "已启用",
+    "extrasHide": "收起"
   },
   "hint": {
-    "configurePayment": "请先在上方配置支付方式",
+    "configurePayment": "尚无付款方式：请在上方设置",
     "pickCloudModel": "请在上方选择云端模型",
     "creditsPerRun": "{{name}} · 每次生成 {{cost}} 积分",
     "engineNotInstalled": "本地引擎未安装 — 请点击“安装引擎”",
@@ -118,7 +127,9 @@
     "usdPerRun": "{{name}} · ${{usd}} / 次",
     "editModel": "编辑模型：请使用指令编辑",
     "editModelLong": "此模型用于编辑图片，不能根据提示词生成。请在图库中打开图片，选择“编辑 > 指令编辑”；或选择文生图模型进行生成。",
-    "writePrompt": "请先输入提示词"
+    "writePrompt": "请先输入提示词",
+    "notEnoughCredits": "积分不足：请在上方充值",
+    "notEnoughUsdc": "USDC 不足：请在上方充值"
   },
   "progress": {
     "preparing": "正在准备 {{name}}",
@@ -273,6 +284,7 @@
     "deleteSelectedConfirm": "{{count}} 张图片将从磁盘中永久删除。",
     "emptyFiltered": "没有符合筛选条件的图片",
     "empty": "你生成的图片将显示在这里",
+    "emptyHint": "在“创作”中输入提示词，然后点击生成",
     "filterModel": "模型",
     "filterEngine": "引擎",
     "filterSource": "来源",
@@ -303,7 +315,9 @@
     "lbNav": "浏览",
     "lbZoom": "点击图片放大",
     "fullscreen": "全屏",
-    "exitFullscreen": "退出全屏"
+    "exitFullscreen": "退出全屏",
+    "filters": "筛选",
+    "all": "全部"
   },
   "meta": {
     "model": "模型",
@@ -378,7 +392,8 @@
     "notLoaded": "已选择，尚未加载。生成时会自动加载。",
     "downloadBelow": "请先在下方“本地设置”中下载。",
     "loadNow": "立即加载",
-    "loading": "正在将模型加载到引擎…"
+    "loading": "正在将模型加载到引擎…",
+    "change": "更换"
   },
   "modelPicker": {
     "cloudTitle": "云端模型",
@@ -405,7 +420,8 @@
     },
     "typeCloudApi": "云端 API",
     "costUsd": "${{usd}}",
-    "badgeCached": "已下载"
+    "badgeCached": "已下载",
+    "mediaLabel": "类型"
   },
   "customModel": {
     "title": "添加自定义模型",
@@ -426,7 +442,7 @@
   },
   "payment": {
     "title": "支付",
-    "apiKey": "API 密钥",
+    "apiKey": "积分",
     "apiKeyNotSet": "未设置 API 密钥",
     "notConfigured": "未配置",
     "credits": "{{count}} 积分",
@@ -435,7 +451,9 @@
     "usdc": "{{balance}} USDC",
     "checkFailed": "检查失败",
     "manageTitle": "在设置中管理",
-    "configureTitle": "在设置中配置"
+    "configureTitle": "在设置中配置",
+    "payg": "按次付费",
+    "payWith": "支付方式"
   },
   "settings": {
     "title": "设置",
@@ -445,19 +463,12 @@
     "navRuntime": "高级运行时",
     "navImage": "图像",
     "navWan": "WAN 视频",
-    "navPayment": "云端支付",
-    "navApiKey": "API 密钥",
-    "navWallet": "x402 钱包",
+    "navPayment": "付款",
     "navPaths": "路径",
     "language": "语言 · Language",
     "languageSystem": "跟随系统",
     "languageHint": "立即生效。“跟随系统”使用操作系统的语言。",
-    "cloudPayment": "云端支付",
-    "activeMethod": "当前方式",
-    "apiKeyCredit": "API 密钥（积分）",
-    "x402Wallet": "x402（USDC 钱包）",
     "apiKeyPlaceholder": "粘贴你在 imference.com 获取的 API 密钥",
-    "x402WalletLabel": "x402 钱包（Base 链 USDC）",
     "paths": "路径",
     "pathsHint": "云端和本地模型在主界面提示词上方的表单中选择。",
     "pythonPath": "Python 路径",
@@ -468,13 +479,21 @@
     "saved": "已保存",
     "engineDesc": "在本机安装和管理本地生成引擎。",
     "runtimeDesc": "引擎的本机调优 — 设备、内存与量化。",
-    "cloudDesc": "云端生成的付费方式 — 积分 API 密钥或链上 USDC 钱包。",
+    "cloudDesc": "云端运行可用积分支付（推荐），也可从钱包按次支付 USDC。",
     "pathsDesc": "Python 所在位置以及生成图像的保存位置。",
     "languageDesc": "应用界面的语言。",
     "navStorage": "存储",
     "storageDesc": "应用在磁盘上保留了什么，以及占用多少。",
     "navTools": "编辑工具",
-    "toolsDesc": "放大、去背景、橡皮擦等 — 在本机或云端运行。"
+    "toolsDesc": "放大、去背景、橡皮擦等 — 在本机或云端运行。",
+    "navCredits": "积分与账户",
+    "creditsDesc": "用于云端运行的预付积分，存放在你的 Imference 账户中。",
+    "navWallet": "USDC 钱包",
+    "walletDesc": "从本应用的钱包中以 USDC 按次支付云端运行。",
+    "navWalletWeb": "钱包",
+    "walletDescWeb": "使用浏览器钱包以 USDC 按次支付云端运行。",
+    "navAgents": "AI 智能体",
+    "agentsDesc": "将 AI 智能体（Claude、Cursor…）连接到 Imference Desktop。"
   },
   "storage": {
     "usageTitle": "模型缓存",
@@ -535,7 +554,9 @@
     "devBadge": "开发 · 可编辑",
     "devSource": "源",
     "updatingTo": " — 正在更新到 v{{version}}…",
-    "pipHint": "详细的 pip 输出会实时显示在日志面板中（从顶栏打开）。"
+    "pipHint": "详细的 pip 输出会实时显示在日志面板中（从顶栏打开）。",
+    "version": "版本",
+    "environment": "运行环境"
   },
   "runtime": {
     "title": "引擎 / 本机",
@@ -575,21 +596,21 @@
   },
   "wallet": {
     "loading": "正在加载钱包…",
-    "title": "钱包（Base 主网 · USDC）",
-    "keychainNote": "该钱包的私钥保存在本机的系统密钥库中（Windows 凭据管理器 / macOS 登录钥匙串）。请将其视为一次性钱包：只存入你可以承受损失的金额。在依赖它之前，请先用“导出私钥”进行备份。",
-    "intro": "x402 需要一个 Base 主网上的 EVM 钱包来按次付费（费用因模型而异 —— 在每个云端模型上标注）。建议：在此生成一个一次性钱包，再从你的 MetaMask 转入几美元。",
+    "title": "应用内钱包",
+    "keychainNote": "钱包私钥保存在这台电脑的系统钥匙串中。请只存放少量资金。",
+    "intro": "不购买积分，而是按次支付 USDC。应用会为你创建一个钱包；向其中转入少量 USDC，每次运行都会按准确价格从中扣款。",
     "generate": "生成新钱包",
     "importExisting": "导入已有私钥",
     "address": "地址",
     "balance": "USDC 余额",
     "rpcError": "RPC 错误：{{error}}",
-    "fundHint": "从 MetaMask（或任意钱包）向该地址转入 Base 链上的 USDC。余额每 30 秒刷新一次。",
+    "fundHint": "从交易所或其他钱包向此地址转入 Base 网络上的 USDC。余额每 30 秒更新一次。",
     "exportKey": "导出私钥",
     "replaceWallet": "更换钱包",
     "privateKeyLabel": "私钥（64 位十六进制字符，可带或不带 0x 前缀）",
-    "importWarning": "这将覆盖凭据管理器中已有的钱包。如需保留当前钱包，请确认已导出其私钥。",
+    "importWarning": "这将替换系统钥匙串中保存的钱包。如需保留当前钱包，请先导出。",
     "replaceTitle": "确定更换当前钱包？",
-    "replaceWarning": "当前私钥将在凭据管理器中被覆盖，除非已导出，否则无法恢复。当前地址上的 USDC 将无法再通过本应用访问。",
+    "replaceWarning": "当前私钥将从系统钥匙串中删除，除非你已导出，否则无法恢复。当前地址中剩余的 USDC 将无法再通过本应用使用。",
     "replaceImport": "通过导入更换",
     "replaceGenerate": "生成新钱包并更换",
     "yourKey": "你的私钥",
@@ -1024,7 +1045,7 @@
     "swap": {
       "button": "加载 {{model}}（替换引擎中的 {{current}}）",
       "confirmTitle": "加载 {{model}}？",
-      "confirmBody": "{{model}} 将替换本地引擎中的 {{current}}。加载需要一点时间；完成后可在“引擎”面板或模型列表中切换回来。",
+      "confirmBody": "{{model}} 将替换本地引擎中的 {{current}}。加载需要一点时间；完成后可在模型列表中切换回来。",
       "confirm": "加载",
       "nothing": "无"
     },
@@ -1064,7 +1085,10 @@
       "reconnect": "允许访问该文件夹",
       "unsupported": "此浏览器无法写入文件夹（Chrome、Edge 或 Brave 可以）：图片保存在浏览器存储中。",
       "privacy": "你的图片从不保存在我们的服务器上：生成结果交给你的浏览器并保存在这里，云端副本会在 24 小时内过期。",
-      "bannerText": "你的图库文件夹需要再次授权才能读取。"
+      "bannerText": "你的图库文件夹需要再次授权才能读取。",
+      "chipBrowser": "保存在此浏览器中",
+      "chipFolder": "保存在 {{name}}",
+      "chipNeedsAccess": "{{name}}：需要授权"
     }
   },
   "webpay": {
@@ -1072,7 +1096,8 @@
       "needsKey": "选择支付方式",
       "insufficient": "充值积分",
       "wallet": "重新连接钱包",
-      "manual": "积分"
+      "manual": "积分",
+      "buy": "购买积分"
     },
     "subtitle": {
       "needsKey": "支付期间，你的提示词和设置都会保留。",
@@ -1088,7 +1113,7 @@
     },
     "recommended": "推荐",
     "pack": {
-      "title": "积分包",
+      "title": "积分",
       "amount": "{{credits}} 积分",
       "runs": {
         "image_one": "约可用 {{what}} 生成 {{n}} 张图片",
@@ -1101,7 +1126,9 @@
       "point1": "一次付款，无需订阅",
       "point2": "你的密钥也可用于 Imference Desktop、Claude（MCP）和 API",
       "card": "用银行卡支付 {{usd}}",
-      "usdc": "用 USDC 支付 {{usd}}"
+      "usdc": "用 USDC 支付 {{usd}}",
+      "point2Desktop": "你的密钥也可用于 imference.com、Claude（MCP）和 API",
+      "howMany": "购买数量"
     },
     "perRun": {
       "title": "按次支付",
@@ -1116,7 +1143,10 @@
       "button": "用我的钱包支付",
       "on": "正在使用 {{address}} 按次支付。",
       "reconnect": "重新连接钱包",
-      "backToCredits": "改用我的积分"
+      "backToCredits": "改用我的积分",
+      "point1Desktop": "从本应用的钱包中以 USDC 支付",
+      "point2Desktop": "在“设置 > 付款”中设置一次即可",
+      "buttonDesktop": "使用应用钱包支付"
     },
     "wallet": {
       "detected": "已检测到 {{name}}",
@@ -1128,7 +1158,8 @@
       "card": "银行卡支付由 Stripe 处理，Imference 不会看到你的卡号。",
       "wallet": "USDC 付款在你自己的钱包中确认，Imference 从不持有你的密钥或资金。",
       "unit": "1 积分 = $0.001，价格以美元计",
-      "terms": "条款"
+      "terms": "条款",
+      "walletDesktop": "USDC 付款来自本应用的钱包，其私钥不会离开这台电脑。"
     },
     "noWallet": "此浏览器中未检测到钱包。安装 MetaMask 或 Coinbase Wallet 即可用 USDC 支付，也可以用银行卡支付。",
     "haveKey": "已有 API 密钥？",
@@ -1149,7 +1180,8 @@
       "copy": "复制",
       "copied": "已复制",
       "download": "下载",
-      "done": "我已保存"
+      "done": "我已保存",
+      "textDesktop": "没有邮箱或密码。这个密钥是找回积分的唯一方式，可用于本应用、imference.com、Claude（MCP）和 API。应用会把它保存在设置中，但请另外妥善保存一份。"
     },
     "chip": {
       "getCredits": "获取积分",
@@ -1183,7 +1215,9 @@
         "none": "未连接钱包。",
         "use": "用我的钱包支付",
         "reconnect": "重新连接",
-        "disconnect": "停止用钱包支付"
+        "forget": "忘记此钱包",
+        "forgetTitle": "忘记此钱包？",
+        "forgetBody": "运行将不再从该钱包扣款，并会移除本网站对它的访问权限（如果你的钱包不支持，请在钱包自己的菜单中断开本网站）。你可以随时重新连接。"
       }
     },
     "card": {
@@ -1193,7 +1227,8 @@
       "late": "已收到付款，积分稍后到账。"
     },
     "signHistoryTitle": "使用钱包登录以查看历史",
-    "signHistoryHint": "仅签名，不付款：{{address}}（{{name}}）。"
+    "signHistoryHint": "仅签名，不付款：{{address}}（{{name}}）。",
+    "haveAccountKey": "已有账户密钥？"
   },
   "engine": {
     "machine": "本机",
@@ -1211,17 +1246,18 @@
       "idle": "已停止",
       "starting": "加载中…",
       "ready": "就绪",
-      "error": "错误"
+      "error": "错误",
+      "stopped": "已停止"
     },
     "engineName": "引擎：{{engine}}"
   },
   "history": {
-    "title": "云端历史",
-    "button": "历史",
-    "desc": "使用您的 API 密钥或钱包支付的所有云端调用。服务器从不保存提示词和设置。结果可在 {{hours}} 小时内重新下载。",
+    "title": "运行记录",
+    "button": "记录",
+    "desc": "使用您的 API 密钥或钱包支付的所有云端运行。服务器从不保存提示词和设置。结果可在 {{hours}} 小时内重新下载。",
     "rail": {
-      "credits": "API 密钥",
-      "x402": "钱包"
+      "credits": "积分",
+      "x402": "按次付费"
     },
     "kind": {
       "image": "图像",
@@ -1245,8 +1281,240 @@
     "save": "保存到图库",
     "saved": "已保存到图库",
     "saveFailed": "无法下载结果：{{error}}",
-    "empty": "暂无云端调用",
+    "empty": "暂无云端运行",
     "more": "加载更多",
     "noRail": "添加 API 密钥或钱包以查看其支付的调用。"
+  },
+  "welcome": {
+    "dialogTitle": "欢迎使用 Imference",
+    "eyebrow": "欢迎使用 Imference",
+    "titleDesktop": "你的图像工作室，在你的显卡上或云端",
+    "titleWeb": "AI 图像和视频，就在浏览器中",
+    "leadDesktop": "{{count}} 个模型、编辑工具和画廊，尽在一个窗口。用你自己的显卡免费，云端按张付费。",
+    "leadDesktopNoCount": "模型、编辑工具和画廊，尽在一个窗口。用你自己的显卡免费，云端按张付费。",
+    "leadWeb": "{{count}} 个云端模型和编辑工具。无需安装，无需账号：只为生成的内容付费。",
+    "leadWebNoCount": "云端模型和编辑工具。无需安装，无需账号：只为生成的内容付费。",
+    "f1Title": "创作",
+    "f1Text": "描述一张图像，选择模型和画幅，点击生成。",
+    "f2Title": "编辑",
+    "f2Text": "用文字修改图像、去除背景、放大、擦除。",
+    "f3Title": "保存",
+    "f3TextDesktop": "每个结果都会连同提示词和参数保存到你的图片文件夹。",
+    "f3TextWeb": "结果保存在此浏览器中，或你选择的磁盘文件夹中。",
+    "step2Eyebrow": "第 2 步，共 3 步",
+    "step3Eyebrow": "第 3 步，共 3 步",
+    "whereTitle": "在哪里生成图像？",
+    "whereLead": "随时可以在顶部切换。两者使用相同的模型和画廊。",
+    "localTitle": "在这台电脑上",
+    "localPrice": "免费且私密：图像不会离开你的电脑。",
+    "gpuFound": "{{name}} · {{vram}} GB 显存",
+    "gpuNone": "未找到兼容的显卡：云端会更快。",
+    "gpuChecking": "正在检测显卡…",
+    "localInstallNote": "本地引擎需要一次性下载（几 GB），在后台安装，你可以继续。",
+    "cloudTitle": "在云端",
+    "cloudPrice": "每张低至 $0.002，也支持视频。无需安装。",
+    "cloudNeeds": "需要带积分的 API 密钥，或按张付费的钱包。",
+    "recommended": "推荐",
+    "payTitle": "你想如何付款？",
+    "payLead": "无需创建账号。现在选择，或直接生成：第一张图像时会询问你。",
+    "creditsTitle": "积分，银行卡支付",
+    "creditsText": "{{credits}} 积分 ${{usd}}。密钥保存在此浏览器中；一张图像通常 2 到 40 积分。",
+    "walletTitle": "按张付费，使用 USDC",
+    "walletText": "连接钱包（Base 网络），确认每张图像的确切价格。无需预付。",
+    "payNow": "选择付款方式",
+    "payLater": "或在第一张图像时再决定",
+    "tourTitle": "你的工作区",
+    "tour1Desktop": "顶栏：在这台电脑或云端运行。本地模式下，引擎按钮显示其状态和你的显卡。",
+    "tour1Web": "创作顶部：模型，以及下方的付款方式（积分或钱包）。",
+    "tour2": "创作：模型、提示词、画幅，然后生成。运行中的任务显示在“任务”中。",
+    "tour3": "画廊：你的作品。点击查看，拖到创作或编辑中即可再次使用。",
+    "keyGenerate": "生成",
+    "keyCommands": "命令",
+    "keyPanels": "显示或隐藏面板",
+    "tryPrompt": "从示例开始",
+    "sample1": "黄昏时分雨中的火车车窗，胶片颗粒，柔和的城市灯光",
+    "sample2": "温馨的阅读角落，温暖的灯光，水彩风格",
+    "sample3": "日出时新雪中的赤狐，焦点清晰，85mm",
+    "start": "开始",
+    "continue": "继续",
+    "finish": "开始创作",
+    "finishCloud": "设置云端付款",
+    "skip": "跳过",
+    "back": "返回",
+    "progress": "第 {{step}} 步，共 {{total}} 步",
+    "mapBar": "本地 · 云端",
+    "mapBarWeb": "Imference Web"
+  },
+  "payErrors": {
+    "insufficient_credits": "积分不足，无法完成此次运行。请充值后继续。",
+    "insufficient_usdc": "钱包中的 USDC 不足，无法完成此次运行。请充值后继续。",
+    "needs_key": "请先设置付款方式，才能在云端运行。",
+    "needs_wallet": "请创建或导入钱包，以便按次付费。",
+    "invalid_key": "无法识别此 API 密钥。请在“设置 > 付款”中检查。",
+    "payment_cancelled": "付款已取消，未产生任何费用。"
+  },
+  "credits": {
+    "unit": "积分",
+    "buy": "购买积分",
+    "balance": "余额",
+    "runsLeft_one": "使用 {{model}} 约可运行 {{n}} 次",
+    "runsLeft_other": "使用 {{model}} 约可运行 {{n}} 次",
+    "haveKey": "我已有密钥",
+    "haveKeyHint": "粘贴你购买积分时获得的账户密钥（在本应用、imference.com 或 Claude 中）。",
+    "useKey": "使用此密钥",
+    "useAnother": "使用其他密钥",
+    "empty": {
+      "title": "积分用于支付云端运行",
+      "lead": "一次购买一个积分包，之后每张图片或视频消耗少量积分。1 积分 = 0.001 美元。",
+      "point1": "首次购买会创建你的 Imference 账户",
+      "point2": "账户就是一个密钥：无需邮箱或密码",
+      "point3": "可用于本应用、imference.com、Claude（MCP）和 API"
+    },
+    "key": {
+      "title": "你的账户密钥",
+      "lead": "这个密钥就是你的 Imference 账户，积分属于它。请妥善保存一份副本，这是找回积分的唯一方式。",
+      "saveFile": "保存到文件",
+      "saved": "密钥已保存到 {{path}}",
+      "where": "在 imference.com、Claude（MCP）或 API 中使用同一个密钥，消耗的是同一份积分。"
+    },
+    "signOut": {
+      "action": "退出此账户",
+      "title": "退出此账户？",
+      "body": "密钥将从本应用中移除。积分仍保留在账户中：再次使用需要该密钥，请确认已保存。",
+      "confirm": "退出"
+    }
+  },
+  "walletPane": {
+    "title": "以 USDC 按次付费",
+    "forWho": "适合持有 USDC 的用户",
+    "lead": "无需购买积分，每次运行都会从本应用为你保管的钱包中按准确价格扣款。无需账户。",
+    "stepsLabel": "设置步骤",
+    "s1": "创建",
+    "s2": "充值",
+    "s3": "就绪",
+    "step1": "创建你的钱包",
+    "step1Hint": "一键完成。私钥保存在这台电脑的系统钥匙串中。",
+    "importTitle": "导入私钥",
+    "importHint": "64 位十六进制私钥，可带或不带 0x。请使用只存少量资金的钱包。",
+    "step2": "充值",
+    "ready": "已可支付你的运行",
+    "fundHint": "从交易所或其他钱包向此地址转入 USDC。几美元就足够了。",
+    "topUpHint": "如需充值，请向此地址转入更多 USDC。",
+    "network": "仅限 Base 网络上的 USDC。转入其他资产将会丢失。",
+    "balanceError": "暂时无法读取余额，将自动重试。",
+    "qr": "钱包地址二维码",
+    "backup": {
+      "title": "备份此钱包的私钥",
+      "lead": "私钥掌管此钱包中的 USDC。保存一份副本，即可在其他电脑上恢复，或在 MetaMask、Rabby 中打开此钱包。",
+      "saveFile": "保存到文件",
+      "copy": "复制私钥",
+      "copied": "已复制",
+      "saved": "钱包私钥已保存到 {{path}}",
+      "warning": "任何持有此私钥的人都能花掉其中的 USDC。请妥善保管文件，切勿分享。"
+    },
+    "replace": {
+      "title": "使用其他钱包",
+      "lead": "这将替换本应用中的钱包。请先保存其私钥：钱包中剩余的 USDC 只能凭该私钥取回。",
+      "import": "导入其他私钥",
+      "create": "创建新钱包"
+    }
+  },
+  "payNotice": {
+    "noCredits": {
+      "title": "尚无积分：云端运行需要付款方式",
+      "body_one": "购买一个积分包（{{usd}}，使用 {{model}} 约可运行 {{runs}} 次）。首次购买会创建你的账户。",
+      "body_other": "购买一个积分包（{{usd}}，使用 {{model}} 约可运行 {{runs}} 次）。首次购买会创建你的账户。",
+      "action": "购买积分"
+    },
+    "noWallet": {
+      "title": "尚无 USDC 钱包：无法支付此次运行",
+      "body": "按次付费需要本应用中有一个存有 USDC 的钱包。一键创建，然后向其转入 Base 网络上的 USDC。",
+      "action": "设置钱包"
+    },
+    "shortCredits": {
+      "title": "积分不足，无法完成此次运行",
+      "body": "此次运行需要 {{cost}} 积分，你还剩 {{have}}。",
+      "action": "充值"
+    },
+    "shortUsdc": {
+      "title": "USDC 不足，无法完成此次运行",
+      "body": "此次运行需要 {{cost}}，钱包中有 {{have}}。请向其地址转入 Base 网络上的 USDC。",
+      "action": "充值"
+    },
+    "webNoCredits": "用银行卡购买积分，5 美元起（首次购买会创建你的账户），或使用浏览器钱包按次付费。",
+    "webNoBalance": "你的账户已没有积分。请用银行卡充值以继续生成。",
+    "webNoWallet": {
+      "title": "未连接钱包",
+      "body": "使用浏览器钱包（MetaMask、Coinbase Wallet、Rabby…）以 USDC 按次支付。每次付款都需在钱包中确认。",
+      "action": "连接我的钱包"
+    }
+  },
+  "apiKeyDialog": {
+    "button": "我有 API 密钥",
+    "title": "使用你的 API 密钥",
+    "desc": "粘贴你购买积分时获得的账户密钥（在本应用、imference.com 或 Claude 中）。使用前会先验证。"
+  },
+  "agents": {
+    "title": "让 AI 智能体在本机创作",
+    "lead": "将 AI 智能体（Claude、Cursor…）连接到 Imference Desktop：在对话中请求一张图片，它会在本机用你的 GPU 生成。",
+    "point1": "使用你的 GPU 和已下载的模型生成 — 免费",
+    "point2": "也能编辑：去除背景、放大、描述…",
+    "point3": "所有结果都会进入图库，并在“活动”中实时显示",
+    "point4": "本地运行的内容不会离开这台电脑",
+    "allow": "允许 AI 智能体使用 Imference Desktop",
+    "allowHint": "一个仅本机可访问的本地 API（127.0.0.1，带令牌保护）。Imference MCP 服务器通过它在本机生成和编辑。",
+    "details": "技术细节",
+    "apiOffWarning": "上方已关闭 AI 智能体：在重新开启之前，已连接的应用只能使用云端。",
+    "connectTitle": "连接 AI 应用",
+    "recheck": "重新检查",
+    "detecting": "正在查找本机上的 AI 应用…",
+    "otherApp": "其他应用",
+    "otherHint": "Cursor、VS Code、Windsurf… 任何支持 MCP 的应用",
+    "showSetup": "查看设置方法",
+    "connect": "连接",
+    "reconnect": "重新连接",
+    "repair": "修复",
+    "connectedBadge": "已连接",
+    "failedBadge": "无法启动",
+    "outdatedBadge": "需要更新",
+    "notConnected": "尚未连接",
+    "notFound": "未在本机找到 {{name}} — 仍可以先完成设置",
+    "failed": "它的 Imference 服务器无法启动 — “修复”会重新设置",
+    "outdated": "Imference 服务器 v{{version}} 还不能通过 Desktop 生成 — “修复”会更新它",
+    "mode": {
+      "desktop": "使用 Imference Desktop 安装的服务器（v{{version}}）",
+      "npm-global": "使用你通过 npm 安装的服务器（v{{version}}）",
+      "npx": "使用 npm 上最新的服务器（npx）",
+      "other": "使用自定义路径的服务器（v{{version}}）"
+    },
+    "projectEntries_one": "也已在一个 Claude Code 项目中设置：{{projects}}",
+    "projectEntries_other": "也已在 {{count}} 个 Claude Code 项目中设置：{{projects}}",
+    "preparing": "准备中…",
+    "downloadingServer": "正在下载 Imference 服务器…",
+    "downloadingNode": "正在下载 Node.js（运行所需）…",
+    "connected": "已连接",
+    "updated": "Imference 服务器已更新",
+    "doneClaudeDesktop": "完成。请完全退出 Claude Desktop（托盘图标 › 退出）后重新打开。",
+    "doneClaudeCode": "完成。开启新的 Claude Code 会话即可使用。",
+    "tryIt": "然后试试：“用 Imference 生成一座暴风雨中的灯塔。”",
+    "backup": "原设置已保存到 {{path}}",
+    "manualClaudeCode": "此处无法使用 claude 命令：请在终端中运行以下命令。",
+    "manualOther": "将以下内容添加到该应用的 MCP 设置中（路径适用于本机）：",
+    "serverLine": "Imference 服务器：{{version}}",
+    "notInstalled": "未安装",
+    "desktopCopy": "由 Desktop 安装",
+    "nodeLine": "Node.js {{version}}（{{source}}）",
+    "nodeSystem": "你的",
+    "nodeDesktop": "由 Desktop 安装",
+    "nodeNone": "Node.js：未找到 — 连接时会自动下载",
+    "update": "更新到 v{{version}}",
+    "via": "来自 {{name}}",
+    "viaAgent": "来自 AI 智能体",
+    "anAgent": "一个 AI 智能体",
+    "viaHint": "由 {{name}} 通过 Imference Desktop 的本地 API 启动（设置 › AI 智能体）。",
+    "spend": "允许 AI 智能体使用我的点数进行云端运行",
+    "spendHint": "关闭：它们只在本机免费运行。开启：当你要求使用云端时，它们会使用你的 Imference 账户 — 无需复制到它们的设置中，关闭后立即停止。",
+    "spendNoKey": "添加账户后才会生效（设置 › 点数与账户）。",
+    "permissionsTitle": "AI 智能体可以做什么"
   }
 }

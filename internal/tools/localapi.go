@@ -52,6 +52,8 @@ type APIOutput struct {
 	Format string `json:"format"`
 	Path   string `json:"path,omitempty"`
 	Text   string `json:"text,omitempty"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
 }
 
 // APIResult is a finished run.
@@ -201,6 +203,10 @@ func (s *APIServer) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/tools", s.handleList)
 	mux.HandleFunc("POST /v1/tools/{tool_id}", s.handleRun)
+	mux.HandleFunc("GET /v1/generation", s.handleGenerationInfo)
+	mux.HandleFunc("POST /v1/generate", s.handleGenerate)
+	mux.HandleFunc("GET /v1/cloud-credentials", s.handleCloudCredentials)
+	mux.HandleFunc("POST /v1/agent-runs", s.handleAgentRun)
 	mux.HandleFunc("GET /v1/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
@@ -216,8 +222,26 @@ func (s *APIServer) Handler() http.Handler {
 			writeErr(w, http.StatusUnauthorized, &Error{Code: CodeInvalidInput, Message: "missing or invalid bearer token"})
 			return
 		}
+		if agent := strings.TrimSpace(r.Header.Get(AgentHeader)); agent != "" {
+			r = r.WithContext(context.WithValue(r.Context(), agentKey{}, agent))
+		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+// AgentHeader names the app driving the API (the MCP server forwards its
+// client's name: "claude-ai", "claude-code"…), shown on the Activity row.
+const AgentHeader = "X-Imference-Agent"
+
+type agentKey struct{}
+
+// AgentFrom is the AgentHeader of the request behind ctx ("" = not sent).
+func AgentFrom(ctx context.Context) string {
+	s, _ := ctx.Value(agentKey{}).(string)
+	if len(s) > 64 {
+		s = s[:64]
+	}
+	return s
 }
 
 func (s *APIServer) handleList(w http.ResponseWriter, _ *http.Request) {
@@ -417,9 +441,9 @@ func extFor(mimeType, fallback string) string {
 // statusFor maps a tool error code to the API's HTTP status.
 func statusFor(code string) int {
 	switch code {
-	case CodeInvalidInput, CodeTooLarge:
+	case CodeInvalidInput, CodeTooLarge, CodeModelNotCached:
 		return http.StatusBadRequest
-	case CodeUnsupportedRuntime, CodeWeightsMissing, CodeOOM:
+	case CodeUnsupportedRuntime, CodeWeightsMissing, CodeOOM, CodeEngineNotReady:
 		return http.StatusServiceUnavailable
 	}
 	return http.StatusInternalServerError

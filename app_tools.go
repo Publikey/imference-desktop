@@ -1194,7 +1194,21 @@ func (b toolsAPIBackend) LocalAvailable(toolID string) bool {
 }
 
 func (b toolsAPIBackend) RunLocal(ctx context.Context, toolID string, inputs map[string][]string, params map[string]any) (*tools.APIResult, *tools.Error) {
-	res := b.a.runTool(ctx, ToolRunRequest{JobID: "api_" + newToolJobID(), ToolID: toolID, Inputs: inputs, Params: params, RunOn: tools.ModeLocal})
+	jobID := "api_" + newToolJobID()
+	label := toolID
+	if t, ok := b.a.toolsCat.Get(toolID); ok && t.Name != "" {
+		label = t.Name
+	}
+	// The Activity row ("via Claude"); its stages come from "tools:progress".
+	run := AgentRun{JobID: jobID, Kind: "tool", ToolID: toolID, Label: label, Agent: tools.AgentFrom(ctx), State: "running"}
+	b.a.emitAgentRun(run)
+	res := b.a.runTool(ctx, ToolRunRequest{JobID: jobID, ToolID: toolID, Inputs: inputs, Params: params, RunOn: tools.ModeLocal})
+	if res.Error != nil {
+		run.State, run.Error = "error", res.Error.Message
+	} else {
+		run.State, run.Tool = "done", &res
+	}
+	b.a.emitAgentRun(run)
 	if res.Error != nil {
 		e := *res.Error
 		e.CloudRetry = nil // agents choose run_on themselves

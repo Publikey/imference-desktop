@@ -51,7 +51,7 @@ function score(c: Command, tokens: string[]): number | null {
 
 function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="bg-muted text-muted-foreground inline-flex min-w-[1.25rem] items-center justify-center rounded px-1 py-0.5 text-[10px] font-medium leading-none">
+    <kbd className="bg-muted text-muted-foreground inline-flex min-w-[1.25rem] items-center justify-center rounded px-1 py-0.5 text-2xs font-medium leading-none">
       {children}
     </kbd>
   );
@@ -197,7 +197,7 @@ export function CommandPalette({
             rows.map(({ c, i, header }) => (
               <Fragment key={c.id}>
                 {header && (
-                  <div className="text-muted-foreground/60 px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider">
+                  <div className="ds-sublabel px-2.5 pb-1 pt-3">
                     {header}
                   </div>
                 )}
@@ -231,7 +231,7 @@ export function CommandPalette({
           )}
         </div>
 
-        <div className="text-muted-foreground/60 flex items-center gap-3 border-t px-4 py-2 text-[10px]">
+        <div className="text-muted-foreground/60 flex items-center gap-3 border-t px-4 py-2 text-2xs">
           <span className="inline-flex items-center gap-1">
             <Kbd>↑</Kbd>
             <Kbd>↓</Kbd>

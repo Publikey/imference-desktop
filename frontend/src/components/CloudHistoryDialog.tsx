@@ -227,8 +227,8 @@ function StatusBadge({ status }: { status: CloudHistoryItem["status"] }) {
   return (
     <span
       className={cn(
-        "rounded-full px-2 py-0.5 text-[11px] font-medium",
-        status === "done" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+        "rounded-full px-2 py-0.5 text-2xs font-medium",
+        status === "done" && "bg-success/15 text-success",
         status === "failed" && "bg-destructive/15 text-destructive",
         status === "pending" && "bg-muted text-muted-foreground"
       )}

@@ -3,6 +3,9 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as mcpsetup$0 from "./internal/mcpsetup/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as tools$0 from "./internal/tools/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -128,6 +131,43 @@ export interface LocalAPIInfo {
     "running": boolean;
     "port": number;
     "discoveryPath": string;
+}
+
+/**
+ * MCPStatusInfo is the AI agents pane.
+ */
+export interface MCPStatusInfo {
+    "node": mcpsetup$0.Node | null;
+    "nodes": mcpsetup$0.Node[] | null;
+    "installs": mcpsetup$0.Install[] | null;
+    "clients": mcpsetup$0.Client[] | null;
+
+    /**
+     * Script: the server Desktop would connect (its copy, else an npm-global one).
+     */
+    "script": string;
+    "scriptVersion": string;
+    "dir": string;
+
+    /**
+     * Latest release of the server ("" = unknown: offline, or not checked).
+     */
+    "latest": string;
+
+    /**
+     * UpdateAvailable: Desktop's copy is older than Latest.
+     */
+    "updateAvailable": boolean;
+
+    /**
+     * MinVersion: the oldest server that generates through Desktop.
+     */
+    "minVersion": string;
+
+    /**
+     * APIKeySet: a credits API key is saved (what "let AI agents spend my credits" hands out).
+     */
+    "apiKeySet": boolean;
 }
 
 /**

@@ -1,4 +1,3 @@
-import { ComposerCardHeader } from "@/components/ComposerCard";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -13,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SectionHeader } from "@/components/ds";
 import { ProgressBar } from "@/components/ui/progress";
 import type {
   ComponentsProgress,
@@ -134,26 +134,14 @@ export function LocalReadinessCard({
     }
   };
 
-  if (allReady && !expanded) {
-    return (
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
-        className="bg-card hover:border-primary/30 flex w-full items-center gap-2 rounded-2xl border px-4 py-2.5 text-left text-xs shadow-sm transition"
-      >
-        <Check className="size-3.5 shrink-0 text-emerald-500" />
-        <span className="min-w-0 flex-1 truncate">
-          {t("readiness.readyLine", { name: model.name })}
-        </span>
-        <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
-      </button>
-    );
-  }
+  // All green: nothing to prepare. The model card says it is loaded and the
+  // header's engine pill carries the engine state — no third "ready" line.
+  if (allReady && !expanded) return null;
 
   return (
-    <section className="bg-card grid min-w-0 gap-2.5 overflow-hidden rounded-2xl border px-4 py-3 text-xs shadow-sm">
+    <section className="ds-card grid min-w-0 gap-2.5 overflow-hidden px-4 py-3 text-xs">
       <div className="flex items-center justify-between">
-        <ComposerCardHeader title={t("readiness.title")} help={t("readiness.help")} />
+        <SectionHeader title={t("readiness.title")} help={t("readiness.help")} />
         <div className="flex items-center gap-2">
           {pendingActions > 1 && (
             <button
@@ -316,7 +304,7 @@ function Row({
         className={cn(
           "flex size-5 shrink-0 items-center justify-center rounded-full border",
           ok
-            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+            ? "border-success/40 bg-success/10 text-success"
             : busy
               ? "border-primary/40 text-primary"
               : "border-muted-foreground/30 text-muted-foreground"
@@ -376,7 +364,7 @@ function BusyLine({
 }) {
   return (
     <div className="grid gap-1">
-      <div className="flex items-center justify-between gap-2 text-[11px]">
+      <div className="flex items-center justify-between gap-2 text-2xs">
         <span className="text-muted-foreground min-w-0 truncate" title={text}>
           {text}
         </span>

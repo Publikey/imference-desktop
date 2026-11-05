@@ -5,6 +5,9 @@ import tailwindcss from "@tailwindcss/vite";
 import wails from "@wailsio/runtime/plugins/vite";
 export default defineConfig(({ mode }) => {
     const web = mode === "web";
+    // Design preview: the desktop UI in a plain browser, every Go binding
+    // answered from fixtures (src/lib/preview-runtime.ts).
+    const preview = mode === "preview";
     return {
         // Bind the dev server to 127.0.0.1 (IPv4). Wails' dev asset proxy dials
         // tcp4 127.0.0.1:<port>; the default `localhost` host resolves to IPv6 (::1)
@@ -21,7 +24,9 @@ export default defineConfig(({ mode }) => {
                 // The browser version's product name, in the tab and in link previews.
                 { name: "web-title", transformIndexHtml: (html) => html.replace("<title>Imference Desktop</title>", "<title>Imference Web</title>") },
             ]
-            : [react(), tailwindcss(), wails("./bindings")],
+            : preview
+                ? [react(), tailwindcss()]
+                : [react(), tailwindcss(), wails("./bindings")],
         resolve: {
             alias: [
                 { find: "@", replacement: resolve(__dirname, "./src") },
@@ -31,11 +36,20 @@ export default defineConfig(({ mode }) => {
                 // Web build: the generated bindings and wails-bridge.ts talk to the Go web
                 // server (src/lib/web-runtime.ts) instead of the Wails webview.
                 ...(web ? [{ find: /^@wailsio\/runtime$/, replacement: resolve(__dirname, "src/lib/web-runtime.ts") }] : []),
+                ...(preview ? [{ find: /^@wailsio\/runtime$/, replacement: resolve(__dirname, "src/lib/preview-runtime.ts") }] : []),
             ],
         },
+        // Preview: never pre-bundle the real runtime past the alias.
+        optimizeDeps: preview ? { exclude: ["@wailsio/runtime"] } : undefined,
         // npm run build:web -> dist-web/, embedded by the Go web build (web_main.go).
         // Relative asset URLs: the same build is served at "/" or under "/app/".
         base: web ? "./" : undefined,
-        build: web ? { outDir: "dist-web", emptyOutDir: true } : undefined,
+        // Design preview build (visual regression): never into dist/, which the
+        // desktop binary embeds.
+        build: web
+            ? { outDir: "dist-web", emptyOutDir: true }
+            : preview
+                ? { outDir: "dist-preview", emptyOutDir: true }
+                : undefined,
     };
 });

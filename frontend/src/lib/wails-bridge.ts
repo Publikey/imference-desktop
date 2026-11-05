@@ -12,6 +12,10 @@ import {
   GenerateLocal,
   GenerateWallet,
   GetCreditBalance,
+  StartCardCheckout,
+  AdoptAPIKey,
+  SaveAPIKeyFile,
+  SaveWalletKeyFile,
   GetEngineInfo,
   GetLogs,
   GetSettings,
@@ -87,6 +91,10 @@ import type {
   ToolProgress,
   ToolsSettings,
   LocalApiInfo,
+  AgentRun,
+  McpStatus,
+  McpConnectResult,
+  McpProgress,
   CloudHistoryItem,
   CloudHistoryPage,
 } from "./types";
@@ -115,6 +123,14 @@ const raw = {
   // Pass the (possibly unsaved draft) API key; Go falls back to the saved one
   // when "" is given. The key arg is redacted from logs in sanitize() below.
   getCreditBalance: GetCreditBalance as (apiKey: string) => Promise<CreditInfo>,
+  /** In-app card purchase of one credit pack (Stripe Embedded Checkout). */
+  startCardCheckout: StartCardCheckout as (packs: number) => Promise<{ clientSecret: string; publishableKey: string; apiKey: string }>,
+  /** Saves a key (bought or pasted) as the credits key; credits become the method. */
+  adoptAPIKey: AdoptAPIKey as unknown as (key: string) => Promise<AppSettings>,
+  /** Native "Save as" for the API key (the account); "" when cancelled. */
+  saveAPIKeyFile: SaveAPIKeyFile as () => Promise<string>,
+  /** Native "Save as" for the app wallet's private key; "" when cancelled. */
+  saveWalletKeyFile: SaveWalletKeyFile as () => Promise<string>,
   // Cloud call history (GET /history): rail "" = the payment mode's; cursor =
   // the previous page's next_cursor. A result within its 24 h comes back to
   // the gallery with redownloadCloudOutput(item, outputIndex).
@@ -249,6 +265,15 @@ const raw = {
     ts: ToolsSettings
   ) => Promise<ToolsSettings>,
   getLocalApiInfo: (() => Call.ByName("main.App.GetLocalAPIInfo")) as () => Promise<LocalApiInfo>,
+  // Settings › AI agents: detect / connect / update the Imference MCP server.
+  mcpStatus: ((check: boolean) => Call.ByName("main.App.MCPStatus", check)) as (check: boolean) => Promise<McpStatus>,
+  connectMcp: ((client: string) => Call.ByName("main.App.ConnectMCP", client)) as (client: string) => Promise<McpConnectResult>,
+  updateMcp: (() => Call.ByName("main.App.UpdateMCP")) as () => Promise<void>,
+  onMcpProgress: (cb: (p: McpProgress) => void): (() => void) =>
+    Events.On("mcp:progress", (e) => cb(e.data as McpProgress)),
+  // A run an AI agent started through the local API (an Activity row "via Claude").
+  onAgentRun: (cb: (r: AgentRun) => void): (() => void) =>
+    Events.On("agent:run", (e) => cb(e.data as AgentRun)),
   // Instruction-edit models (cloud catalog + the loaded local edit model).
   listEditModels: (() => Call.ByName("main.App.ListEditModels")) as () => Promise<EditModelsInfo>,
   switchToEditModel: (() => Call.ByName("main.App.SwitchToEditModel")) as () => Promise<void>,
@@ -329,6 +354,8 @@ const NO_WRAP = new Set([
   "onSettingsChanged",
   "onToolProgress",
   "onToolWeights",
+  "onMcpProgress",
+  "onAgentRun",
 ]);
 
 function wrap<K extends keyof typeof raw>(key: K, fn: (typeof raw)[K]): (typeof raw)[K] {

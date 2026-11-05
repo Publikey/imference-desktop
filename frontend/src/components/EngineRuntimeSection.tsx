@@ -35,10 +35,10 @@ export function EngineRuntimeSection({
     onChange({ image, wan: { ...wan, ...patch } });
 
   return (
-    <section className="bg-card grid gap-4 rounded-2xl border p-4 shadow-sm">
+    <section className="ds-card grid gap-4 p-4">
       <div>
         <h3 className="text-sm font-semibold">{t("runtime.title")}</h3>
-        <p className="text-muted-foreground text-[11px]">{t("runtime.desc")}</p>
+        <p className="text-muted-foreground text-2xs">{t("runtime.desc")}</p>
       </div>
 
       {/* Image — one block for every image backend (SDXL, SD 1.5, Z-Image,

@@ -137,7 +137,7 @@ export function HoverPopover({
             onMouseEnter={() => window.clearTimeout(closeTimer.current)}
             onMouseLeave={close}
             style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width }}
-            className="bg-popover text-popover-foreground fixed z-[90] max-h-56 overflow-y-auto rounded-lg border p-2.5 text-[11px] leading-relaxed shadow-lg"
+            className="bg-popover text-popover-foreground fixed z-[90] max-h-56 overflow-y-auto rounded-lg border p-2.5 text-2xs leading-relaxed shadow-lg"
           >
             {/* select-text so the message can be copied into a bug report; the
                 panel survives the pointer entering it, which makes that possible. */}

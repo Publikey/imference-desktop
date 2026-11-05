@@ -12,17 +12,18 @@ import { beginPointerDrag } from "@/lib/pointer-drag";
 // also collapse to a slim rail.
 // ---------------------------------------------------------------------------
 
-export type PanelId = "engine" | "create" | "edit" | "gallery";
+export type PanelId = "create" | "edit" | "gallery";
 export type PanelColumns = PanelId[][];
 
 // Every panel can be switched off from the header (PanelToggles); a hidden
 // panel keeps its slot in the persisted arrangement so it comes back where the
 // user last put it. Default: Create + Gallery shown, Edit off.
-const ALL_PANELS: PanelId[] = ["engine", "create", "edit", "gallery"];
-const DEFAULT_COLUMNS: PanelColumns = [["engine"], ["create"], ["edit"], ["gallery"]];
-// v3: Activity left the panel system (it's a floating dock now). Older keys are
-// simply not read — their layouts (which listed "queue") reset to the v3 default.
-const STORAGE_KEY = "imference.panels.v3";
+const ALL_PANELS: PanelId[] = ["create", "edit", "gallery"];
+const DEFAULT_COLUMNS: PanelColumns = [["create"], ["edit"], ["gallery"]];
+// v4: the Engine panel left the panel system (its block heads Create, its
+// details live in the header's engine popover). Older keys are simply not
+// read — their layouts reset to the v4 default.
+const STORAGE_KEY = "imference.panels.v4";
 
 // Manual-resize bounds for a sidebar column (px). The gallery column always
 // grows to fill the rest, so it isn't width-controlled.
@@ -70,7 +71,6 @@ function withEditPanel(cols: unknown): PanelColumns | null {
     const gi = next.findIndex((c) => Array.isArray(c) && c.includes("gallery"));
     next.splice(gi < 0 ? next.length : gi, 0, ["edit"]);
   }
-  if (!next.flat().includes("engine")) next.unshift(["engine"]);
   return validColumns(next) ? next : null;
 }
 
@@ -132,8 +132,7 @@ function loadLayout(): PersistedLayout {
  * as the user made it; only its rendering folds: while the side columns plus a
  * MIN_GROW_PX gallery don't fit, two side columns merge into one (the later
  * one's panels stacked under the earlier one's). Neighbours first, then the
- * pair whose merged column is narrowest — the short Engine goes over Create
- * before the wide Edit does. Widening the window unfolds it again.
+ * pair whose merged column is narrowest. Widening the window unfolds it again.
  *
  * Stacked (below the row layout) there is one column: the grow column (the
  * gallery, endlessly scrolling) goes last so nothing ends up under it.
@@ -476,23 +475,24 @@ export function PanelBoard({
         // A collapsed rail keeps its fixed slim width; otherwise the manual /
         // default width drives the column via a CSS var (only applied at xl).
         const columnClass = cn(
-          "flex flex-col gap-4 xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain xl:pb-6 xl:[scrollbar-gutter:stable]",
+          "flex flex-col gap-4 xl:min-h-0 xl:overflow-y-auto xl:overflow-x-hidden xl:overscroll-contain xl:pb-6 xl:[scrollbar-gutter:stable]",
           grow
             ? "min-w-0 xl:flex-1"
             : rail
               ? "mx-auto xl:mx-0 xl:w-12 xl:shrink-0"
               : "mx-auto w-full max-w-2xl xl:mx-0 xl:max-w-none xl:w-[var(--col-w)] xl:shrink-0"
         );
-        const style =
-          grow || rail
-            ? undefined
-            : ({ "--col-w": `${colWidthPx(col)}px` } as React.CSSProperties);
+        // Columns enter left to right, 60ms apart (index.css .panel-enter).
+        const style = {
+          ...(grow || rail ? {} : { "--col-w": `${colWidthPx(col)}px` }),
+          "--enter-delay": `${ci * 60}ms`,
+        } as React.CSSProperties;
         // Key by position, not content: a content key remounts the whole column
         // on every live reorder, destroying the dragged panel's node (and its
         // dragend) mid-drag.
         return (
           <Fragment key={ci}>
-            <div className={columnClass} style={style} data-scroll-root>
+            <div className={cn(columnClass, "panel-enter")} style={style} data-scroll-root>
               {col.map((id) => (
                 <Panel
                   key={id}
@@ -633,7 +633,7 @@ function Panel({
             className="bg-card/60 hover:border-primary/30 hover:bg-card group flex flex-1 items-center gap-2 rounded-xl border px-3 py-2 shadow-sm backdrop-blur transition-colors"
           >
             <span className="text-muted-foreground [&_svg]:size-4">{spec.icon}</span>
-            <h2 className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.14em]">
+            <h2 className="ds-panel-title">
               {spec.title}
             </h2>
             {spec.badge}
@@ -653,8 +653,8 @@ function Panel({
     >
       <header className="flex h-6 select-none items-center gap-1.5 px-1">
         {grip}
-        <span className="text-muted-foreground [&_svg]:size-3.5">{spec.icon}</span>
-        <h2 className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.14em]">
+        <span className="panel-icon [&_svg]:size-3.5">{spec.icon}</span>
+        <h2 className="ds-panel-title">
           {spec.title}
         </h2>
         {spec.badge}

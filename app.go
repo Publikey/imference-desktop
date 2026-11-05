@@ -256,6 +256,8 @@ func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) 
 		a.emit(eventName, data...)
 	})
 	a.bus.Info("app", "startup", nil)
+	// First launch: no theme reported yet, paint the window from the OS.
+	a.applyOSAppearance()
 	// Agents' local tools API (127.0.0.1, token in local-api.json).
 	a.startToolsAPI()
 	go func() {

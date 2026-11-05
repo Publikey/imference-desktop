@@ -96,6 +96,11 @@ available; code signing and silent in-app auto-update are on the roadmap.
   click-to-select, expand (outpaint), repaint, restore faces, describe, and
   quick utilities (resize, crop, convert, strip metadata, video trim/convert)
   right from the gallery — on your machine or in the cloud.
+- 🤖 **Driven by your AI agent** — connect **Claude Desktop, Claude Code,
+  Cursor** or any MCP app in one click (Settings → AI agents, or the *AI
+  agents* button in the header). Ask for an image in the chat: it's generated
+  on your GPU, for free, and shows up live in the app. See
+  [AI agents](#ai-agents-claude-cursor).
 
 <div align="center">
 
@@ -105,6 +110,42 @@ available; code signing and silent in-app auto-update are on the roadmap.
 -->
 
 </div>
+
+## AI agents (Claude, Cursor…)
+
+Imference Desktop can be driven by an AI agent through the open-source
+[Imference MCP server](https://github.com/Publikey/Imference-mcp) — ask Claude
+for an image and your own GPU makes it.
+
+1. Open **Settings → AI agents** (or click **AI agents** in the header).
+2. Click **Connect** next to Claude Desktop or Claude Code. Desktop looks at
+   what's already there (an MCP server set up before, an npm install, a
+   Node.js ≥ 20.10) and downloads only what's missing: the server
+   (`imference-mcp.js`, from the MCP's GitHub release) and, if no usable
+   Node.js is found, the official portable Node.js — both checked against
+   their published SHA-256. For any other MCP app, **Show setup** gives the
+   config snippet to paste.
+3. Restart the AI app and ask: *"Generate a lighthouse in a storm with
+   Imference."*
+
+What the agent can do, and how it shows:
+
+- **Generate locally, for free**, with the models you downloaded (a
+  downloaded model that isn't loaded is loaded first; an agent never starts a
+  multi-GB download), and run the **editing tools** on your machine.
+- **Everything is visible**: each run appears live in Activity, marked
+  *via Claude* (or the app's name) with its model, and lands in the gallery —
+  including the agent's cloud runs.
+- **Cloud only if you allow it**: *Let AI agents spend my credits for cloud
+  runs* (off by default) lets the MCP server use this app's Imference account
+  for cloud runs. The key is handed out on request and never written into the
+  agent's config; turning the option off stops it at once.
+- **Your call**: *Let AI agents use Imference Desktop* turns the whole local
+  API off. A local failure is reported to the agent, never silently retried
+  as a paid cloud run.
+
+The local API behind it is documented in [Editing tools](#editing-tools)
+below.
 
 ## Editing tools
 
@@ -164,7 +205,38 @@ tool on it. Every tool shows where it will run before you start:
   Inputs may be absolute paths, `https://` URLs or `data:` URIs; outputs are
   saved to the gallery and returned as paths. Runs are local only (`503
   unsupported_runtime` when this machine can't run the tool). Turn the API off
-  in Settings → *Editing tools*.
+  in Settings → *AI agents*.
+
+  Agents can also **generate** with your GPU (the MCP server's `generate` with
+  `run_on: local`):
+
+  ```bash
+  # the loaded model, the local models and which are downloaded
+  curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:47823/v1/generation
+  curl -H "Authorization: Bearer $TOKEN" -X POST http://127.0.0.1:47823/v1/generate \
+       -d '{"prompt": "a red fox in fresh snow", "format_code": "portrait"}'
+  ```
+
+  Empty fields take the model's defaults (format, steps, guidance, quality
+  tags). A `model` other than the loaded one is loaded first when it is already
+  downloaded (`400 model_not_cached` otherwise: agents never start a download);
+  the engine starts on demand (`503 engine_not_ready` when it isn't installed).
+  `source_image` + `strength` run image-to-image.
+
+  Runs started this way show up live in Activity ("via Claude" — the MCP
+  server sends its client's name as `X-Imference-Agent`) and land in the
+  gallery.
+- **Connect Claude (Settings → AI agents).** One click wires the
+  [Imference MCP server](https://github.com/Publikey/Imference-mcp) into
+  Claude Desktop (its `claude_desktop_config.json`, merged, `.bak` first) or
+  Claude Code (`claude mcp add -s user`), or shows the snippet for any other
+  MCP app. Desktop first looks at what's there — servers already configured
+  (and whether they start), an npm install, a Node.js ≥ 20.10 — and only
+  downloads what's missing: the single-file server `imference-mcp.js` from the
+  MCP's GitHub release, and the official portable Node.js when none fits, both
+  sha256-checked, into `<config dir>/imference-desktop-go/mcp/`. The client
+  config points at them with absolute paths. Your API key is only added when
+  you tick the option (cloud runs then spend your credits).
 
 ## Web version (prototype)
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress";
 import { api } from "@/lib/wails-bridge";
 import type { EngineInfo, InstallPhase, InstallProgress, PythonInfo } from "@/lib/types";
+import { Badge } from "@/components/ds";
 
 // i18n keys per install phase, resolved at render.
 const PHASE_KEY: Record<InstallPhase, string> = {
@@ -101,7 +102,7 @@ export function LocalEngineSection({ onInstallDone }: Props) {
   const statusPill = renderStatusPill(engineInfo, installing, progress);
 
   return (
-    <section className="bg-card rounded-2xl border p-4 shadow-sm">
+    <section className="ds-card p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold">{t("engineSection.title")}</h3>
@@ -122,41 +123,55 @@ export function LocalEngineSection({ onInstallDone }: Props) {
         </div>
       </div>
 
-      <PythonLine probe={pythonProbe} err={pythonError} />
+      {!(engineInfo?.installed && !installing) && <PythonLine probe={pythonProbe} err={pythonError} />}
 
       {engineInfo?.installed && !installing && (
-        <>
-          <p className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
-            <span>imference-engine</span>
-            <span className="font-mono">
+        <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-6 gap-y-2 border-t pt-3 text-xs">
+          <dt className="text-muted-foreground">{t("engineSection.version")}</dt>
+          <dd className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-medium tabular-nums">
               {engineInfo.engineVersion ? `v${engineInfo.engineVersion}` : t("engineSection.versionUnknown")}
             </span>
             {engineInfo.dev ? (
               // Editable dev checkout — make it unmistakable this is NOT a release.
-              <span
-                className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400"
-                title={engineInfo.devPath || undefined}
-              >
-                <FlaskConical className="size-3" />
+              <Badge tone="warning" title={engineInfo.devPath || undefined}>
+                <FlaskConical />
                 {t("engineSection.devBadge")}
-              </span>
+              </Badge>
             ) : (
               engineInfo.outdated && engineInfo.pinnedVersion && (
-                <span className="text-yellow-700">
+                <span className="text-warning">
                   {t("engineSection.updatingTo", { version: engineInfo.pinnedVersion })}
                 </span>
               )
             )}
-          </p>
-          {engineInfo.dev && engineInfo.devPath && (
-            <p className="text-muted-foreground/80 mt-1 truncate font-mono text-xs" title={engineInfo.devPath}>
-              {t("engineSection.devSource")}: {engineInfo.devPath}
-            </p>
+          </dd>
+          {pythonProbe && (
+            <>
+              <dt className="text-muted-foreground">Python</dt>
+              <dd className="min-w-0 truncate" title={pythonProbe.path}>
+                <span className="font-medium tabular-nums">{pythonProbe.version}</span>
+                <span className="text-muted-foreground font-mono"> · {pythonProbe.path}</span>
+              </dd>
+            </>
           )}
-          <p className="text-muted-foreground mt-1 truncate font-mono text-xs" title={engineInfo.pythonPath}>
-            venv: {engineInfo.pythonPath}
-          </p>
-        </>
+          {engineInfo.pythonPath && (
+            <>
+              <dt className="text-muted-foreground">{t("engineSection.environment")}</dt>
+              <dd className="text-muted-foreground min-w-0 truncate font-mono" title={engineInfo.pythonPath}>
+                {engineInfo.pythonPath}
+              </dd>
+            </>
+          )}
+          {engineInfo.dev && engineInfo.devPath && (
+            <>
+              <dt className="text-muted-foreground">{t("engineSection.devSource")}</dt>
+              <dd className="text-muted-foreground min-w-0 truncate font-mono" title={engineInfo.devPath}>
+                {engineInfo.devPath}
+              </dd>
+            </>
+          )}
+        </dl>
       )}
 
       {installing && progress && <ProgressView p={progress} />}
@@ -217,11 +232,11 @@ function ProgressView({ p }: { p: InstallProgress }) {
       </div>
       <ProgressBar percent={p.percentEstimate > 0 ? p.percentEstimate : null} />
       {detail && (
-        <p className="text-muted-foreground truncate font-mono text-[11px]" title={detail}>
+        <p className="text-muted-foreground truncate font-mono text-2xs" title={detail}>
           {detail}
         </p>
       )}
-      <p className="text-muted-foreground/70 text-[11px]">
+      <p className="text-muted-foreground/70 text-2xs">
         {t("engineSection.pipHint")}
       </p>
     </div>
@@ -235,14 +250,14 @@ function renderStatusPill(
 ) {
   if (installing) {
     return (
-      <Badge color="yellow">
+      <Badge tone="warning">
         <Loader2 className="size-3 animate-spin" /> <BadgeText k="engineSection.badgeInstalling" />
       </Badge>
     );
   }
   if (p?.phase === "error") {
     return (
-      <Badge color="red">
+      <Badge tone="danger">
         <XCircle className="size-3" /> <BadgeText k="engineSection.badgeError" />
       </Badge>
     );
@@ -254,20 +269,20 @@ function renderStatusPill(
   // meanwhile rather than lying).
   if (info?.installed && !info.engineVersion && !info.dev) {
     return (
-      <Badge color="yellow">
+      <Badge tone="warning">
         <AlertTriangle className="size-3" /> <BadgeText k="engineSection.badgeIncomplete" />
       </Badge>
     );
   }
   if (info?.installed) {
     return (
-      <Badge color="green">
+      <Badge tone="success">
         <CheckCircle2 className="size-3" /> <BadgeText k="engineSection.badgeInstalled" />
       </Badge>
     );
   }
   return (
-    <Badge color="gray">
+    <Badge tone="neutral">
       <Circle className="size-3" /> <BadgeText k="engineSection.badgeNotInstalled" />
     </Badge>
   );
@@ -279,22 +294,3 @@ function BadgeText({ k }: { k: string }) {
   return <>{t(k)}</>;
 }
 
-function Badge({
-  color,
-  children,
-}: {
-  color: "green" | "yellow" | "red" | "gray";
-  children: React.ReactNode;
-}) {
-  const cls = {
-    green: "bg-green-500/15 text-green-700",
-    yellow: "bg-yellow-500/15 text-yellow-700",
-    red: "bg-destructive/15 text-destructive",
-    gray: "bg-muted text-muted-foreground",
-  }[color];
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>
-      {children}
-    </span>
-  );
-}

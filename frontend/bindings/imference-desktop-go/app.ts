@@ -24,6 +24,9 @@ import * as components$0 from "./internal/components/models.js";
 import * as logbus$0 from "./internal/logbus/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as mcpsetup$0 from "./internal/mcpsetup/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as types$0 from "./internal/types/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -37,6 +40,15 @@ import * as $models from "./models.js";
  */
 export function AddLora(path: string): $CancellablePromise<types$0.Settings> {
     return $Call.ByID(1589676372, path);
+}
+
+/**
+ * AdoptAPIKey saves key as the credits key and makes credits the payment
+ * method: after a purchase (the key the API created), or a key the user
+ * pasted ("I already have a key").
+ */
+export function AdoptAPIKey(key: string): $CancellablePromise<types$0.Settings> {
+    return $Call.ByID(28862922, key);
 }
 
 /**
@@ -91,6 +103,16 @@ export function CheckModelReadiness(baseRepo: string, backend: string): $Cancell
 
 export function ClearLogs(): $CancellablePromise<void> {
     return $Call.ByID(1566804265);
+}
+
+/**
+ * ConnectMCP configures client ("claude-desktop", "claude-code" or "other")
+ * to run the Imference MCP server, downloading what's missing first. No key
+ * goes into the client's config: for cloud runs the server asks Desktop for
+ * the account's key, when Settings › AI agents allows it.
+ */
+export function ConnectMCP(client: string): $CancellablePromise<mcpsetup$0.ConnectResult> {
+    return $Call.ByID(2695361743, client);
 }
 
 /**
@@ -455,6 +477,14 @@ export function LogFromFrontend(level: string, source: string, message: string, 
 }
 
 /**
+ * MCPStatus reports the setup. check: also start each configured server once
+ * and look up the latest release (a few seconds).
+ */
+export function MCPStatus(check: boolean): $CancellablePromise<$models.MCPStatusInfo> {
+    return $Call.ByID(706159517, check);
+}
+
+/**
  * OpenCacheFolder reveals one of the three known cache directories in the OS
  * file manager. kind is an allow-list, never a path — the frontend can't ask
  * for an arbitrary location.
@@ -577,6 +607,16 @@ export function RunTool(req: $models.ToolRunRequest): $CancellablePromise<$model
 }
 
 /**
+ * SaveAPIKeyFile writes the saved API key to a text file the user picks (a
+ * native "Save as" dialog): the key is the account, a copy outside the app is
+ * the only way back to the credits if this computer is lost. Returns the path,
+ * or "" when the dialog was cancelled.
+ */
+export function SaveAPIKeyFile(): $CancellablePromise<string> {
+    return $Call.ByID(896931921);
+}
+
+/**
  * SaveSettings overwrites settings on disk and restarts the sidecar in the
  * background if a sidecar-affecting field changed — but ONLY when the engine is
  * currently running. When it's stopped (the default now — the engine starts on
@@ -585,6 +625,16 @@ export function RunTool(req: $models.ToolRunRequest): $CancellablePromise<$model
  */
 export function SaveSettings(next: types$0.Settings): $CancellablePromise<types$0.Settings> {
     return $Call.ByID(1949631069, next);
+}
+
+/**
+ * SaveWalletKeyFile writes the app wallet's private key to a text file the
+ * user picks (native "Save as"), the same way the account key is backed up.
+ * Anyone holding that file can spend the wallet's USDC: the file says so.
+ * Returns the path, or "" when cancelled.
+ */
+export function SaveWalletKeyFile(): $CancellablePromise<string> {
+    return $Call.ByID(1190035546);
 }
 
 /**
@@ -612,11 +662,32 @@ export function SelectLocalModel(modelCode: string): $CancellablePromise<void> {
 }
 
 /**
+ * SetAppearance is called by the renderer whenever the resolved theme changes
+ * (launch, a manual switch, the OS flipping while on "system"). It repaints
+ * every window's native background and remembers the choice for next launch.
+ * The web build has no native window: nothing to do.
+ */
+export function SetAppearance(dark: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3167202905, dark);
+}
+
+/**
  * SetToolsSettings saves the preferences and applies them (idle timeout,
  * local API on/off).
  */
 export function SetToolsSettings(ts: types$0.ToolsSettings): $CancellablePromise<types$0.ToolsSettings> {
     return $Call.ByID(262164407, ts);
+}
+
+/**
+ * StartCardCheckout starts an in-app card purchase of `packs` credit packs (Stripe
+ * Embedded Checkout, mounted by the frontend). It tops up the saved API key,
+ * or — for a buyer without one — the imference API creates a key for this
+ * purchase, returned in APIKey: the frontend adopts it (AdoptAPIKey) once
+ * Stripe reports the payment done, so an abandoned checkout changes nothing.
+ */
+export function StartCardCheckout(packs: number): $CancellablePromise<types$0.CardCheckout> {
+    return $Call.ByID(3854876613, packs);
 }
 
 /**
@@ -679,6 +750,14 @@ export function TakeClientGalleryOutbox(): $CancellablePromise<$models.ClientGal
  */
 export function ToolGenModels(toolID: string, sourceName: string, meta: types$0.GenerationMeta | null): $CancellablePromise<$models.GenToolModels> {
     return $Call.ByID(3729842993, toolID, sourceName, meta);
+}
+
+/**
+ * UpdateMCP replaces Desktop's copy of the server with the latest release
+ * (the clients' configs point at the same file: nothing else to change).
+ */
+export function UpdateMCP(): $CancellablePromise<void> {
+    return $Call.ByID(2434483664);
 }
 
 /**

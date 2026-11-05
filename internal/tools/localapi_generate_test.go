@@ -36,6 +36,66 @@ func (f *fakeGenBackend) Generate(_ context.Context, body GenerateBody, source s
 		Outputs: []APIOutput{{Name: "image", Type: "image", Format: "png", Path: "/gallery/a.png", Width: 1024, Height: 1024}}}, nil
 }
 
+type fakeCredsBackend struct {
+	fakeBackend
+	key     string
+	allowed bool
+}
+
+func (f *fakeCredsBackend) CloudCredentials() (string, bool) { return f.key, f.allowed }
+
+func TestLocalAPICloudCredentials(t *testing.T) {
+	be := &fakeCredsBackend{key: "imf_key"}
+	srv := newGenAPI(t, be)
+	if code, _ := call(t, srv, "GET", "/v1/cloud-credentials", "", nil); code != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", code)
+	}
+	if code, m := call(t, srv, "GET", "/v1/cloud-credentials", "secret", nil); code != http.StatusForbidden || errCode(m) != CodeNotAllowed {
+		t.Fatalf("not allowed: %d %v", code, m)
+	}
+	be.allowed = true
+	if code, m := call(t, srv, "GET", "/v1/cloud-credentials", "secret", nil); code != 200 || m["api_key"] != "imf_key" {
+		t.Fatalf("allowed: %d %v", code, m)
+	}
+	be.key = ""
+	if code, m := call(t, srv, "GET", "/v1/cloud-credentials", "secret", nil); code != http.StatusNotFound || errCode(m) != CodeNoAPIKey {
+		t.Fatalf("no key: %d %v", code, m)
+	}
+	if code, _ := call(t, newGenAPI(t, &fakeBackend{}), "GET", "/v1/cloud-credentials", "secret", nil); code != http.StatusNotFound {
+		t.Fatalf("no credentials backend: %d", code)
+	}
+}
+
+type fakeReportBackend struct {
+	fakeBackend
+	got []AgentReport
+}
+
+func (f *fakeReportBackend) ReportAgentRun(_ context.Context, r AgentReport) *Error {
+	f.got = append(f.got, r)
+	return nil
+}
+
+func TestLocalAPIAgentRuns(t *testing.T) {
+	be := &fakeReportBackend{}
+	srv := newGenAPI(t, be)
+	if code, _ := call(t, srv, "POST", "/v1/agent-runs", "secret", map[string]any{"id": "r1", "state": "running", "label": "a cat", "model": "flux"}); code != http.StatusAccepted {
+		t.Fatalf("report: %d", code)
+	}
+	if code, m := call(t, srv, "POST", "/v1/agent-runs", "secret", map[string]any{"id": "r1", "state": "weird"}); code != 400 || errCode(m) != CodeInvalidInput {
+		t.Fatalf("bad state: %d %v", code, m)
+	}
+	if code, _ := call(t, srv, "POST", "/v1/agent-runs", "secret", map[string]any{"state": "done"}); code != 400 {
+		t.Fatalf("no id: %d", code)
+	}
+	if len(be.got) != 1 || be.got[0].Label != "a cat" || be.got[0].Model != "flux" {
+		t.Fatalf("got = %+v", be.got)
+	}
+	if code, _ := call(t, srv, "POST", "/v1/agent-runs", "", map[string]any{"id": "x", "state": "running"}); code != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", code)
+	}
+}
+
 func newGenAPI(t *testing.T, be APIBackend) *httptest.Server {
 	t.Helper()
 	cat, err := Builtin()

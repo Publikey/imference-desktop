@@ -1169,6 +1169,51 @@ export default function App() {
     []
   );
 
+  // Runs an AI agent starts through the local API ("agent:run"): an Activity
+  // row "via Claude" while it runs, then its image joins the gallery like any
+  // local run (a tool's outputs too). A final event without a row (the app
+  // opened mid-run) adds the row directly.
+  useEffect(
+    () =>
+      api.onAgentRun((r) => {
+        const isTool = r.kind === "tool";
+        const now = Date.now();
+        const base: Job = {
+          id: r.jobId, mode: r.mode === "cloud" ? "cloud" : "local", prompt: r.label, status: "running", progress: null,
+          queuedAt: now, startedAt: now, via: r.agent ?? "", modelName: r.model || undefined,
+          ...(isTool ? { kind: "tool" as const, tool: { toolId: r.toolId ?? "" } } : {}),
+        };
+        const upsert = (patch: (j: Job) => Partial<Job>) =>
+          setJobs((js) =>
+            js.some((j) => j.id === r.jobId)
+              ? js.map((j) => (j.id === r.jobId ? { ...j, ...patch(j) } : j))
+              : [{ ...base, ...patch(base) }, ...js]
+          );
+        if (r.state === "running") {
+          upsert(() => ({}));
+          return;
+        }
+        if (r.state === "error") {
+          upsert((j) => ({ status: "error", error: r.error ?? "", endedAt: Date.now(), ...(j.tool ? { tool: { ...j.tool, stage: undefined } } : {}) }));
+          return;
+        }
+        if (!isTool) {
+          upsert((j) => ({ status: "done", image: r.image, progress: null, endedAt: Date.now(), modelName: r.model || j.modelName }));
+          return;
+        }
+        const res = r.tool;
+        const saved = res?.outputs.map((o) => o.savedName).filter((n): n is string => !!n) ?? [];
+        const first = res?.outputs.find((o) => o.savedName && o.type !== "text");
+        void (first?.savedName ? api.getSavedImage(first.savedName).catch(() => undefined) : Promise.resolve(undefined)).then(
+          (preview) => {
+            upsert((j) => ({ status: "done", endedAt: Date.now(), tool: { ...(j.tool ?? { toolId: r.toolId ?? "" }), result: res, preview, stage: undefined } }));
+            if (saved.length) setToolOutputs((o) => [...o, ...saved]);
+          }
+        );
+      }),
+    []
+  );
+
   // A tool run is an Activity job, like a generation: cloud runs start at
   // once (in parallel), local runs wait in their own queue and run one at a
   // time (one engine). The result lands in the gallery; the Edit panel never

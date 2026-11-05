@@ -32,7 +32,7 @@ function bindingID(fqn: string): number {
   return h >>> 0;
 }
 const METHODS =
-  "AddLora AdoptAPIKey CancelModelDownload CancelTool CancelToolWeights CheckForUpdate CheckModelReadiness ClearLogs DeleteCachedModel DeleteSavedImage DetectPython DownloadCatalogLora DownloadModelComponents DownloadToolWeights DropPendingCloudJob EngineStatus EnsureLocalModel ExportWalletPrivateKey GalleryFacets GenerateCloud GenerateLocal GenerateWallet GetCreditBalance GetEngineInfo GetFolderSizes GetLocalAPIInfo GetLogs GetSavedImage GetSettings GetSidecarStatus GetStorageInfo GetToolsSettings GetVersion GetWalletInfo ImportWallet InstallEngine ListCachedModels ListCatalogLoras ListCloudHistory ListCloudLoras ListCloudModels ListEditModels ListLocalModels ListPendingCloudJobs ListSavedImages ListTools LogFromFrontend OpenCacheFolder PickLoraFile PickModelFile ProbeTools PurgeBaseComponentsCache RecheckPendingCloud RedownloadCloudOutput RefreshWalletBalance ReleaseTools RemoveCustomModel RemoveLora RestartSidecar RevealInFolder RunTool SaveAPIKeyFile SaveSettings SaveWalletKeyFile SelectCloudModel SelectLocalModel SetToolsSettings StartCardCheckout StartSidecar StopLocalGeneration StopSidecar SwitchBackFromEditModel SwitchToEditModel TakeClientGalleryOutbox ToolGenModels UseCustomModel".split(
+  "AddLora AdoptAPIKey ConnectMCP MCPStatus UpdateMCP CancelModelDownload CancelTool CancelToolWeights CheckForUpdate CheckModelReadiness ClearLogs DeleteCachedModel DeleteSavedImage DetectPython DownloadCatalogLora DownloadModelComponents DownloadToolWeights DropPendingCloudJob EngineStatus EnsureLocalModel ExportWalletPrivateKey GalleryFacets GenerateCloud GenerateLocal GenerateWallet GetCreditBalance GetEngineInfo GetFolderSizes GetLocalAPIInfo GetLogs GetSavedImage GetSettings GetSidecarStatus GetStorageInfo GetToolsSettings GetVersion GetWalletInfo ImportWallet InstallEngine ListCachedModels ListCatalogLoras ListCloudHistory ListCloudLoras ListCloudModels ListEditModels ListLocalModels ListPendingCloudJobs ListSavedImages ListTools LogFromFrontend OpenCacheFolder PickLoraFile PickModelFile ProbeTools PurgeBaseComponentsCache RecheckPendingCloud RedownloadCloudOutput RefreshWalletBalance ReleaseTools RemoveCustomModel RemoveLora RestartSidecar RevealInFolder RunTool SaveAPIKeyFile SaveSettings SaveWalletKeyFile SelectCloudModel SelectLocalModel SetToolsSettings StartCardCheckout StartSidecar StopLocalGeneration StopSidecar SwitchBackFromEditModel SwitchToEditModel TakeClientGalleryOutbox ToolGenModels UseCustomModel".split(
     " ",
   );
 const nameByID = new Map(METHODS.map((n) => [bindingID("main.App." + n), n]));
@@ -279,6 +279,23 @@ async function handle(name: string, args: any[]): Promise<any> {
       return { quotaBytes: 100e9, minFreeBytes: 10e9, usedBytes: 38.4e9, freeBytes: 412e9, modelsDir: "/Users/demo/Imference/models", wan: {} };
     case "GetFolderSizes":
       return { models: 38.4e9, outputs: 1.2e9, engine: 6.1e9, cache: 2.4e9 };
+    case "MCPStatus":
+      return mcpStatus();
+    case "ConnectMCP": {
+      // A first connect downloads the server: show the progress.
+      for (let p = 0; p <= 100; p += 20) {
+        await new Promise((r) => setTimeout(r, 150));
+        emit("mcp:progress", { stage: "server", percent: p });
+      }
+      emit("mcp:progress", { stage: "done", percent: 100 });
+      const client = args[0];
+      const cmd = { command: "C:\\Program Files\\nodejs\\node.exe", args: ["C:\\Users\\demo\\AppData\\Roaming\\imference-desktop-go\\mcp\\imference-mcp.js"] };
+      if (client === "other") return { client, done: false, restart: false, manual: JSON.stringify({ mcpServers: { imference: cmd } }, null, 2) };
+      mcpConnected.add(client);
+      return { client, done: true, restart: true, configPath: "C:\\Users\\demo\\AppData\\Roaming\\Claude\\claude_desktop_config.json", backup: client === "claude-desktop" ? "C:\\Users\\demo\\AppData\\Roaming\\Claude\\claude_desktop_config.json.bak" : undefined };
+    }
+    case "UpdateMCP":
+      return null;
     case "GetLocalAPIInfo":
       return { enabled: true, url: "http://127.0.0.1:7862", token: "demo" };
     case "ListEditModels": {
@@ -308,6 +325,33 @@ async function handle(name: string, args: any[]): Promise<any> {
     default:
       return null;
   }
+}
+
+// Settings › AI agents. ?mcp=connected | failed | nonode (default: nothing set up yet).
+const mcpMode = q.get("mcp") || "";
+const mcpConnected = new Set<string>(mcpMode === "connected" ? ["claude-desktop"] : []);
+function mcpStatus() {
+  const script = "C:\\Users\\demo\\AppData\\Roaming\\imference-desktop-go\\mcp\\imference-mcp.js";
+  const node = mcpMode === "nonode" ? null : { path: "C:\\Program Files\\nodejs\\node.exe", version: "v22.21.1", source: "system", ok: true };
+  const entry = (health: string) => ({
+    scope: "user", name: "imference", command: node?.path ?? "node", args: [script], mode: "desktop", hasApiKey: false,
+    health, version: health === "ok" ? "0.5.0" : undefined,
+    healthError: health === "failed" ? "the server exited without answering: Error: Cannot find module 'C:\\old\\imference-mcp.js'" : undefined,
+  });
+  const installed = mcpConnected.size > 0 || mcpMode === "failed";
+  return {
+    node, nodes: node ? [node] : [],
+    installs: installed ? [{ kind: "desktop", script, version: "0.5.0" }] : [],
+    clients: [
+      { id: "claude-desktop", name: "Claude Desktop", installed: true, configPath: "C:\\Users\\demo\\AppData\\Roaming\\Claude\\claude_desktop_config.json",
+        entries: mcpMode === "failed" ? [entry("failed")] : mcpConnected.has("claude-desktop") ? [entry("ok")] : [] },
+      { id: "claude-code", name: "Claude Code", installed: true, cli: "C:\\Users\\demo\\.local\\bin\\claude.exe",
+        entries: mcpConnected.has("claude-code") ? [entry("ok")] : [] },
+    ],
+    script: installed ? script : "", scriptVersion: installed ? "0.5.0" : "",
+    dir: "C:\\Users\\demo\\AppData\\Roaming\\imference-desktop-go\\mcp",
+    latest: "0.5.0", updateAvailable: false, minVersion: "0.5.0", apiKeySet: true,
+  };
 }
 
 // --------------------------------------------------------------- calls

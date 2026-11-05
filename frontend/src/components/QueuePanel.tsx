@@ -6,6 +6,7 @@ import { HoverPopover } from "@/components/ui/hover-popover";
 import { cn } from "@/lib/utils";
 import { ToolIcon } from "@/components/ToolBits";
 import { KNOWN_STAGES } from "@/lib/tools";
+import { AgentBadge } from "@/components/AgentBadge";
 import type { GenerationMeta, Job } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -213,6 +214,16 @@ function QueueRow({
               <span className="text-muted-foreground/60 ml-auto shrink-0">{elapsed}</span>
             )}
           </p>
+          {job.via !== undefined && (
+            <div className="mt-1 flex min-w-0 items-center gap-1.5">
+              <AgentBadge via={job.via} />
+              {job.modelName && (
+                <span className="text-muted-foreground truncate text-2xs" title={job.modelName}>
+                  {job.modelName}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Trailing action: STOP a running local run (hard-restarts the engine),

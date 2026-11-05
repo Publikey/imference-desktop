@@ -91,6 +91,10 @@ import type {
   ToolProgress,
   ToolsSettings,
   LocalApiInfo,
+  AgentRun,
+  McpStatus,
+  McpConnectResult,
+  McpProgress,
   CloudHistoryItem,
   CloudHistoryPage,
 } from "./types";
@@ -261,6 +265,15 @@ const raw = {
     ts: ToolsSettings
   ) => Promise<ToolsSettings>,
   getLocalApiInfo: (() => Call.ByName("main.App.GetLocalAPIInfo")) as () => Promise<LocalApiInfo>,
+  // Settings › AI agents: detect / connect / update the Imference MCP server.
+  mcpStatus: ((check: boolean) => Call.ByName("main.App.MCPStatus", check)) as (check: boolean) => Promise<McpStatus>,
+  connectMcp: ((client: string) => Call.ByName("main.App.ConnectMCP", client)) as (client: string) => Promise<McpConnectResult>,
+  updateMcp: (() => Call.ByName("main.App.UpdateMCP")) as () => Promise<void>,
+  onMcpProgress: (cb: (p: McpProgress) => void): (() => void) =>
+    Events.On("mcp:progress", (e) => cb(e.data as McpProgress)),
+  // A run an AI agent started through the local API (an Activity row "via Claude").
+  onAgentRun: (cb: (r: AgentRun) => void): (() => void) =>
+    Events.On("agent:run", (e) => cb(e.data as AgentRun)),
   // Instruction-edit models (cloud catalog + the loaded local edit model).
   listEditModels: (() => Call.ByName("main.App.ListEditModels")) as () => Promise<EditModelsInfo>,
   switchToEditModel: (() => Call.ByName("main.App.SwitchToEditModel")) as () => Promise<void>,
@@ -341,6 +354,8 @@ const NO_WRAP = new Set([
   "onSettingsChanged",
   "onToolProgress",
   "onToolWeights",
+  "onMcpProgress",
+  "onAgentRun",
 ]);
 
 function wrap<K extends keyof typeof raw>(key: K, fn: (typeof raw)[K]): (typeof raw)[K] {

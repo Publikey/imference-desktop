@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Bot,
   Check,
   Sparkles,
   FolderOpen,
@@ -28,6 +29,7 @@ import { isWeb, SETTINGS_CHANGED_EVENT } from "@/lib/target";
 import { WebWalletSettings } from "@/components/WebPay";
 import { WebGallerySection } from "@/components/WebGallerySection";
 import { ToolsSection } from "@/components/ToolsSection";
+import { AgentsPane } from "@/components/AgentsPane";
 import { api } from "@/lib/wails-bridge";
 import { cn } from "@/lib/utils";
 import { SUPPORTED_LANGUAGES, setLanguage, storedLanguage } from "@/i18n";
@@ -44,7 +46,7 @@ type Props = {
   initialSection?: string;
 };
 
-type PaneId = "engine" | "runtime" | "tools" | "credits" | "wallet" | "paths" | "storage" | "gallery" | "language";
+type PaneId = "engine" | "runtime" | "tools" | "agents" | "credits" | "wallet" | "paths" | "storage" | "gallery" | "language";
 
 // Top-level categories. Each is a full pane (icon + title + one-line purpose);
 // only the selected pane renders, so the dialog never becomes one long scroll.
@@ -57,6 +59,8 @@ const PANES: {
   { id: "engine", labelKey: "settings.navEngine", descKey: "settings.engineDesc", icon: Server },
   { id: "runtime", labelKey: "settings.navRuntime", descKey: "settings.runtimeDesc", icon: SlidersHorizontal },
   { id: "tools", labelKey: "settings.navTools", descKey: "settings.toolsDesc", icon: Wand2 },
+  // Claude & co. driving Desktop (the local API + the Imference MCP server).
+  { id: "agents", labelKey: "settings.navAgents", descKey: "settings.agentsDesc", icon: Bot },
   // Paying for cloud runs: two separate stories, two panes. Which one pays a
   // run is chosen on the payment line in Create, not here.
   { id: "credits", labelKey: "settings.navCredits", descKey: "settings.creditsDesc", icon: Sparkles },
@@ -101,6 +105,9 @@ function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
       return { pane: "paths" };
     case "tools":
       return { pane: "tools" };
+    case "agents":
+    case "mcp":
+      return { pane: "agents" };
     case "storage":
       return { pane: "storage" };
     case "language":
@@ -325,6 +332,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             {pane === "gallery" && isWeb && <WebGallerySection />}
 
             {pane === "tools" && <ToolsSection draft={draft} setDraft={setDraft} />}
+            {pane === "agents" && !isWeb && <AgentsPane draft={draft} setDraft={setDraft} />}
 
             {pane === "language" && (
               <div className="ds-card grid gap-2 p-4">

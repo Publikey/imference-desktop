@@ -164,7 +164,7 @@ tool on it. Every tool shows where it will run before you start:
   Inputs may be absolute paths, `https://` URLs or `data:` URIs; outputs are
   saved to the gallery and returned as paths. Runs are local only (`503
   unsupported_runtime` when this machine can't run the tool). Turn the API off
-  in Settings → *Editing tools*.
+  in Settings → *AI agents*.
 
   Agents can also **generate** with your GPU (the MCP server's `generate` with
   `run_on: local`):
@@ -181,6 +181,21 @@ tool on it. Every tool shows where it will run before you start:
   downloaded (`400 model_not_cached` otherwise: agents never start a download);
   the engine starts on demand (`503 engine_not_ready` when it isn't installed).
   `source_image` + `strength` run image-to-image.
+
+  Runs started this way show up live in Activity ("via Claude" — the MCP
+  server sends its client's name as `X-Imference-Agent`) and land in the
+  gallery.
+- **Connect Claude (Settings → AI agents).** One click wires the
+  [Imference MCP server](https://github.com/Publikey/Imference-mcp) into
+  Claude Desktop (its `claude_desktop_config.json`, merged, `.bak` first) or
+  Claude Code (`claude mcp add -s user`), or shows the snippet for any other
+  MCP app. Desktop first looks at what's there — servers already configured
+  (and whether they start), an npm install, a Node.js ≥ 20.10 — and only
+  downloads what's missing: the single-file server `imference-mcp.js` from the
+  MCP's GitHub release, and the official portable Node.js when none fits, both
+  sha256-checked, into `<config dir>/imference-desktop-go/mcp/`. The client
+  config points at them with absolute paths. Your API key is only added when
+  you tick the option (cloud runs then spend your credits).
 
 ## Web version (prototype)
 

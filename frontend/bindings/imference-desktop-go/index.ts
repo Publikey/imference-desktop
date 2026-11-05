@@ -12,6 +12,7 @@ export type {
     EngineStatusInfo,
     GenToolModels,
     LocalAPIInfo,
+    MCPStatusInfo,
     ToolInfo,
     ToolRunOutput,
     ToolRunRequest,

@@ -500,6 +500,11 @@ export type Job = {
    *  the local generation queue, settled by App.runToolJob. */
   kind?: "tool";
   tool?: ToolJobInfo;
+  /** Started by an AI agent through the local API (the MCP client's name,
+   *  "" = unknown): the row says "via Claude", the user can't re-run it. */
+  via?: string;
+  /** The model an agent's run uses (its name, as the app shows it). */
+  modelName?: string;
 };
 
 /** The tool side of an Activity job. */
@@ -606,6 +611,8 @@ export type ToolsSettings = {
   mode?: ToolsMode;
   /** The 127.0.0.1 API for agents is ON unless this is set. */
   localApiDisabled?: boolean;
+  /** AI agents may use this account's API key for cloud runs (GET /v1/cloud-credentials). */
+  agentsCanSpend?: boolean;
   /** Stop the tools sidecar after this many idle minutes (0 = 10). */
   idleMinutes?: number;
   /** Force the tools' device (auto | cpu | cuda | directml | rocm | mps). */
@@ -771,6 +778,72 @@ export type LocalApiInfo = {
   port: number;
   discoveryPath: string;
 };
+
+/** "agent:run": a run an AI agent started through the local API (App.AgentRun). */
+export type AgentRun = {
+  jobId: string;
+  kind: "generate" | "tool";
+  toolId?: string;
+  /** The prompt, or the tool's name. */
+  label: string;
+  /** The MCP client's name (claude-ai, claude-code, cursor…), "" = unknown. */
+  agent?: string;
+  /** The model's name (generate). */
+  model?: string;
+  /** Where it runs: this computer, or the agent's own cloud call (reported to Desktop). */
+  mode?: "local" | "cloud";
+  state: "running" | "done" | "error";
+  image?: GenerationResult;
+  tool?: ToolRunResult;
+  error?: string;
+};
+
+// Settings › AI agents (App.MCPStatus — internal/mcpsetup).
+export type McpNode = { path: string; version: string; source: "system" | "desktop"; ok: boolean };
+export type McpInstall = { kind: "desktop" | "npm-global"; script: string; version: string };
+export type McpEntry = {
+  /** "user", or the project folder of a Claude Code project-scoped server. */
+  scope: string;
+  name: string;
+  command: string;
+  args: string[];
+  mode: "desktop" | "npm-global" | "npx" | "other";
+  hasApiKey: boolean;
+  health: "ok" | "failed" | "unchecked";
+  healthError?: string;
+  version?: string;
+};
+export type McpClient = {
+  id: "claude-desktop" | "claude-code";
+  name: string;
+  installed: boolean;
+  configPath?: string;
+  cli?: string;
+  entries: McpEntry[];
+};
+export type McpStatus = {
+  node: McpNode | null;
+  nodes: McpNode[];
+  installs: McpInstall[];
+  clients: McpClient[];
+  script: string;
+  scriptVersion: string;
+  dir: string;
+  latest: string;
+  updateAvailable: boolean;
+  minVersion: string;
+  apiKeySet: boolean;
+};
+export type McpConnectResult = {
+  client: string;
+  done: boolean;
+  configPath?: string;
+  backup?: string;
+  /** A command to run (Claude Code without its CLI) or a JSON snippet (other apps). */
+  manual?: string;
+  restart: boolean;
+};
+export type McpProgress = { stage: "server" | "node" | "done"; percent: number };
 
 /** One file a past cloud call produced. `url` is absent once expired. */
 export type CloudHistoryOutput = {

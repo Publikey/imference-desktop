@@ -930,6 +930,13 @@ export interface ToolsSettings {
     "localApiDisabled"?: boolean;
 
     /**
+     * AgentsCanSpend lets AI agents (the Imference MCP server) use this
+     * account's API key for cloud runs: the local API hands it out on request
+     * (GET /v1/cloud-credentials). Off by default.
+     */
+    "agentsCanSpend"?: boolean;
+
+    /**
      * IdleMinutes stops the tools sidecar (releasing its models) after this
      * many idle minutes. 0 = default (10).
      */

@@ -69,7 +69,9 @@ type GenerateBody struct {
 
 // GenerateResult is a finished local generation.
 type GenerateResult struct {
-	Model      string      `json:"model"`
+	Model string `json:"model"`
+	// ModelName is the name Desktop shows (Model is its code).
+	ModelName  string      `json:"model_name,omitempty"`
 	Seed       int         `json:"seed"`
 	Outputs    []APIOutput `json:"outputs"`
 	DurationMs int64       `json:"duration_ms"`
@@ -81,6 +83,93 @@ type GenerateBackend interface {
 	GenerationInfo(ctx context.Context) GenerationInfo
 	// Generate runs body locally; sourcePath is the materialized source image ("" = none).
 	Generate(ctx context.Context, body GenerateBody, sourcePath string) (*GenerateResult, *Error)
+}
+
+// CredentialsBackend hands the account's API key to agents when the user
+// allows it (Settings › AI agents), so the MCP server's cloud runs use the
+// key Desktop already has — never copied into the agent's config.
+type CredentialsBackend interface {
+	// CloudCredentials returns the key ("" = none saved) and whether agents may use it.
+	CloudCredentials() (apiKey string, allowed bool)
+}
+
+// CodeNotAllowed: the user hasn't allowed agents to spend their credits.
+const CodeNotAllowed = "not_allowed"
+
+// CodeNoAPIKey: no API key is saved in Desktop.
+const CodeNoAPIKey = "no_api_key"
+
+// handleCloudCredentials is GET /v1/cloud-credentials → {"api_key"}.
+func (s *APIServer) handleCloudCredentials(w http.ResponseWriter, r *http.Request) {
+	c, ok := s.Backend.(CredentialsBackend)
+	if !ok {
+		writeErr(w, http.StatusNotFound, &Error{Code: CodeInvalidInput, Message: "not available in this build"})
+		return
+	}
+	key, allowed := c.CloudCredentials()
+	switch {
+	case !allowed:
+		writeErr(w, http.StatusForbidden, &Error{Code: CodeNotAllowed,
+			Message: "Imference Desktop doesn't let AI agents spend its credits: turn on Settings › AI agents › Let AI agents spend my credits"})
+	case key == "":
+		writeErr(w, http.StatusNotFound, &Error{Code: CodeNoAPIKey,
+			Message: "no Imference account in Imference Desktop yet: buy credits or add an API key in Settings › Credits & account"})
+	default:
+		if s.Bus != nil {
+			s.Bus.Info("tools", "AI agent got the account's API key for cloud runs", map[string]any{"agent": AgentFrom(r.Context())})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"api_key": key})
+	}
+}
+
+// AgentReport is POST /v1/agent-runs: an agent tells Desktop about a cloud
+// run it started itself (the MCP server's generate with run_on: cloud), so
+// it shows in Activity and, once done, in the gallery like a local run.
+// Desktop fetches the result itself from the request_id (never a URL from
+// the caller).
+type AgentReport struct {
+	// ID identifies the run across reports (the cloud request_id).
+	ID string `json:"id"`
+	// State: running, done, error.
+	State string `json:"state"`
+	// Kind: generate (the only one today).
+	Kind      string  `json:"kind"`
+	Label     string  `json:"label"`
+	Model     string  `json:"model"`
+	RequestID string  `json:"request_id"`
+	Credits   float64 `json:"credits"`
+	Error     string  `json:"error"`
+}
+
+// AgentReportBackend receives the agents' cloud runs. Optional (404 without).
+type AgentReportBackend interface {
+	ReportAgentRun(ctx context.Context, r AgentReport) *Error
+}
+
+func (s *APIServer) handleAgentRun(w http.ResponseWriter, r *http.Request) {
+	b, ok := s.Backend.(AgentReportBackend)
+	if !ok {
+		writeErr(w, http.StatusNotFound, &Error{Code: CodeInvalidInput, Message: "not available in this build"})
+		return
+	}
+	var rep AgentReport
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&rep); err != nil {
+		writeErr(w, http.StatusBadRequest, &Error{Code: CodeInvalidInput, Message: "invalid JSON body: " + err.Error()})
+		return
+	}
+	switch {
+	case strings.TrimSpace(rep.ID) == "" || len(rep.ID) > 128:
+		writeErr(w, http.StatusBadRequest, &Error{Code: CodeInvalidInput, Field: "id", Message: "id is required"})
+		return
+	case rep.State != "running" && rep.State != "done" && rep.State != "error":
+		writeErr(w, http.StatusBadRequest, &Error{Code: CodeInvalidInput, Field: "state", Message: "state must be running, done or error"})
+		return
+	}
+	if terr := b.ReportAgentRun(r.Context(), rep); terr != nil {
+		writeErr(w, statusFor(terr.Code), terr)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true})
 }
 
 func (s *APIServer) genBackend(w http.ResponseWriter) (GenerateBackend, bool) {

@@ -7,6 +7,7 @@ import { ToolIcon } from "@/components/ToolBits";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { agentDisplayName } from "@/components/AgentBadge";
 import { flyToActivity } from "@/lib/launchFlight";
 import type { GenerationMeta, Job } from "@/lib/types";
 
@@ -401,6 +402,12 @@ function FinishNotice({ job, onOpen, onDismiss }: { job: Job; onOpen: () => void
             )}
           >
             {failed ? t("activity.noticeFailed") : t("activity.noticeDone")}
+            {job.via !== undefined && (
+              <span className="text-muted-foreground font-normal">
+                {" · "}
+                {agentDisplayName(job.via) ? t("agents.via", { name: agentDisplayName(job.via) }) : t("agents.viaAgent")}
+              </span>
+            )}
           </span>
           <span className="block truncate text-xs font-medium" title={job.prompt}>
             {job.prompt}

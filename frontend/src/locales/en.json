@@ -661,7 +661,7 @@
     "localLabel": "Run locally",
     "cloudLabel": "Or use the cloud",
     "cloudTitle": "Generate in the cloud",
-    "cloudHint": "Buy credits by card, no install needed.",
+    "cloudHint": "Buy credits by card or crypto, no install needed.",
     "skip": "Skip for now"
   },
   "shortcuts": {
@@ -1215,7 +1215,8 @@
       "back": "Other ways to pay",
       "secure": "Secure payment by Stripe",
       "unavailable": "Stripe could not be loaded. Check your connection or ad blocker, then try again.",
-      "late": "Payment received. Your credits will appear in a moment."
+      "late": "Payment received. Your credits will appear in a moment.",
+      "hint": "Credit or debit card"
     },
     "signHistoryTitle": "Sign in with your wallet to see your history",
     "signHistoryHint": "A signature only, no payment: {{address}} ({{name}}).",
@@ -1223,7 +1224,6 @@
       "toggle": "Pay per run from a crypto wallet instead"
     },
     "crypto": {
-      "toggle": "Pay with crypto instead (BTC, ETH, USDT and more)",
       "secure": "Processed by NOWPayments",
       "coin": "Coin",
       "fees": "Network fees are on us. Send the amount shown in one transaction.",
@@ -1241,7 +1241,9 @@
       "expired": "This payment address expired",
       "expiredHint": "No payment arrived in time, so nothing was charged.",
       "newAddress": "Get a new address",
-      "failed": "The payment did not go through. If you sent funds, write to contact@imference.com with your order: {{order}}"
+      "failed": "The payment did not go through. If you sent funds, write to contact@imference.com with your order: {{order}}",
+      "pay": "Pay {{usd}} in crypto",
+      "hint": "BTC, ETH, USDT, USDC and more"
     }
   },
   "engine": {
@@ -1327,12 +1329,12 @@
     "localInstallNote": "The local engine is a one-time download (a few GB). It installs in the background; you can keep going.",
     "cloudTitle": "In the cloud",
     "cloudPrice": "From $0.002 per image, video too. No install.",
-    "cloudNeeds": "Needs credits, bought by card: no account to create.",
+    "cloudNeeds": "Needs credits, bought by card or crypto: no account to create.",
     "recommended": "Recommended",
     "payTitle": "How would you like to pay?",
     "payLead": "No account, no password: your first purchase creates your Imference key, which holds your credits. Buy now, or simply generate: you will be asked at your first image.",
-    "creditsTitle": "Credits, by card",
-    "creditsText": "{{credits}} credits for ${{usd}}, by card. Your Imference key is kept in this browser; a typical image costs 2 to 40 credits.",
+    "creditsTitle": "Credits, by card or crypto",
+    "creditsText": "{{credits}} credits for ${{usd}}, by card or crypto. Your Imference key is kept in this browser; a typical image costs 2 to 40 credits.",
     "payNow": "Choose a payment method",
     "payLater": "or decide at your first image",
     "tourTitle": "Your workspace",
@@ -1468,8 +1470,8 @@
       "body": "This run costs {{cost}} and the wallet holds {{have}}. Send USDC on the Base network to its address.",
       "action": "Add funds"
     },
-    "webNoCredits": "Buy credits by card, from $5. Your first purchase creates your Imference key: no account, no password.",
-    "webNoBalance": "Your Imference key has no credits left. Top up by card to keep generating.",
+    "webNoCredits": "Buy credits by card or crypto, from $5. Your first purchase creates your Imference key: no account, no password.",
+    "webNoBalance": "Your Imference key has no credits left. Top up by card or crypto to keep generating.",
     "webNoWallet": {
       "title": "No wallet connected",
       "body": "Pay each run in USDC from your browser wallet (MetaMask, Coinbase Wallet, Rabby…). Your wallet asks you to confirm each payment.",

@@ -651,7 +651,7 @@
     "localLabel": "本地运行",
     "cloudLabel": "或使用云端",
     "cloudTitle": "在云端生成",
-    "cloudHint": "用银行卡购买积分，无需安装。",
+    "cloudHint": "用银行卡或加密货币购买积分，无需安装。",
     "skip": "暂时跳过"
   },
   "shortcuts": {
@@ -1203,7 +1203,8 @@
       "back": "其他支付方式",
       "secure": "由 Stripe 提供安全支付",
       "unavailable": "无法加载 Stripe。请检查网络连接或广告拦截插件后重试。",
-      "late": "已收到付款，积分稍后到账。"
+      "late": "已收到付款，积分稍后到账。",
+      "hint": "信用卡或借记卡"
     },
     "signHistoryTitle": "使用钱包登录以查看历史",
     "signHistoryHint": "仅签名，不付款：{{address}}（{{name}}）。",
@@ -1211,7 +1212,6 @@
       "toggle": "改用加密钱包按次付费"
     },
     "crypto": {
-      "toggle": "改用加密货币支付（BTC、ETH、USDT 等）",
       "secure": "由 NOWPayments 处理",
       "coin": "币种",
       "fees": "网络费用由我们承担。请一次性发送显示的金额。",
@@ -1229,7 +1229,9 @@
       "expired": "此付款地址已过期",
       "expiredHint": "未在时限内收到付款，因此没有扣费。",
       "newAddress": "获取新地址",
-      "failed": "付款未成功。如果你已发送资金，请联系 contact@imference.com 并提供订单号：{{order}}"
+      "failed": "付款未成功。如果你已发送资金，请联系 contact@imference.com 并提供订单号：{{order}}",
+      "pay": "用加密货币支付 {{usd}}",
+      "hint": "BTC、ETH、USDT、USDC 等"
     }
   },
   "engine": {
@@ -1315,12 +1317,12 @@
     "localInstallNote": "本地引擎需要一次性下载（几 GB），在后台安装，你可以继续。",
     "cloudTitle": "在云端",
     "cloudPrice": "每张低至 $0.002，也支持视频。无需安装。",
-    "cloudNeeds": "需要积分，用银行卡购买即可，无需创建账户。",
+    "cloudNeeds": "需要积分，用银行卡或加密货币购买即可，无需创建账户。",
     "recommended": "推荐",
     "payTitle": "你想如何付款？",
     "payLead": "无需账户，无需密码：首次购买会创建你的 Imference 密钥，用来存放积分。现在购买，或直接生成：第一张图像时会询问你。",
-    "creditsTitle": "积分，银行卡支付",
-    "creditsText": "{{credits}} 积分 ${{usd}}，银行卡支付。你的 Imference 密钥保存在此浏览器中；一张图像通常 2 到 40 积分。",
+    "creditsTitle": "积分，银行卡或加密货币支付",
+    "creditsText": "{{credits}} 积分 ${{usd}}，银行卡或加密货币支付。你的 Imference 密钥保存在此浏览器中；一张图像通常 2 到 40 积分。",
     "payNow": "选择付款方式",
     "payLater": "或在第一张图像时再决定",
     "tourTitle": "你的工作区",
@@ -1456,8 +1458,8 @@
       "body": "此次运行需要 {{cost}}，钱包中有 {{have}}。请向其地址转入 Base 网络上的 USDC。",
       "action": "充值"
     },
-    "webNoCredits": "用银行卡购买积分，5 美元起。首次购买会创建你的 Imference 密钥：无需账户，无需密码。",
-    "webNoBalance": "你的 Imference 密钥已没有积分。请用银行卡充值以继续生成。",
+    "webNoCredits": "用银行卡或加密货币购买积分，5 美元起。首次购买会创建你的 Imference 密钥：无需账户，无需密码。",
+    "webNoBalance": "你的 Imference 密钥已没有积分。请用银行卡或加密货币充值以继续生成。",
     "webNoWallet": {
       "title": "未连接钱包",
       "body": "使用浏览器钱包（MetaMask、Coinbase Wallet、Rabby…）以 USDC 按次支付。每次付款都需在钱包中确认。",

@@ -243,26 +243,29 @@ function PayDialog() {
                 <Point>{t("webpay.pack.point1")}</Point>
                 <Point>{t(isWeb ? "webpay.pack.point2" : "webpay.pack.point2Desktop")}</Point>
               </ul>
-              <Button
-                size="lg"
-                variant="brand"
-                className="h-11"
-                onClick={act("card", async () => setCard(await startCardCheckout(packs)), false)}
-                disabled={!!busy}
-              >
-                {busy === "card" ? <Loader2 className="size-4 animate-spin" /> : <CreditCard className="size-4" />}
-                {t("webpay.pack.card", { usd: usd(PACK_USD * packs) })}
-              </Button>
-              {/* The same pack in crypto (BTC, ETH, USDT...): its own pane. */}
-              <button
-                type="button"
-                className="text-muted-foreground hover:text-foreground flex w-fit items-center gap-1.5 justify-self-center text-sm underline-offset-4 hover:underline"
-                onClick={() => setCrypto(true)}
-                disabled={!!busy}
-              >
-                <Bitcoin className="size-4" />
-                {t("webpay.crypto.toggle")}
-              </button>
+              {/* Card and crypto side by side, same size: two ways to pay the same pack. */}
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Button
+                    size="lg"
+                    variant="brand"
+                    className="h-11"
+                    onClick={act("card", async () => setCard(await startCardCheckout(packs)), false)}
+                    disabled={!!busy}
+                  >
+                    {busy === "card" ? <Loader2 className="size-4 animate-spin" /> : <CreditCard className="size-4" />}
+                    {t("webpay.pack.card", { usd: usd(PACK_USD * packs) })}
+                  </Button>
+                  <p className="text-muted-foreground text-center text-xs">{t("webpay.card.hint")}</p>
+                </div>
+                <div className="grid gap-1.5">
+                  <Button size="lg" variant="brand" className="h-11" onClick={() => setCrypto(true)} disabled={!!busy}>
+                    <Bitcoin className="size-4" />
+                    {t("webpay.crypto.pay", { usd: usd(PACK_USD * packs) })}
+                  </Button>
+                  <p className="text-muted-foreground text-center text-xs">{t("webpay.crypto.hint")}</p>
+                </div>
+              </div>
             </section>
 
             {/* 2. Per run from a crypto wallet, for people who hold USDC (web only). */}

@@ -124,6 +124,21 @@ export function ConnectMCP(client: string): $CancellablePromise<mcpsetup$0.Conne
 }
 
 /**
+ * CryptoCoins lists the coins a credit pack can be paid with (NOWPayments,
+ * behind the imference API).
+ */
+export function CryptoCoins(): $CancellablePromise<types$0.CryptoCoin[] | null> {
+    return $Call.ByID(2726981970);
+}
+
+/**
+ * CryptoPaymentStatus reads a crypto payment's state, until it is credited.
+ */
+export function CryptoPaymentStatus(orderID: string): $CancellablePromise<types$0.CryptoStatus> {
+    return $Call.ByID(2900938600, orderID);
+}
+
+/**
  * DeleteCachedModel removes one downloaded checkpoint on the user's request.
  * Refuses the active model — the engine has it mmap'd, so the delete would fail
  * on Windows anyway, and a clear message beats a sharing violation.
@@ -711,6 +726,15 @@ export function SetToolsSettings(ts: types$0.ToolsSettings): $CancellablePromise
  */
 export function StartCardCheckout(packs: number): $CancellablePromise<types$0.CardCheckout> {
     return $Call.ByID(3854876613, packs);
+}
+
+/**
+ * StartCryptoPayment creates a crypto payment for `packs` packs in coin: an
+ * exact amount and a deposit address. It tops up the saved Imference key or,
+ * for a buyer without one, a key the imference API creates (in APIKey).
+ */
+export function StartCryptoPayment(packs: number, coin: string): $CancellablePromise<types$0.CryptoPayment> {
+    return $Call.ByID(1415183428, packs, coin);
 }
 
 /**

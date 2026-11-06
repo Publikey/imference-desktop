@@ -464,14 +464,54 @@ export function showNewKey(apiKey: string) {
   set({ newKey: apiKey });
 }
 
-/** Pack in USDC: one wallet signature, credits on the key (a new one for a guest). */
-export async function buyPackWithWallet(): Promise<void> {
-  const address = await connectWallet();
+// ------------------------------------------------------- packs in crypto
+
+export type CryptoCoin = { code: string; name: string; minUsd: number };
+
+/** A pack to pay in crypto (NOWPayments behind imference.com). */
+export type CryptoPayment = {
+  orderId: string;
+  apiKey: string; // the key the credits land on (a new one for a guest)
+  payAddress: string;
+  payAmount: string;
+  payCurrency: string;
+  coinName: string;
+  network: string;
+  payinExtraId: string; // memo / tag the coin needs, "" when none
+  expiresAt: string;
+  credits: number;
+  hadKey: boolean;
+};
+
+export type CryptoStatus = { status: string; credits: number; credited: number };
+
+/** The coins a pack can be paid with. */
+export async function cryptoCoins(): Promise<CryptoCoin[]> {
+  return api.cryptoCoins();
+}
+
+/**
+ * A crypto payment for `packs` packs. Unlike a card, it can complete after the
+ * dialog is closed, so a guest moves to the new key right away: the credits
+ * never land on a key nobody has.
+ */
+export async function startCryptoPayment(packs: number, coin: string): Promise<CryptoPayment> {
+  if (!isWeb) await refreshSession(); // the settings may have changed meanwhile
   const hadKey = state.session.hasKey;
-  const out = await post("web/pay/pack", { address });
-  if (!hadKey) return reloadInto(out.apiKey, true);
-  set({ notice: { kind: "credits-added", credits: out.creditsAdded } });
+  const p = await api.startCryptoPayment(packs, coin);
+  if (!hadKey) await adoptKey(p.apiKey);
+  return { ...p, hadKey };
+}
+
+/** A crypto payment's state. */
+export async function cryptoPaymentStatus(orderId: string): Promise<CryptoStatus> {
+  return api.cryptoPaymentStatus(orderId);
+}
+
+/** Credits landed: refresh the balance everywhere. */
+export async function finishCryptoPayment(): Promise<void> {
   await refreshBalance();
+  notifyBalanceChanged();
 }
 
 /** Desktop: the payment method, saved in the settings. */

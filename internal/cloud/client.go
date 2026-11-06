@@ -832,7 +832,7 @@ type creditsResponse struct {
 // body so an invalid/expired key shows a useful message.
 func (c *Client) GetCredits(ctx context.Context, apiKey string) (float64, error) {
 	if apiKey == "" {
-		return 0, errors.New("cloud: API key not set")
+		return 0, errors.New("cloud: Imference key not set")
 	}
 
 	reqCtx, cancel := context.WithTimeout(ctx, statusTimeout)
@@ -872,7 +872,7 @@ func (c *Client) Generate(
 	onEnqueued func(requestID, kind string),
 ) (types.GenerationResult, error) {
 	if apiKey == "" {
-		return types.GenerationResult{}, errors.New("cloud: API key not set")
+		return types.GenerationResult{}, errors.New("cloud: Imference key not set")
 	}
 	if model == "" {
 		return types.GenerationResult{}, errors.New("cloud: cloud model not set")

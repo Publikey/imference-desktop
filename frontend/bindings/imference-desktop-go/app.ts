@@ -43,6 +43,14 @@ export function AddLora(path: string): $CancellablePromise<types$0.Settings> {
 }
 
 /**
+ * AddRecoveryEmail links email to the saved Imference key at once;
+ * imference.com emails the key to it. Returns imference.com's message.
+ */
+export function AddRecoveryEmail(email: string): $CancellablePromise<string> {
+    return $Call.ByID(4124610721, email);
+}
+
+/**
  * AdoptAPIKey saves key as the credits key and makes credits the payment
  * method: after a purchase (the key the API created), or a key the user
  * pasted ("I already have a key").
@@ -308,6 +316,14 @@ export function GetLocalAPIInfo(): $CancellablePromise<$models.LocalAPIInfo> {
  */
 export function GetLogs(): $CancellablePromise<logbus$0.Entry[] | null> {
     return $Call.ByID(1743981476);
+}
+
+/**
+ * GetRecoveryEmail returns the saved Imference key's recovery email, masked
+ * ("j***@gmail.com"), or "" when none is linked.
+ */
+export function GetRecoveryEmail(): $CancellablePromise<string> {
+    return $Call.ByID(1849672300);
 }
 
 /**
@@ -585,6 +601,13 @@ export function RemoveLora(path: string): $CancellablePromise<types$0.Settings> 
     return $Call.ByID(1195692449, path);
 }
 
+/**
+ * RemoveRecoveryEmail unlinks the saved Imference key's recovery email.
+ */
+export function RemoveRecoveryEmail(): $CancellablePromise<void> {
+    return $Call.ByID(2161195122);
+}
+
 export function RestartSidecar(): $CancellablePromise<void> {
     return $Call.ByID(2718986071);
 }
@@ -607,9 +630,9 @@ export function RunTool(req: $models.ToolRunRequest): $CancellablePromise<$model
 }
 
 /**
- * SaveAPIKeyFile writes the saved API key to a text file the user picks (a
- * native "Save as" dialog): the key is the account, a copy outside the app is
- * the only way back to the credits if this computer is lost. Returns the path,
+ * SaveAPIKeyFile writes the saved Imference key to a text file the user picks
+ * (a native "Save as" dialog): the key holds the credits, and a copy outside
+ * the app is a way back to them if this computer is lost. Returns the path,
  * or "" when the dialog was cancelled.
  */
 export function SaveAPIKeyFile(): $CancellablePromise<string> {
@@ -629,7 +652,7 @@ export function SaveSettings(next: types$0.Settings): $CancellablePromise<types$
 
 /**
  * SaveWalletKeyFile writes the app wallet's private key to a text file the
- * user picks (native "Save as"), the same way the account key is backed up.
+ * user picks (native "Save as"), the same way the Imference key is backed up.
  * Anyone holding that file can spend the wallet's USDC: the file says so.
  * Returns the path, or "" when cancelled.
  */
@@ -681,8 +704,8 @@ export function SetToolsSettings(ts: types$0.ToolsSettings): $CancellablePromise
 
 /**
  * StartCardCheckout starts an in-app card purchase of `packs` credit packs (Stripe
- * Embedded Checkout, mounted by the frontend). It tops up the saved API key,
- * or — for a buyer without one — the imference API creates a key for this
+ * Embedded Checkout, mounted by the frontend). It tops up the saved Imference
+ * key, or — for a buyer without one — the imference API creates a key for this
  * purchase, returned in APIKey: the frontend adopts it (AdoptAPIKey) once
  * Stripe reports the payment done, so an abandoned checkout changes nothing.
  */

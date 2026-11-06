@@ -199,7 +199,7 @@ func (c *Client) RunTool(ctx context.Context, rail, apiKey string, signer x402.S
 		}
 	} else {
 		if apiKey == "" {
-			return nil, &ToolError{Code: "cloud", Message: "Cloud API key not set", Terminal: true}
+			return nil, &ToolError{Code: "cloud", Message: "Imference key not set", Terminal: true}
 		}
 		r, _ := http.NewRequestWithContext(postCtx, http.MethodPost, c.base+"/tools/"+url.PathEscape(req.ToolID), bytes.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+apiKey)

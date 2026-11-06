@@ -554,6 +554,25 @@ export function dismissNewKey() {
   set({ newKey: null });
 }
 
+// ------------------------------------------------------- recovery email
+
+/** The saved key's recovery email, masked ("j***@gmail.com"); "" when none. */
+export async function getRecoveryEmail(): Promise<string> {
+  return api.getRecoveryEmail();
+}
+
+/** Links the email to the key at once; imference.com emails the key to it. */
+export async function addRecoveryEmail(email: string): Promise<string> {
+  return api.addRecoveryEmail(email.trim());
+}
+
+export async function removeRecoveryEmail(): Promise<void> {
+  await api.removeRecoveryEmail();
+}
+
+/** imference.com's "Lost your Imference key?" page. */
+export const LOST_KEY_URL = "https://imference.com/key";
+
 // --------------------------------------------------------------- startup
 
 /** Polls the balance after a card payment until the webhook has credited it. */

@@ -113,7 +113,7 @@ func (s *APIServer) handleCloudCredentials(w http.ResponseWriter, r *http.Reques
 			Message: "Imference Desktop doesn't let AI agents spend its credits: turn on Settings › AI agents › Let AI agents spend my credits"})
 	case key == "":
 		writeErr(w, http.StatusNotFound, &Error{Code: CodeNoAPIKey,
-			Message: "no Imference account in Imference Desktop yet: buy credits or add an API key in Settings › Credits & account"})
+			Message: "no Imference key in Imference Desktop yet: buy credits or paste a key in Settings › Credits & key"})
 	default:
 		if s.Bus != nil {
 			s.Bus.Info("tools", "AI agent got the account's API key for cloud runs", map[string]any{"agent": AgentFrom(r.Context())})

@@ -424,7 +424,7 @@ func (s *webServer) call(w http.ResponseWriter, r *http.Request) {
 	// A run needs a way to pay: credits on a key, or the browser wallet.
 	if paidMethods[m.name] && !u.canPay() {
 		writeJSON(w, http.StatusPaymentRequired, map[string]string{
-			"error": "an API key with credits is needed to generate", "code": codeNeedsKey})
+			"error": "an Imference key with credits is needed to generate", "code": codeNeedsKey})
 		return
 	}
 	if asyncMethods[m.name] {

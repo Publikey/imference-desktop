@@ -39,6 +39,9 @@ export function PaymentBar({
     { value: "bearer", label: t("payment.apiKey") },
     { value: "x402", label: t("payment.payg") },
   ];
+  // Paying per run in USDC is for people who set up the app wallet: the switch
+  // only shows once there is one (or it is the method in use).
+  const showSwitch = mode === "x402" || !!settings?.walletAddress;
 
   if (problem) {
     const credits = mode === "bearer";
@@ -62,11 +65,13 @@ export function PaymentBar({
       credits ? void openPayDialog(problem === "no_method" ? "needs_key" : "insufficient_credits") : onConfigure("wallet");
     return (
       <div className="grid gap-2.5" role="group" aria-label={t("payment.title")}>
-        {/* Always switchable: picking a way not set up yet says how to set it up. */}
-        <div className="flex items-center justify-between gap-2">
-          <span className="ds-sublabel">{t("payment.payWith")}</span>
-          <Segmented size="sm" label={t("payment.payWith")} value={mode} onChange={(m) => onModeChange(m as PaymentMode)} items={methods} />
-        </div>
+        {/* Switchable once a wallet exists: picking a way not set up yet says how to set it up. */}
+        {showSwitch && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="ds-sublabel">{t("payment.payWith")}</span>
+            <Segmented size="sm" label={t("payment.payWith")} value={mode} onChange={(m) => onModeChange(m as PaymentMode)} items={methods} />
+          </div>
+        )}
         <PayNotice
           title={title}
           body={body}
@@ -100,6 +105,7 @@ export function PaymentBar({
       title={t("payment.manageTitle")}
       onClick={() => onConfigure(mode === "bearer" ? "credits" : "wallet")}
       onHistory={openCloudHistory}
+      showSwitch={showSwitch}
       switchLabel={t("payment.payWith")}
     />
   );
@@ -121,7 +127,7 @@ export function PayNotice({
   /** Credits (brand button, sparkles) or the wallet. */
   credits: boolean;
   onFix: () => void;
-  /** Credits with no account yet: "I have an API key" (opens the key dialog). */
+  /** Credits with no key yet: "I have an Imference key" (opens the key dialog). */
   withKeyButton?: boolean;
 }) {
   const { t } = useTranslation();
@@ -180,7 +186,7 @@ export function PaymentRow({
   action: string;
   title: string;
   onClick: () => void;
-  /** The cloud calls billed to this account (CloudHistoryDialog). */
+  /** The cloud calls billed to this key (CloudHistoryDialog). */
   onHistory?: () => void;
   /** Show the method switch (desktop: only when both ways are set up). */
   showSwitch?: boolean;

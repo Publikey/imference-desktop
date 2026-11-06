@@ -6,9 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { friendlyPayError } from "@/lib/pay-errors";
 import { notifyBalanceChanged } from "@/lib/target";
-import { signInWithKey } from "@/lib/web-pay";
+import { LOST_KEY_URL, signInWithKey } from "@/lib/web-pay";
 
-/** "I have an API key": paste the account key. It is checked against the API
+/** "I have an Imference key": paste it. It is checked against the API
  *  before it replaces anything; then it pays (desktop) or the page reloads
  *  into its session (web). */
 export function ApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -59,12 +59,15 @@ export function ApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             autoComplete="off"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="im_…"
+            placeholder={t("settings.apiKeyPlaceholder")}
             aria-label={t("apiKeyDialog.title")}
             className="font-mono"
           />
           {err && <p className="text-destructive text-sm">{err}</p>}
-          <div className="flex justify-end gap-2">
+          <div className="flex items-center justify-end gap-2">
+            <a href={LOST_KEY_URL} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground mr-auto text-xs underline-offset-4 hover:underline">
+              {t("credits.lostKey")}
+            </a>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               {t("common.cancel")}
             </Button>

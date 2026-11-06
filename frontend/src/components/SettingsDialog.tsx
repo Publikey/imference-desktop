@@ -64,15 +64,16 @@ const PANES: {
   // Paying for cloud runs: two separate stories, two panes. Which one pays a
   // run is chosen on the payment line in Create, not here.
   { id: "credits", labelKey: "settings.navCredits", descKey: "settings.creditsDesc", icon: Sparkles },
-  { id: "wallet", labelKey: "settings.navWallet", descKey: "settings.walletDesc", icon: Wallet },
   { id: "paths", labelKey: "settings.navPaths", descKey: "settings.pathsDesc", icon: FolderOpen },
   { id: "storage", labelKey: "settings.navStorage", descKey: "settings.storageDesc", icon: HardDrive },
   { id: "language", labelKey: "settings.navLanguage", descKey: "settings.languageDesc", icon: Languages },
+  // Last: paying per run in USDC is for people who already hold crypto.
+  { id: "wallet", labelKey: "settings.navWallet", descKey: "settings.walletDesc", icon: Wallet },
 ];
 
 // The web build has no local engine, disk or wallet: only cloud panes remain,
 // plus "gallery" (where the browser keeps the user's images).
-const WEB_PANES: PaneId[] = ["credits", "wallet", "gallery", "language"];
+const WEB_PANES: PaneId[] = ["credits", "gallery", "language", "wallet"];
 const GALLERY_PANE = { id: "gallery" as PaneId, labelKey: "web.gallery.nav", descKey: "web.gallery.desc", icon: FolderOpen };
 // On the web the wallet is the browser's own (no app wallet): its pane says so.
 const VISIBLE_PANES = isWeb

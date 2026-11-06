@@ -29,6 +29,9 @@ var webAllow = map[string]bool{
 	"ListCloudLoras": true, "ListCatalogLoras": true,
 	"ListTools": true, "GetToolsSettings": true, "CancelTool": true, "RunTool": true, "ListEditModels": true, "ToolGenModels": true,
 	"TakeClientGalleryOutbox": true, "ListCloudHistory": true, "RedownloadCloudOutput": true,
+	// Recovery email of the session's Imference key: the App reads the key
+	// from its settings, which webSettings pins to the session's.
+	"GetRecoveryEmail": true, "AddRecoveryEmail": true, "RemoveRecoveryEmail": true,
 }
 
 var webStub = map[string]bool{

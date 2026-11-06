@@ -33,7 +33,7 @@ func ClampPacks(n int) int {
 // mounts Stripe's form with ClientSecret / PublishableKey; nobody leaves the
 // app. APIKey is the key the credits land on: the caller's own when it sent
 // one, otherwise a new key the imference API created for this purchase (the
-// buyer's account from then on).
+// buyer's Imference key from then on).
 type CardCheckout struct {
 	ClientSecret   string `json:"clientSecret"`
 	PublishableKey string `json:"publishableKey"`

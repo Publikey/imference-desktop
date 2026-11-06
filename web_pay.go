@@ -49,7 +49,7 @@ const (
 )
 
 var (
-	errUnknownKey    = errors.New("unknown API key")
+	errUnknownKey    = errors.New("unknown Imference key")
 	errSignCancelled = errors.New("payment cancelled in the wallet")
 	errSignTimeout   = errors.New("the wallet did not sign in time")
 	errNoTab         = errors.New("open Imference in a browser tab to sign the payment")

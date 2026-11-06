@@ -996,7 +996,7 @@ func (a *App) runToolCloud(ctx context.Context, jobID string, t tools.Tool, inpu
 		}
 		signer = w
 	} else if s.APIKey == "" {
-		return nil, 0, tools.NewError(tools.CodeCloud, "Cloud API key not set — add it in Settings")
+		return nil, 0, tools.NewError(tools.CodeCloud, "Imference key not set: buy credits or paste your key in Settings › Credits & key")
 	}
 	files := map[string][]string{}
 	for name, v := range inputs {

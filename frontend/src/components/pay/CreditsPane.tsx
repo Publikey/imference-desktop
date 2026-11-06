@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, Download, Eye, EyeOff, KeyRound, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { Check, Copy, Download, Eye, EyeOff, KeyRound, Loader2, Mail, RefreshCw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConfirm } from "@/components/ui/confirm";
@@ -9,14 +9,22 @@ import { api } from "@/lib/wails-bridge";
 import { creditsToUSD } from "@/lib/utils";
 import { friendlyPayError } from "@/lib/pay-errors";
 import { notifyBalanceChanged, onBalanceMaybeChanged } from "@/lib/target";
-import { openPayDialog, signInWithKey, signOut as webSignOut } from "@/lib/web-pay";
+import {
+  LOST_KEY_URL,
+  addRecoveryEmail,
+  getRecoveryEmail,
+  openPayDialog,
+  removeRecoveryEmail,
+  signInWithKey,
+  signOut as webSignOut,
+} from "@/lib/web-pay";
 import { isWeb } from "@/lib/target";
 import type { AppSettings, CreditInfo } from "@/lib/types";
 
-// Settings > Credits & account (desktop). Credits are prepaid and live on an
-// Imference account; the account has no email or password: it IS a key. The
-// pane says so plainly — empty, it explains and sells the pack; with a key, it
-// shows the balance and treats the key as what it is, the account.
+// Settings > Credits & key. Credits are prepaid and live on an Imference key:
+// there is no account, no email and no password. The pane says so plainly —
+// empty, it explains and sells the pack; with a key, it shows the balance, the
+// key, and the optional recovery email that can send the key back if lost.
 export function CreditsPane({
   draft,
   setDraft,
@@ -24,7 +32,6 @@ export function CreditsPane({
   draft: AppSettings;
   setDraft: (next: AppSettings) => void;
 }) {
-  const { t } = useTranslation();
   const key = (draft.apiKey ?? "").trim();
   return key ? <Account apiKey={key} draft={draft} setDraft={setDraft} /> : <NoAccount />;
 }
@@ -64,7 +71,7 @@ function NoAccount() {
   );
 }
 
-/** "I already have a key": checked against the API, then it becomes the account. */
+/** "I already have a key": checked against the API, then it pays the runs. */
 function HaveKey({ asReplace = false, onDone }: { asReplace?: boolean; onDone?: () => void }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(asReplace);
@@ -87,13 +94,23 @@ function HaveKey({ asReplace = false, onDone }: { asReplace?: boolean; onDone?: 
   };
   if (!open)
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-muted-foreground hover:text-foreground justify-self-start text-sm font-medium underline-offset-4 hover:underline"
-      >
-        {t("credits.haveKey")}
-      </button>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-muted-foreground hover:text-foreground text-sm font-medium underline-offset-4 hover:underline"
+        >
+          {t("credits.haveKey")}
+        </button>
+        <a
+          href={LOST_KEY_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-muted-foreground hover:text-foreground text-sm underline-offset-4 hover:underline"
+        >
+          {t("credits.lostKey")}
+        </a>
+      </div>
     );
   return (
     <form
@@ -114,7 +131,7 @@ function HaveKey({ asReplace = false, onDone }: { asReplace?: boolean; onDone?: 
           autoComplete="off"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="im_…"
+          placeholder={t("settings.apiKeyPlaceholder")}
           className="font-mono"
         />
         <Button type="submit" variant="secondary" disabled={busy || !value.trim()}>
@@ -123,6 +140,9 @@ function HaveKey({ asReplace = false, onDone }: { asReplace?: boolean; onDone?: 
         </Button>
       </div>
       {err && <p className="text-destructive text-xs">{err}</p>}
+      <a href={LOST_KEY_URL} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground justify-self-start text-xs underline-offset-4 hover:underline">
+        {t("credits.lostKey")}
+      </a>
       {asReplace && (
         <button type="button" onClick={onDone} className="text-muted-foreground hover:text-foreground justify-self-start text-xs">
           {t("common.cancel")}
@@ -132,7 +152,7 @@ function HaveKey({ asReplace = false, onDone }: { asReplace?: boolean; onDone?: 
   );
 }
 
-/** A key is set: the balance, then the key as the account it is. */
+/** A key is set: the balance, the key, its recovery email. */
 function Account({ apiKey, draft, setDraft }: { apiKey: string; draft: AppSettings; setDraft: (next: AppSettings) => void }) {
   const { t, i18n } = useTranslation();
   const confirm = useConfirm();
@@ -176,10 +196,13 @@ function Account({ apiKey, draft, setDraft }: { apiKey: string; draft: AppSettin
   };
   const saveFile = async () => {
     if (isWeb) {
-      const blob = new Blob([`Imference API key (your account: it holds your credits)\n${apiKey}\n\nhttps://imference.com\n`], { type: "text/plain" });
+      const blob = new Blob(
+        [`Imference key (it holds your credits)\n${apiKey}\n\nhttps://imference.com/app\nLost it one day? ${LOST_KEY_URL}\n`],
+        { type: "text/plain" },
+      );
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = "imference-api-key.txt";
+      a.download = "imference-key.txt";
       a.click();
       URL.revokeObjectURL(a.href);
       return;
@@ -226,7 +249,7 @@ function Account({ apiKey, draft, setDraft }: { apiKey: string; draft: AppSettin
         </div>
       </section>
 
-      {/* The key = the account */}
+      {/* The key: it holds the credits */}
       <section className="ds-card grid gap-3 p-5">
         <div className="flex items-start gap-3">
           <span className="bg-muted text-foreground grid size-9 shrink-0 place-items-center rounded-xl">
@@ -266,6 +289,8 @@ function Account({ apiKey, draft, setDraft }: { apiKey: string; draft: AppSettin
         <p className="text-muted-foreground text-xs">{t("credits.key.where")}</p>
       </section>
 
+      <RecoveryEmail apiKey={apiKey} />
+
       {/* Other actions */}
       {replacing ? (
         <HaveKey asReplace onDone={() => setReplacing(false)} />
@@ -280,5 +305,142 @@ function Account({ apiKey, draft, setDraft }: { apiKey: string; draft: AppSettin
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The optional recovery email: linked at once, and imference.com emails the
+ * key to it; imference.com/key sends it back there if it is ever lost.
+ */
+function RecoveryEmail({ apiKey }: { apiKey: string }) {
+  const { t } = useTranslation();
+  const confirm = useConfirm();
+  const [current, setCurrent] = useState<string | null>(null); // masked; "" = none; null = loading
+  const [adding, setAdding] = useState(false);
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  const load = useCallback(async () => {
+    setErr("");
+    try {
+      setCurrent(await getRecoveryEmail());
+    } catch (e) {
+      setCurrent("");
+      setErr(friendlyPayError(t, e instanceof Error ? e.message : String(e)));
+    }
+  }, [t]);
+  useEffect(() => {
+    setCurrent(null);
+    setAdding(false);
+    setMsg("");
+    void load();
+  }, [apiKey, load]);
+  const add = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await addRecoveryEmail(email);
+      setMsg(t("credits.recovery.sent"));
+      setAdding(false);
+      setEmail("");
+      void load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    const ok = await confirm({
+      title: t("credits.recovery.removeTitle"),
+      description: t("credits.recovery.removeBody"),
+      confirmLabel: t("credits.recovery.remove"),
+      cancelLabel: t("common.cancel"),
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await removeRecoveryEmail();
+      setMsg("");
+      setCurrent("");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="ds-card grid gap-3 p-5">
+      <div className="flex items-start gap-3">
+        <span className="bg-muted text-foreground grid size-9 shrink-0 place-items-center rounded-xl">
+          <Mail className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="ds-label">{t("credits.recovery.title")}</h3>
+            <span className="text-muted-foreground bg-muted rounded-full px-2 py-px text-2xs font-medium">{t("credits.recovery.optional")}</span>
+          </div>
+          <p className="text-muted-foreground mt-0.5 text-sm">{t("credits.recovery.lead")}</p>
+        </div>
+      </div>
+      {current === null ? (
+        <p className="text-muted-foreground flex items-center gap-2 text-sm">
+          <Loader2 className="size-4 animate-spin" />
+          {t("common.checking")}
+        </p>
+      ) : current ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="flex items-center gap-2 text-sm">
+            <Check className="text-success size-4" />
+            {t("credits.recovery.linked", { email: current })}
+          </span>
+          <button type="button" onClick={() => void remove()} disabled={busy} className="text-muted-foreground hover:text-destructive text-sm font-medium">
+            {t("credits.recovery.remove")}
+          </button>
+        </div>
+      ) : adding ? (
+        <form
+          className="grid gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (email.trim()) void add();
+          }}
+        >
+          <div className="flex gap-2">
+            <Input
+              type="email"
+              autoComplete="email"
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              aria-label={t("credits.recovery.title")}
+            />
+            <Button type="submit" variant="secondary" disabled={busy || !email.trim()}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+              {t("credits.recovery.send")}
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-xs">{t("credits.recovery.privacy")}</p>
+          <button type="button" onClick={() => setAdding(false)} className="text-muted-foreground hover:text-foreground justify-self-start text-xs">
+            {t("common.cancel")}
+          </button>
+        </form>
+      ) : (
+        <div>
+          <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+            <Mail className="size-4" />
+            {t("credits.recovery.add")}
+          </Button>
+        </div>
+      )}
+      {msg && <p className="text-sm">{msg}</p>}
+      {err && <p className="text-destructive text-xs">{err}</p>}
+    </section>
   );
 }

@@ -211,8 +211,12 @@ export function Welcome({
           title={t("welcome.creditsTitle")}
           text={t("welcome.creditsText", { credits: PACK_CREDITS.toLocaleString(), usd: PACK_USD })}
         />
-        <PayOption icon={<Wallet />} title={t("welcome.walletTitle")} text={t("welcome.walletText")} />
       </div>
+      {/* Crypto is for people who already hold USDC: one line, offered in the payment window. */}
+      <p className="text-muted-foreground mt-3 flex items-start gap-2 text-xs">
+        <Wallet className="mt-px size-3.5 shrink-0" />
+        <span>{t("welcome.walletAlt")}</span>
+      </p>
       <div className="mt-5 flex flex-wrap items-center gap-3">
         {/* Ends the tour first: the payment window opens over the app, not
             behind this dialog. needs_key = the first choice (both ways). */}

@@ -3,7 +3,7 @@
 // lives in lib/web-pay.ts.
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronRight, Coins, CreditCard, Copy, Download, KeyRound, Loader2, Lock, ShieldCheck, Sparkles, Wallet, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, Coins, CreditCard, Copy, Download, KeyRound, Loader2, Lock, Mail, ShieldCheck, Sparkles, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm";
 import { Input } from "@/components/ui/input";
@@ -33,10 +33,11 @@ import {
   useWebPay,
   chooseWallet,
   type BrowserWallet,
-  PayError,
   forgetWallet,
+  LOST_KEY_URL,
+  addRecoveryEmail,
 } from "@/lib/web-pay";
-import { isWeb, openSettingsAt } from "@/lib/target";
+import { isWeb } from "@/lib/target";
 
 function useUsd() {
   const { i18n } = useTranslation();
@@ -82,6 +83,8 @@ function PayDialog() {
   const [paid, setPaid] = useState<null | "waiting" | number>(null);
   // How many packs this card payment buys (one Stripe checkout).
   const [packs, setPacks] = useState<number>(1);
+  // Paying with a crypto wallet: folded under the card, opened on demand.
+  const [altOpen, setAltOpen] = useState(false);
 
   useEffect(() => {
     setBusy("");
@@ -90,6 +93,8 @@ function PayDialog() {
     setCard(null);
     setPaid(null);
     setPacks(1);
+    setAltOpen(dialog?.reason === "needs_wallet" || session.payMode === "wallet");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dialog]);
 
   useEffect(() => {
@@ -104,6 +109,9 @@ function PayDialog() {
   // Web: offer per-run payment only when choosing a way to pay for the first
   // time (or reconnecting the wallet) — not when buying / topping up credits.
   const showPerRun = isWeb && (dialog.reason === "choose" || dialog.reason === "needs_wallet");
+  // The crypto options (a pack in USDC, per-run payment) are for people who
+  // already hold USDC: folded under the card, on the web only.
+  const showAlt = isWeb && (showPerRun || packs === 1);
 
   // Stripe's onComplete: the pack is paid. Wait for the credits, then close —
   // and retry the run that asked for them.
@@ -159,7 +167,7 @@ function PayDialog() {
 
   return (
     <Dialog open onOpenChange={(open) => !open && closePayDialog(false)}>
-      <DialogContent className={cn("max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-0", showPerRun || card ? "sm:max-w-3xl" : "sm:max-w-lg")}>
+      <DialogContent className={cn("max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-0", card ? "sm:max-w-3xl" : "sm:max-w-lg")}>
         {/* Header: what is being paid for. */}
         <div className="flex items-start gap-4 border-b p-6 pr-12">
           {q?.image ? (
@@ -186,14 +194,9 @@ function PayDialog() {
         {card && <CardPane c={card} paid={paid} onBack={() => setCard(null)} onComplete={() => void onCardComplete()} />}
 
         {!card && (
-          <div className={cn("grid gap-4 p-6", showPerRun && "md:grid-cols-[1.25fr_1fr]")}>
-            {/* 1. The pack — recommended (on the web, next to pay-as-you-go). */}
-            <section className={cn("relative grid content-start gap-4 rounded-2xl p-5", showPerRun ? "border-primary/40 bg-primary/[0.03] border-2" : "ds-card")}>
-              {showPerRun && (
-                <span className="bg-primary text-primary-foreground absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-2xs font-semibold">
-                  {t("webpay.recommended")}
-                </span>
-              )}
+          <div className="grid gap-4 p-6">
+            {/* 1. Credits by card: the way to pay. */}
+            <section className="ds-card relative grid content-start gap-4 rounded-2xl p-5">
               <div>
                 <div className="text-muted-foreground text-xs font-medium">{t("webpay.pack.title")}</div>
                 <div className="mt-1 flex items-baseline justify-between gap-3">
@@ -222,95 +225,80 @@ function PayDialog() {
                 <Point>{t("webpay.pack.point1")}</Point>
                 <Point>{t(isWeb ? "webpay.pack.point2" : "webpay.pack.point2Desktop")}</Point>
               </ul>
-              <div className="grid gap-2">
-                <Button size="lg" variant="brand" className="h-11" onClick={act("card", async () => setCard(await startCardCheckout(packs)), false)} disabled={!!busy}>
-                  {busy === "card" ? <Loader2 className="size-4 animate-spin" /> : <CreditCard className="size-4" />}
-                  {t("webpay.pack.card", { usd: usd(PACK_USD * packs) })}
-                </Button>
-                {/* One pack only: the USDC pack is signed for exactly that amount. */}
-                {isWeb && packs === 1 && (
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="h-11"
-                    onClick={act("pack", buyPackWithWallet, true)}
-                    disabled={!!busy || !wallet}
-                  >
-                    {busy === "pack" ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />}
-                    {t("webpay.pack.usdc", { usd: usd(PACK_USD) })}
-                  </Button>
-                )}
-              </div>
+              <Button
+                size="lg"
+                variant="brand"
+                className="h-11"
+                onClick={act("card", async () => setCard(await startCardCheckout(packs)), false)}
+                disabled={!!busy}
+              >
+                {busy === "card" ? <Loader2 className="size-4 animate-spin" /> : <CreditCard className="size-4" />}
+                {t("webpay.pack.card", { usd: usd(PACK_USD * packs) })}
+              </Button>
             </section>
 
-            {/* 2. Per run, in USDC — no account at all (web, first choice only). */}
-            {showPerRun && (
-            <section className="grid content-start gap-4 rounded-2xl border p-5">
-              <div>
-                <div className="text-muted-foreground text-xs font-medium">{t("webpay.perRun.title")}</div>
-                <div className="mt-1 text-2xl font-semibold">
-                  {q ? usd(q.credits / 1000) : t("webpay.perRun.exact")}
-                </div>
-                <p className="text-muted-foreground mt-1 text-sm">{t(`webpay.perRun.unit.${kind}`)}</p>
-              </div>
-              <ul className="text-muted-foreground grid gap-1.5 text-sm">
-                <Point>{t(isWeb ? "webpay.perRun.point1" : "webpay.perRun.point1Desktop")}</Point>
-                <Point>{t(isWeb ? "webpay.perRun.point2" : "webpay.perRun.point2Desktop")}</Point>
-              </ul>
-              {session.payMode === "wallet" ? (
-                <div className="grid gap-2">
-                  <p className="text-sm">{t("webpay.perRun.on", { address: shortAddr(session.payer) })}</p>
-                  {dialog.reason === "needs_wallet" && (
-                    <Button variant="outline" onClick={act("run", payPerRun, true)} disabled={!!busy || !wallet}>
-                      {t("webpay.perRun.reconnect")}
-                    </Button>
-                  )}
-                  {session.hasKey && (
-                    <Button variant="ghost" onClick={act("run", switchToCredits, false)} disabled={!!busy}>
-                      {t("webpay.perRun.backToCredits")}
-                    </Button>
-                  )}
-                </div>
-              ) : isWeb ? (
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="h-11"
-                  onClick={act("run", payPerRun, true)}
-                  disabled={!!busy || !wallet}
+            {/* 2. Crypto, for USDC holders: folded under the card (web only). */}
+            {showAlt && (
+              <section className="grid gap-3">
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground flex w-fit items-center gap-1.5 text-sm"
+                  onClick={() => setAltOpen((o) => !o)}
+                  aria-expanded={altOpen}
                 >
-                  {busy === "run" ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />}
-                  {t("webpay.perRun.button")}
-                </Button>
-              ) : (
-                // Desktop: the app's own wallet. None yet: set it up in Settings.
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="h-11"
-                  disabled={!!busy}
-                  onClick={async () => {
-                    setBusy("run");
-                    setErr("");
-                    try {
-                      await payPerRun();
-                      closePayDialog(true);
-                    } catch (e) {
-                      if (e instanceof PayError && e.code === "needs_wallet") {
-                        closePayDialog(false);
-                        openSettingsAt("x402");
-                      } else setErr(failure(e));
-                    } finally {
-                      setBusy("");
-                    }
-                  }}
-                >
-                  {busy === "run" ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />}
-                  {t("webpay.perRun.buttonDesktop")}
-                </Button>
-              )}
-              {isWeb && <WalletPicker wallets={wallets} chosen={chosen} disabled={!!busy} />}
-            </section>
+                  <Wallet className="size-4" />
+                  {t("webpay.alt.toggle")}
+                  <ChevronDown className={cn("size-4 transition-transform", altOpen && "rotate-180")} />
+                </button>
+                {altOpen && (
+                  <div className="grid gap-4 rounded-2xl border p-5">
+                    {/* One pack only: the USDC pack is signed for exactly that amount. */}
+                    {packs === 1 && (
+                      <div className="grid gap-2">
+                        <p className="text-muted-foreground text-sm">{t("webpay.alt.packLead")}</p>
+                        <Button variant="outline" onClick={act("pack", buyPackWithWallet, true)} disabled={!!busy || !wallet}>
+                          {busy === "pack" ? <Loader2 className="size-4 animate-spin" /> : <Coins className="size-4" />}
+                          {t("webpay.pack.usdc", { usd: usd(PACK_USD) })}
+                        </Button>
+                      </div>
+                    )}
+                    {showPerRun && (
+                      <div className={cn("grid gap-3", packs === 1 && "border-t pt-4")}>
+                        <div>
+                          <div className="text-muted-foreground text-xs font-medium">{t("webpay.perRun.title")}</div>
+                          <div className="mt-1 text-xl font-semibold">{q ? usd(q.credits / 1000) : t("webpay.perRun.exact")}</div>
+                          <p className="text-muted-foreground mt-1 text-sm">{t(`webpay.perRun.unit.${kind}`)}</p>
+                        </div>
+                        <ul className="text-muted-foreground grid gap-1.5 text-sm">
+                          <Point>{t("webpay.perRun.point1")}</Point>
+                          <Point>{t("webpay.perRun.point2")}</Point>
+                        </ul>
+                        {session.payMode === "wallet" ? (
+                          <div className="grid gap-2">
+                            <p className="text-sm">{t("webpay.perRun.on", { address: shortAddr(session.payer) })}</p>
+                            {dialog.reason === "needs_wallet" && (
+                              <Button variant="outline" onClick={act("run", payPerRun, true)} disabled={!!busy || !wallet}>
+                                {t("webpay.perRun.reconnect")}
+                              </Button>
+                            )}
+                            {session.hasKey && (
+                              <Button variant="ghost" onClick={act("run", switchToCredits, false)} disabled={!!busy}>
+                                {t("webpay.perRun.backToCredits")}
+                              </Button>
+                            )}
+                          </div>
+                        ) : (
+                          <Button variant="outline" onClick={act("run", payPerRun, true)} disabled={!!busy || !wallet}>
+                            {busy === "run" ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />}
+                            {t("webpay.perRun.button")}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    <WalletPicker wallets={wallets} chosen={chosen} disabled={!!busy} />
+                  </div>
+                )}
+              </section>
             )}
           </div>
         )}
@@ -339,7 +327,7 @@ function PayDialog() {
             }}
           >
             <label className="text-sm font-medium" htmlFor="webpay-key">
-              {t(isWeb ? "webpay.haveKey" : "webpay.haveAccountKey")}
+              {t("webpay.haveKey")}
             </label>
             <div className="flex min-w-[min(16rem,100%)] flex-1 gap-2">
               <Input
@@ -355,6 +343,9 @@ function PayDialog() {
                 {t("webpay.useKey")}
               </Button>
             </div>
+            <a className="text-muted-foreground w-full text-xs underline hover:text-foreground" href={LOST_KEY_URL} target="_blank" rel="noopener noreferrer">
+              {t("credits.lostKey")}
+            </a>
           </form>
         )}
 
@@ -364,7 +355,7 @@ function PayDialog() {
             <Lock className="mt-0.5 size-3.5 shrink-0" />
             <span>{t("webpay.trust.card")}</span>
           </p>
-          {isWeb && (
+          {isWeb && altOpen && (
             <p className="flex items-start gap-2">
               <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
               <span>{t("webpay.trust.wallet")}</span>
@@ -609,10 +600,13 @@ function KeepKeyDialog() {
   const [copied, setCopied] = useState(false);
   if (!newKey) return null;
   const download = () => {
-    const blob = new Blob([`Imference API key\n${newKey}\n\nhttps://imference.com\n`], { type: "text/plain" });
+    const blob = new Blob(
+      [`Imference key (it holds your credits)\n${newKey}\n\nhttps://imference.com/app\nLost it one day? ${LOST_KEY_URL}\n`],
+      { type: "text/plain" },
+    );
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "imference-api-key.txt";
+    a.download = "imference-key.txt";
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -640,12 +634,78 @@ function KeepKeyDialog() {
               {t("webpay.keep.download")}
             </Button>
           )}
-          <Button className="ml-auto" onClick={dismissNewKey}>
+        </div>
+        <ProtectKey />
+        <div className="flex justify-end">
+          <Button onClick={dismissNewKey}>
             {t("webpay.keep.done")}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * "Protect it (optional)": a recovery email typed by the user after any
+ * purchase, card or USDC. It is linked to the key (already saved here) at
+ * once, and imference.com emails the key to it.
+ */
+function ProtectKey() {
+  const { t } = useTranslation();
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const send = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await addRecoveryEmail(email);
+      setMsg(t("credits.recovery.sent"));
+      setEmail("");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form
+      className="bg-muted/40 grid gap-2 rounded-xl border p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (email.trim()) void send();
+      }}
+    >
+      <p className="flex items-center gap-2 text-sm font-medium">
+        <Mail className="size-4 shrink-0" />
+        {t("webpay.keep.protectTitle")}
+      </p>
+      <p className="text-muted-foreground text-xs">{t("webpay.keep.protectHint")}</p>
+      {msg ? (
+        <p className="flex items-start gap-2 text-sm">
+          <Check className="text-success mt-0.5 size-4 shrink-0" />
+          {msg}
+        </p>
+      ) : (
+        <div className="flex gap-2">
+          <Input
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            aria-label={t("credits.recovery.title")}
+          />
+          <Button type="submit" variant="secondary" disabled={busy || !email.trim()}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+            {t("credits.recovery.send")}
+          </Button>
+        </div>
+      )}
+      {err && <p className="text-destructive text-xs">{err}</p>}
+    </form>
   );
 }
 
@@ -731,6 +791,9 @@ export function WebPaymentBar({ onConfigure }: { onConfigure: (section: string) 
     { value: "credits", label: t("webpay.settings.credits.title") },
     { value: "wallet", label: t("webpay.settings.wallet.title") },
   ];
+  // Credits by card is the way to pay: the switch to a crypto wallet only shows
+  // once the wallet is in use (it is offered in the payment dialog and Settings).
+  const showSwitch = mode === "wallet";
   if (mode === "wallet" && paying !== "wallet") {
     return (
       <div className="grid gap-2.5" role="group" aria-label={t("payment.title")}>
@@ -754,10 +817,6 @@ export function WebPaymentBar({ onConfigure }: { onConfigure: (section: string) 
     const none = !session.hasKey;
     return (
       <div className="grid gap-2.5" role="group" aria-label={t("payment.title")}>
-        <div className="flex items-center justify-between gap-2">
-          <span className="ds-sublabel">{t("payment.payWith")}</span>
-          <Segmented size="sm" label={t("payment.payWith")} value={mode} onChange={(m) => void switchTo(m)} items={methods} />
-        </div>
         <PayNotice
           credits
           title={none ? t("payNotice.noCredits.title") : t("payNotice.shortCredits.title")}
@@ -783,6 +842,7 @@ export function WebPaymentBar({ onConfigure }: { onConfigure: (section: string) 
       title={row.title}
       onClick={row.onClick}
       onHistory={openCloudHistory}
+      showSwitch={showSwitch}
       switchLabel={t("payment.payWith")}
     />
   );
@@ -877,53 +937,3 @@ export function WebWalletSettings() {
     </div>
   );
 }
-
-function ModeCard({
-  active,
-  icon,
-  title,
-  desc,
-  status,
-  children,
-}: {
-  active: boolean;
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  status: string;
-  children: React.ReactNode;
-}) {
-  const { t } = useTranslation();
-  return (
-    <section
-      className={
-        "ds-card grid gap-3 p-4 " + (active ? "border-primary ring-primary/20 ring-2" : "")
-      }
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className={
-            "grid size-8 shrink-0 place-items-center rounded-lg " +
-            (active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")
-          }
-        >
-          {icon}
-        </div>
-        <div className="grid min-w-0 flex-1 gap-0.5">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold">{title}</span>
-            {active && (
-              <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-2xs font-medium">
-                {t("webpay.settings.inUse")}
-              </span>
-            )}
-          </div>
-          <p className="text-muted-foreground text-xs">{desc}</p>
-          <p className="mt-1 text-sm">{status}</p>
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
-

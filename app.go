@@ -577,7 +577,7 @@ func (a *App) GenerateCloud(req types.GenerationRequest) (types.GenerationResult
 	default:
 		if s.APIKey == "" {
 			a.bus.Warn("app", "GenerateCloud: API key not set", nil)
-			return types.GenerationResult{}, errors.New("Cloud API key not set")
+			return types.GenerationResult{}, errors.New("Imference key not set")
 		}
 		result, err = a.cloud.Generate(a.ctx, s.APIKey, s.CloudModel, req, onEnqueued)
 	}

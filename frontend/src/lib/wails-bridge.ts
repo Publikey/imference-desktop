@@ -14,6 +14,9 @@ import {
   GetCreditBalance,
   StartCardCheckout,
   AdoptAPIKey,
+  GetRecoveryEmail,
+  AddRecoveryEmail,
+  RemoveRecoveryEmail,
   SaveAPIKeyFile,
   SaveWalletKeyFile,
   GetEngineInfo,
@@ -123,11 +126,17 @@ const raw = {
   // Pass the (possibly unsaved draft) API key; Go falls back to the saved one
   // when "" is given. The key arg is redacted from logs in sanitize() below.
   getCreditBalance: GetCreditBalance as (apiKey: string) => Promise<CreditInfo>,
-  /** In-app card purchase of one credit pack (Stripe Embedded Checkout). */
+  /** In-app card purchase of credit packs (Stripe Embedded Checkout). */
   startCardCheckout: StartCardCheckout as (packs: number) => Promise<{ clientSecret: string; publishableKey: string; apiKey: string }>,
   /** Saves a key (bought or pasted) as the credits key; credits become the method. */
   adoptAPIKey: AdoptAPIKey as unknown as (key: string) => Promise<AppSettings>,
-  /** Native "Save as" for the API key (the account); "" when cancelled. */
+  /** The saved Imference key's recovery email, masked; "" when none. */
+  getRecoveryEmail: GetRecoveryEmail as () => Promise<string>,
+  /** Links the email to the key; imference.com emails the key to it. */
+  addRecoveryEmail: AddRecoveryEmail as (email: string) => Promise<string>,
+  /** Unlinks the saved Imference key's recovery email. */
+  removeRecoveryEmail: RemoveRecoveryEmail as () => Promise<void>,
+  /** Native "Save as" for the Imference key; "" when cancelled. */
   saveAPIKeyFile: SaveAPIKeyFile as () => Promise<string>,
   /** Native "Save as" for the app wallet's private key; "" when cancelled. */
   saveWalletKeyFile: SaveWalletKeyFile as () => Promise<string>,

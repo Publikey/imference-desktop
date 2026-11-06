@@ -265,7 +265,7 @@
     "stopTitle": "Stop this generation?",
     "stopConfirm": "The current image is discarded and the engine reloads the model (~10–20s) before the next run.",
     "dropCloudTitle": "Stop waiting for this cloud run?",
-    "dropCloudConfirm": "The row is removed and the app stops re-checking it. This does not cancel the run server-side — if it ever finishes, the result stays retrievable from your account.",
+    "dropCloudConfirm": "The row is removed and the app stops re-checking it. This does not cancel the run server-side — if it ever finishes, the result stays retrievable from your history.",
     "step": "step {{step}}/{{total}}",
     "cloudRunning": "Running in the cloud…",
     "generating": "Generating…",
@@ -449,7 +449,6 @@
   "payment": {
     "title": "Payment",
     "apiKey": "Credits",
-    "apiKeyNotSet": "API key not set",
     "notConfigured": "Not configured",
     "credits": "{{count}} credits",
     "walletNotConfigured": "Wallet not configured",
@@ -469,12 +468,11 @@
     "navRuntime": "Advanced runtime",
     "navImage": "Image",
     "navWan": "WAN video",
-    "navPayment": "Payment",
     "navPaths": "Paths",
     "language": "Language",
     "languageSystem": "System",
     "languageHint": "Applies immediately. \"System\" follows your OS language.",
-    "apiKeyPlaceholder": "Paste your API key from imference.com",
+    "apiKeyPlaceholder": "Paste your Imference key",
     "paths": "Paths",
     "pathsHint": "The cloud and local models are chosen from the form, above the prompt.",
     "pythonPath": "Python path",
@@ -485,15 +483,14 @@
     "saved": "Saved",
     "engineDesc": "Install and manage the local generation engine on this machine.",
     "runtimeDesc": "Host-machine tuning for the engine — device, memory, and quantization.",
-    "cloudDesc": "Cloud runs are paid with credits (recommended) or, per run, in USDC from a wallet.",
     "pathsDesc": "Where Python lives and where finished images are saved.",
     "languageDesc": "The language of the app interface.",
     "navStorage": "Storage",
     "storageDesc": "What the app keeps on disk, and how much of it.",
     "navTools": "Editing tools",
     "toolsDesc": "Upscale, remove background, eraser and more — on this computer or in the cloud.",
-    "navCredits": "Credits & account",
-    "creditsDesc": "Prepaid credits for cloud runs, on your Imference account.",
+    "navCredits": "Credits & key",
+    "creditsDesc": "Prepaid credits for cloud runs, on your Imference key. No account, no password.",
     "navWallet": "USDC wallet",
     "walletDesc": "Pay each cloud run in USDC, from a wallet in this app.",
     "navWalletWeb": "Wallet",
@@ -606,14 +603,12 @@
     "loading": "Loading wallet…",
     "title": "Wallet in this app",
     "keychainNote": "The wallet's private key stays in your system keychain on this computer. Keep only small amounts in it.",
-    "intro": "Pay each run in USDC instead of buying credits. The app creates a wallet for you; send it a few dollars of USDC and every run is paid from it, at its exact price.",
     "generate": "Generate new wallet",
     "importExisting": "Import existing private key",
     "address": "Address",
     "balance": "USDC balance",
     "rpcError": "RPC error: {{error}}",
     "fundHint": "Send USDC on the Base network to this address, from an exchange or another wallet. The balance updates every 30 s.",
-    "exportKey": "Export private key",
     "replaceWallet": "Replace wallet",
     "privateKeyLabel": "Private key (64 hex chars, with or without 0x prefix)",
     "importWarning": "This replaces the wallet saved in your system keychain. Export the current one first if you want to keep it.",
@@ -627,10 +622,8 @@
   "credit": {
     "balance": "Credit balance",
     "refreshTitle": "Refresh balance",
-    "enterKey": "Enter your API key above to see your remaining credits.",
     "credits": "credits",
-    "buy": "Buy credits",
-    "buyTitle": "Top up this key on imference.com — credits work in the app, in Claude (MCP) and via the API"
+    "buy": "Buy credits"
   },
   "logs": {
     "title": "Logs",
@@ -668,7 +661,7 @@
     "localLabel": "Run locally",
     "cloudLabel": "Or use the cloud",
     "cloudTitle": "Generate in the cloud",
-    "cloudHint": "Add an API key or connect a wallet — no install needed.",
+    "cloudHint": "Buy credits by card, no install needed.",
     "skip": "Skip for now"
   },
   "shortcuts": {
@@ -1108,7 +1101,6 @@
       "needsKey": "Choose how to pay",
       "insufficient": "Top up your credits",
       "wallet": "Reconnect your wallet",
-      "manual": "Credits",
       "buy": "Buy credits"
     },
     "subtitle": {
@@ -1123,7 +1115,6 @@
       "tool": "per edit",
       "price": "{{credits}} credits ({{usd}})"
     },
-    "recommended": "Recommended",
     "pack": {
       "title": "Credits",
       "amount": "{{credits}} credits",
@@ -1136,10 +1127,10 @@
         "tool_other": "About {{n}} {{what}} edits"
       },
       "point1": "One payment, no subscription",
-      "point2": "Your key also works in Imference Desktop, in Claude (MCP) and through the API",
+      "point2": "Your Imference key also works in Imference Desktop and in Claude (MCP)",
       "card": "Pay {{usd}} by card",
       "usdc": "Pay {{usd}} in USDC",
-      "point2Desktop": "Your key also works on imference.com, in Claude (MCP) and through the API",
+      "point2Desktop": "Your Imference key also works in Imference Web and in Claude (MCP)",
       "howMany": "How many credits"
     },
     "perRun": {
@@ -1155,10 +1146,7 @@
       "button": "Pay with my wallet",
       "on": "Paying per run with {{address}}.",
       "reconnect": "Reconnect the wallet",
-      "backToCredits": "Use my credits instead",
-      "point1Desktop": "Paid in USDC from a wallet in this app",
-      "point2Desktop": "Set it up once in Settings > Payment",
-      "buttonDesktop": "Pay with the app wallet"
+      "backToCredits": "Use my credits instead"
     },
     "wallet": {
       "detected": "{{name}} detected",
@@ -1170,13 +1158,12 @@
       "card": "Card payments are processed by Stripe. Imference never sees your card number.",
       "wallet": "USDC payments are confirmed in your own wallet. Imference never holds your keys or your funds.",
       "unit": "1 credit = $0.001, prices in US dollars",
-      "terms": "Terms",
-      "walletDesktop": "USDC payments come from this app's wallet; its key never leaves this computer."
+      "terms": "Terms"
     },
     "noWallet": "No wallet found in this browser. Install MetaMask or Coinbase Wallet to pay in USDC, or pay by card.",
-    "haveKey": "Already have an API key?",
+    "haveKey": "Already have an Imference key?",
     "useKey": "Use",
-    "invalidKey": "This key isn't recognised.",
+    "invalidKey": "This Imference key isn't recognised.",
     "cancelled": "Payment cancelled in the wallet.",
     "notEnoughUsdc": "Not enough USDC on Base in this wallet.",
     "signTitle": "Confirm the payment of {{usd}} in your wallet",
@@ -1187,13 +1174,15 @@
       "cancelled": "Payment cancelled, nothing was charged."
     },
     "keep": {
-      "title": "Keep your key: it is your account",
-      "text": "There is no email or password. This key is the only way back to your credits, here, in Imference Desktop, in Claude (MCP) or through the API. This browser remembers it, but save it somewhere safe.",
+      "title": "Keep your Imference key",
+      "text": "No account, no password: this key holds your credits. Use it here, in Imference Desktop or in Claude (MCP). This browser remembers it; keep a copy somewhere safe too.",
       "copy": "Copy",
       "copied": "Copied",
       "download": "Download",
       "done": "I saved it",
-      "textDesktop": "There is no email or password. This key is the only way back to your credits, here, on imference.com, in Claude (MCP) or through the API. The app keeps it in its settings, but save a copy somewhere safe."
+      "textDesktop": "No account, no password: this key holds your credits. Use it here, in Imference Web or in Claude (MCP). The app keeps it in its settings; keep a copy somewhere safe too.",
+      "protectTitle": "Protect it (optional)",
+      "protectHint": "Add a recovery email: we send your key there now, and you can get it back at imference.com/key if you lose it. The address is used for nothing else."
     },
     "chip": {
       "getCredits": "Get credits",
@@ -1204,25 +1193,16 @@
       "wallet": "USDC · {{address}}",
       "walletTitle": "Paying per run with your wallet"
     },
-    "key": {
-      "none": "No key yet? Buy credits once and the key is created for you."
-    },
     "settings": {
       "title": "How your runs are paid",
       "desc": "Pick one. You can switch at any time.",
-      "inUse": "In use",
       "credits": {
         "title": "Credits",
-        "desc": "Prepaid credits on your API key. The same key works in Imference Desktop, in Claude (MCP) and through the API.",
-        "status": "Key ending in {{hint}} · {{credits}} credits left",
-        "none": "No API key in this browser yet.",
-        "use": "Pay with my credits",
-        "change": "Use another key",
-        "forget": "Forget this key"
+        "use": "Pay with my credits"
       },
       "wallet": {
         "title": "Pay as you go",
-        "desc": "Each run is paid in USDC on Base and confirmed in your wallet. No account needed.",
+        "desc": "Each run is paid in USDC on Base and confirmed in your wallet. For people who already hold USDC.",
         "status": "{{name}} · {{address}}",
         "none": "No wallet connected.",
         "use": "Pay with my wallet",
@@ -1240,7 +1220,10 @@
     },
     "signHistoryTitle": "Sign in with your wallet to see your history",
     "signHistoryHint": "A signature only, no payment: {{address}} ({{name}}).",
-    "haveAccountKey": "Already have an account key?"
+    "alt": {
+      "toggle": "Pay with USDC instead (crypto wallet)",
+      "packLead": "Buy the same pack in USDC on Base, signed in your browser wallet."
+    }
   },
   "engine": {
     "machine": "This computer",
@@ -1266,7 +1249,7 @@
   "history": {
     "title": "Run history",
     "button": "History",
-    "desc": "Every cloud run paid with your API key or your wallet. Prompts and settings are never kept on the server. Results can be downloaded again for {{hours}} h.",
+    "desc": "Every cloud run paid with your Imference key or your wallet. Prompts and settings are never kept on the server. Results can be downloaded again for {{hours}} h.",
     "rail": {
       "credits": "Credits",
       "x402": "Pay as you go"
@@ -1295,7 +1278,7 @@
     "saveFailed": "Could not download the result: {{error}}",
     "empty": "No cloud runs yet",
     "more": "Load more",
-    "noRail": "Add an API key or a wallet to see the calls they paid for."
+    "noRail": "Add an Imference key or a wallet to see the calls they paid for."
   },
   "welcome": {
     "dialogTitle": "Welcome to Imference",
@@ -1325,19 +1308,17 @@
     "localInstallNote": "The local engine is a one-time download (a few GB). It installs in the background; you can keep going.",
     "cloudTitle": "In the cloud",
     "cloudPrice": "From $0.002 per image, video too. No install.",
-    "cloudNeeds": "Needs an API key with credits, or a wallet that pays per image.",
+    "cloudNeeds": "Needs credits, bought by card: no account to create.",
     "recommended": "Recommended",
     "payTitle": "How would you like to pay?",
-    "payLead": "There is no account to create. Choose now, or simply generate: you will be asked at your first image.",
+    "payLead": "No account, no password: your first purchase creates your Imference key, which holds your credits. Buy now, or simply generate: you will be asked at your first image.",
     "creditsTitle": "Credits, by card",
-    "creditsText": "{{credits}} credits for ${{usd}}. A key is kept in this browser; a typical image costs 2 to 40 credits.",
-    "walletTitle": "Pay per image, with USDC",
-    "walletText": "Connect a wallet (Base network) and approve each image's exact price. Nothing is prepaid.",
+    "creditsText": "{{credits}} credits for ${{usd}}, by card. Your Imference key is kept in this browser; a typical image costs 2 to 40 credits.",
     "payNow": "Choose a payment method",
     "payLater": "or decide at your first image",
     "tourTitle": "Your workspace",
     "tour1Desktop": "Top bar: run on this computer or in the cloud. In local mode, the engine button shows its state and your GPU.",
-    "tour1Web": "Top of Create: the model, and under it how you pay (credits or a wallet).",
+    "tour1Web": "Top of Create: the model, and under it your credits.",
     "tour2": "Create: the model, your prompt, a format, then Generate. Running jobs show in Activity.",
     "tour3": "Gallery: your results. Click to view, drag one onto Create or Edit to reuse it.",
     "keyGenerate": "Generate",
@@ -1355,14 +1336,15 @@
     "back": "Back",
     "progress": "Step {{step}} of {{total}}",
     "mapBar": "Local · Cloud",
-    "mapBarWeb": "Imference Web"
+    "mapBarWeb": "Imference Web",
+    "walletAlt": "Already hold USDC? You can also pay per image from a crypto wallet, in the payment window."
   },
   "payErrors": {
     "insufficient_credits": "Not enough credits for this run. Top up to continue.",
     "insufficient_usdc": "Not enough USDC in the wallet for this run. Add funds to continue.",
     "needs_key": "Set up a payment method to run in the cloud.",
     "needs_wallet": "Create or import a wallet to pay as you go.",
-    "invalid_key": "This API key isn't recognised. Check it in Settings > Payment.",
+    "invalid_key": "This Imference key isn't recognised. Check it in Settings › Credits & key.",
     "payment_cancelled": "Payment cancelled, nothing was charged."
   },
   "credits": {
@@ -1371,29 +1353,43 @@
     "balance": "Balance",
     "runsLeft_one": "About {{n}} run left with {{model}}",
     "runsLeft_other": "About {{n}} runs left with {{model}}",
-    "haveKey": "I already have a key",
-    "haveKeyHint": "Paste the account key you got when you bought credits (here, on imference.com or for Claude).",
+    "haveKey": "I already have an Imference key",
+    "haveKeyHint": "Paste the Imference key you got when you bought credits (here, in Imference Web or for Claude).",
     "useKey": "Use this key",
     "useAnother": "Use another key",
     "empty": {
       "title": "Credits pay for your cloud runs",
       "lead": "Buy a pack once, then each image or video takes a few credits. 1 credit = $0.001.",
-      "point1": "Your first purchase creates your Imference account",
-      "point2": "The account is a key: no email, no password",
+      "point1": "Your first purchase creates your Imference key",
+      "point2": "No account, no password: the key holds your credits",
       "point3": "Works here, on imference.com, in Claude (MCP) and through the API"
     },
     "key": {
-      "title": "Your account key",
-      "lead": "This key is your Imference account: your credits belong to it. Keep a copy somewhere safe, it is the only way back to them.",
+      "title": "Your Imference key",
+      "lead": "Your credits live on this key. Keep a copy somewhere safe, or add a recovery email below.",
       "saveFile": "Save to a file",
       "saved": "Key saved to {{path}}",
-      "where": "Use the same key on imference.com, in Claude (MCP) or through the API: it spends the same credits."
+      "where": "Use the same key in Imference Web, in Imference Desktop or in Claude (MCP): it spends the same credits."
     },
     "signOut": {
-      "action": "Sign out of this account",
-      "title": "Sign out of this account?",
-      "body": "The key is removed from this app. Your credits stay on the account: you will need the key to use them again, so make sure you saved it.",
+      "action": "Remove this key from this device",
+      "title": "Remove this key from this device?",
+      "body": "Your credits stay on the key: you will need it to use them again, so make sure you saved it (or added a recovery email).",
       "confirm": "Sign out"
+    },
+    "lostKey": "Lost your key?",
+    "recovery": {
+      "title": "Recovery email",
+      "optional": "Optional",
+      "lead": "Lost your key one day? We send it back to this email from imference.com/key. Nothing else: no newsletter, no account.",
+      "linked": "Linked: {{email}}",
+      "add": "Add a recovery email",
+      "send": "Send me my key",
+      "sent": "Done: your key is linked to this email, and we just sent it there.",
+      "privacy": "We email you your key now. The address is only used to send it back if you ask.",
+      "remove": "Remove",
+      "removeTitle": "Remove the recovery email?",
+      "removeBody": "If you lose the key afterwards, we can't send it back to you."
     }
   },
   "walletPane": {
@@ -1434,8 +1430,8 @@
   "payNotice": {
     "noCredits": {
       "title": "No credits yet: cloud runs need a way to pay",
-      "body_one": "Buy a credit pack ({{usd}}, about {{runs}} run with {{model}}). Your first purchase creates your account.",
-      "body_other": "Buy a credit pack ({{usd}}, about {{runs}} runs with {{model}}). Your first purchase creates your account.",
+      "body_one": "Buy a credit pack ({{usd}}, about {{runs}} run with {{model}}). Your first purchase creates your Imference key: no account, no password.",
+      "body_other": "Buy a credit pack ({{usd}}, about {{runs}} runs with {{model}}). Your first purchase creates your Imference key: no account, no password.",
       "action": "Buy credits"
     },
     "noWallet": {
@@ -1453,8 +1449,8 @@
       "body": "This run costs {{cost}} and the wallet holds {{have}}. Send USDC on the Base network to its address.",
       "action": "Add funds"
     },
-    "webNoCredits": "Buy credits by card, from $5 (your first purchase creates your account), or pay each run from your browser wallet.",
-    "webNoBalance": "Your account has no credits left. Top up by card to keep generating.",
+    "webNoCredits": "Buy credits by card, from $5. Your first purchase creates your Imference key: no account, no password.",
+    "webNoBalance": "Your Imference key has no credits left. Top up by card to keep generating.",
     "webNoWallet": {
       "title": "No wallet connected",
       "body": "Pay each run in USDC from your browser wallet (MetaMask, Coinbase Wallet, Rabby…). Your wallet asks you to confirm each payment.",
@@ -1462,9 +1458,9 @@
     }
   },
   "apiKeyDialog": {
-    "button": "I have an API key",
-    "title": "Use your API key",
-    "desc": "Paste the account key you got with your credits (here, on imference.com or for Claude). It is checked before it is used."
+    "button": "I have an Imference key",
+    "title": "Use your Imference key",
+    "desc": "Paste the Imference key you got with your credits (here, in Imference Web or for Claude). It is checked before it is used."
   },
   "agents": {
     "title": "Let an AI agent create on this computer",
@@ -1525,8 +1521,8 @@
     "anAgent": "an AI agent",
     "viaHint": "Started by {{name}} through Imference Desktop's local API (Settings › AI agents).",
     "spend": "Let AI agents spend my credits for cloud runs",
-    "spendHint": "Off: they only work on this computer, for free. On: when you ask for the cloud, they use your Imference account — nothing to copy into their settings, and turning this off stops it at once.",
-    "spendNoKey": "Your Imference account is used once you add one (Settings › Credits & account).",
+    "spendHint": "Off: they only work on this computer, for free. On: when you ask for the cloud, they use the credits of your Imference key, with nothing to copy into their settings. Turning this off stops it at once.",
+    "spendNoKey": "Works once you have an Imference key (Settings › Credits & key).",
     "permissionsTitle": "What AI agents may do"
   }
 }

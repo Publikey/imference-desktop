@@ -15,7 +15,7 @@ export type PayErrorCode =
 const PATTERNS: [RegExp, PayErrorCode][] = [
   [/not enough credits|insufficient credits/i, "insufficient_credits"],
   [/not enough USDC/i, "insufficient_usdc"],
-  [/API key not set|needs_key|an API key with credits is needed/i, "needs_key"],
+  [/(API|Imference) key not set|needs_key|an (API|Imference) key with credits is needed/i, "needs_key"],
   [/no wallet configured|connect a wallet to pay/i, "needs_wallet"],
   [/HTTP 40[13]\b|invalid[_ ]key|invalid api key|unauthori[sz]ed/i, "invalid_key"],
   [/payment cancelled|cancelled in the wallet/i, "payment_cancelled"],

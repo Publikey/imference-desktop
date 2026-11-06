@@ -1214,7 +1214,7 @@
       "toggle": "改用加密货币支付（BTC、ETH、USDT 等）",
       "secure": "由 NOWPayments 处理",
       "coin": "币种",
-      "fees": "网络费用由我们承担。获取地址后，金额会锁定几分钟。",
+      "fees": "网络费用由我们承担。请一次性发送显示的金额。",
       "getAddress": "获取付款地址",
       "qr": "付款地址二维码",
       "sendExactly": "请准确发送",

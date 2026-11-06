@@ -1226,7 +1226,7 @@
       "toggle": "Pay with crypto instead (BTC, ETH, USDT and more)",
       "secure": "Processed by NOWPayments",
       "coin": "Coin",
-      "fees": "Network fees are on us. The amount is fixed for a few minutes once you get the address.",
+      "fees": "Network fees are on us. Send the amount shown in one transaction.",
       "getAddress": "Get the payment address",
       "qr": "QR code of the payment address",
       "sendExactly": "Send exactly",

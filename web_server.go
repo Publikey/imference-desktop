@@ -124,7 +124,6 @@ func (s *webServer) mux() *http.ServeMux {
 	})
 	mux.HandleFunc("POST /web/login", s.login)
 	mux.HandleFunc("POST /web/pay/card", s.payCard)
-	mux.HandleFunc("POST /web/pay/pack", s.payPack)
 	mux.HandleFunc("POST /web/sign", s.sign)
 	mux.HandleFunc("POST /web/logout", s.logout)
 	mux.HandleFunc("POST /web/call", s.call)

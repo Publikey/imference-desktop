@@ -1117,7 +1117,6 @@
       "point1": "一次付款，无需订阅",
       "point2": "你的 Imference 密钥也可用于 Imference Desktop 和 Claude（MCP）",
       "card": "用银行卡支付 {{usd}}",
-      "usdc": "用 USDC 支付 {{usd}}",
       "point2Desktop": "你的 Imference 密钥也可用于 Imference Web 和 Claude（MCP）",
       "howMany": "购买数量"
     },
@@ -1209,8 +1208,28 @@
     "signHistoryTitle": "使用钱包登录以查看历史",
     "signHistoryHint": "仅签名，不付款：{{address}}（{{name}}）。",
     "alt": {
-      "toggle": "改用 USDC 付款（加密钱包）",
-      "packLead": "用 Base 上的 USDC 购买同样的积分包，在浏览器钱包中签名。"
+      "toggle": "改用加密钱包按次付费"
+    },
+    "crypto": {
+      "toggle": "改用加密货币支付（BTC、ETH、USDT 等）",
+      "secure": "由 NOWPayments 处理",
+      "coin": "币种",
+      "fees": "网络费用由我们承担。获取地址后，金额会锁定几分钟。",
+      "getAddress": "获取付款地址",
+      "qr": "付款地址二维码",
+      "sendExactly": "请准确发送",
+      "network": "网络 {{network}}",
+      "toAddress": "到此地址",
+      "memo": "Memo / 标签（必填）",
+      "memoHint": "缺少它，付款将无法与你的订单匹配。",
+      "waiting": "等待你的付款……",
+      "confirming": "已检测到付款，正在网络上确认……",
+      "keepOpen": "网络确认付款后积分即到账，可能需要几分钟。请一次性发送准确金额。你可以关闭此窗口：积分仍会到账到你的密钥。",
+      "partial": "已添加 {{credits}} 积分：付款金额不足，按实际支付部分到账。",
+      "expired": "此付款地址已过期",
+      "expiredHint": "未在时限内收到付款，因此没有扣费。",
+      "newAddress": "获取新地址",
+      "failed": "付款未成功。如果你已发送资金，请联系 contact@imference.com 并提供订单号：{{order}}"
     }
   },
   "engine": {

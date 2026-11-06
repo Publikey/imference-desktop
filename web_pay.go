@@ -4,8 +4,8 @@ package main
 
 // Paying from the web version. A visitor has three ways to pay a run:
 //
-//   - credits on an API key: bought by card (POST web/pay/card -> Stripe
-//     Checkout) or in USDC (POST web/pay/pack -> x402 on /ondemand/credits/add);
+//   - credits on an Imference key: bought by card (POST web/pay/card -> Stripe
+//     Embedded Checkout) or in crypto (StartCryptoPayment -> NOWPayments);
 //   - per run in USDC, with the browser wallet (payMode "wallet"): GenerateCloud
 //     and RunTool take the x402 rail, exactly like the desktop with its own
 //     wallet, except that the signature comes from the browser.
@@ -345,62 +345,6 @@ func (s *webServer) payCard(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{
 		"clientSecret": co.ClientSecret, "publishableKey": co.PublishableKey, "apiKey": co.APIKey})
-}
-
-// payPack buys one pack in USDC with the browser wallet at body.address: x402
-// on /ondemand/credits/add, credited to the session's key, or to a new key the
-// session then moves to.
-func (s *webServer) payPack(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get(csrfHeader) != "1" {
-		http.Error(w, "missing "+csrfHeader+" header", http.StatusForbidden)
-		return
-	}
-	u, err := s.sessionUser(w, r)
-	if err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
-		return
-	}
-	var body struct {
-		Address string `json:"address"`
-	}
-	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err != nil || !common.IsHexAddress(body.Address) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "wallet address required"})
-		return
-	}
-	xc := x402.New(&browserSign{u: u, addr: common.HexToAddress(body.Address)})
-	xc.HTTP = &http.Client{Timeout: 60 * time.Second}
-	xc.MaxAmount = big.NewInt(packCredits * 1000) // exactly the pack, never more
-	xc.Logger = u.app.bus
-	resp, err := xc.DoJSON(r.Context(), http.MethodPost, s.api()+"/ondemand/credits/add",
-		map[string]any{"credits": packCredits, "api_key": u.apiKey}, nil)
-	if err != nil {
-		if code := payErrCode(err); code != "" {
-			writeJSON(w, http.StatusPaymentRequired, map[string]string{"error": err.Error(), "code": code})
-			return
-		}
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
-		return
-	}
-	defer resp.Body.Close()
-	var out struct {
-		APIKey       string `json:"api_key"`
-		CreditsAdded int64  `json:"credits_added"`
-		Error        string `json:"error"`
-	}
-	_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&out)
-	if resp.StatusCode != http.StatusOK || out.APIKey == "" {
-		msg := out.Error
-		if msg == "" {
-			msg = fmt.Sprintf("the imference API answered %d", resp.StatusCode)
-		}
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": msg})
-		return
-	}
-	if err := s.bindKey(w, r, out.APIKey); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"apiKey": out.APIKey, "creditsAdded": out.CreditsAdded})
 }
 
 // sign receives the wallet's answer to a "web:sign" request.

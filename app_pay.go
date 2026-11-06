@@ -112,3 +112,25 @@ func (a *App) AddRecoveryEmail(email string) (string, error) {
 func (a *App) RemoveRecoveryEmail() error {
 	return a.cloud.RemoveRecoveryEmail(a.ctx, a.settings.Get().APIKey)
 }
+
+// CryptoCoins lists the coins a credit pack can be paid with (NOWPayments,
+// behind the imference API).
+func (a *App) CryptoCoins() ([]types.CryptoCoin, error) {
+	return a.cloud.CryptoCoins(a.ctx)
+}
+
+// StartCryptoPayment creates a crypto payment for `packs` packs in coin: an
+// exact amount and a deposit address. It tops up the saved Imference key or,
+// for a buyer without one, a key the imference API creates (in APIKey).
+func (a *App) StartCryptoPayment(packs int, coin string) (types.CryptoPayment, error) {
+	p, err := a.cloud.StartCryptoPayment(a.ctx, a.settings.Get().APIKey, packs, coin)
+	if err != nil {
+		a.bus.Warn("app", "StartCryptoPayment failed", map[string]any{"err": err.Error()})
+	}
+	return p, err
+}
+
+// CryptoPaymentStatus reads a crypto payment's state, until it is credited.
+func (a *App) CryptoPaymentStatus(orderID string) (types.CryptoStatus, error) {
+	return a.cloud.CryptoPaymentStatus(a.ctx, orderID)
+}

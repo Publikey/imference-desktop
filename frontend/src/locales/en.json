@@ -1129,7 +1129,6 @@
       "point1": "One payment, no subscription",
       "point2": "Your Imference key also works in Imference Desktop and in Claude (MCP)",
       "card": "Pay {{usd}} by card",
-      "usdc": "Pay {{usd}} in USDC",
       "point2Desktop": "Your Imference key also works in Imference Web and in Claude (MCP)",
       "howMany": "How many credits"
     },
@@ -1221,8 +1220,28 @@
     "signHistoryTitle": "Sign in with your wallet to see your history",
     "signHistoryHint": "A signature only, no payment: {{address}} ({{name}}).",
     "alt": {
-      "toggle": "Pay with USDC instead (crypto wallet)",
-      "packLead": "Buy the same pack in USDC on Base, signed in your browser wallet."
+      "toggle": "Pay per run from a crypto wallet instead"
+    },
+    "crypto": {
+      "toggle": "Pay with crypto instead (BTC, ETH, USDT and more)",
+      "secure": "Processed by NOWPayments",
+      "coin": "Coin",
+      "fees": "Network fees are on us. The amount is fixed for a few minutes once you get the address.",
+      "getAddress": "Get the payment address",
+      "qr": "QR code of the payment address",
+      "sendExactly": "Send exactly",
+      "network": "network {{network}}",
+      "toAddress": "To this address",
+      "memo": "Memo / tag (required)",
+      "memoHint": "Without it, the payment can't be matched to your order.",
+      "waiting": "Waiting for your payment...",
+      "confirming": "Payment seen. Confirming on the network...",
+      "keepOpen": "Your credits arrive once the network confirms the payment, which can take a few minutes. Send the exact amount in one transaction. You can close this window: the credits still land on your key.",
+      "partial": "{{credits}} credits added: the payment was short, so you got the part you paid for.",
+      "expired": "This payment address expired",
+      "expiredHint": "No payment arrived in time, so nothing was charged.",
+      "newAddress": "Get a new address",
+      "failed": "The payment did not go through. If you sent funds, write to contact@imference.com with your order: {{order}}"
     }
   },
   "engine": {

@@ -387,6 +387,39 @@ type CardCheckout struct {
 	APIKey         string `json:"apiKey"`
 }
 
+// CryptoCoin is a coin a pack can be paid with (NOWPayments, enabled on the
+// imference.com account).
+type CryptoCoin struct {
+	Code   string  `json:"code"`
+	Name   string  `json:"name"`
+	MinUSD float64 `json:"minUsd"`
+}
+
+// CryptoPayment is a pack to pay in crypto: send PayAmount of PayCurrency to
+// PayAddress (with PayinExtraID as memo/tag when set) before ExpiresAt. APIKey
+// is the key the credits land on (a new one for a buyer without one).
+type CryptoPayment struct {
+	OrderID      string `json:"orderId"`
+	APIKey       string `json:"apiKey"`
+	PayAddress   string `json:"payAddress"`
+	PayAmount    string `json:"payAmount"`
+	PayCurrency  string `json:"payCurrency"`
+	CoinName     string `json:"coinName"`
+	Network      string `json:"network"`
+	PayinExtraID string `json:"payinExtraId"`
+	ExpiresAt    string `json:"expiresAt"`
+	Credits      int64  `json:"credits"`
+}
+
+// CryptoStatus is a crypto payment's state: waiting, confirming, confirmed,
+// sending, partially_paid, finished, expired, failed or refunded. Credited is
+// what reached the key so far.
+type CryptoStatus struct {
+	Status   string `json:"status"`
+	Credits  int64  `json:"credits"`
+	Credited int64  `json:"credited"`
+}
+
 // GenerationRequest is the unified frontend → Go payload for both modes.
 // Mirrors imference-desktop/src/renderer/src/lib/types.ts GenerationParams.
 type GenerationRequest struct {

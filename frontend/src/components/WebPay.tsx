@@ -1,9 +1,10 @@
 // Web version only: the payment dialog, the wallet-signing card, the purchase
 // notices, "keep your key", and the account chip in the header. The logic
 // lives in lib/web-pay.ts.
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import qrcode from "qrcode-generator";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, Coins, CreditCard, Copy, Download, KeyRound, Loader2, Lock, Mail, ShieldCheck, Sparkles, Wallet, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowLeft, Bitcoin, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, Coins, CreditCard, Copy, Download, KeyRound, Loader2, Lock, Mail, ShieldCheck, Sparkles, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,12 @@ import {
   showNewKey,
   startCardCheckout,
   type CardCheckout,
-  buyPackWithWallet,
+  cryptoCoins,
+  cryptoPaymentStatus,
+  finishCryptoPayment,
+  startCryptoPayment,
+  type CryptoCoin,
+  type CryptoPayment,
   closePayDialog,
   dismissNewKey,
   dismissNotice,
@@ -72,7 +78,7 @@ function PayDialog() {
   const usd = useUsd();
   const failure = useFailure();
   const { dialog, session, balance, wallets, walletId } = useWebPay();
-  const [busy, setBusy] = useState<"" | "card" | "pack" | "run" | "key">("");
+  const [busy, setBusy] = useState<"" | "card" | "run" | "key">("");
   const [err, setErr] = useState("");
   const [key, setKey] = useState("");
   // A wallet request can sit unseen in the extension: after a few seconds,
@@ -83,14 +89,17 @@ function PayDialog() {
   const [paid, setPaid] = useState<null | "waiting" | number>(null);
   // How many packs this card payment buys (one Stripe checkout).
   const [packs, setPacks] = useState<number>(1);
-  // Paying with a crypto wallet: folded under the card, opened on demand.
+  // Paying per run from a crypto wallet (web): folded under the card.
   const [altOpen, setAltOpen] = useState(false);
+  // Paying the pack in crypto (NOWPayments): its pane replaces the options.
+  const [crypto, setCrypto] = useState(false);
 
   useEffect(() => {
     setBusy("");
     setErr("");
     setKey("");
     setCard(null);
+    setCrypto(false);
     setPaid(null);
     setPacks(1);
     setAltOpen(dialog?.reason === "needs_wallet" || session.payMode === "wallet");
@@ -99,7 +108,7 @@ function PayDialog() {
 
   useEffect(() => {
     setSlow(false);
-    if (busy !== "pack" && busy !== "run") return;
+    if (busy !== "run") return;
     const id = window.setTimeout(() => setSlow(true), 6000);
     return () => window.clearTimeout(id);
   }, [busy]);
@@ -109,9 +118,6 @@ function PayDialog() {
   // Web: offer per-run payment only when choosing a way to pay for the first
   // time (or reconnecting the wallet) — not when buying / topping up credits.
   const showPerRun = isWeb && (dialog.reason === "choose" || dialog.reason === "needs_wallet");
-  // The crypto options (a pack in USDC, per-run payment) are for people who
-  // already hold USDC: folded under the card, on the web only.
-  const showAlt = isWeb && (showPerRun || packs === 1);
 
   // Stripe's onComplete: the pack is paid. Wait for the credits, then close —
   // and retry the run that asked for them.
@@ -130,6 +136,14 @@ function PayDialog() {
       closePayDialog(added > 0 && dialog.reason !== "manual");
       if (!c.hadKey) showNewKey(c.apiKey);
     }, 1500);
+  };
+  // The crypto payment is credited: refresh, then close like a card payment.
+  const onCryptoComplete = async (p: CryptoPayment, credited: number) => {
+    await finishCryptoPayment().catch(() => {});
+    window.setTimeout(() => {
+      closePayDialog(credited > 0 && dialog.reason !== "manual");
+      if (!p.hadKey) showNewKey(p.apiKey);
+    }, 2500);
   };
   const chosen = wallets.find((w) => w.id === walletId) ?? wallets[0];
   const wallet = chosen?.name ?? "";
@@ -193,7 +207,11 @@ function PayDialog() {
 
         {card && <CardPane c={card} paid={paid} onBack={() => setCard(null)} onComplete={() => void onCardComplete()} />}
 
-        {!card && (
+        {crypto && !card && (
+          <CryptoPane packs={packs} onBack={() => setCrypto(false)} onComplete={(p, credited) => void onCryptoComplete(p, credited)} />
+        )}
+
+        {!card && !crypto && (
           <div className="grid gap-4 p-6">
             {/* 1. Credits by card: the way to pay. */}
             <section className="ds-card relative grid content-start gap-4 rounded-2xl p-5">
@@ -235,10 +253,20 @@ function PayDialog() {
                 {busy === "card" ? <Loader2 className="size-4 animate-spin" /> : <CreditCard className="size-4" />}
                 {t("webpay.pack.card", { usd: usd(PACK_USD * packs) })}
               </Button>
+              {/* The same pack in crypto (BTC, ETH, USDT...): its own pane. */}
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground flex w-fit items-center gap-1.5 justify-self-center text-sm underline-offset-4 hover:underline"
+                onClick={() => setCrypto(true)}
+                disabled={!!busy}
+              >
+                <Bitcoin className="size-4" />
+                {t("webpay.crypto.toggle")}
+              </button>
             </section>
 
-            {/* 2. Crypto, for USDC holders: folded under the card (web only). */}
-            {showAlt && (
+            {/* 2. Per run from a crypto wallet, for people who hold USDC (web only). */}
+            {showPerRun && (
               <section className="grid gap-3">
                 <button
                   type="button"
@@ -252,18 +280,8 @@ function PayDialog() {
                 </button>
                 {altOpen && (
                   <div className="grid gap-4 rounded-2xl border p-5">
-                    {/* One pack only: the USDC pack is signed for exactly that amount. */}
-                    {packs === 1 && (
-                      <div className="grid gap-2">
-                        <p className="text-muted-foreground text-sm">{t("webpay.alt.packLead")}</p>
-                        <Button variant="outline" onClick={act("pack", buyPackWithWallet, true)} disabled={!!busy || !wallet}>
-                          {busy === "pack" ? <Loader2 className="size-4 animate-spin" /> : <Coins className="size-4" />}
-                          {t("webpay.pack.usdc", { usd: usd(PACK_USD) })}
-                        </Button>
-                      </div>
-                    )}
                     {showPerRun && (
-                      <div className={cn("grid gap-3", packs === 1 && "border-t pt-4")}>
+                      <div className="grid gap-3">
                         <div>
                           <div className="text-muted-foreground text-xs font-medium">{t("webpay.perRun.title")}</div>
                           <div className="mt-1 text-xl font-semibold">{q ? usd(q.credits / 1000) : t("webpay.perRun.exact")}</div>
@@ -536,6 +554,249 @@ function CardPane({
         <div className="ds-callout ds-callout-danger flex items-start gap-2 px-3 py-2 text-sm">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
           <span>{failed}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The pack paid in crypto: pick a coin, then send the exact amount to the address. */
+function CryptoPane({
+  packs,
+  onBack,
+  onComplete,
+}: {
+  packs: number;
+  onBack: () => void;
+  onComplete: (p: CryptoPayment, credited: number) => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const usd = useUsd();
+  const num = (n: number) => new Intl.NumberFormat(i18n.language).format(n);
+  const [coins, setCoins] = useState<CryptoCoin[] | null>(null);
+  const [coin, setCoin] = useState("");
+  const [p, setP] = useState<CryptoPayment | null>(null);
+  const [status, setStatus] = useState("waiting");
+  const [credited, setCredited] = useState(0);
+  const [phase, setPhase] = useState<"coins" | "starting" | "pay" | "done" | "expired" | "failed">("coins");
+  const [err, setErr] = useState("");
+  const [now, setNow] = useState(Date.now());
+  const [copied, setCopied] = useState("");
+  const done = useRef(onComplete);
+  done.current = onComplete;
+
+  useEffect(() => {
+    let dead = false;
+    cryptoCoins()
+      .then((list) => {
+        if (dead) return;
+        setCoins(list);
+        setCoin((c) => c || list[0]?.code || "");
+      })
+      .catch((e) => !dead && setErr(e?.message || String(e)));
+    return () => {
+      dead = true;
+    };
+  }, []);
+
+  // Follow the payment: every 5 s until credited, expired or failed.
+  useEffect(() => {
+    if (!p || phase !== "pay") return;
+    let dead = false;
+    let timer = 0;
+    const poll = async () => {
+      try {
+        const st = await cryptoPaymentStatus(p.orderId);
+        if (dead) return;
+        setStatus(st.status);
+        if (st.status === "finished" || (st.status === "partially_paid" && st.credited > 0)) {
+          setCredited(st.credited);
+          setPhase("done");
+          done.current(p, st.credited);
+          return;
+        }
+        if (st.status === "expired") return setPhase("expired");
+        if (st.status === "failed" || st.status === "refunded") return setPhase("failed");
+      } catch {
+        /* network hiccup: try again */
+      }
+      if (!dead) timer = window.setTimeout(poll, 5000);
+    };
+    timer = window.setTimeout(poll, 3000);
+    return () => {
+      dead = true;
+      window.clearTimeout(timer);
+    };
+  }, [p, phase]);
+
+  useEffect(() => {
+    if (phase !== "pay") return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [phase]);
+
+  const qr = useMemo(() => {
+    if (!p) return "";
+    const q = qrcode(0, "M");
+    q.addData(p.payAddress);
+    q.make();
+    return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+  }, [p]);
+
+  const start = async () => {
+    setErr("");
+    setPhase("starting");
+    try {
+      const out = await startCryptoPayment(packs, coin);
+      setP(out);
+      setStatus("waiting");
+      setPhase("pay");
+    } catch (e: any) {
+      setErr(e?.message || String(e));
+      setPhase("coins");
+    }
+  };
+  const copy = (what: string, value: string) => {
+    void navigator.clipboard.writeText(value).then(() => {
+      setCopied(what);
+      window.setTimeout(() => setCopied(""), 1500);
+    });
+  };
+  // The coin people know (USDT, USDC), not the code with its network.
+  const ticker = (code: string) => (code.startsWith("usdt") ? "USDT" : code.startsWith("usdc") ? "USDC" : code.toUpperCase());
+  const left = p?.expiresAt ? Math.max(0, Date.parse(p.expiresAt) - now) : 0;
+  const mmss = `${Math.floor(left / 60000)}:${String(Math.floor((left % 60000) / 1000)).padStart(2, "0")}`;
+
+  return (
+    <div className="grid gap-4 p-6">
+      <div className="flex items-center justify-between gap-3">
+        <Button variant="ghost" size="sm" className="-ml-2" onClick={onBack} disabled={phase === "starting" || phase === "done"}>
+          <ArrowLeft className="size-4" />
+          {t("webpay.card.back")}
+        </Button>
+        <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <Lock className="size-3.5" />
+          {t("webpay.crypto.secure")}
+        </span>
+      </div>
+
+      {(phase === "coins" || phase === "starting") && (
+        <section className="ds-card grid gap-4 rounded-2xl p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-xl font-semibold">{t("webpay.pack.amount", { credits: num(PACK_CREDITS * packs) })}</span>
+            <span className="text-xl font-semibold">{usd(PACK_USD * packs)}</span>
+          </div>
+          <label className="grid gap-1.5 text-sm">
+            <span className="font-medium">{t("webpay.crypto.coin")}</span>
+            <select
+              className="border-input bg-background h-10 w-full rounded-lg border px-3 text-sm"
+              value={coin}
+              onChange={(e) => setCoin(e.target.value)}
+              disabled={!coins || phase === "starting"}
+            >
+              {!coins && <option>{t("common.loading")}</option>}
+              {coins?.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-muted-foreground text-xs">{t("webpay.crypto.fees")}</p>
+          <Button size="lg" variant="brand" className="h-11" onClick={() => void start()} disabled={!coin || phase === "starting"}>
+            {phase === "starting" ? <Loader2 className="size-4 animate-spin" /> : <Bitcoin className="size-4" />}
+            {t("webpay.crypto.getAddress")}
+          </Button>
+        </section>
+      )}
+
+      {phase === "pay" && p && (
+        <section className="grid gap-4">
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+            <div
+              className="size-40 shrink-0 rounded-xl bg-white p-2 [&_svg]:block [&_svg]:size-full"
+              role="img"
+              aria-label={t("webpay.crypto.qr")}
+              dangerouslySetInnerHTML={{ __html: qr }}
+            />
+            <div className="grid w-full min-w-0 gap-3">
+              <div>
+                <div className="text-muted-foreground text-xs">{t("webpay.crypto.sendExactly")}</div>
+                <div className="text-2xl font-semibold tabular-nums">
+                  {p.payAmount} <span className="text-muted-foreground">{ticker(p.payCurrency)}</span>
+                </div>
+                <div className="text-muted-foreground text-xs">
+                  {p.coinName}
+                  {p.network ? ` · ${t("webpay.crypto.network", { network: p.network.toUpperCase() })}` : ""}
+                </div>
+              </div>
+              <div className="grid gap-1">
+                <span className="text-sm font-medium">{t("webpay.crypto.toAddress")}</span>
+                <div className="flex gap-2">
+                  <Input readOnly value={p.payAddress} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                  <Button variant="outline" size="icon" onClick={() => copy("address", p.payAddress)} aria-label={t("common.copy")}>
+                    {copied === "address" ? <Check className="text-success size-4" /> : <Copy className="size-4" />}
+                  </Button>
+                </div>
+              </div>
+              {p.payinExtraId && (
+                <div className="grid gap-1">
+                  <span className="text-warning text-sm font-medium">{t("webpay.crypto.memo")}</span>
+                  <div className="flex gap-2">
+                    <Input readOnly value={p.payinExtraId} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                    <Button variant="outline" size="icon" onClick={() => copy("memo", p.payinExtraId)} aria-label={t("common.copy")}>
+                      {copied === "memo" ? <Check className="text-success size-4" /> : <Copy className="size-4" />}
+                    </Button>
+                  </div>
+                  <span className="text-muted-foreground text-xs">{t("webpay.crypto.memoHint")}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl border px-4 py-3 text-sm">
+            <Loader2 className="text-primary size-4 shrink-0 animate-spin" />
+            <span className="flex-1">{t(status === "waiting" ? "webpay.crypto.waiting" : "webpay.crypto.confirming")}</span>
+            {status === "waiting" && left > 0 && (
+              <span className="text-muted-foreground flex items-center gap-1 tabular-nums">
+                <Clock className="size-3.5" />
+                {mmss}
+              </span>
+            )}
+          </div>
+          <p className="text-muted-foreground text-xs">{t("webpay.crypto.keepOpen")}</p>
+        </section>
+      )}
+
+      {phase === "done" && (
+        <div className="grid place-items-center gap-3 py-12 text-center">
+          <CheckCircle2 className="size-10 text-success" />
+          <p className="font-medium">
+            {status === "partially_paid"
+              ? t("webpay.crypto.partial", { credits: num(credited) })
+              : t("webpay.notice.added", { credits: num(credited) })}
+          </p>
+        </div>
+      )}
+
+      {phase === "expired" && (
+        <div className="grid place-items-center gap-3 py-10 text-center">
+          <p className="font-medium">{t("webpay.crypto.expired")}</p>
+          <p className="text-muted-foreground text-sm">{t("webpay.crypto.expiredHint")}</p>
+          <Button onClick={() => { setP(null); setPhase("coins"); }}>{t("webpay.crypto.newAddress")}</Button>
+        </div>
+      )}
+
+      {phase === "failed" && p && (
+        <div className="ds-callout ds-callout-danger flex items-start gap-2 px-3 py-2 text-sm">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{t("webpay.crypto.failed", { order: p.orderId })}</span>
+        </div>
+      )}
+
+      {err && (
+        <div className="ds-callout ds-callout-danger flex items-start gap-2 px-3 py-2 text-sm">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{err}</span>
         </div>
       )}
     </div>

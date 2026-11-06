@@ -17,6 +17,9 @@ import {
   GetRecoveryEmail,
   AddRecoveryEmail,
   RemoveRecoveryEmail,
+  CryptoCoins,
+  StartCryptoPayment,
+  CryptoPaymentStatus,
   SaveAPIKeyFile,
   SaveWalletKeyFile,
   GetEngineInfo,
@@ -136,6 +139,23 @@ const raw = {
   addRecoveryEmail: AddRecoveryEmail as (email: string) => Promise<string>,
   /** Unlinks the saved Imference key's recovery email. */
   removeRecoveryEmail: RemoveRecoveryEmail as () => Promise<void>,
+  /** Coins a credit pack can be paid with (NOWPayments, behind imference.com). */
+  cryptoCoins: CryptoCoins as unknown as () => Promise<{ code: string; name: string; minUsd: number }[]>,
+  /** A crypto payment for `packs` packs: exact amount, deposit address, key. */
+  startCryptoPayment: StartCryptoPayment as unknown as (packs: number, coin: string) => Promise<{
+    orderId: string;
+    apiKey: string;
+    payAddress: string;
+    payAmount: string;
+    payCurrency: string;
+    coinName: string;
+    network: string;
+    payinExtraId: string;
+    expiresAt: string;
+    credits: number;
+  }>,
+  /** A crypto payment's state, until it is credited. */
+  cryptoPaymentStatus: CryptoPaymentStatus as unknown as (orderId: string) => Promise<{ status: string; credits: number; credited: number }>,
   /** Native "Save as" for the Imference key; "" when cancelled. */
   saveAPIKeyFile: SaveAPIKeyFile as () => Promise<string>,
   /** Native "Save as" for the app wallet's private key; "" when cancelled. */

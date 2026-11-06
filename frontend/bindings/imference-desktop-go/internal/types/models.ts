@@ -158,6 +158,45 @@ export interface CreditInfo {
 }
 
 /**
+ * CryptoCoin is a coin a pack can be paid with (NOWPayments, enabled on the
+ * imference.com account).
+ */
+export interface CryptoCoin {
+    "code": string;
+    "name": string;
+    "minUsd": number;
+}
+
+/**
+ * CryptoPayment is a pack to pay in crypto: send PayAmount of PayCurrency to
+ * PayAddress (with PayinExtraID as memo/tag when set) before ExpiresAt. APIKey
+ * is the key the credits land on (a new one for a buyer without one).
+ */
+export interface CryptoPayment {
+    "orderId": string;
+    "apiKey": string;
+    "payAddress": string;
+    "payAmount": string;
+    "payCurrency": string;
+    "coinName": string;
+    "network": string;
+    "payinExtraId": string;
+    "expiresAt": string;
+    "credits": number;
+}
+
+/**
+ * CryptoStatus is a crypto payment's state: waiting, confirming, confirmed,
+ * sending, partially_paid, finished, expired, failed or refunded. Credited is
+ * what reached the key so far.
+ */
+export interface CryptoStatus {
+    "status": string;
+    "credits": number;
+    "credited": number;
+}
+
+/**
  * EngineInfo reflects whether the bundled-engine venv exists and looks valid.
  * Computed on demand by GetEngineInfo — cheap, fast, can be called every time
  * the SettingsDialog opens.

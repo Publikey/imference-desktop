@@ -265,32 +265,6 @@ func TestPerRunPaymentRefusedInTheWallet(t *testing.T) {
 	}
 }
 
-// A pack in USDC: a guest gets a new key with the credits, and the session
-// moves to it.
-func TestPackInUSDCCreatesTheKey(t *testing.T) {
-	t.Setenv("IMFERENCE_BASE_RPC", "http://127.0.0.1:1")
-	api := httptest.NewServer(x402Gate(t, "5000000", func(w http.ResponseWriter, r *http.Request, _ map[string]any) {
-		var body map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		if body["credits"] != float64(packCredits) || body["api_key"] != "" {
-			t.Errorf("credits/add body %v", body)
-		}
-		_, _ = w.Write([]byte(`{"api_key":"good-pack","credits_added":5000}`))
-	}))
-	defer api.Close()
-	srv, hs := startServer(t, api.URL)
-	c := newClient(t, hs.URL)
-	c.call("GetVersion") // open the guest session
-	walletTab(t, srv, c, false)
-	code, m := c.post("/web/pay/pack", map[string]any{"address": testWalletAddr}, true)
-	if code != http.StatusOK || m["apiKey"] != "good-pack" || m["creditsAdded"] != float64(5000) {
-		t.Fatalf("pay/pack: %d %v", code, m)
-	}
-	if k := settingsKey(t, c); k != "good-pack" {
-		t.Fatalf("session key after the pack: %q", k)
-	}
-}
-
 // By card: an Embedded Checkout session for one pack. The page gets what it
 // needs to mount Stripe's form; the session keeps its key until the payment is
 // done (the page then signs in with the new key).

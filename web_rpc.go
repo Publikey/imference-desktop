@@ -32,6 +32,8 @@ var webAllow = map[string]bool{
 	// Recovery email of the session's Imference key: the App reads the key
 	// from its settings, which webSettings pins to the session's.
 	"GetRecoveryEmail": true, "AddRecoveryEmail": true, "RemoveRecoveryEmail": true,
+	// Credit packs in crypto: the session's key (or a new one for a guest).
+	"CryptoCoins": true, "StartCryptoPayment": true, "CryptoPaymentStatus": true,
 }
 
 var webStub = map[string]bool{

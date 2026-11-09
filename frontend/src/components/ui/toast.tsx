@@ -3,8 +3,10 @@ import { AlertTriangle, Check, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ToastVariant = "default" | "success" | "error";
-type Toast = { id: number; message: string; variant: ToastVariant; duration: number };
-type ToastInput = { variant?: ToastVariant; duration?: number };
+/** One button on the toast ("Undo"): runs, then dismisses the toast. */
+type ToastAction = { label: string; onClick: () => void };
+type Toast = { id: number; message: string; variant: ToastVariant; duration: number; action?: ToastAction };
+type ToastInput = { variant?: ToastVariant; duration?: number; action?: ToastAction };
 
 type ToastApi = {
   toast: (message: string, opts?: ToastInput) => void;
@@ -25,8 +27,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const push = useCallback((message: string, opts?: ToastInput) => {
     const id = nextId.current++;
-    const duration = opts?.duration ?? 3200;
-    setToasts((cur) => [...cur, { id, message, variant: opts?.variant ?? "default", duration }]);
+    // A toast with an action stays a little longer: time to read, then click.
+    const duration = opts?.duration ?? (opts?.action ? 6000 : 3200);
+    setToasts((cur) => [...cur, { id, message, variant: opts?.variant ?? "default", duration, action: opts?.action }]);
   }, []);
 
   // Stable identity so callers can safely list `toast` in effect deps.
@@ -77,6 +80,18 @@ function ToastRow({ toast, onDone }: { toast: Toast; onDone: () => void }) {
         )}
       />
       <span className="min-w-0 flex-1 truncate">{toast.message}</span>
+      {toast.action && (
+        <button
+          type="button"
+          onClick={() => {
+            toast.action!.onClick();
+            onDone();
+          }}
+          className="shrink-0 rounded-full px-2 py-0.5 font-semibold underline-offset-2 hover:underline"
+        >
+          {toast.action.label}
+        </button>
+      )}
       <button
         type="button"
         onClick={onDone}

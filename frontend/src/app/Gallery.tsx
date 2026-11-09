@@ -16,14 +16,18 @@ import type { GalleryFacets, GalleryFilter, GenerationMeta, Job, SavedImage } fr
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/wails-bridge";
 import { useStuck } from "@/lib/sticky";
+import { downloadFile } from "@/lib/download";
 import { forgetFavorites, toggleFavorite, useFavorites } from "@/lib/favorites";
 import { Kbd, Segmented } from "@/components/ds";
 import {
   Check,
   CornerDownLeft,
   Copy,
+  Dices,
+  Download,
   FolderOpen,
   SlidersHorizontal,
+  Sparkles,
   ImageIcon,
   Star,
   LayoutGrid,
@@ -122,6 +126,8 @@ export function Gallery({
   onImageDragStart,
   onReuseSettings,
   onReusePrompt,
+  onReuseSeed,
+  onUsePrompt,
   onHideJob,
   onOpenTool,
 }: {
@@ -133,6 +139,10 @@ export function Gallery({
   onReuseSettings: (meta: GenerationMeta) => void;
   /** Load the prompt alone, keeping the current parameters. */
   onReusePrompt: (prompt: string) => void;
+  /** Fix the seed for the next runs. */
+  onReuseSeed: (seed: number) => void;
+  /** An example prompt from the empty gallery, into Create. */
+  onUsePrompt: (prompt: string) => void;
   onHideJob: (id: string) => void;
   /** Open an item in the Edit panel. */
   onOpenTool: (toolId: string, source: ToolSource, maskMode?: "select") => void;
@@ -153,8 +163,29 @@ export function Gallery({
   // so the reload waited for the bottom of the gallery to scroll into view.
   const doneRef = useRef(false);
   const [loading, setLoading] = useState(false);
-  // Two columns on a phone (three leaves ~110px thumbnails), three otherwise.
-  const [cols, setCols] = useState(() => (window.innerWidth < 640 ? 2 : 3));
+  // Two columns on a phone (three leaves ~110px thumbnails), three otherwise;
+  // then whatever the user picked last, per device class.
+  const colsKey = window.innerWidth < 640 ? "imference.gallery.cols.phone" : "imference.gallery.cols";
+  const [cols, setColsState] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem(colsKey));
+      if (v >= 1 && v <= 4) return v;
+    } catch {
+      /* default below */
+    }
+    return window.innerWidth < 640 ? 2 : 3;
+  });
+  const setCols = useCallback(
+    (n: number) => {
+      setColsState(n);
+      try {
+        localStorage.setItem(colsKey, String(n));
+      } catch {
+        /* not remembered */
+      }
+    },
+    [colsKey]
+  );
   const [filter, setFilter] = useState<GalleryFilter>(EMPTY_FILTER);
   const [facets, setFacets] = useState<GalleryFacets | null>(null);
   // Multi-selection (keyed by filename), the context menu, and the fullscreen
@@ -347,6 +378,22 @@ export function Gallery({
   }, [selected, deleteNames, confirm, t]);
 
   const clearSelection = useCallback(() => setSelected(new Set()), []);
+  // Star the whole selection (or un-star it, when every one is already starred).
+  const favoriteSelected = useCallback(() => {
+    const names = [...selected];
+    const all = names.every((n) => favorites.has(n));
+    names.filter((n) => all || !favorites.has(n)).forEach(toggleFavorite);
+  }, [selected, favorites]);
+  // Web: files one after the other (browsers ask once to allow several).
+  const downloadSelected = useCallback(async () => {
+    for (const n of selected) {
+      try {
+        await downloadFile(await api.getSavedImage(n), n);
+      } catch {
+        /* unreadable file: skip it */
+      }
+    }
+  }, [selected]);
 
   // Open an editing tool on a gallery item, in the Edit panel (closes the
   // viewer, which would cover it).
@@ -467,7 +514,7 @@ export function Gallery({
           e.preventDefault();
           setSelected(new Set(names));
         }
-      } else if (e.key === "Delete" || e.key === "Backspace") {
+      } else if ((e.key === "Delete" || e.key === "Backspace") && viewIndexRef.current == null) {
         setSelected((cur) => {
           if (cur.size > 0) {
             e.preventDefault();
@@ -615,6 +662,20 @@ export function Gallery({
               </span>
             </p>
           )}
+          {!filtered && (
+            // A first image is one click away: the same examples as the tour.
+            <div className="relative mt-4 flex max-w-xl flex-col items-center gap-2">
+              <p className="ds-sublabel">{t("welcome.tryPrompt")}</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {(["sample1", "sample2", "sample3"] as const).map((k) => (
+                  <button key={k} type="button" className="welcome-prompt" onClick={() => onUsePrompt(t(`welcome.${k}`))}>
+                    <Sparkles className="size-3.5 shrink-0" />
+                    <span>{t(`welcome.${k}`)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {filtered && (
             <button
               type="button"
@@ -649,12 +710,31 @@ export function Gallery({
       {/* Loading the NEXT page (not the first) → append a row of skeleton tiles. */}
       {loading && !initialLoading && <GallerySkeleton cols={cols} rows={1} />}
 
-      {/* Floating selection bar. */}
-      {selected.size > 0 && (
+      {/* Floating selection bar. Portalled to <body>: inside the board, the
+          panels' entrance transform makes `fixed` relative to the column, and
+          the bar floated mid-gallery instead of at the window's bottom. */}
+      {selected.size > 0 &&
+        createPortal(
         <div className="animate-in fade-in slide-in-from-bottom-2 fixed bottom-[calc(1.5rem+var(--phone-nav-h))] left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border bg-popover/95 px-2 py-2 pl-4 shadow-2xl backdrop-blur">
           <span className="text-sm font-medium tabular-nums">
             {t("gallery.selectedCount", { count: selected.size })}
           </span>
+          <button
+            type="button"
+            onClick={favoriteSelected}
+            className="hover:bg-muted inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
+          >
+            <Star className="size-3.5" /> {t("gallery.favoriteSelected")}
+          </button>
+          {isWeb && (
+            <button
+              type="button"
+              onClick={downloadSelected}
+              className="hover:bg-muted inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
+            >
+              <Download className="size-3.5" /> {t("gallery.download")}
+            </button>
+          )}
           <button
             type="button"
             onClick={deleteSelected}
@@ -669,8 +749,9 @@ export function Gallery({
           >
             {t("gallery.clearSelection")}
           </button>
-        </div>
-      )}
+        </div>,
+        document.body
+        )}
 
       {menu && (
         <TileContextMenu
@@ -682,6 +763,7 @@ export function Gallery({
           onUseAsSource={onUseAsSource}
           onReuseSettings={onReuseSettings}
           onReusePrompt={onReusePrompt}
+          onReuseSeed={onReuseSeed}
           onDelete={deleteOne}
           onTool={openTool}
         />
@@ -696,6 +778,7 @@ export function Gallery({
           onUseAsSource={onUseAsSource}
           onReuseSettings={onReuseSettings}
           onReusePrompt={onReusePrompt}
+          onReuseSeed={onReuseSeed}
           onDelete={deleteOne}
           onTool={openTool}
         />
@@ -1197,6 +1280,7 @@ export function TileContextMenu({
   onUseAsSource,
   onReuseSettings,
   onReusePrompt,
+  onReuseSeed,
   onDelete,
   onTool,
 }: {
@@ -1208,6 +1292,7 @@ export function TileContextMenu({
   onUseAsSource: (getSrc: () => Promise<string>) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
   onReusePrompt: (prompt: string) => void;
+  onReuseSeed: (seed: number) => void;
   onDelete: (name: string) => void;
   onTool: (toolId: string, target: ViewerItem, maskMode?: "select") => void;
 }) {
@@ -1301,6 +1386,13 @@ export function TileContextMenu({
             onClick={run(() => onReusePrompt(meta.prompt))}
           />
         )}
+        {!!meta?.seed && (
+          <MenuItem
+            icon={<Dices />}
+            label={t("gallery.ctxReuseSeed", { seed: meta.seed })}
+            onClick={run(() => onReuseSeed(meta.seed))}
+          />
+        )}
         {meta?.prompt && (
           <MenuItem
             icon={<Copy />}
@@ -1313,6 +1405,13 @@ export function TileContextMenu({
             icon={<Star />}
             label={favorites.has(target.name) ? t("gallery.unfavorite") : t("gallery.favorite")}
             onClick={run(() => toggleFavorite(target.name!))}
+          />
+        )}
+        {isWeb && target.name && (
+          <MenuItem
+            icon={<Download />}
+            label={t("gallery.download")}
+            onClick={run(() => void target.getSrc().then((src) => downloadFile(src, target.name!)).catch(() => {}))}
           />
         )}
         {target.savedPath && !isWeb && (

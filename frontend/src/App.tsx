@@ -14,6 +14,8 @@ import {
 } from "@/components/PanelBoard";
 import { PANEL_ORDER, PanelIcon } from "@/components/PanelToggles";
 import { PhoneTabBar, useIsPhone } from "@/components/PhoneTabBar";
+import { rememberPrompt } from "@/lib/prompt-history";
+import { notifyFinished } from "@/lib/notify";
 import { PaymentBar } from "@/components/PaymentBar";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { CloudHistoryDialog } from "@/components/CloudHistoryDialog";
@@ -948,6 +950,7 @@ export default function App() {
     (which: Mode) => {
       const p = prompt.trim();
       if (!p) return;
+      rememberPrompt(p);
       // Local: the PENDING pick, not the loaded model — a job can be enqueued
       // for a cached model that's still being swapped in, and it must carry that
       // model's formats/defaults (the same ones the params panel is showing).
@@ -1342,8 +1345,29 @@ export default function App() {
   // Load a past image's metadata back into the composer (prompt + parameters) to
   // re-run or remix it. Doesn't switch model or mode; the original img2img source
   // isn't stored, so it's not restored.
+  // Every "reuse" overwrites what the user had: the toast offers to put it back.
+  const promptNowRef = useRef(prompt);
+  promptNowRef.current = prompt;
+  const paramsNowRef = useRef(params);
+  paramsNowRef.current = params;
+  const undoable = useCallback(
+    (message: string) => {
+      const before = { prompt: promptNowRef.current, params: paramsNowRef.current };
+      toast.toast(message, {
+        action: {
+          label: t("common.undo"),
+          onClick: () => {
+            setPrompt(before.prompt);
+            setParams(before.params);
+          },
+        },
+      });
+    },
+    [toast, t]
+  );
   const reuseSettings = useCallback(
     (meta: GenerationMeta) => {
+      undoable(t("toast.settingsReused"));
       if (meta.prompt != null) setPrompt(meta.prompt);
       setParams((pp) => {
         const base = pp ?? (activeModel ? defaultParams(activeModel) : null);
@@ -1368,17 +1392,27 @@ export default function App() {
           ...fmt,
         };
       });
-      toast.toast(t("toast.settingsReused"));
     },
-    [activeModel, toast, t]
+    [activeModel, undoable, t]
   );
   // The prompt alone, for a remix on the current model and parameters.
   const reusePrompt = useCallback(
     (text: string) => {
+      undoable(t("toast.promptReused"));
       setPrompt(text);
-      toast.toast(t("toast.promptReused"));
     },
-    [toast, t]
+    [undoable, t]
+  );
+  // The seed alone: keep a lucky composition while changing the prompt.
+  const reuseSeed = useCallback(
+    (seed: number) => {
+      undoable(t("toast.seedReused", { seed }));
+      setParams((pp) => {
+        const base = pp ?? (activeModel ? defaultParams(activeModel) : null);
+        return base ? { ...base, seedMode: "fixed" as const, seed } : pp;
+      });
+    },
+    [activeModel, undoable, t]
   );
 
   // Paste an image anywhere (⌘/Ctrl+V) → it becomes the reference image, like
@@ -1609,6 +1643,22 @@ export default function App() {
     !prompt.trim() && !editModelActive && (mode === "cloud" ? cloudReady : localCanRun)
       ? t("hint.writePrompt")
       : contextHint;
+
+  // Web: a run that took a while and ended while the user was in another tab
+  // gets a notification (when allowed) and a count in the tab title.
+  const notifiedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isWeb) return;
+    for (const j of jobs) {
+      if ((j.status !== "done" && j.status !== "error") || notifiedRef.current.has(j.id)) continue;
+      notifiedRef.current.add(j.id);
+      if (j.hidden || !j.startedAt || (j.endedAt ?? Date.now()) - j.startedAt < 15_000) continue;
+      notifyFinished(
+        j.status === "done" ? t("notify.doneTitle") : t("notify.failedTitle"),
+        j.prompt.length > 90 ? `${j.prompt.slice(0, 90)}…` : j.prompt
+      );
+    }
+  }, [jobs, t]);
 
   // Activity-panel derivations: in-flight count (running + queued) for the badge,
   // finished rows for the Clear action, and the done subset the gallery shows as
@@ -2069,6 +2119,11 @@ export default function App() {
                     onImageDragStart={startImageDrag}
                     onReuseSettings={reuseSettings}
                     onReusePrompt={reusePrompt}
+                    onReuseSeed={reuseSeed}
+                    onUsePrompt={(p) => {
+                      showPanel("create");
+                      applySamplePrompt(p);
+                    }}
                     onHideJob={dismissJob}
                   />
                 ),
@@ -2109,6 +2164,7 @@ export default function App() {
           onUseAsSource={useAsImg2img}
           onReuseSettings={reuseSettings}
           onReusePrompt={reusePrompt}
+          onReuseSeed={reuseSeed}
           onDelete={() => {}}
         />
       )}

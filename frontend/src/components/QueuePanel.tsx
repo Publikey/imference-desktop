@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, Check, Clock, Cloud, Copy, Cpu, Loader2, Sparkles, Square, X } from "lucide-react";
+import { AlertCircle, Bell, Check, Clock, Cloud, Copy, Cpu, Loader2, Sparkles, Square, X } from "lucide-react";
+import { requestNotify, useNotifyPermission } from "@/lib/notify";
 import { ProgressBar } from "@/components/ui/progress";
 import { HoverPopover } from "@/components/ui/hover-popover";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,7 @@ export function QueuePanel({
   onOpenImage: (item: LightboxItem) => void;
 }) {
   const { t } = useTranslation();
+  const notifyPerm = useNotifyPermission();
   const visible = jobs.filter((j) => !j.hidden);
   const anyRunning = visible.some((j) => j.status === "running");
   const now = useNow(anyRunning);
@@ -75,7 +77,20 @@ export function QueuePanel({
     );
   }
 
+  const busy = visible.some((j) => j.status === "running" || j.status === "queued");
   return (
+    <>
+    {/* Web, while something runs: offer to be told when it's done — asked
+        from this click, never on its own. */}
+    {busy && notifyPerm === "default" && (
+      <button
+        type="button"
+        onClick={() => void requestNotify()}
+        className="text-muted-foreground hover:text-foreground mb-2 inline-flex items-center gap-1.5 text-2xs font-medium transition-colors"
+      >
+        <Bell className="size-3" /> {t("queue.notifyMe")}
+      </button>
+    )}
     <ul className="flex flex-col gap-2">
       {visible.map((job) => (
         <QueueRow
@@ -89,6 +104,7 @@ export function QueuePanel({
         />
       ))}
     </ul>
+    </>
   );
 }
 
@@ -119,6 +135,12 @@ function QueueRow({
   // output as the thumbnail.
   const thumb = isTool ? job.tool?.preview : job.image?.imageBase64;
   const toolPct = isTool && job.tool?.fraction ? job.tool.fraction * 100 : null;
+  // Time left, from the pace so far. Only once a few steps are in: the first
+  // ones carry the model load and would make the guess wild.
+  const eta =
+    running && job.startedAt && pct !== null && pct >= 8 && pct < 100 && (job.progress?.step ?? 0) >= 2
+      ? fmtElapsed(((now - job.startedAt) * (100 - pct)) / pct)
+      : "";
 
   const toolText = isTool ? job.tool?.result?.outputs.find((o) => o.type === "text" && o.text)?.text : undefined;
   const statusLine = isTool && job.status === "done" && toolText
@@ -131,7 +153,7 @@ function QueueRow({
       : t("queue.queuedNext")
     : running
       ? pct !== null
-        ? t("queue.step", { step: job.progress!.step, total: job.progress!.total })
+        ? t("queue.step", { step: job.progress!.step, total: job.progress!.total }) + (eta ? ` · ${t("queue.eta", { time: eta })}` : "")
         : job.mode === "cloud"
           ? t("queue.cloudRunning")
           : t("queue.generating")

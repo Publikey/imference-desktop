@@ -28,6 +28,8 @@ export function ShortcutsDialog({
         { keys: [mod, "K"], label: t("shortcuts.palette") },
         { keys: ["?"], label: t("shortcuts.help") },
         { keys: [mod, "↵"], label: t("shortcuts.generate") },
+        { keys: ["↑"], label: t("shortcuts.lastPrompt") },
+        { keys: [mod, "V"], label: t("shortcuts.pasteRef") },
       ],
     },
     {
@@ -45,6 +47,11 @@ export function ShortcutsDialog({
       title: t("shortcuts.viewer"),
       rows: [
         { keys: ["←", "→"], label: t("shortcuts.prevNext") },
+        { keys: ["R"], label: t("shortcuts.reuse") },
+        { keys: ["S"], label: t("shortcuts.favorite") },
+        { keys: ["I"], label: t("shortcuts.details") },
+        { keys: ["F"], label: t("shortcuts.fullscreen") },
+        { keys: ["Del"], label: t("shortcuts.deleteOne") },
         { keys: [t("shortcuts.click")], label: t("shortcuts.zoom") },
         { keys: ["Esc"], label: t("shortcuts.close") },
       ],

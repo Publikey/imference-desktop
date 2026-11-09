@@ -21,7 +21,8 @@
     "reinstall": "重新安装",
     "settings": "设置",
     "logs": "日志",
-    "all": "全部"
+    "all": "全部",
+    "undo": "撤销"
   },
   "header": {
     "versionTitle": "Imference Desktop 版本",
@@ -107,7 +108,9 @@
     "qualityTagsHelp": "添加在提示词之前。已预填该模型效果最佳的标签。",
     "extras": "反向提示词与质量标签",
     "extrasSet": "已启用",
-    "extrasHide": "收起"
+    "extrasHide": "收起",
+    "recent": "最近的提示词",
+    "recentHint": "在空的提示词框中按 ↑ 可调出上一条"
   },
   "hint": {
     "configurePayment": "尚无付款方式：请在上方设置",
@@ -269,7 +272,9 @@
     "queuedNext": "排队中 · 即将开始",
     "queuedPosition": "排队中 · 第 {{position}} 位",
     "done": "用时 {{time}}",
-    "failed": "失败"
+    "failed": "失败",
+    "eta": "约剩 {{time}}",
+    "notifyMe": "完成时通知我"
   },
   "activity": {
     "busy_one": "{{count}} 运行中",
@@ -330,7 +335,12 @@
     "undated": "更早",
     "showDetails": "显示详情 (I)",
     "hideDetails": "隐藏详情 (I)",
-    "lbDetails": "详情"
+    "lbDetails": "详情",
+    "ctxReuseSeed": "沿用种子 {{seed}}",
+    "download": "下载",
+    "favoriteSelected": "收藏",
+    "lbFavorite": "收藏",
+    "lbReuse": "复用"
   },
   "meta": {
     "model": "模型",
@@ -406,7 +416,9 @@
     "downloadBelow": "请先在下方“本地设置”中下载。",
     "loadNow": "立即加载",
     "loading": "正在将模型加载到引擎…",
-    "change": "更换"
+    "change": "更换",
+    "recent": "最近",
+    "switchTo": "切换到 {{name}}"
   },
   "modelPicker": {
     "cloudTitle": "云端模型",
@@ -434,7 +446,8 @@
     "typeCloudApi": "云端 API",
     "costUsd": "${{usd}}",
     "badgeCached": "已下载",
-    "mediaLabel": "类型"
+    "mediaLabel": "类型",
+    "recent": "最近使用"
   },
   "customModel": {
     "title": "添加自定义模型",
@@ -664,7 +677,8 @@
     "deleted_other": "已删除 {{count}} 张图片",
     "pastedRef": "已将粘贴的图片设为参考图",
     "promptReused": "提示词已载入「创作」",
-    "settingsReused": "提示词和参数已载入「创作」"
+    "settingsReused": "提示词和参数已载入「创作」",
+    "seedReused": "后续生成将沿用种子 {{seed}}"
   },
   "onboarding": {
     "title": "欢迎使用 Imference",
@@ -694,7 +708,14 @@
     "context": "上下文菜单",
     "prevNext": "上一张 / 下一张",
     "zoom": "缩放",
-    "close": "关闭"
+    "close": "关闭",
+    "lastPrompt": "上一条提示词（提示词为空时）",
+    "pasteRef": "粘贴图片作为参考图",
+    "reuse": "复用提示词和参数",
+    "favorite": "收藏 / 取消收藏",
+    "details": "显示 / 隐藏详情",
+    "fullscreen": "全屏",
+    "deleteOne": "删除图片"
   },
   "lora": {
     "title": "LoRA",
@@ -1554,5 +1575,9 @@
     "spendHint": "关闭：它们只在本机免费运行。开启：当你要求使用云端时，它们会使用你 Imference 密钥中的积分，无需复制到它们的设置中。关闭后立即停止。",
     "spendNoKey": "拥有 Imference 密钥后生效（设置 › 积分与密钥）。",
     "permissionsTitle": "AI 智能体可以做什么"
+  },
+  "notify": {
+    "doneTitle": "生成完成",
+    "failedTitle": "生成失败"
   }
 }

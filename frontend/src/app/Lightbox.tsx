@@ -3,6 +3,7 @@
 import { ToolMenuList } from "@/components/ToolBits";
 import { ENGINE_LABEL } from "@/lib/engines";
 import { toggleFavorite, useFavorites } from "@/lib/favorites";
+import { downloadFile } from "@/lib/download";
 import { isWeb } from "@/lib/target";
 import type { GenerationMeta } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Dices,
+  Download,
   CornerDownLeft,
   FolderOpen,
   ImageIcon,
@@ -42,6 +45,7 @@ export function Lightbox({
   onUseAsSource,
   onReuseSettings,
   onReusePrompt,
+  onReuseSeed,
   onDelete,
   onTool,
 }: {
@@ -52,6 +56,7 @@ export function Lightbox({
   onUseAsSource: (getSrc: () => Promise<string>) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
   onReusePrompt: (prompt: string) => void;
+  onReuseSeed: (seed: number) => void;
   onDelete: (name: string) => void;
   /** Editing tools; absent = no Edit menu (e.g. the unsaved session viewer). */
   onTool?: (toolId: string, target: ViewerItem, maskMode?: "select") => void;
@@ -120,6 +125,8 @@ export function Lightbox({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // A confirm dialog over the viewer (delete) owns the keyboard.
+      if (document.querySelector("[role=alertdialog], [role=dialog]")) return;
       // Esc leaves fullscreen first, then closes the viewer.
       if (e.key === "Escape") {
         if (editOpen) setEditOpen(false);
@@ -129,10 +136,17 @@ export function Lightbox({
       else if (e.key === "ArrowRight") next();
       else if (e.key === "f" || e.key === "F") setFull((f) => !f);
       else if (e.key === "i" || e.key === "I") toggleDetails();
+      // One key per frequent move, on the image in view.
+      else if ((e.key === "r" || e.key === "R") && !e.metaKey && !e.ctrlKey && current?.meta?.prompt) onReuseSettings(current.meta);
+      else if ((e.key === "s" || e.key === "S") && !e.metaKey && !e.ctrlKey && current?.name) toggleFavorite(current.name);
+      else if ((e.key === "Delete" || e.key === "Backspace") && current?.name) {
+        e.preventDefault();
+        onDelete(current.name);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, prev, next, editOpen, toggleDetails]);
+  }, [onClose, prev, next, editOpen, toggleDetails, current, onReuseSettings, onDelete]);
 
   if (!current) return null;
   const meta = current.meta;
@@ -145,9 +159,14 @@ export function Lightbox({
     actions.push({ key: "reuse", icon: <RotateCcw />, label: t("gallery.ctxReuse"), run: () => onReuseSettings(meta) });
     actions.push({ key: "prompt", icon: <CornerDownLeft />, label: t("gallery.ctxReusePrompt"), run: () => onReusePrompt(meta.prompt) });
   }
+  if (meta?.seed)
+    actions.push({ key: "seed", icon: <Dices />, label: t("gallery.ctxReuseSeed", { seed: meta.seed }), run: () => onReuseSeed(meta.seed) });
   if (!isVideo) actions.push({ key: "ref", icon: <ImageIcon />, label: t("gallery.ctxUseAsSource"), run: () => onUseAsSource(current.getSrc) });
   if (meta?.prompt)
     actions.push({ key: "copy", icon: <Copy />, label: t("gallery.ctxCopyPrompt"), run: () => void navigator.clipboard?.writeText(meta.prompt).catch(() => {}) });
+  // Web: the browser gallery is out of the user's reach — this gets a file out.
+  if (isWeb && current.name)
+    actions.push({ key: "download", icon: <Download />, label: t("gallery.download"), run: () => void current.getSrc().then((d) => downloadFile(d, current.name!)).catch(() => {}) });
   if (current.savedPath && !isWeb)
     actions.push({ key: "reveal", icon: <FolderOpen />, label: t("gallery.ctxReveal"), run: () => void api.revealInFolder(current.savedPath!).catch(() => {}) });
   const showPanel = !full && details && (!!meta || actions.length > 0);
@@ -375,6 +394,18 @@ export function Lightbox({
             <span className="flex items-center gap-1">
               <kbd className="rounded bg-white/15 px-1">I</kbd>
               {t("gallery.lbDetails")}
+            </span>
+          )}
+          {current.name && (
+            <span className="hidden items-center gap-1 lg:flex">
+              <kbd className="rounded bg-white/15 px-1">S</kbd>
+              {t("gallery.lbFavorite")}
+            </span>
+          )}
+          {meta?.prompt && (
+            <span className="hidden items-center gap-1 lg:flex">
+              <kbd className="rounded bg-white/15 px-1">R</kbd>
+              {t("gallery.lbReuse")}
             </span>
           )}
           <span className="flex items-center gap-1">

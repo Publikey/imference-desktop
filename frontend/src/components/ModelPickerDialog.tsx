@@ -111,6 +111,7 @@ export function ModelPickerDialog({
   catalog,
   customModels,
   activeCode,
+  recentCodes = [],
   cachedCodes,
   busy,
   onPick,
@@ -125,6 +126,8 @@ export function ModelPickerDialog({
   catalog: ModelInfo[];
   customModels: ModelInfo[];
   activeCode: string | null;
+  /** Last picked models, newest first: a "Recent" row on top of the catalog. */
+  recentCodes?: string[];
   /** Local model codes whose weights are already downloaded. */
   cachedCodes: Set<string>;
   busy: boolean;
@@ -181,6 +184,18 @@ export function ModelPickerDialog({
     );
     return groupModels(filtered, t);
   }, [mediaSource, typeFilter, search, t]);
+
+  // Recent: only on the unfiltered catalog, where it saves a search; the
+  // models also stay in their own family below.
+  const recentGroup = useMemo<Group | null>(() => {
+    if (search || typeFilter !== "all" || mediaFilter !== "all" || (!isCloud && tab === "mine")) return null;
+    const items = recentCodes
+      .map((c) => source.find((m) => m.modelCode === c))
+      .filter((m): m is ModelInfo => !!m)
+      .slice(0, 3);
+    return items.length > 1 ? { key: "recent", label: t("modelPicker.recent"), rank: -1, items } : null;
+  }, [search, typeFilter, mediaFilter, isCloud, tab, recentCodes, source, t]);
+  const shownGroups = recentGroup ? [recentGroup, ...groups] : groups;
 
   const total = groups.reduce((n, g) => n + g.items.length, 0);
   const showMine = !isCloud && tab === "mine";
@@ -294,7 +309,7 @@ export function ModelPickerDialog({
               )}
             </div>
           ) : (
-            groups.map((g) => (
+            shownGroups.map((g) => (
               <section key={g.key} className="mb-5 last:mb-0">
                 <h4 className="ds-label mb-2 flex gap-2">
                   {g.label}

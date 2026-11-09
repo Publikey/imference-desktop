@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ModelPickerDialog, ModelThumb } from "@/components/ModelPickerDialog";
 import type { AppSettings, ModelInfo } from "@/lib/types";
 import { isEditModel } from "@/lib/tools";
+import { rememberModel, useRecentModels } from "@/lib/recent-models";
 
 type Mode = "local" | "cloud";
 
@@ -121,6 +122,19 @@ export function ModelBar({
   // you pick a cloud model even while a local model is still downloading.
   const busy = switching || (downloading && !isCloud);
 
+  // Whatever path selected it (this card, the palette, the welcome tour), the
+  // active model joins the recents.
+  useEffect(() => {
+    if (activeCode) rememberModel(mode, activeCode);
+  }, [mode, activeCode]);
+  const recentCodes = useRecentModels(mode);
+  // The way back: the last few others, as one-click chips under the card.
+  const quick = recentCodes
+    .filter((c) => c !== activeCode)
+    .map((c) => allModels.find((m) => m.modelCode === c && !isEditModel(m)))
+    .filter((m): m is ModelInfo => !!m)
+    .slice(0, 3);
+
   const pick = useCallback(
     async (code: string) => {
       if (code === activeCode || busy) return;
@@ -215,6 +229,26 @@ export function ModelBar({
         )}
       </div>
 
+      {!loading && !listError && quick.length > 0 && (
+        <div className="mt-2 flex min-w-0 items-center gap-1.5">
+          <span className="text-subtle shrink-0 text-2xs">{t("modelBar.recent")}</span>
+          <div className="flex min-w-0 gap-1 overflow-hidden">
+            {quick.map((m) => (
+              <button
+                key={m.modelCode}
+                type="button"
+                disabled={busy}
+                onClick={() => void pick(m.modelCode)}
+                title={t("modelBar.switchTo", { name: m.name })}
+                className="ds-chip-btn min-w-0 max-w-[9rem] shrink disabled:opacity-50"
+              >
+                <span className="truncate">{m.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {isCloud && !loading && !listError && <ExternalModelWarning model={selected} className="mt-2" />}
 
       {!isCloud && selected && !loading && !listError && (
@@ -270,6 +304,7 @@ export function ModelBar({
         catalog={(isCloud ? cloudModels : localModels).filter((m) => !isEditModel(m))}
         customModels={customModels}
         activeCode={activeCode}
+        recentCodes={recentCodes}
         cachedCodes={cachedCodes}
         busy={busy}
         onPick={(m) => {

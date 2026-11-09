@@ -21,7 +21,8 @@
     "reinstall": "Reinstall",
     "settings": "Settings",
     "logs": "Logs",
-    "all": "All"
+    "all": "All",
+    "undo": "Undo"
   },
   "header": {
     "versionTitle": "Imference Desktop version",
@@ -109,7 +110,9 @@
     "qualityTagsHelp": "Added in front of your prompt. Pre-filled with the tags this model responds to best.",
     "extras": "Negative prompt & quality tags",
     "extrasSet": "in use",
-    "extrasHide": "Hide"
+    "extrasHide": "Hide",
+    "recent": "Recent prompts",
+    "recentHint": "↑ in an empty prompt brings back the last one"
   },
   "hint": {
     "configurePayment": "No way to pay yet: set one up above",
@@ -272,7 +275,9 @@
     "queuedNext": "Queued · next up",
     "queuedPosition": "Queued · #{{position}} in line",
     "done": "Done in {{time}}",
-    "failed": "Failed"
+    "failed": "Failed",
+    "eta": "~{{time}} left",
+    "notifyMe": "Notify me when it's done"
   },
   "activity": {
     "busy_one": "{{count}} running",
@@ -336,7 +341,12 @@
     "undated": "Older",
     "showDetails": "Show details (I)",
     "hideDetails": "Hide details (I)",
-    "lbDetails": "Details"
+    "lbDetails": "Details",
+    "ctxReuseSeed": "Keep seed {{seed}}",
+    "download": "Download",
+    "favoriteSelected": "Favorite",
+    "lbFavorite": "Favorite",
+    "lbReuse": "Reuse"
   },
   "meta": {
     "model": "Model",
@@ -412,7 +422,9 @@
     "downloadBelow": "Download it in Local setup below first.",
     "loadNow": "Load now",
     "loading": "Loading a model into the engine…",
-    "change": "Change"
+    "change": "Change",
+    "recent": "Recent",
+    "switchTo": "Switch to {{name}}"
   },
   "modelPicker": {
     "cloudTitle": "Cloud models",
@@ -440,7 +452,8 @@
     "typeCloudApi": "Cloud API",
     "costUsd": "${{usd}}",
     "badgeCached": "On disk",
-    "mediaLabel": "Kind"
+    "mediaLabel": "Kind",
+    "recent": "Recent"
   },
   "customModel": {
     "title": "Add custom model",
@@ -674,7 +687,8 @@
     "deleted_other": "{{count}} images deleted",
     "pastedRef": "Pasted image set as the reference",
     "promptReused": "Prompt loaded in Create",
-    "settingsReused": "Prompt and settings loaded in Create"
+    "settingsReused": "Prompt and settings loaded in Create",
+    "seedReused": "Seed {{seed}} kept for the next runs"
   },
   "onboarding": {
     "title": "Welcome to Imference",
@@ -704,7 +718,14 @@
     "context": "Context menu",
     "prevNext": "Previous / next",
     "zoom": "Zoom",
-    "close": "Close"
+    "close": "Close",
+    "lastPrompt": "Last prompt (empty prompt)",
+    "pasteRef": "Paste an image as reference",
+    "reuse": "Reuse prompt & settings",
+    "favorite": "Add to / remove from favorites",
+    "details": "Show / hide details",
+    "fullscreen": "Fullscreen",
+    "deleteOne": "Delete the image"
   },
   "lora": {
     "title": "LoRAs",
@@ -1566,5 +1587,9 @@
     "spendHint": "Off: they only work on this computer, for free. On: when you ask for the cloud, they use the credits of your Imference key, with nothing to copy into their settings. Turning this off stops it at once.",
     "spendNoKey": "Works once you have an Imference key (Settings › Credits & key).",
     "permissionsTitle": "What AI agents may do"
+  },
+  "notify": {
+    "doneTitle": "Your generation is ready",
+    "failedTitle": "A generation failed"
   }
 }

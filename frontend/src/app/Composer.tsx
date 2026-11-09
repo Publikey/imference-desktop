@@ -5,8 +5,10 @@ import { LaunchBurst, useLaunchBurst } from "@/components/LaunchBurst";
 import { Button } from "@/components/ui/button";
 import { useStuck } from "@/lib/sticky";
 import { cn } from "@/lib/utils";
-import { CornerDownLeft, Download, Loader2, Plus, Sparkles, X } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { Popover } from "@/components/ui/popover";
+import { useRecentPrompts } from "@/lib/prompt-history";
+import { CornerDownLeft, Download, History, Loader2, Plus, Sparkles, X } from "lucide-react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ComposerAction, Mode } from "./shared";
 
@@ -63,6 +65,10 @@ export function Composer({
   const preRef = useAutoGrow(prePrompt, extrasOpen);
   const negRef = useAutoGrow(negativePrompt, extrasOpen);
   const extrasSet = !!(negativePrompt.trim() || prePrompt.trim());
+  const recent = useRecentPrompts();
+  const [recentOpen, setRecentOpen] = useState(false);
+  const recentAnchor = useRef<HTMLButtonElement>(null);
+  const recentId = useId();
   const secondaryField =
     "ds-field block max-h-24 w-full resize-none px-3 py-1.5 text-xs leading-snug";
 
@@ -72,7 +78,54 @@ export function Composer({
       title={t("composer.prompt")}
       help={t("composer.promptHelp")}
       action={
-        prompt.length > 0 && (
+        <>
+        {recent.length > 0 && (
+          <>
+            <button
+              ref={recentAnchor}
+              type="button"
+              onClick={() => setRecentOpen((o) => !o)}
+              aria-expanded={recentOpen}
+              aria-controls={recentOpen ? recentId : undefined}
+              aria-haspopup="dialog"
+              title={t("composer.recent")}
+              aria-label={t("composer.recent")}
+              className="text-muted-foreground/70 hover:text-foreground hover:bg-muted rounded p-0.5 transition-colors"
+            >
+              <History className="size-3.5" />
+            </button>
+            <Popover
+              id={recentId}
+              open={recentOpen}
+              onOpenChange={setRecentOpen}
+              anchorRef={recentAnchor}
+              align="end"
+              label={t("composer.recent")}
+              className="w-80 p-1"
+            >
+              <div className="ds-label px-2.5 pb-1 pt-2">{t("composer.recent")}</div>
+              <div className="max-h-72 overflow-y-auto">
+                {recent.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => {
+                      onPromptChange(p);
+                      setRecentOpen(false);
+                      document.getElementById("composer-prompt")?.focus();
+                    }}
+                    title={p}
+                    className="hover:bg-accent block w-full rounded-lg px-2.5 py-1.5 text-left text-xs leading-snug"
+                  >
+                    <span className="line-clamp-2">{p}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-subtle border-t px-2.5 py-1.5 text-2xs">{t("composer.recentHint")}</p>
+            </Popover>
+          </>
+        )}
+        {prompt.length > 0 && (
           <>
             <span className="text-muted-foreground/60 text-2xs tabular-nums">
               {t("composer.charCount", { count: prompt.length })}
@@ -87,7 +140,8 @@ export function Composer({
               <X className="size-3.5" />
             </button>
           </>
-        )
+        )}
+        </>
       }
     >
 
@@ -100,6 +154,13 @@ export function Composer({
         ref={promptRef}
         value={prompt}
         onChange={(e) => onPromptChange(e.target.value)}
+        // ↑ in an empty prompt brings back the last one, like a shell.
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp" && !prompt && recent[0] && !e.shiftKey && !e.altKey) {
+            e.preventDefault();
+            onPromptChange(recent[0]);
+          }
+        }}
         placeholder={t("composer.promptPlaceholder")}
         rows={3}
         className="composer-input mt-2 block max-h-72 min-h-24 w-full resize-none bg-transparent text-[0.9375rem] leading-relaxed outline-none"

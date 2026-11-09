@@ -136,7 +136,8 @@ export function Header({
       <PanelToggles hidden={panelHidden} onToggle={onTogglePanel} modLabel={modLabel} />
 
       <div className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-1">
-        {/* AI agents: a headline feature, so named and set apart (desktop). */}
+        {/* AI agents (desktop): named, but as quiet as Settings beside it — the
+            work in the window keeps the eye. Icon only below lg. */}
         {!isWeb && onOpenAgents && <AgentsButton onClick={onOpenAgents} />}
         <Button
           variant="ghost"
@@ -199,10 +200,10 @@ function AgentsButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       title={t(connected ? "header.agentsConnected" : "header.agentsTitle")}
       data-testid="header-agents"
-      className="agents-btn relative mr-1 h-9 gap-2 rounded-lg px-3 font-medium max-sm:w-9 max-sm:px-0"
+      className="text-muted-foreground hover:text-foreground hover:bg-muted relative h-9 gap-2 rounded-lg px-2.5 max-lg:w-9 max-lg:px-0"
     >
       <Bot className="size-4" />
-      <span className="max-sm:sr-only">{t("header.agents")}</span>
+      <span className="max-lg:sr-only">{t("header.agents")}</span>
       {connected && <span className="bg-success ring-background absolute right-1 top-1 size-2 rounded-full ring-2" />}
     </Button>
   );

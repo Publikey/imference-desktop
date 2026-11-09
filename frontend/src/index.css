@@ -40,6 +40,13 @@
   /* Motion vocabulary — one easing family for the whole app. */
   --ease-out-expo: var(--im-ease-out);
   --ease-spring: var(--im-ease-spring);
+  /* Height of the phone tab bar (PhoneTabBar); 0 wherever it isn't shown. */
+  --phone-nav-h: 0px;
+}
+@media (max-width: 639px) {
+  :root {
+    --phone-nav-h: calc(3.5rem + env(safe-area-inset-bottom));
+  }
 }
 
 @theme inline {
@@ -299,6 +306,25 @@
     outline: var(--im-focus-width) solid var(--im-ring);
     outline-offset: 1px;
   }
+  /* Header panel switches: several can be on at once, so they must not read
+     as tabs. A small brand bar marks each panel that is shown. */
+  .panel-toggles {
+    gap: 2px;
+  }
+  .panel-toggles .ds-seg-item {
+    position: relative;
+  }
+  .panel-toggles .ds-seg-item[aria-pressed="true"]::after {
+    content: "";
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    width: 0.875rem;
+    height: 2px;
+    border-radius: 2px;
+    translate: -50% 0;
+    background: linear-gradient(90deg, var(--brand-from), var(--brand-to));
+  }
   .ds-chip-btn {
     display: inline-flex;
     align-items: center;
@@ -394,13 +420,50 @@
   .run-dock {
     margin-top: -1.25rem;
     padding-top: 1.75rem;
-    /* Frosted, not a solid band: the canvas (and its aurora) shows through,
-       blurred; the mask fades the glass in over the top 1.75rem. */
+    transition: background-color var(--im-duration-fast) ease;
+  }
+  /* Frosted, not a solid band: the canvas (and its aurora) shows through,
+     blurred; the mask fades the glass in over the top 1.75rem. Only while it
+     floats over the column's content — at rest under a short panel, the glass
+     was a tinted band with nothing behind it. */
+  .run-dock[data-stuck] {
     background: color-mix(in oklch, var(--background) 72%, transparent);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
     -webkit-mask-image: linear-gradient(to bottom, transparent, black 1.75rem);
     mask-image: linear-gradient(to bottom, transparent, black 1.75rem);
+  }
+  /* Phones: the bottom tab bar (PhoneTabBar). The window's content ends
+     above it, and the fixed chrome (Activity, toasts, selection bar) rises
+     by its height through --phone-nav-h. */
+  .phone-tabbar {
+    height: var(--phone-nav-h);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: color-mix(in oklch, var(--background) 86%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    backdrop-filter: blur(16px) saturate(1.2);
+  }
+  .phone-tab-on {
+    color: color-mix(in oklch, var(--brand-from) 85%, var(--im-fg));
+    background-color: color-mix(in oklch, var(--brand-from) 14%, transparent);
+  }
+  .app-frame {
+    padding-bottom: var(--phone-nav-h);
+  }
+  /* The gallery's search/filter bar, once it floats over the tiles. */
+  .gallery-toolbar {
+    border-radius: var(--im-radius-lg);
+    transition:
+      background-color var(--im-duration-fast) ease,
+      box-shadow var(--im-duration-fast) ease;
+  }
+  .gallery-toolbar[data-stuck] {
+    background: color-mix(in oklch, var(--background) 94%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow:
+      0 1px 0 color-mix(in oklch, var(--border) 80%, transparent),
+      0 8px 20px -14px rgb(0 0 0 / 0.35);
   }
   /* Lightbox image (md+): as tall as the window allows, and no wider than the
      viewer row leaves beside the 20rem details panel. --ar = width / height. */
@@ -623,19 +686,6 @@
 
   /* Header › AI agents: a headline feature, set apart from the icon buttons —
      a brand tint and ring, the icon in the brand colour. */
-  .agents-btn {
-    color: var(--foreground);
-    background-color: color-mix(in oklch, var(--brand-from) 10%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--brand-from) 30%, transparent);
-  }
-  .agents-btn:hover {
-    background-color: color-mix(in oklch, var(--brand-from) 18%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--brand-from) 45%, transparent);
-  }
-  .agents-btn svg {
-    color: var(--brand-from);
-  }
-
   /* ---- Panel system ------------------------------------------------------
      The main window is three drag-reorderable panels (Create / Activity /
      Gallery). Panels are light columns — a slim header over the content — so

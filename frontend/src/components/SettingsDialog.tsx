@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Bot,
@@ -50,31 +50,39 @@ type PaneId = "engine" | "runtime" | "tools" | "agents" | "credits" | "wallet" |
 
 // Top-level categories. Each is a full pane (icon + title + one-line purpose);
 // only the selected pane renders, so the dialog never becomes one long scroll.
+// Grouped under three headings in the rail, so related panes sit together.
+type PaneGroup = "local" | "payment" | "app";
+const GROUP_LABEL: Record<PaneGroup, string> = {
+  local: "settings.groupLocal",
+  payment: "settings.groupPayment",
+  app: "settings.groupApp",
+};
 const PANES: {
   id: PaneId;
   labelKey: string;
   descKey: string;
   icon: typeof Server;
+  group: PaneGroup;
 }[] = [
-  { id: "engine", labelKey: "settings.navEngine", descKey: "settings.engineDesc", icon: Server },
-  { id: "runtime", labelKey: "settings.navRuntime", descKey: "settings.runtimeDesc", icon: SlidersHorizontal },
-  { id: "tools", labelKey: "settings.navTools", descKey: "settings.toolsDesc", icon: Wand2 },
+  { id: "engine", labelKey: "settings.navEngine", descKey: "settings.engineDesc", icon: Server, group: "local" },
+  { id: "runtime", labelKey: "settings.navRuntime", descKey: "settings.runtimeDesc", icon: SlidersHorizontal, group: "local" },
+  { id: "tools", labelKey: "settings.navTools", descKey: "settings.toolsDesc", icon: Wand2, group: "local" },
+  { id: "storage", labelKey: "settings.navStorage", descKey: "settings.storageDesc", icon: HardDrive, group: "local" },
+  // Paying for cloud runs: two separate stories, two panes, side by side under
+  // one heading. Which one pays a run is chosen on the payment line in Create.
+  { id: "credits", labelKey: "settings.navCredits", descKey: "settings.creditsDesc", icon: Sparkles, group: "payment" },
+  // Second: paying per run in USDC is for people who already hold crypto.
+  { id: "wallet", labelKey: "settings.navWallet", descKey: "settings.walletDesc", icon: Wallet, group: "payment" },
   // Claude & co. driving Desktop (the local API + the Imference MCP server).
-  { id: "agents", labelKey: "settings.navAgents", descKey: "settings.agentsDesc", icon: Bot },
-  // Paying for cloud runs: two separate stories, two panes. Which one pays a
-  // run is chosen on the payment line in Create, not here.
-  { id: "credits", labelKey: "settings.navCredits", descKey: "settings.creditsDesc", icon: Sparkles },
-  { id: "paths", labelKey: "settings.navPaths", descKey: "settings.pathsDesc", icon: FolderOpen },
-  { id: "storage", labelKey: "settings.navStorage", descKey: "settings.storageDesc", icon: HardDrive },
-  { id: "language", labelKey: "settings.navLanguage", descKey: "settings.languageDesc", icon: Languages },
-  // Last: paying per run in USDC is for people who already hold crypto.
-  { id: "wallet", labelKey: "settings.navWallet", descKey: "settings.walletDesc", icon: Wallet },
+  { id: "agents", labelKey: "settings.navAgents", descKey: "settings.agentsDesc", icon: Bot, group: "app" },
+  { id: "paths", labelKey: "settings.navPaths", descKey: "settings.pathsDesc", icon: FolderOpen, group: "app" },
+  { id: "language", labelKey: "settings.navLanguage", descKey: "settings.languageDesc", icon: Languages, group: "app" },
 ];
 
 // The web build has no local engine, disk or wallet: only cloud panes remain,
 // plus "gallery" (where the browser keeps the user's images).
-const WEB_PANES: PaneId[] = ["credits", "gallery", "language", "wallet"];
-const GALLERY_PANE = { id: "gallery" as PaneId, labelKey: "web.gallery.nav", descKey: "web.gallery.desc", icon: FolderOpen };
+const WEB_PANES: PaneId[] = ["credits", "wallet", "gallery", "language"];
+const GALLERY_PANE = { id: "gallery" as PaneId, labelKey: "web.gallery.nav", descKey: "web.gallery.desc", icon: FolderOpen, group: "app" as PaneGroup };
 // On the web the wallet is the browser's own (no app wallet): its pane says so.
 const VISIBLE_PANES = isWeb
   ? [...PANES, GALLERY_PANE]
@@ -241,12 +249,20 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
             <DialogTitle className="text-sm font-semibold">{t("settings.title")}</DialogTitle>
           </div>
           <div className="flex gap-1 overflow-x-auto px-2 pb-2 sm:flex-1 sm:flex-col sm:gap-0.5 sm:overflow-x-visible sm:overflow-y-auto">
-            {VISIBLE_PANES.map((p) => {
+            {VISIBLE_PANES.map((p, i) => {
               const Icon = p.icon;
               const isActive = pane === p.id;
+              // A heading where the group changes (desktop rail only: the phone
+              // strip of tabs has no room for them).
+              const heading = VISIBLE_PANES[i - 1]?.group !== p.group;
               return (
+                <Fragment key={p.id}>
+                {heading && (
+                  <div className={cn("ds-label px-2.5 pb-1 max-sm:hidden", i > 0 ? "pt-4" : "pt-1")}>
+                    {t(GROUP_LABEL[p.group])}
+                  </div>
+                )}
                 <button
-                  key={p.id}
                   type="button"
                   onClick={() => setPane(p.id)}
                   className={cn(
@@ -259,6 +275,7 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
                   <Icon className={cn("size-4 shrink-0", isActive ? "text-[var(--brand-from)]" : "opacity-70")} />
                   {t(p.labelKey)}
                 </button>
+                </Fragment>
               );
             })}
           </div>

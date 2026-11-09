@@ -13,6 +13,7 @@ import {
   type PanelId,
 } from "@/components/PanelBoard";
 import { PANEL_ORDER, PanelIcon } from "@/components/PanelToggles";
+import { PhoneTabBar, useIsPhone } from "@/components/PhoneTabBar";
 import { PaymentBar } from "@/components/PaymentBar";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { CloudHistoryDialog } from "@/components/CloudHistoryDialog";
@@ -238,6 +239,24 @@ export default function App() {
   const togglePanel = useCallback(
     (id: PanelId) => setPanelHidden(id, !panelHidden[id]),
     [setPanelHidden, panelHidden]
+  );
+  // Phones show one panel at a time (PhoneTabBar). Kept apart from the
+  // persisted layout, so a phone session doesn't rearrange the wide one.
+  const isPhone = useIsPhone();
+  const isPhoneRef = useRef(isPhone);
+  isPhoneRef.current = isPhone;
+  const [phoneTab, setPhoneTab] = useState<PanelId>("create");
+  const boardHidden = useMemo<Partial<Record<PanelId, boolean>>>(
+    () => (isPhone ? { create: phoneTab !== "create", edit: phoneTab !== "edit", gallery: phoneTab !== "gallery" } : panelHidden),
+    [isPhone, phoneTab, panelHidden]
+  );
+  // Bring a panel on screen: shown in the layout and, on a phone, its tab.
+  const showPanel = useCallback(
+    (id: PanelId) => {
+      setPanelHidden(id, false);
+      if (isPhoneRef.current) setPhoneTab(id);
+    },
+    [setPanelHidden]
   );
   // Cmd/Ctrl+1..3 shows / hides Create, Edit, Gallery (same as the header switches).
   useEffect(() => {
@@ -1134,7 +1153,7 @@ export default function App() {
   // Show a panel, bring it into view and flash it so the eye lands on it.
   const flashPanel = useCallback(
     (id: PanelId) => {
-      setPanelHidden(id, false);
+      showPanel(id);
       window.setTimeout(() => {
         const el = document.querySelector<HTMLElement>(`[data-panel-id="${id}"]`);
         if (!el) return;
@@ -1143,15 +1162,15 @@ export default function App() {
         window.setTimeout(() => el.classList.remove("panel-flash"), 1200);
       }, 60);
     },
-    [setPanelHidden]
+    [showPanel]
   );
   const openEditor = useCallback(
     (toolId: string, source: ToolSource, maskMode?: "select") => {
       setEditTarget({ toolId, source, maskMode, key: Date.now() });
-      setPanelHidden("edit", false);
+      showPanel("edit");
       flashPanel("edit");
     },
-    [setPanelHidden, flashPanel]
+    [showPanel, flashPanel]
   );
 
   // Tool stages ("tools:progress") onto their Activity rows.
@@ -1303,18 +1322,20 @@ export default function App() {
       const src = await getSrc();
       // A video can't seed img2img — ignore the gesture (the lightbox/menu also
       // hide the action for videos; this guards the drag path).
-      if (!src || isVideoSrc(src)) return;
+      if (!src || isVideoSrc(src)) return false;
       // The selected model takes no reference image (a Krea 2 pick, say): the
       // card isn't even mounted, so accepting the drop would swallow it in
       // silence. Say why instead.
       if (refSlotsRef.current < 1) {
         toast.toast(t("toast.modelTakesNoRefImage"));
-        return;
+        return false;
       }
       setSourceImage(await prepareRefImage(src, refDimsRef.current.width, refDimsRef.current.height));
       setMode("local");
+      return true;
     } catch {
       /* fetch/read failure — ignore */
+      return false;
     }
   }, [toast, t]);
 
@@ -1347,9 +1368,39 @@ export default function App() {
           ...fmt,
         };
       });
+      toast.toast(t("toast.settingsReused"));
     },
-    [activeModel]
+    [activeModel, toast, t]
   );
+  // The prompt alone, for a remix on the current model and parameters.
+  const reusePrompt = useCallback(
+    (text: string) => {
+      setPrompt(text);
+      toast.toast(t("toast.promptReused"));
+    },
+    [toast, t]
+  );
+
+  // Paste an image anywhere (⌘/Ctrl+V) → it becomes the reference image, like
+  // a drop on the Create panel. Text pastes are left alone, so pasting into
+  // the prompt still works; so is anything typed into another field.
+  const useAsImg2imgRef = useRef(useAsImg2img);
+  useAsImg2imgRef.current = useAsImg2img;
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith("image/"));
+      if (!file) return;
+      const el = e.target as HTMLElement | null;
+      // A field that takes files of its own (a dialog's upload) keeps them.
+      if (el?.closest?.("[role=dialog]")) return;
+      e.preventDefault();
+      void readFileAsDataURL(file).then((src) =>
+        useAsImg2imgRef.current(async () => src).then((ok) => ok && toast.toast(t("toast.pastedRef")))
+      );
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [toast, t]);
 
   // Create panel = img2img drop target. Highlighted (dropActive) both by a native
   // OS-file drag over it and by an in-app pointer image-drag (startImageDrag).
@@ -1552,6 +1603,12 @@ export default function App() {
     return settings?.localModel?.name ?? t("hint.pickModel");
   }, [editModelActive, mode, cloudConfigured, cloudPayProblem, pay.method, downloading, activationIsLoad, localNeedsDownload, localNeedsActivation, componentsBlocked, pendingLocalModel, sidecar.state, settings?.cloudModelInfo, settings?.localModel, settings?.paymentMode, params?.formatCode, params?.durationS, engineInstalled, t]);
   contextHintRef.current = contextHint;
+  // Under the run button: when the prompt is the only thing missing, say so
+  // there, where the eye is — not the model and price of a run that can't start.
+  const runHint =
+    !prompt.trim() && !editModelActive && (mode === "cloud" ? cloudReady : localCanRun)
+      ? t("hint.writePrompt")
+      : contextHint;
 
   // Activity-panel derivations: in-flight count (running + queued) for the badge,
   // finished rows for the Clear action, and the done subset the gallery shows as
@@ -1704,7 +1761,7 @@ export default function App() {
               </div>
             ) : isWeb ? (
               <div data-blocker="payment" className="rounded-lg">
-                <WebPaymentBar onConfigure={openSettings} />
+                <WebPaymentBar onConfigure={openSettings} costCredits={cloudRunCost} />
               </div>
             ) : undefined
           }
@@ -1810,8 +1867,8 @@ export default function App() {
             side on desktop, stacked (in the same order) on narrow windows. */}
         <div className="mx-auto w-full max-w-[110rem] px-4 pt-5 pb-16 sm:px-6 xl:flex xl:h-full xl:flex-col xl:pb-0">
           <PanelBoard
-            columns={visibleColumns(panelColumns, panelHidden)}
-            onColumnsChange={(next) => setPanelColumns(restoreHidden(next, panelColumns, panelHidden))}
+            columns={visibleColumns(panelColumns, boardHidden)}
+            onColumnsChange={(next) => setPanelColumns(restoreHidden(next, panelColumns, boardHidden))}
             collapsed={panelCollapsed}
             onToggleCollapsed={togglePanelCollapsed}
             widths={panelWidths}
@@ -1969,7 +2026,7 @@ export default function App() {
 
                         {/* 6. The run button — last in the panel, but pinned to
                             the bottom of the viewport so it never scrolls away. */}
-                        <PrimaryAction action={primary} contextHint={contextHint} mode={mode} />
+                        <PrimaryAction action={primary} contextHint={runHint} mode={mode} />
                       </>
                     )}
                   </div>
@@ -1994,7 +2051,7 @@ export default function App() {
                   <EditEmpty
                     dropActive={editDropActive}
                     galleryHidden={!!panelHidden.gallery}
-                    onShowGallery={() => setPanelHidden("gallery", false)}
+                    onShowGallery={() => showPanel("gallery")}
                     onOpen={(src) => openEditor(defaultToolFor(src.kind), src)}
                   />
                 ),
@@ -2011,6 +2068,7 @@ export default function App() {
                     onUseAsSource={useAsImg2img}
                     onImageDragStart={startImageDrag}
                     onReuseSettings={reuseSettings}
+                    onReusePrompt={reusePrompt}
                     onHideJob={dismissJob}
                   />
                 ),
@@ -2019,6 +2077,8 @@ export default function App() {
           />
         </div>
       </main>
+
+      {isPhone && <PhoneTabBar tab={phoneTab} onTab={setPhoneTab} />}
 
       {/* Activity — a persistent bottom-right dock (widget + overlay) instead of
           an in-layout panel, so it's always reachable and never pushed off-screen. */}
@@ -2048,6 +2108,7 @@ export default function App() {
           onClose={() => setLightbox(null)}
           onUseAsSource={useAsImg2img}
           onReuseSettings={reuseSettings}
+          onReusePrompt={reusePrompt}
           onDelete={() => {}}
         />
       )}

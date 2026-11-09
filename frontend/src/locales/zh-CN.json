@@ -317,7 +317,20 @@
     "fullscreen": "全屏",
     "exitFullscreen": "退出全屏",
     "filters": "筛选",
-    "all": "全部"
+    "all": "全部",
+    "favorite": "加入收藏",
+    "unfavorite": "取消收藏",
+    "favoritesOnly": "仅看收藏",
+    "emptyFavorites": "还没有收藏",
+    "emptyFavoritesHint": "给图片加星标，就能在这里找到它。",
+    "ctxReusePrompt": "仅复用提示词",
+    "today": "今天",
+    "yesterday": "昨天",
+    "thisWeek": "本周早些时候",
+    "undated": "更早",
+    "showDetails": "显示详情 (I)",
+    "hideDetails": "隐藏详情 (I)",
+    "lbDetails": "详情"
   },
   "meta": {
     "model": "模型",
@@ -452,7 +465,9 @@
     "manageTitle": "在设置中管理",
     "configureTitle": "在设置中配置",
     "payg": "按次付费",
-    "payWith": "支付方式"
+    "payWith": "支付方式",
+    "runsLeft_one": "≈ {{count}} 次",
+    "runsLeft_other": "≈ {{count}} 次"
   },
   "settings": {
     "title": "设置",
@@ -490,7 +505,10 @@
     "navWalletWeb": "钱包",
     "walletDescWeb": "使用浏览器钱包以 USDC 按次支付云端运行。",
     "navAgents": "AI 智能体",
-    "agentsDesc": "将 AI 智能体（Claude、Cursor…）连接到 Imference Desktop。"
+    "agentsDesc": "将 AI 智能体（Claude、Cursor…）连接到 Imference Desktop。",
+    "groupLocal": "本机",
+    "groupPayment": "支付",
+    "groupApp": "应用"
   },
   "storage": {
     "usageTitle": "模型缓存",
@@ -643,7 +661,10 @@
     "genStopped": "已停止生成 — 正在重新加载引擎",
     "cloudRechecking": "正在重新检查云端生成…",
     "switchQueued": "将在当前生成完成后加载 {{name}}",
-    "deleted_other": "已删除 {{count}} 张图片"
+    "deleted_other": "已删除 {{count}} 张图片",
+    "pastedRef": "已将粘贴的图片设为参考图",
+    "promptReused": "提示词已载入「创作」",
+    "settingsReused": "提示词和参数已载入「创作」"
   },
   "onboarding": {
     "title": "欢迎使用 Imference",
@@ -947,6 +968,8 @@
       "guidance": "引导强度"
     },
     "values": {
+      "2": "2×",
+      "4": "4×",
       "short": "简短",
       "detailed": "详细",
       "more_detailed": "非常详细",
@@ -963,8 +986,6 @@
       "mp4": "MP4",
       "gif": "GIF",
       "webm": "WebM",
-      "2": "2×",
-      "4": "4×",
       "realesrgan-x4plus": "照片",
       "realesrgan-x4plus-anime": "插画",
       "birefnet-lite": "BiRefNet（最佳）",
@@ -1329,7 +1350,7 @@
     "tour1Desktop": "顶栏：在这台电脑或云端运行。本地模式下，引擎按钮显示其状态和你的显卡。",
     "tour1Web": "Create 顶部：模型，下面是你的积分。",
     "tour2": "创作：模型、提示词、画幅，然后生成。运行中的任务显示在“任务”中。",
-    "tour3": "画廊：你的作品。点击查看，拖到创作或编辑中即可再次使用。",
+    "tour3": "画廊：你的作品。点击查看，给想保留的加星标，拖到创作或编辑中即可再次使用。拖动面板的 ⠿ 手柄可调整位置。",
     "keyGenerate": "生成",
     "keyCommands": "命令",
     "keyPanels": "显示或隐藏面板",

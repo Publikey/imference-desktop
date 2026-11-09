@@ -2,6 +2,7 @@
 // (Split out of App.tsx; see App.tsx for how the pieces fit together.)
 import { ToolMenuList } from "@/components/ToolBits";
 import { ENGINE_LABEL } from "@/lib/engines";
+import { toggleFavorite, useFavorites } from "@/lib/favorites";
 import { isWeb } from "@/lib/target";
 import type { GenerationMeta } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -11,12 +12,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  CornerDownLeft,
   FolderOpen,
   ImageIcon,
+  Info,
   Loader2,
   Maximize2,
   Minimize2,
   RotateCcw,
+  Star,
   Trash2,
   Wand2,
   X,
@@ -37,6 +41,7 @@ export function Lightbox({
   onClose,
   onUseAsSource,
   onReuseSettings,
+  onReusePrompt,
   onDelete,
   onTool,
 }: {
@@ -46,6 +51,7 @@ export function Lightbox({
   onClose: () => void;
   onUseAsSource: (getSrc: () => Promise<string>) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
+  onReusePrompt: (prompt: string) => void;
   onDelete: (name: string) => void;
   /** Editing tools; absent = no Edit menu (e.g. the unsaved session viewer). */
   onTool?: (toolId: string, target: ViewerItem, maskMode?: "select") => void;
@@ -65,6 +71,26 @@ export function Lightbox({
   // The Edit (tools) dropdown in the action bar.
   const [editOpen, setEditOpen] = useState(false);
   useEffect(() => setEditOpen(false), [index]);
+  // The details panel (prompt, actions, parameters) beside the image; folded
+  // away with I, and remembered, for those who only want to look.
+  const [details, setDetails] = useState(() => {
+    try {
+      return localStorage.getItem(DETAILS_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const toggleDetails = useCallback(() => {
+    setDetails((d) => {
+      try {
+        localStorage.setItem(DETAILS_KEY, d ? "0" : "1");
+      } catch {
+        /* not remembered */
+      }
+      return !d;
+    });
+  }, []);
+  const favorites = useFavorites();
 
   const total = items.length;
   const current = items[index];
@@ -102,13 +128,29 @@ export function Lightbox({
       else if (e.key === "ArrowLeft") prev();
       else if (e.key === "ArrowRight") next();
       else if (e.key === "f" || e.key === "F") setFull((f) => !f);
+      else if (e.key === "i" || e.key === "I") toggleDetails();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, prev, next, editOpen]);
+  }, [onClose, prev, next, editOpen, toggleDetails]);
 
   if (!current) return null;
   const meta = current.meta;
+  const fav = !!current.name && favorites.has(current.name);
+  const isVideo = current.kind === "video" || isVideoSrc(src);
+  // Labeled actions, right under the prompt in the details panel: what to do
+  // with this image, in words rather than a row of icons to decode.
+  const actions: { key: string; icon: React.ReactNode; label: string; run: () => void }[] = [];
+  if (meta?.prompt) {
+    actions.push({ key: "reuse", icon: <RotateCcw />, label: t("gallery.ctxReuse"), run: () => onReuseSettings(meta) });
+    actions.push({ key: "prompt", icon: <CornerDownLeft />, label: t("gallery.ctxReusePrompt"), run: () => onReusePrompt(meta.prompt) });
+  }
+  if (!isVideo) actions.push({ key: "ref", icon: <ImageIcon />, label: t("gallery.ctxUseAsSource"), run: () => onUseAsSource(current.getSrc) });
+  if (meta?.prompt)
+    actions.push({ key: "copy", icon: <Copy />, label: t("gallery.ctxCopyPrompt"), run: () => void navigator.clipboard?.writeText(meta.prompt).catch(() => {}) });
+  if (current.savedPath && !isWeb)
+    actions.push({ key: "reveal", icon: <FolderOpen />, label: t("gallery.ctxReveal"), run: () => void api.revealInFolder(current.savedPath!).catch(() => {}) });
+  const showPanel = !full && details && (!!meta || actions.length > 0);
 
   // Actions sit in frosted groups (edit | image actions | delete | view), each
   // button flat inside its group; the edge arrows are standalone discs.
@@ -187,37 +229,38 @@ export function Lightbox({
               )}
             </div>
           )}
-          <div className={group}>
-          {/* img2img needs an image source — hidden for videos. */}
-          {!isVideoSrc(src) && (
-            <button type="button" className={iconBtn} title={t("gallery.ctxUseAsSource")} aria-label={t("gallery.ctxUseAsSource")} onClick={() => onUseAsSource(current.getSrc)}>
-              <ImageIcon />
-            </button>
-          )}
-          {meta?.prompt && (
-            <button type="button" className={iconBtn} title={t("gallery.ctxReuse")} aria-label={t("gallery.ctxReuse")} onClick={() => onReuseSettings(meta)}>
-              <RotateCcw />
-            </button>
-          )}
-          {meta?.prompt && (
-            <button type="button" className={iconBtn} title={t("gallery.ctxCopyPrompt")} aria-label={t("gallery.ctxCopyPrompt")} onClick={() => void navigator.clipboard?.writeText(meta.prompt).catch(() => {})}>
-              <Copy />
-            </button>
-          )}
-          {current.savedPath && !isWeb && (
-            <button type="button" className={iconBtn} title={t("gallery.ctxReveal")} aria-label={t("gallery.ctxReveal")} onClick={() => void api.revealInFolder(current.savedPath!).catch(() => {})}>
-              <FolderOpen />
-            </button>
-          )}
-          </div>
+          {/* The image's own state and the destructive action, apart from the
+              labeled actions in the details panel. */}
           {current.name && (
             <div className={group}>
+              <button
+                type="button"
+                className={iconBtn}
+                title={fav ? t("gallery.unfavorite") : t("gallery.favorite")}
+                aria-label={fav ? t("gallery.unfavorite") : t("gallery.favorite")}
+                aria-pressed={fav}
+                onClick={() => toggleFavorite(current.name!)}
+              >
+                <Star className={cn(fav && "fill-amber-300 text-amber-300")} />
+              </button>
               <button type="button" className={cn(iconBtn, "hover:bg-destructive/80")} title={t("gallery.ctxDelete")} aria-label={t("gallery.ctxDelete")} onClick={() => onDelete(current.name!)}>
                 <Trash2 />
               </button>
             </div>
           )}
           <div className={group}>
+          {!full && (
+            <button
+              type="button"
+              className={cn(iconBtn, details && "bg-white/15 text-white")}
+              title={details ? t("gallery.hideDetails") : t("gallery.showDetails")}
+              aria-label={details ? t("gallery.hideDetails") : t("gallery.showDetails")}
+              aria-pressed={details}
+              onClick={toggleDetails}
+            >
+              <Info />
+            </button>
+          )}
           <button
             type="button"
             className={iconBtn}
@@ -251,11 +294,16 @@ export function Lightbox({
           "flex w-full flex-col items-center",
           full
             ? "h-full max-w-none gap-0"
-            : "max-h-full max-w-6xl gap-4 max-md:overflow-y-auto md:flex-row md:items-center"
+            : cn(
+                "max-h-full max-w-6xl gap-3 max-md:overflow-y-auto md:flex-row md:justify-center",
+                // With the panel: both columns share one height, so the panel
+                // reads as the image's caption rather than a card adrift.
+                showPanel ? "md:items-stretch" : "md:items-center"
+              )
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden max-md:flex-none md:w-auto">
+        <div className={cn("relative flex min-h-0 w-full items-center justify-center overflow-hidden max-md:flex-none md:w-auto", showPanel ? "md:flex-none" : "flex-1")}>
           {loading && !src && (
             // A dimensioned placeholder (from the known aspect) so the frame
             // doesn't jump when the full image resolves.
@@ -306,7 +354,7 @@ export function Lightbox({
               />
             ))}
         </div>
-        {!full && meta && <MetaPanel meta={meta} />}
+        {showPanel && <MetaPanel meta={meta ?? null} actions={actions} />}
       </div>
 
       {/* Keyboard-hint footer — discoverable navigation + zoom affordance. */}
@@ -323,6 +371,12 @@ export function Lightbox({
             <kbd className="rounded bg-white/15 px-1">F</kbd>
             {full ? t("gallery.exitFullscreen") : t("gallery.fullscreen")}
           </span>
+          {!full && (
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-white/15 px-1">I</kbd>
+              {t("gallery.lbDetails")}
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <kbd className="rounded bg-white/15 px-1">Esc</kbd>
             {t("common.close")}
@@ -335,6 +389,8 @@ export function Lightbox({
   );
 }
 
+const DETAILS_KEY = "imference.lightbox.details";
+
 function formatCreated(iso: string | undefined, lang: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -342,12 +398,19 @@ function formatCreated(iso: string | undefined, lang: string): string {
   return new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" }).format(d);
 }
 
-export function MetaPanel({ meta }: { meta: GenerationMeta }) {
+export function MetaPanel({
+  meta,
+  actions = [],
+}: {
+  meta: GenerationMeta | null;
+  actions?: { key: string; icon: React.ReactNode; label: string; run: () => void }[];
+}) {
   const { t, i18n } = useTranslation();
   const rows: [string, string][] = [];
   const add = (k: string, v: string | number | undefined | null) => {
     if (v !== undefined && v !== null && v !== "" && v !== 0) rows.push([k, String(v)]);
   };
+  if (!meta) return <ActionList actions={actions} standalone />;
   add(t("meta.model"), meta.modelName || meta.modelCode);
   add(t("meta.engine"), meta.engine ? (ENGINE_LABEL[meta.engine] ?? meta.engine) : "");
   add(t("meta.source"), meta.source === "local" || meta.source === "cloud" ? t(`mode.${meta.source}`) : meta.source);
@@ -381,6 +444,7 @@ export function MetaPanel({ meta }: { meta: GenerationMeta }) {
           <p className="text-muted-foreground leading-relaxed">{meta.negativePrompt}</p>
         </div>
       )}
+      {actions.length > 0 && <ActionList actions={actions} />}
       {rows.length > 0 && (
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 border-t pt-4 text-xs">
           {rows.map(([k, v]) => (
@@ -391,6 +455,40 @@ export function MetaPanel({ meta }: { meta: GenerationMeta }) {
           ))}
         </dl>
       )}
+    </div>
+  );
+}
+
+// The viewer's actions as a labeled list: in the details panel under the
+// prompt, or alone when the image has no metadata.
+function ActionList({
+  actions,
+  standalone,
+}: {
+  actions: { key: string; icon: React.ReactNode; label: string; run: () => void }[];
+  standalone?: boolean;
+}) {
+  if (!actions.length) return null;
+  return (
+    <div
+      className={cn(
+        "grid gap-0.5",
+        standalone
+          ? "bg-popover/95 text-popover-foreground w-full shrink-0 self-center rounded-2xl border p-2 shadow-2xl backdrop-blur md:w-72"
+          : "-mx-2 -my-1"
+      )}
+    >
+      {actions.map((a) => (
+        <button
+          key={a.key}
+          type="button"
+          onClick={a.run}
+          className="text-foreground hover:bg-accent flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground"
+        >
+          {a.icon}
+          {a.label}
+        </button>
+      ))}
     </div>
   );
 }

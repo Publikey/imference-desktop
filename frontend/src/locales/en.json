@@ -323,7 +323,20 @@
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit fullscreen",
     "filters": "Filters",
-    "all": "All"
+    "all": "All",
+    "favorite": "Add to favorites",
+    "unfavorite": "Remove from favorites",
+    "favoritesOnly": "Favorites only",
+    "emptyFavorites": "No favorites yet",
+    "emptyFavoritesHint": "Star an image to keep it here.",
+    "ctxReusePrompt": "Reuse prompt only",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "Earlier this week",
+    "undated": "Older",
+    "showDetails": "Show details (I)",
+    "hideDetails": "Hide details (I)",
+    "lbDetails": "Details"
   },
   "meta": {
     "model": "Model",
@@ -458,7 +471,9 @@
     "manageTitle": "Manage in Settings",
     "configureTitle": "Configure in Settings",
     "payg": "Pay as you go",
-    "payWith": "Pay with"
+    "payWith": "Pay with",
+    "runsLeft_one": "≈ {{count}} run",
+    "runsLeft_other": "≈ {{count}} runs"
   },
   "settings": {
     "title": "Settings",
@@ -496,7 +511,10 @@
     "navWalletWeb": "Wallet",
     "walletDescWeb": "Pay each cloud run in USDC from your browser wallet.",
     "navAgents": "AI agents",
-    "agentsDesc": "Connect AI agents (Claude, Cursor…) to Imference Desktop."
+    "agentsDesc": "Connect AI agents (Claude, Cursor…) to Imference Desktop.",
+    "groupLocal": "On this computer",
+    "groupPayment": "Payment",
+    "groupApp": "App"
   },
   "storage": {
     "usageTitle": "Model cache",
@@ -653,7 +671,10 @@
     "cloudRechecking": "Rechecking cloud generations…",
     "switchQueued": "{{name}} will load after the current generation",
     "deleted_one": "Image deleted",
-    "deleted_other": "{{count}} images deleted"
+    "deleted_other": "{{count}} images deleted",
+    "pastedRef": "Pasted image set as the reference",
+    "promptReused": "Prompt loaded in Create",
+    "settingsReused": "Prompt and settings loaded in Create"
   },
   "onboarding": {
     "title": "Welcome to Imference",
@@ -958,6 +979,8 @@
       "guidance": "Guidance"
     },
     "values": {
+      "2": "2×",
+      "4": "4×",
       "short": "Short",
       "detailed": "Detailed",
       "more_detailed": "Very detailed",
@@ -974,8 +997,6 @@
       "mp4": "MP4",
       "gif": "GIF",
       "webm": "WebM",
-      "2": "2×",
-      "4": "4×",
       "realesrgan-x4plus": "Photo",
       "realesrgan-x4plus-anime": "Illustration",
       "birefnet-lite": "BiRefNet (best)",
@@ -1341,7 +1362,7 @@
     "tour1Desktop": "Top bar: run on this computer or in the cloud. In local mode, the engine button shows its state and your GPU.",
     "tour1Web": "Top of Create: the model, and under it your credits.",
     "tour2": "Create: the model, your prompt, a format, then Generate. Running jobs show in Activity.",
-    "tour3": "Gallery: your results. Click to view, drag one onto Create or Edit to reuse it.",
+    "tour3": "Gallery: your results. Click to view, star the ones to keep, drag one onto Create or Edit to reuse it. Each panel moves by its ⠿ handle.",
     "keyGenerate": "Generate",
     "keyCommands": "Commands",
     "keyPanels": "Show or hide panels",

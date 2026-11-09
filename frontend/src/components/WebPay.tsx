@@ -978,7 +978,14 @@ function ProtectKey() {
  * The payment line under the model on the web, the counterpart of the Desktop PaymentBar:
  * credits or pay as you go, and the active way's status with its next step.
  */
-export function WebPaymentBar({ onConfigure }: { onConfigure: (section: string) => void }) {
+export function WebPaymentBar({
+  onConfigure,
+  costCredits = 0,
+}: {
+  onConfigure: (section: string) => void;
+  /** The next run's price in credits (0 = unknown): shows the balance as runs. */
+  costCredits?: number;
+}) {
   const { t, i18n } = useTranslation();
   const failure = useFailure();
   const { session, balance } = useWebPay();
@@ -1037,7 +1044,13 @@ export function WebPaymentBar({ onConfigure }: { onConfigure: (section: string) 
           ? {
               ok: balance === null || balance > 0,
               icon: <Coins className="size-3.5 shrink-0" />,
-              label: balance === null ? t("webpay.chip.credits") : t("webpay.chip.balance", { credits: num(balance) }),
+              label:
+                balance === null
+                  ? t("webpay.chip.credits")
+                  : t("webpay.chip.balance", { credits: num(balance) }) +
+                    (costCredits > 0 && balance >= costCredits
+                      ? ` · ${t("payment.runsLeft", { count: Math.floor(balance / costCredits) })}`
+                      : ""),
               action: t("credit.buy"),
               title: t("webpay.chip.buyTitle"),
               onClick: buy,

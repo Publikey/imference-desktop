@@ -15,6 +15,8 @@ import { GALLERY_CHANGED_EVENT, isWeb } from "@/lib/target";
 import type { GalleryFacets, GalleryFilter, GenerationMeta, Job, SavedImage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/wails-bridge";
+import { useStuck } from "@/lib/sticky";
+import { forgetFavorites, toggleFavorite, useFavorites } from "@/lib/favorites";
 import { Kbd, Segmented } from "@/components/ds";
 import {
   Check,
@@ -23,6 +25,7 @@ import {
   FolderOpen,
   SlidersHorizontal,
   ImageIcon,
+  Star,
   LayoutGrid,
   Maximize2,
   RotateCcw,
@@ -85,7 +88,29 @@ export type GalleryShared = {
    */
   audibleName: string | null;
   toggleAudible: (name: string) => void;
+  isFavorite: (name: string) => boolean;
+  /** Hover actions on a tile: the two moves people make most from an image. */
+  reuseSettings: (meta: GenerationMeta) => void;
+  useAsSource: (getSrc: () => Promise<string>) => void;
 };
+
+// Day buckets for the gallery's section headers: Today, Yesterday, earlier this
+// week, then one per month ("October 2026"). Images without a date (pre-
+// metadata files) fall in "Older". Consecutive tiles only: the order on disk is
+// kept, a header just marks where the bucket changes.
+function dayBucket(iso: string | undefined, now: Date, lang: string, t: (k: string) => string): string {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return t("gallery.undated");
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(d)) / 86_400_000);
+  if (days <= 0) return t("gallery.today");
+  if (days === 1) return t("gallery.yesterday");
+  if (days < 7) return t("gallery.thisWeek");
+  return new Intl.DateTimeFormat(lang, {
+    month: "long",
+    year: d.getFullYear() === now.getFullYear() ? undefined : "numeric",
+  }).format(d);
+}
 
 // Basename of a saved path, for matching a session job to its file on disk.
 export const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
@@ -96,6 +121,7 @@ export function Gallery({
   onUseAsSource,
   onImageDragStart,
   onReuseSettings,
+  onReusePrompt,
   onHideJob,
   onOpenTool,
 }: {
@@ -105,11 +131,19 @@ export function Gallery({
   onUseAsSource: (getSrc: () => Promise<string>) => void;
   onImageDragStart: (e: React.PointerEvent, getSrc: () => Promise<string>, previewSrc: string | null, name?: string | null) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
+  /** Load the prompt alone, keeping the current parameters. */
+  onReusePrompt: (prompt: string) => void;
   onHideJob: (id: string) => void;
   /** Open an item in the Edit panel. */
   onOpenTool: (toolId: string, source: ToolSource, maskMode?: "select") => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const favorites = useFavorites();
+  // Favorites only: a view over the loaded pages. Stars live in this window,
+  // not in the files, so the filter can't go to the backend — it pages the
+  // whole history in instead (names and metadata only; bytes stay lazy).
+  const [favOnly, setFavOnly] = useState(false);
+  const toolbar = useStuck("top");
   const toast = useToast();
   const confirm = useConfirm();
   const [saved, setSaved] = useState<SavedImage[]>([]);
@@ -249,6 +283,12 @@ export function Gallery({
     return () => io.disconnect();
   }, [loadMore, done]);
 
+  // Favorites only: keep paging until the whole history is in (the sentinel
+  // can't drive it — a few starred tiles never reach the bottom).
+  useEffect(() => {
+    if (favOnly && !done && !loading) loadMore();
+  }, [favOnly, done, loading, loadMore]);
+
   // Hide session job-tiles whose on-disk file was just deleted (so the deleted
   // image doesn't linger as a fresh tile).
   const hideJobsFor = useCallback(
@@ -273,6 +313,7 @@ export function Gallery({
           return next;
         });
         hideJobsFor(set);
+        forgetFavorites(names);
         refreshFacets();
         toast.toast(t("toast.deleted", { count: names.length }));
       });
@@ -462,6 +503,9 @@ export function Gallery({
     startImageDrag: onImageDragStart,
     audibleName,
     toggleAudible,
+    isFavorite: (name) => favorites.has(name),
+    reuseSettings: onReuseSettings,
+    useAsSource: onUseAsSource,
   };
 
   // Build the tile list + the parallel viewer sequence (same order) whose index
@@ -469,13 +513,17 @@ export function Gallery({
   // columns round-robin so the reading order is LEFT-TO-RIGHT; each column stacks
   // at natural height → true masonry. Session generations are folded into `saved`
   // (see the merge effect), so the gallery is a single uniform stream.
-  const tiles: { key: string; el: React.ReactElement }[] = [];
+  const groups: { label: string; tiles: { key: string; el: React.ReactElement }[] }[] = [];
   const viewItems: ViewerItem[] = [];
   const pushView = (v: ViewerItem) => {
     viewItems.push(v);
     return viewItems.length - 1;
   };
-  for (const g of saved) {
+  const now = new Date();
+  const shown = favOnly ? saved.filter((g) => favorites.has(g.name)) : saved;
+  for (const g of shown) {
+    const label = dayBucket(g.meta?.createdAt, now, i18n.language, t);
+    if (groups[groups.length - 1]?.label !== label) groups.push({ label, tiles: [] });
     const index = pushView({
       name: g.name,
       savedPath: g.savedPath || undefined,
@@ -483,27 +531,63 @@ export function Gallery({
       kind: g.kind,
       getSrc: () => (g.src ? Promise.resolve(g.src) : api.getSavedImage(g.name)),
     });
-    tiles.push({ key: g.name, el: <SavedTile image={g} index={index} shared={shared} onDelete={deleteOne} /> });
+    groups[groups.length - 1].tiles.push({ key: g.name, el: <SavedTile image={g} index={index} shared={shared} /> });
   }
   viewItemsRef.current = viewItems;
-  const columns: { key: string; el: React.ReactElement }[][] = Array.from({ length: cols }, () => []);
-  tiles.forEach((t, i) => columns[i % cols].push(t));
-  const empty = tiles.length === 0;
+  // Masonry per day section: each section spreads its tiles over `cols`
+  // columns round-robin, so the reading order stays left to right.
+  const sections = groups.map((g) => {
+    const columns: { key: string; el: React.ReactElement }[][] = Array.from({ length: cols }, () => []);
+    g.tiles.forEach((tile, i) => columns[i % cols].push(tile));
+    return { label: g.label, columns };
+  });
+  const empty = viewItems.length === 0;
   // First page still loading → show a skeleton grid, not the "no images" empty
   // state (which used to flash before the first page arrived).
-  const initialLoading = empty && loading;
+  const initialLoading = empty && loading && !favOnly;
+  const favEmpty = empty && favOnly;
 
   return (
-    <div className="flex flex-col gap-3 pb-20">
-      {/* One toolbar: search · filters | density. */}
-      <div className="flex items-center gap-2">
+    <div className="relative flex flex-col gap-3 pb-20">
+      <div ref={toolbar.sentinelRef} aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px" />
+      {/* One toolbar: search · filters · favorites | density. Sticky, so it
+          stays at hand however far the gallery is scrolled; frosted only once
+          it actually floats over the tiles. */}
+      <div
+        ref={toolbar.barRef}
+        data-stuck={toolbar.stuck || undefined}
+        className="gallery-toolbar sticky top-0 z-20 -mx-1.5 -my-1.5 flex items-center gap-2 px-1.5 py-1.5"
+      >
         <FilterBar facets={facets} filter={filter} onChange={setFilter} />
+        <button
+          type="button"
+          onClick={() => setFavOnly((v) => !v)}
+          aria-pressed={favOnly}
+          title={t("gallery.favoritesOnly")}
+          className={cn(
+            "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors",
+            favOnly
+              ? "border-warning/50 bg-warning/10 text-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+          )}
+        >
+          <Star className={cn("size-3.5", favOnly && "fill-warning text-warning")} />
+          <span className="max-md:sr-only">{t("gallery.favoritesOnly")}</span>
+        </button>
         {isWeb && <WebGalleryLocation />}
         <ColumnPicker cols={cols} onChange={setCols} />
       </div>
 
       {initialLoading ? (
         <GallerySkeleton cols={cols} />
+      ) : favEmpty ? (
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-1.5 text-center">
+          <Star className="text-warning mb-2 size-7" strokeWidth={1.5} />
+          <p className="text-foreground text-base font-semibold tracking-[-0.011em]">
+            {loading ? t("common.checking") : t("gallery.emptyFavorites")}
+          </p>
+          {!loading && <p className="text-muted-foreground max-w-72 text-sm">{t("gallery.emptyFavoritesHint")}</p>}
+        </div>
       ) : empty ? (
         <div className="relative flex min-h-[60vh] w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl text-center lg:min-h-[70vh]">
           <div className="canvas-glow pointer-events-none absolute inset-0" />
@@ -542,15 +626,23 @@ export function Gallery({
           )}
         </div>
       ) : (
-        <div className="flex items-start gap-3">
-          {columns.map((col, ci) => (
-            <div key={ci} className="flex min-w-0 flex-1 flex-col gap-3">
-              {col.map((t) => (
-                <div key={t.key}>{t.el}</div>
+        sections.map((sec, si) => (
+          <section key={`${si}-${sec.label}`} className="flex flex-col gap-2" aria-label={sec.label}>
+            <h3 className={cn("ds-sublabel flex items-center gap-2 px-0.5", si > 0 && "mt-3")}>
+              {sec.label}
+              <span className="bg-border/70 h-px flex-1" />
+            </h3>
+            <div className="flex items-start gap-3">
+              {sec.columns.map((col, ci) => (
+                <div key={ci} className="flex min-w-0 flex-1 flex-col gap-3">
+                  {col.map((tile) => (
+                    <div key={tile.key}>{tile.el}</div>
+                  ))}
+                </div>
               ))}
             </div>
-          ))}
-        </div>
+          </section>
+        ))
       )}
 
       {!done && <div ref={sentinelRef} className="h-4 w-full" />}
@@ -559,7 +651,7 @@ export function Gallery({
 
       {/* Floating selection bar. */}
       {selected.size > 0 && (
-        <div className="animate-in fade-in slide-in-from-bottom-2 fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border bg-popover/95 px-2 py-2 pl-4 shadow-2xl backdrop-blur">
+        <div className="animate-in fade-in slide-in-from-bottom-2 fixed bottom-[calc(1.5rem+var(--phone-nav-h))] left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border bg-popover/95 px-2 py-2 pl-4 shadow-2xl backdrop-blur">
           <span className="text-sm font-medium tabular-nums">
             {t("gallery.selectedCount", { count: selected.size })}
           </span>
@@ -589,6 +681,7 @@ export function Gallery({
           onOpenAt={openAt}
           onUseAsSource={onUseAsSource}
           onReuseSettings={onReuseSettings}
+          onReusePrompt={onReusePrompt}
           onDelete={deleteOne}
           onTool={openTool}
         />
@@ -602,6 +695,7 @@ export function Gallery({
           onClose={() => setViewIndex(null)}
           onUseAsSource={onUseAsSource}
           onReuseSettings={onReuseSettings}
+          onReusePrompt={onReusePrompt}
           onDelete={deleteOne}
           onTool={openTool}
         />
@@ -840,12 +934,10 @@ export function SavedTile({
   image,
   index,
   shared,
-  onDelete,
 }: {
   image: SavedImage;
   index: number;
   shared: GalleryShared;
-  onDelete: (name: string) => void;
 }) {
   const { t } = useTranslation();
   const ref = useRef<HTMLElement>(null);
@@ -905,6 +997,7 @@ export function SavedTile({
 
   const aspect = image.width > 0 && image.height > 0 ? image.width / image.height : 1;
   const selected = shared.isSelected(image.name);
+  const favorite = shared.isFavorite(image.name);
   const isVideo = image.kind === "video" || isVideoSrc(src);
   const audible = isVideo && shared.audibleName === image.name;
   // `muted` is a DOM property, not just an attribute: set it on the element
@@ -994,9 +1087,8 @@ export function SavedTile({
         active={shared.selectionActive}
         onToggle={() => shared.toggle(image.name, index)}
       />
-      {/* Tile actions, clustered so nothing lands on the selection box in the
-          opposite corner. Sound stays visible on a video (it's state, not just an
-          action: it tells you which tile you're hearing); delete is hover-only. */}
+      {/* Top right: state you want to see at a glance — the star (always shown
+          once set) and, on a video, which tile has the sound. */}
       <div className="absolute right-1.5 top-1.5 z-10 flex items-center gap-1">
         {isVideo && (
           <button
@@ -1022,26 +1114,75 @@ export function SavedTile({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onDelete(image.name);
+            toggleFavorite(image.name);
           }}
-          aria-label={t("gallery.deleteImage")}
-          className="hidden rounded-full bg-black/50 p-1.5 text-white hover:bg-destructive/80 group-hover:block"
+          aria-label={favorite ? t("gallery.unfavorite") : t("gallery.favorite")}
+          aria-pressed={favorite}
+          title={favorite ? t("gallery.unfavorite") : t("gallery.favorite")}
+          className={cn(
+            "rounded-full bg-black/50 p-1.5 text-white transition hover:bg-black/70",
+            favorite ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          )}
         >
-          <Trash2 className="size-3.5" />
+          <Star className={cn("size-3.5", favorite && "fill-amber-300 text-amber-300")} />
         </button>
       </div>
-      <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 text-2xs text-white opacity-0 transition-opacity group-hover:opacity-100">
-        {image.source && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-1.5 py-0.5 font-medium capitalize">
-            {image.source === "tool" && <Wand2 className="size-2.5" />}
-            {image.source === "tool" && image.meta?.tool
-              ? t(`tools.names.${image.meta.tool}`, { defaultValue: image.meta.tool })
-              : image.source}
-          </span>
+      {/* Hover: what this image is (the prompt) and the two moves people make
+          from it — run it again, or start from it. Delete stays in the menu,
+          the viewer and the selection bar, away from a passing cursor. */}
+      <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1.5 bg-gradient-to-t from-black/75 via-black/45 to-transparent px-2.5 pb-2 pt-8 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {image.meta?.prompt && (
+          <p className="line-clamp-2 text-xs leading-snug [text-shadow:0_1px_2px_rgb(0_0_0/0.5)]">{image.meta.prompt}</p>
         )}
-        {image.seed > 0 && <span className="tabular-nums">{t("gallery.seed", { seed: image.seed })}</span>}
+        <div className="flex items-center gap-1.5 text-2xs">
+          {image.source && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-1.5 py-0.5 font-medium capitalize">
+              {image.source === "tool" && <Wand2 className="size-2.5" />}
+              {image.source === "tool" && image.meta?.tool
+                ? t(`tools.names.${image.meta.tool}`, { defaultValue: image.meta.tool })
+                : image.source}
+            </span>
+          )}
+          {image.seed > 0 && <span className="truncate tabular-nums text-white/75">{t("gallery.seed", { seed: image.seed })}</span>}
+          <span className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1">
+            {image.meta?.prompt && (
+              <TileAction
+                label={t("gallery.ctxReuse")}
+                onClick={() => shared.reuseSettings(image.meta!)}
+                icon={<RotateCcw />}
+              />
+            )}
+            {!isVideo && (
+              <TileAction
+                label={t("gallery.ctxUseAsSource")}
+                onClick={() => shared.useAsSource(ensureSrc)}
+                icon={<ImageIcon />}
+              />
+            )}
+          </span>
+        </div>
       </figcaption>
     </figure>
+  );
+}
+
+// A round icon button in a tile's hover bar.
+function TileAction({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      // A press here must not start the tile's img2img drag.
+      onPointerDown={(e) => e.stopPropagation()}
+      aria-label={label}
+      title={label}
+      className="rounded-full bg-white/20 p-1.5 text-white backdrop-blur transition hover:bg-white/35 [&_svg]:size-3.5"
+    >
+      {icon}
+    </button>
   );
 }
 
@@ -1055,6 +1196,7 @@ export function TileContextMenu({
   onOpenAt,
   onUseAsSource,
   onReuseSettings,
+  onReusePrompt,
   onDelete,
   onTool,
 }: {
@@ -1065,10 +1207,12 @@ export function TileContextMenu({
   onOpenAt: (index: number) => void;
   onUseAsSource: (getSrc: () => Promise<string>) => void;
   onReuseSettings: (meta: GenerationMeta) => void;
+  onReusePrompt: (prompt: string) => void;
   onDelete: (name: string) => void;
   onTool: (toolId: string, target: ViewerItem, maskMode?: "select") => void;
 }) {
   const { t } = useTranslation();
+  const favorites = useFavorites();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -1152,9 +1296,23 @@ export function TileContextMenu({
         )}
         {meta?.prompt && (
           <MenuItem
+            icon={<CornerDownLeft />}
+            label={t("gallery.ctxReusePrompt")}
+            onClick={run(() => onReusePrompt(meta.prompt))}
+          />
+        )}
+        {meta?.prompt && (
+          <MenuItem
             icon={<Copy />}
             label={t("gallery.ctxCopyPrompt")}
             onClick={run(() => void navigator.clipboard?.writeText(meta.prompt).catch(() => {}))}
+          />
+        )}
+        {target.name && (
+          <MenuItem
+            icon={<Star />}
+            label={favorites.has(target.name) ? t("gallery.unfavorite") : t("gallery.favorite")}
+            onClick={run(() => toggleFavorite(target.name!))}
           />
         )}
         {target.savedPath && !isWeb && (

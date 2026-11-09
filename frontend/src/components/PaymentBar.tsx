@@ -34,6 +34,11 @@ export function PaymentBar({
   const num = (n: number) => new Intl.NumberFormat(i18n.language).format(n);
   const usd = (credits: number) => `$${creditsToUSD(credits)}`;
   const model = settings?.cloudModelInfo?.name ?? "";
+  // A balance means more as runs of the selected model and format: "≈ 640 runs".
+  const withRuns = (label: string, credits: number) =>
+    costCredits > 0 && credits >= costCredits
+      ? `${label} · ${t("payment.runsLeft", { count: Math.floor(credits / costCredits) })}`
+      : label;
 
   const methods = [
     { value: "bearer", label: t("payment.apiKey") },
@@ -90,7 +95,7 @@ export function PaymentBar({
     : pay.error
       ? friendlyPayError(t, pay.error)
       : mode === "bearer"
-        ? t("payment.credits", { count: pay.credits ?? 0 })
+        ? withRuns(t("payment.credits", { count: pay.credits ?? 0 }), pay.credits ?? 0)
         : t("payment.usdc", { balance: (pay.usd ?? 0).toFixed(2) });
   return (
     <PaymentRow

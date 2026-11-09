@@ -62,13 +62,15 @@ export function QueuePanel({
 
   if (visible.length === 0) {
     return (
-      <div className="border-border/60 text-muted-foreground/70 relative flex flex-col items-center justify-center gap-2.5 overflow-hidden rounded-2xl border border-dashed px-4 py-10 text-center">
-        <div className="canvas-glow pointer-events-none absolute inset-0" />
-        <div className="brand-surface relative flex size-11 items-center justify-center rounded-2xl text-white shadow-[0_8px_24px_-8px_color-mix(in_oklch,var(--brand-to)_60%,transparent)]">
-          <Sparkles className="size-5" strokeWidth={1.75} />
+      // One quiet row: an empty dock has nothing to show, so it takes little room.
+      <div className="flex items-center gap-3 rounded-xl border border-dashed px-3 py-3 text-left">
+        <div className="brand-surface flex size-8 shrink-0 items-center justify-center rounded-lg text-white">
+          <Sparkles className="size-4" strokeWidth={1.75} />
         </div>
-        <p className="relative text-xs font-medium">{t("queue.empty")}</p>
-        <p className="text-muted-foreground/60 relative text-2xs leading-snug">{t("queue.emptyHint")}</p>
+        <div className="min-w-0">
+          <p className="text-foreground text-xs font-medium">{t("queue.empty")}</p>
+          <p className="text-muted-foreground text-2xs leading-snug">{t("queue.emptyHint")}</p>
+        </div>
       </div>
     );
   }

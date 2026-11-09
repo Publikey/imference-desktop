@@ -578,7 +578,7 @@ function Panel({
       onPointerDown={(e) => startReorder(e, id)}
       title={t("panels.dragToReorder")}
       aria-label={t("panels.dragToReorder")}
-      className="panel-grip text-muted-foreground/40 hover:text-muted-foreground -ml-1 rounded p-0.5 transition-colors"
+      className="panel-grip max-sm:hidden text-muted-foreground/55 group-hover/panel-head:text-muted-foreground hover:!text-foreground hover:bg-muted -ml-1 rounded p-0.5 transition-colors"
     >
       <GripVertical className="size-3.5" />
     </button>
@@ -651,7 +651,7 @@ function Panel({
       data-panel-id={id}
       aria-label={spec.title}
     >
-      <header className="flex h-6 select-none items-center gap-1.5 px-1">
+      <header className="group/panel-head flex h-6 select-none items-center gap-1.5 px-1">
         {grip}
         <span className="panel-icon [&_svg]:size-3.5">{spec.icon}</span>
         <h2 className="ds-panel-title">

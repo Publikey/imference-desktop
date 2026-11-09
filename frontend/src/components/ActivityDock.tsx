@@ -145,7 +145,7 @@ export function ActivityDock({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
-          <div className="bg-card animate-in fade-in slide-in-from-bottom-2 fixed bottom-[5rem] right-4 z-50 flex max-h-[70dvh] w-[22rem] max-w-[calc(100vw-2rem)] sm:bottom-[6rem] sm:right-6 sm:max-w-[calc(100vw-3rem)] flex-col rounded-2xl border shadow-2xl duration-200">
+          <div className="bg-card animate-in fade-in slide-in-from-bottom-2 fixed bottom-[calc(5rem+var(--phone-nav-h))] right-4 z-50 flex max-h-[70dvh] w-[22rem] max-w-[calc(100vw-2rem)] sm:bottom-[6rem] sm:right-6 sm:max-w-[calc(100vw-3rem)] flex-col rounded-2xl border shadow-2xl duration-200">
             <header className="flex items-center gap-2 border-b px-4 py-3">
               <Activity className="text-muted-foreground size-4" />
               <h2 className="text-sm font-semibold">{t("panels.queue")}</h2>
@@ -214,7 +214,7 @@ export function ActivityDock({
 
       {/* The widget and, to its left, the finish notices popping out of it.
           Phones: tucked closer to the corner. */}
-      <div className="pointer-events-none fixed bottom-2 right-4 z-40 flex sm:bottom-6 sm:right-6 flex-row-reverse items-end gap-3">
+      <div className="pointer-events-none fixed bottom-[calc(0.5rem+var(--phone-nav-h))] right-4 z-40 flex sm:bottom-6 sm:right-6 flex-row-reverse items-end gap-3">
       {/* Persistent widget — a prominent floating pill: brand-tinted with a live
           cloud/local count while runs are in flight, solid card otherwise. */}
       <button

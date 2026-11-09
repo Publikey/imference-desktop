@@ -3,6 +3,7 @@
 import { FieldLabel, Section } from "@/components/ds";
 import { LaunchBurst, useLaunchBurst } from "@/components/LaunchBurst";
 import { Button } from "@/components/ui/button";
+import { useStuck } from "@/lib/sticky";
 import { cn } from "@/lib/utils";
 import { CornerDownLeft, Download, Loader2, Plus, Sparkles, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
@@ -181,8 +182,14 @@ export function PrimaryAction({
   mode: Mode;
 }) {
   const burst = useLaunchBurst("generate");
+  const dock = useStuck("bottom");
   return (
-    <div className="run-dock sticky bottom-0 z-30 pb-3 xl:-bottom-6 xl:pb-9 max-sm:pr-[4.5rem] sm:max-xl:pr-36">
+    <>
+    <div
+      ref={dock.barRef}
+      data-stuck={dock.stuck || undefined}
+      className="run-dock sticky bottom-0 z-30 pb-3 xl:-bottom-6 xl:pb-9 max-sm:pr-[4.5rem] sm:max-xl:pr-36"
+    >
       <span className="relative block w-full rounded-2xl" data-mode={mode}>
         <LaunchBurst burst={burst} />
         <Button
@@ -223,5 +230,8 @@ export function PrimaryAction({
         </Button>
       </span>
     </div>
+    {/* Just past the dock: on screen = the dock rests in place, not floating. */}
+    <div ref={dock.sentinelRef} aria-hidden className="pointer-events-none -mt-px h-px" />
+    </>
   );
 }

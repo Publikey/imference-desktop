@@ -34,7 +34,7 @@ export function PanelToggles({
   const { t } = useTranslation();
   const visibleCount = PANEL_ORDER.filter((p) => !hidden[p.id]).length;
   return (
-    <SegGroup label={t("panels.toggleGroup")} className="h-9">
+    <SegGroup label={t("panels.toggleGroup")} className="panel-toggles h-9 max-sm:hidden">
       {PANEL_ORDER.map(({ id, key }) => {
         const on = !hidden[id];
         const last = on && visibleCount === 1;

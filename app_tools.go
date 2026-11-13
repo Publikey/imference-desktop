@@ -1095,6 +1095,14 @@ func (a *App) ListEditModels() EditModelsInfo {
 // localEditCandidate is the edit model to run locally: the catalog's first
 // locally runnable edit model, else the built-in GGUF entry.
 func (a *App) localEditCandidate() *types.ModelInfo {
+	// IMFERENCE_LOCAL_EDIT_MODEL picks the local edit model by code until the
+	// dialog offers the choice (e.g. "longcat-image-edit-turbo").
+	if want := strings.TrimSpace(os.Getenv("IMFERENCE_LOCAL_EDIT_MODEL")); want != "" {
+		if m, err := a.localCatalogModel(want); err == nil && cloud.IsEditModel(m) {
+			return m
+		}
+		a.bus.Warn("tools", "IMFERENCE_LOCAL_EDIT_MODEL is not a local edit model; ignoring", map[string]any{"model": want})
+	}
 	if models, err := a.cloud.ListModels(a.ctx, true); err == nil {
 		for _, m := range cloud.EditModels(models) {
 			mm := m

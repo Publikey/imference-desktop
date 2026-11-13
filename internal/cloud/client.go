@@ -425,6 +425,8 @@ func normalizeEngine(imEngine string) string {
 		return "ernie-image"
 	case "lumina2", "lumina-image-2", "lumina":
 		return "lumina2"
+	case "longcat-edit", "longcat_edit", "longcat-image-edit":
+		return LongCatEditBackend
 	case "wan22", "wan":
 		return "wan"
 	default:
@@ -448,6 +450,8 @@ var imageBackends = map[string]bool{
 	// Engine-managed builds (weights "auto": the engine picks and downloads the
 	// build that fits the card — see EngineWeightsAuto).
 	"flux2-klein": true, "ernie-image": true, "lumina2": true,
+	// LongCat-Image-Edit: instruction editing only, like Qwen-Image-Edit.
+	LongCatEditBackend: true,
 }
 
 // EngineWeightsAuto is the ModelURL of a model whose weights the ENGINE manages:
@@ -534,8 +538,33 @@ func BuiltinEditModel() types.ModelInfo {
 	}
 }
 
+// LongCatEditBackend is the engine's second instruction-edit backend
+// (LongCat-Image-Edit Turbo, engine-managed weights).
+const LongCatEditBackend = "longcat-edit"
+
+// LongCatEditModel is the model code of the built-in LongCat edit entry.
+const LongCatEditModel = "longcat-image-edit-turbo"
+
+// BuiltinLongCatEditModel is the local LongCat-Image-Edit Turbo entry: the
+// engine picks the build for the card and fetches it (EngineWeightsAuto).
+func BuiltinLongCatEditModel() types.ModelInfo {
+	steps, stepsMin, stepsMax := 8, 1, 50
+	cfg, cfgMin, cfgMax := 1.0, 0.0, 10.0
+	return types.ModelInfo{
+		ModelCode: LongCatEditModel, Name: "LongCat-Image-Edit Turbo",
+		ShortDescription: "Edit an image with plain-language instructions (8 steps).",
+		ModelURL:         EngineWeightsAuto,
+		StepsDefault:     &steps, StepsMin: &stepsMin, StepsMax: &stepsMax,
+		CfgDefault: &cfg, CfgMin: &cfgMin, CfgMax: &cfgMax,
+		BackendType: LongCatEditBackend,
+		CanLocal:    true, ModelType: EditModelType,
+	}
+}
+
 // IsEditBackend reports whether a normalized backend is an instruction-edit one.
-func IsEditBackend(backend string) bool { return backend == EditBackend }
+func IsEditBackend(backend string) bool {
+	return backend == EditBackend || backend == LongCatEditBackend
+}
 
 // EditModels filters a catalog list to the instruction-edit models. The
 // model type (image-edit) or the backend (im_engine qwenimage-edit) is

@@ -49,7 +49,7 @@ logger = logging.getLogger("imference.sidecar")
 MODEL_NAME = "local"
 
 # Instruction-edit backends (Qwen-Image-Edit): only the instruct-edit tool.
-EDIT_BACKENDS = ("qwenimage-edit",)
+EDIT_BACKENDS = ("qwenimage-edit", "longcat-edit")
 
 
 def _device_label(dev) -> str:

@@ -47,7 +47,7 @@ type Host struct {
 
 // EditBackends are the engine backends of instruction-edit models (they only
 // edit — no text-to-image, no strength-based img2img).
-var EditBackends = map[string]bool{"qwenimage-edit": true}
+var EditBackends = map[string]bool{"qwenimage-edit": true, "longcat-edit": true}
 
 // NeedsEditModel reports whether a generation tool runs on an instruction-edit
 // model (instruct-edit) rather than a text-to-image one (vary / inpaint /

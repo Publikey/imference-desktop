@@ -275,6 +275,12 @@ func (m *Manager) runtimeEnv(rt types.EngineRuntimeSettings, backend string) []s
 		"IMAGE_ENABLE_CPU_OFFLOAD="+offloadVal,
 		"IMAGE_OFFLOAD_MODE="+offloadMode,
 	)
+	// Both offload settings on Auto: say so. For a model with engine-managed
+	// weights ("auto") the sidecar then takes the offload mode from the engine's
+	// own measured build table instead of the generic thresholds above.
+	if om := strings.ToLower(strings.TrimSpace(img.OffloadMode)); cpuOffload == nil && om != "model" && om != "group" {
+		env = append(env, "IMFERENCE_OFFLOAD_AUTO=1")
+	}
 	set("MAX_GPU_MODELS", maxGPU)
 	set("MAX_CPU_MODELS", maxCPU)
 

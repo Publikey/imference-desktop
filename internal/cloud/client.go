@@ -419,6 +419,12 @@ func normalizeEngine(imEngine string) string {
 		return "anima"
 	case "krea2", "krea-2", "krea2-turbo":
 		return "krea2"
+	case "flux2-klein", "flux2klein", "flux.2-klein":
+		return "flux2-klein"
+	case "ernie-image", "ernieimage", "ernie_image":
+		return "ernie-image"
+	case "lumina2", "lumina-image-2", "lumina":
+		return "lumina2"
 	case "wan22", "wan":
 		return "wan"
 	default:
@@ -439,6 +445,54 @@ var imageBackends = map[string]bool{
 	// wants ~13 GB VRAM (no sub-module offload in the image engine) — small
 	// cards OOM at load, so catalog rows should gate it via ImLocal.
 	"krea2": true,
+	// Engine-managed builds (weights "auto": the engine picks and downloads the
+	// build that fits the card — see EngineWeightsAuto).
+	"flux2-klein": true, "ernie-image": true, "lumina2": true,
+}
+
+// EngineWeightsAuto is the ModelURL of a model whose weights the ENGINE manages:
+// it picks the build that fits the card (GGUF quantization, fp8 encoder, offload
+// mode) and fetches it from the CDN into its own cache on first load. The
+// desktop downloads nothing for such a model and passes "auto" as the weights
+// path.
+const EngineWeightsAuto = "auto"
+
+// IsEngineManaged reports whether a model's weights are picked and fetched by
+// the engine (ModelURL "auto") rather than downloaded by the desktop.
+func IsEngineManaged(m *types.ModelInfo) bool {
+	return m != nil && m.ModelURL == EngineWeightsAuto
+}
+
+// BuiltinLocalModels are the engine-managed local models the desktop offers
+// when the catalog has no locally runnable row with the same model code yet.
+// Recipes mirror the engine's per-backend defaults.
+func BuiltinLocalModels() []types.ModelInfo {
+	mk := func(code, name, desc, backend string, steps, stepsMax int, cfg float64) types.ModelInfo {
+		s, sMin, sMax := steps, 1, stepsMax
+		c, cMin, cMax := cfg, 0.0, 10.0
+		return types.ModelInfo{
+			ModelCode: code, Name: name, ShortDescription: desc,
+			ModelURL:     EngineWeightsAuto,
+			StepsDefault: &s, StepsMin: &sMin, StepsMax: &sMax,
+			CfgDefault: &c, CfgMin: &cMin, CfgMax: &cMax,
+			BackendType: backend, CanLocal: true, ModelType: "image",
+			RefImages: refSlots(backend),
+		}
+	}
+	return []types.ModelInfo{
+		mk("flux2-klein-4b", "FLUX.2 klein 4B", "Fast 4-step generation; a reference image is edited by instruction.", "flux2-klein", 4, 16, 1.0),
+		mk("ernie-image-turbo", "ERNIE-Image Turbo", "8-step generation with accurate text rendering.", "ernie-image", 8, 30, 1.0),
+		mk("qwen-image-2512", "Qwen-Image 2512", "4-step Lightning build; strong at text and layout.", "qwenimage", 4, 16, 1.0),
+		mk("lumina-image-2", "Lumina-Image 2.0", "Undistilled, 30 steps; base of the Neta anime finetunes.", "lumina2", 30, 50, 4.0),
+	}
+}
+
+// refSlots: one reference-image slot for the backends that take one, else none.
+func refSlots(backend string) int {
+	if SupportsRefImages(backend) {
+		return 1
+	}
+	return 0
 }
 
 // EditBackend is the engine's instruction-edit backend (Qwen-Image-Edit). Its
@@ -549,6 +603,8 @@ func IsImageBackend(name string) bool {
 var refImageBackends = map[string]bool{
 	"sdxl": true, "sd15": true, "zimage": true,
 	"flux": true, "chroma": true, "qwenimage": true, "anima": true,
+	// FLUX.2 klein: the image is a REFERENCE edited by the prompt (no strength).
+	"flux2-klein": true,
 }
 
 // SupportsRefImages reports whether a normalized local backend accepts a
@@ -707,6 +763,19 @@ func (c *Client) ListModels(ctx context.Context, localOnly bool) ([]types.ModelI
 		mi := toModelInfo(m, localOnly)
 		mi.Formats = formatsByModel[m.ModelCode]
 		out = append(out, mi)
+	}
+	if localOnly {
+		// Engine-managed built-ins, unless the catalog already lists the model.
+		listed := map[string]bool{}
+		for _, m := range out {
+			listed[m.ModelCode] = true
+		}
+		for i, b := range BuiltinLocalModels() {
+			if !listed[b.ModelCode] {
+				b.Order = 9000 + i // after the catalog's own rows
+				out = append(out, b)
+			}
+		}
 	}
 	// Catalog display order (model_order), then name as a stable tiebreaker.
 	sort.SliceStable(out, func(i, j int) bool {

@@ -467,38 +467,6 @@ func IsEngineManaged(m *types.ModelInfo) bool {
 	return m != nil && m.ModelURL == EngineWeightsAuto
 }
 
-// BuiltinLocalModels are the engine-managed local models the desktop offers
-// when the catalog has no locally runnable row with the same model code yet.
-// Recipes mirror the engine's per-backend defaults.
-func BuiltinLocalModels() []types.ModelInfo {
-	mk := func(code, name, desc, backend string, steps, stepsMax int, cfg float64) types.ModelInfo {
-		s, sMin, sMax := steps, 1, stepsMax
-		c, cMin, cMax := cfg, 0.0, 10.0
-		return types.ModelInfo{
-			ModelCode: code, Name: name, ShortDescription: desc,
-			ModelURL:     EngineWeightsAuto,
-			StepsDefault: &s, StepsMin: &sMin, StepsMax: &sMax,
-			CfgDefault: &c, CfgMin: &cMin, CfgMax: &cMax,
-			BackendType: backend, CanLocal: true, ModelType: "image",
-			RefImages: refSlots(backend),
-		}
-	}
-	return []types.ModelInfo{
-		mk("flux2-klein-4b", "FLUX.2 klein 4B", "Fast 4-step generation; a reference image is edited by instruction.", "flux2-klein", 4, 16, 1.0),
-		mk("ernie-image-turbo", "ERNIE-Image Turbo", "8-step generation with accurate text rendering.", "ernie-image", 8, 30, 1.0),
-		mk("qwen-image-2512", "Qwen-Image 2512", "4-step Lightning build; strong at text and layout.", "qwenimage", 4, 16, 1.0),
-		mk("lumina-image-2", "Lumina-Image 2.0", "Undistilled, 30 steps; base of the Neta anime finetunes.", "lumina2", 30, 50, 4.0),
-	}
-}
-
-// refSlots: one reference-image slot for the backends that take one, else none.
-func refSlots(backend string) int {
-	if SupportsRefImages(backend) {
-		return 1
-	}
-	return 0
-}
-
 // EditBackend is the engine's instruction-edit backend (Qwen-Image-Edit). Its
 // models only edit an existing image from a plain-language instruction: they
 // cannot do text-to-image, so the Generate flow refuses them and the
@@ -541,25 +509,6 @@ func BuiltinEditModel() types.ModelInfo {
 // LongCatEditBackend is the engine's second instruction-edit backend
 // (LongCat-Image-Edit Turbo, engine-managed weights).
 const LongCatEditBackend = "longcat-edit"
-
-// LongCatEditModel is the model code of the built-in LongCat edit entry.
-const LongCatEditModel = "longcat-image-edit-turbo"
-
-// BuiltinLongCatEditModel is the local LongCat-Image-Edit Turbo entry: the
-// engine picks the build for the card and fetches it (EngineWeightsAuto).
-func BuiltinLongCatEditModel() types.ModelInfo {
-	steps, stepsMin, stepsMax := 8, 1, 50
-	cfg, cfgMin, cfgMax := 1.0, 0.0, 10.0
-	return types.ModelInfo{
-		ModelCode: LongCatEditModel, Name: "LongCat-Image-Edit Turbo",
-		ShortDescription: "Edit an image with plain-language instructions (8 steps).",
-		ModelURL:         EngineWeightsAuto,
-		StepsDefault:     &steps, StepsMin: &stepsMin, StepsMax: &stepsMax,
-		CfgDefault: &cfg, CfgMin: &cfgMin, CfgMax: &cfgMax,
-		BackendType: LongCatEditBackend,
-		CanLocal:    true, ModelType: EditModelType,
-	}
-}
 
 // IsEditBackend reports whether a normalized backend is an instruction-edit one.
 func IsEditBackend(backend string) bool {
@@ -792,19 +741,6 @@ func (c *Client) ListModels(ctx context.Context, localOnly bool) ([]types.ModelI
 		mi := toModelInfo(m, localOnly)
 		mi.Formats = formatsByModel[m.ModelCode]
 		out = append(out, mi)
-	}
-	if localOnly {
-		// Engine-managed built-ins, unless the catalog already lists the model.
-		listed := map[string]bool{}
-		for _, m := range out {
-			listed[m.ModelCode] = true
-		}
-		for i, b := range BuiltinLocalModels() {
-			if !listed[b.ModelCode] {
-				b.Order = 9000 + i // after the catalog's own rows
-				out = append(out, b)
-			}
-		}
 	}
 	// Catalog display order (model_order), then name as a stable tiebreaker.
 	sort.SliceStable(out, func(i, j int) bool {

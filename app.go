@@ -1377,10 +1377,6 @@ func (a *App) localCatalogModel(modelCode string) (*types.ModelInfo, error) {
 		m := cloud.BuiltinEditModel()
 		return &m, nil
 	}
-	if modelCode == cloud.LongCatEditModel {
-		m := cloud.BuiltinLongCatEditModel()
-		return &m, nil
-	}
 	return nil, fmt.Errorf("model %q not found in catalog (or it's cloud-only)", modelCode)
 }
 

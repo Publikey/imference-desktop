@@ -8,6 +8,7 @@ import {
   HardDrive,
   Languages,
   Server,
+  ShieldCheck,
   SlidersHorizontal,
   Wallet,
   Wand2,
@@ -19,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -46,7 +48,7 @@ type Props = {
   initialSection?: string;
 };
 
-type PaneId = "engine" | "runtime" | "tools" | "agents" | "credits" | "wallet" | "paths" | "storage" | "gallery" | "language";
+type PaneId = "engine" | "runtime" | "tools" | "agents" | "credits" | "wallet" | "paths" | "storage" | "gallery" | "language" | "privacy";
 
 // Top-level categories. Each is a full pane (icon + title + one-line purpose);
 // only the selected pane renders, so the dialog never becomes one long scroll.
@@ -67,6 +69,8 @@ const PANES: {
   { id: "paths", labelKey: "settings.navPaths", descKey: "settings.pathsDesc", icon: FolderOpen },
   { id: "storage", labelKey: "settings.navStorage", descKey: "settings.storageDesc", icon: HardDrive },
   { id: "language", labelKey: "settings.navLanguage", descKey: "settings.languageDesc", icon: Languages },
+  // The one thing the app sends on its own: the anonymous daily ping.
+  { id: "privacy", labelKey: "settings.navPrivacy", descKey: "settings.privacyDesc", icon: ShieldCheck },
   // Last: paying per run in USDC is for people who already hold crypto.
   { id: "wallet", labelKey: "settings.navWallet", descKey: "settings.walletDesc", icon: Wallet },
 ];
@@ -115,6 +119,8 @@ function resolveSection(section?: string): { pane: PaneId; scrollTo?: string } {
       return { pane: "language" };
     case "gallery":
       return { pane: "gallery" };
+    case "privacy":
+      return { pane: "privacy" };
     default:
       return { pane: isWeb ? "credits" : "engine" };
   }
@@ -334,6 +340,21 @@ export function SettingsDialog({ open, onOpenChange, onSaved, initialSection }: 
 
             {pane === "tools" && <ToolsSection draft={draft} setDraft={setDraft} />}
             {pane === "agents" && !isWeb && <AgentsPane draft={draft} setDraft={setDraft} />}
+
+            {pane === "privacy" && !isWeb && (
+              <div className="ds-card flex items-start gap-3.5 p-4">
+                <Checkbox
+                  id="usagePing"
+                  className="mt-0.5"
+                  checked={!draft.usagePingOff}
+                  onCheckedChange={(on) => setDraft((d) => ({ ...d, usagePingOff: !on }))}
+                />
+                <div className="grid min-w-0 flex-1 gap-1">
+                  <Label htmlFor="usagePing">{t("settings.usagePing")}</Label>
+                  <p className="text-muted-foreground text-[13px] leading-relaxed">{t("settings.usagePingHint")}</p>
+                </div>
+              </div>
+            )}
 
             {pane === "language" && (
               <div className="ds-card grid gap-2 p-4">

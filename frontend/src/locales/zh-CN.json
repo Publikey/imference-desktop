@@ -490,7 +490,11 @@
     "navWalletWeb": "钱包",
     "walletDescWeb": "使用浏览器钱包以 USDC 按次支付云端运行。",
     "navAgents": "AI 智能体",
-    "agentsDesc": "将 AI 智能体（Claude、Cursor…）连接到 Imference Desktop。"
+    "agentsDesc": "将 AI 智能体（Claude、Cursor…）连接到 Imference Desktop。",
+    "navPrivacy": "隐私",
+    "privacyDesc": "应用自行发送的内容。除非在云端运行，你的提示词和图片只保留在这台电脑上。",
+    "usagePing": "将此安装计为活跃（匿名）",
+    "usagePingHint": "每天一次，加载模型列表的请求会同时告诉 imference.com：有一个安装在当天、当周和当月处于活跃状态，并附带应用版本和操作系统。不含任何标识符：应用只记住上次上报的日期，因此服务器可以统计安装数量，但无法识别你的安装。不会发送任何与你生成内容有关的信息。"
   },
   "storage": {
     "usageTitle": "模型缓存",

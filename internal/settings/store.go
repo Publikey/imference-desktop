@@ -26,6 +26,8 @@ type Store struct {
 	mu    sync.RWMutex
 	path  string
 	cache types.Settings
+	// fresh: there was no settings file when the store was opened.
+	fresh bool
 }
 
 // New loads existing settings from disk (or returns defaults if the file is
@@ -52,6 +54,7 @@ func (s *Store) reload() error {
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, fs.ErrNotExist) {
 		s.cache = types.Settings{} // defaults: all empty
+		s.fresh = true
 		return nil
 	}
 	if err != nil {
@@ -86,6 +89,10 @@ func migrateEngineRuntime(raw []byte, parsed *types.Settings) {
 		parsed.EngineRuntime.Image = legacy.EngineRuntime.Sdxl
 	}
 }
+
+// Fresh reports whether no settings file existed when the store was opened,
+// which is how a first launch looks.
+func (s *Store) Fresh() bool { return s.fresh }
 
 // Get returns a copy of the current settings.
 func (s *Store) Get() types.Settings {

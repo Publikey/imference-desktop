@@ -35,6 +35,8 @@ export type AppSettings = {
   modelCacheMinFreeBytes?: number;
   /** Editing-tools preferences. */
   tools?: ToolsSettings;
+  /** Turns off the anonymous once-a-day "this install is active" ping. */
+  usagePingOff?: boolean;
 };
 
 /** One downloaded checkpoint, as listed in Settings → Storage. */

@@ -43,6 +43,7 @@ import (
 	"imference-desktop-go/internal/tools"
 	"imference-desktop-go/internal/types"
 	"imference-desktop-go/internal/update"
+	"imference-desktop-go/internal/usageping"
 	"imference-desktop-go/internal/version"
 	"imference-desktop-go/internal/wallet"
 	"imference-desktop-go/internal/x402"
@@ -228,6 +229,14 @@ func newApp(opts appOptions) *App {
 		webOutputDir:  opts.outputDir,
 		cloudOnly:     opts.cloudOnly,
 		clientGallery: opts.clientGallery,
+	}
+	// Desktop only: the web build is one server for many users, not an install.
+	if !opts.cloudOnly && opts.configDir == "" {
+		a.cloud.SetUsagePing(usageping.New(
+			filepath.Join(logDir, "usage-ping.json"),
+			store.Fresh(),
+			func() bool { return store.Get().UsagePingOff },
+		))
 	}
 	if opts.clientGallery && opts.configDir != "" {
 		a.outboxPath = filepath.Join(opts.configDir, "gallery-outbox.json")

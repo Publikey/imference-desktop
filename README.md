@@ -339,6 +339,29 @@ source, but there's no prebuilt binary yet — see
 Learn more about the app on the
 [imference.com/desktop](https://imference.com/desktop) page.
 
+## Privacy
+
+Local generations never leave your computer, and the app has no account and no
+analytics SDK. It sends one thing on its own: an anonymous "this install is
+active" ping, so we can tell how many people use the app, including those who
+only run locally.
+
+- **How.** The app already loads the model list from imference.com. On the
+  first such request of a day (UTC) it adds one header:
+  `X-Imference-Ping: p=dwmf&v=1.4.2&os=windows&arch=amd64`.
+- **What it says.** Whether this is the install's first ping of the day (`d`),
+  the week (`w`), the month (`m`) or ever (`f`), plus the app version,
+  operating system and CPU architecture. Nothing else: no prompts, no models,
+  no hardware details.
+- **No identifier.** The app only remembers the date of its last ping
+  (`usage-ping.json`, next to `settings.json`). The server adds the flags to
+  daily totals and keeps no per-install record and no IP address, so it can
+  count installs but cannot recognize yours or link two pings.
+- **Turning it off.** *Settings → Privacy*, or set `DO_NOT_TRACK=1` in the
+  environment. Builds from source (`dev` version) never ping.
+
+The code is in [`internal/usageping`](internal/usageping/usageping.go).
+
 ## Feedback
 
 This is an early public release — rough edges are expected.

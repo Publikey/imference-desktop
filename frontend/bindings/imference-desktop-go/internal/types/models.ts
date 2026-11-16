@@ -920,6 +920,12 @@ export interface Settings {
      * Tools holds the editing-tools preferences.
      */
     "tools": ToolsSettings;
+
+    /**
+     * UsagePingOff turns off the anonymous once-a-day "this install is active"
+     * ping that rides on the model catalog request (internal/usageping).
+     */
+    "usagePingOff"?: boolean;
 }
 
 /**

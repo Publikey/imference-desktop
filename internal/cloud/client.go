@@ -21,6 +21,7 @@ import (
 
 	"imference-desktop-go/internal/logbus"
 	"imference-desktop-go/internal/types"
+	"imference-desktop-go/internal/usageping"
 	"imference-desktop-go/internal/x402"
 )
 
@@ -76,7 +77,21 @@ type Client struct {
 	formatsMu      sync.Mutex
 	formats        []apiFormat
 	formatsFetched time.Time
+
+	// ping is the anonymous active-install ping carried by the catalog request
+	// (internal/usageping). Nil in the web build and in tests: no ping.
+	ping UsagePing
 }
+
+// UsagePing supplies the ping header of a catalog request: its value ("" for
+// none) and the function to call once the server has answered the request.
+type UsagePing interface {
+	Header() (value string, sent func())
+}
+
+// SetUsagePing makes catalog requests carry the anonymous usage ping. Call it
+// before the client is used.
+func (c *Client) SetUsagePing(p UsagePing) { c.ping = p }
 
 func New(bus *logbus.Bus) *Client {
 	return &Client{
@@ -794,6 +809,15 @@ func (c *Client) fetchCatalog(ctx context.Context) ([]apiModel, error) {
 	// clients that predate them). An older API ignores the parameter.
 	r, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, c.base+"/api/models?type=all", nil)
 	r.Header.Set("Accept", "application/json")
+	// The first catalog fetch of the day doubles as the anonymous
+	// active-install ping; it counts once the server has answered.
+	var pingSent func()
+	if c.ping != nil {
+		if value, sent := c.ping.Header(); value != "" {
+			r.Header.Set(usageping.HeaderName, value)
+			pingSent = sent
+		}
+	}
 
 	resp, err := c.http.Do(r)
 	if err != nil {
@@ -810,6 +834,9 @@ func (c *Client) fetchCatalog(ctx context.Context) ([]apiModel, error) {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
 		return nil, fmt.Errorf("cloud: parse /api/models: %w", err)
+	}
+	if pingSent != nil {
+		pingSent()
 	}
 
 	c.catalog = parsed.Models

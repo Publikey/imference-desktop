@@ -62,6 +62,9 @@ type Settings struct {
 	ModelCacheMinFreeBytes int64 `json:"modelCacheMinFreeBytes,omitempty"`
 	// Tools holds the editing-tools preferences.
 	Tools ToolsSettings `json:"tools"`
+	// UsagePingOff turns off the anonymous once-a-day "this install is active"
+	// ping that rides on the model catalog request (internal/usageping).
+	UsagePingOff bool `json:"usagePingOff,omitempty"`
 }
 
 // ToolsSettings are the editing-tools preferences.

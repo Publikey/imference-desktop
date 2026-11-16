@@ -496,7 +496,11 @@
     "navWalletWeb": "Wallet",
     "walletDescWeb": "Pay each cloud run in USDC from your browser wallet.",
     "navAgents": "AI agents",
-    "agentsDesc": "Connect AI agents (Claude, Cursor…) to Imference Desktop."
+    "agentsDesc": "Connect AI agents (Claude, Cursor…) to Imference Desktop.",
+    "navPrivacy": "Privacy",
+    "privacyDesc": "What the app sends on its own. Your prompts and images stay on this computer unless you run in the cloud.",
+    "usagePing": "Count this install as active (anonymous)",
+    "usagePingHint": "Once a day, the request that loads the model list also tells imference.com that an install was active that day, week and month, with the app version and operating system. There is no identifier: the app only remembers the date of its last ping, so the server can count installs but cannot recognize yours. Nothing about what you generate is sent."
   },
   "storage": {
     "usageTitle": "Model cache",

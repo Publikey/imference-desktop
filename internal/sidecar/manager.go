@@ -231,7 +231,7 @@ func resolveOffload(setting *bool, modeSetting, device, backend string) (value, 
 // backend. SDXL and Z-Image both use the engine's IMAGE_* contract, but the
 // desktop keeps a separate settings block for each — only one image backend
 // loads per sidecar, so we emit IMAGE_* from the block matching `backend`.
-func (m *Manager) runtimeEnv(rt types.EngineRuntimeSettings, backend string) []string {
+func (m *Manager) runtimeEnv(rt types.EngineRuntimeSettings, backend string, engineManaged bool) []string {
 	var env []string
 	set := func(key, val string) {
 		if v := strings.TrimSpace(val); v != "" && v != "auto" {
@@ -263,7 +263,18 @@ func (m *Manager) runtimeEnv(rt types.EngineRuntimeSettings, backend string) []s
 	// LogPanel. Explicit Settings picks short-circuit the probe.
 	offloadVal, offloadMode, offloadReason := resolveOffload(
 		cpuOffload, img.OffloadMode, dev, backend)
-	if m.bus != nil {
+	// Both offload settings on Auto. For a model with engine-managed weights
+	// ("auto") the sidecar then takes the offload mode from the engine's own
+	// measured build table, not from the generic thresholds above.
+	om := strings.ToLower(strings.TrimSpace(img.OffloadMode))
+	offloadAuto := cpuOffload == nil && om != "model" && om != "group"
+	if offloadAuto && engineManaged {
+		// The values below are only a fallback: don't log them as the decision.
+		if m.bus != nil {
+			m.bus.Info("sidecar", "CPU offload — Auto: engine-managed weights, the engine's build for this card decides (see \"Engine build for this card\")",
+				map[string]any{"backend": backend})
+		}
+	} else if m.bus != nil {
 		m.bus.Info("sidecar", "CPU offload — "+offloadReason,
 			map[string]any{"backend": backend,
 				"IMAGE_ENABLE_CPU_OFFLOAD": offloadVal,
@@ -275,10 +286,7 @@ func (m *Manager) runtimeEnv(rt types.EngineRuntimeSettings, backend string) []s
 		"IMAGE_ENABLE_CPU_OFFLOAD="+offloadVal,
 		"IMAGE_OFFLOAD_MODE="+offloadMode,
 	)
-	// Both offload settings on Auto: say so. For a model with engine-managed
-	// weights ("auto") the sidecar then takes the offload mode from the engine's
-	// own measured build table instead of the generic thresholds above.
-	if om := strings.ToLower(strings.TrimSpace(img.OffloadMode)); cpuOffload == nil && om != "model" && om != "group" {
+	if offloadAuto {
 		env = append(env, "IMFERENCE_OFFLOAD_AUTO=1")
 	}
 	set("MAX_GPU_MODELS", maxGPU)
@@ -489,7 +497,7 @@ func (m *Manager) Start(parentCtx context.Context, pythonPath, sdxlPath string, 
 	if shift > 0 {
 		env = append(env, fmt.Sprintf("IMFERENCE_BACKEND_SHIFT=%g", shift))
 	}
-	env = append(env, m.runtimeEnv(rt, backend)...)
+	env = append(env, m.runtimeEnv(rt, backend, sdxlPath == "auto")...)
 	cmd.Env = m.engineEnv(env)
 
 	// A configured base_model (Z-Image) pulls a large shared base at register

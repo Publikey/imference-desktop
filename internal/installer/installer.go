@@ -74,8 +74,10 @@ import (
 // the Qwen-Image 2512 lite build, with per-card build selection
 // (weights_path="auto": the catalog's model_url "auto").
 //
-// Pinned to the imference-engine release v0.6.0.
-const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.6.0.tar.gz"
+// v0.6.1: video-concat keeps the audio of the joined clips.
+//
+// Pinned to the imference-engine release v0.6.1.
+const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.6.1.tar.gz"
 
 // EngineExtras is the extras list installed with the engine: the eight image
 // backends, the Qwen-Image-Edit GGUF lite build (gguf + bitsandbytes for its

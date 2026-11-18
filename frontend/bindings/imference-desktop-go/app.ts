@@ -710,6 +710,14 @@ export function SetAppearance(dark: boolean): $CancellablePromise<void> {
 }
 
 /**
+ * SetLocalEditModel remembers the edit model local runs use. It loads
+ * nothing: the dialog then offers to load it (SwitchToEditModel).
+ */
+export function SetLocalEditModel(modelCode: string): $CancellablePromise<void> {
+    return $Call.ByID(2321662643, modelCode);
+}
+
+/**
  * SetToolsSettings saves the preferences and applies them (idle timeout,
  * local API on/off).
  */

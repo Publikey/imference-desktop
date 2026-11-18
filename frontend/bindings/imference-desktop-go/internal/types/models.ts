@@ -870,6 +870,13 @@ export interface Settings {
     "previousLocalModel"?: string;
 
     /**
+     * LocalEditModel is the edit model the user picked for local runs in the
+     * "Edit with instructions" dialog (App.SetLocalEditModel). Empty = the
+     * catalog's first locally runnable edit model.
+     */
+    "localEditModel"?: string;
+
+    /**
      * EngineRuntime holds host-machine tuning for the engine (device, VAE mode,
      * offload, model-residency caps, WAN quantization). Applied as env vars when
      * the sidecar starts. NOT generation params — those live in the generation UI.

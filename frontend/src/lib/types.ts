@@ -766,6 +766,8 @@ export type EditModelsInfo = {
   localCandidate?: ModelInfo | null;
   /** Its weights are already downloaded. */
   localCandidateCached?: boolean;
+  /** The edit models this computer can run (a choice when there are several). */
+  localChoices?: ModelInfo[];
   /** The model to switch back to after switching to the edit model. */
   previous?: ModelInfo | null;
   /** The local model the engine holds now (what a swap replaces). */

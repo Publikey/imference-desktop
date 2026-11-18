@@ -306,6 +306,7 @@ const raw = {
   // Instruction-edit models (cloud catalog + the loaded local edit model).
   listEditModels: (() => Call.ByName("main.App.ListEditModels")) as () => Promise<EditModelsInfo>,
   switchToEditModel: (() => Call.ByName("main.App.SwitchToEditModel")) as () => Promise<void>,
+  setLocalEditModel: ((code: string) => Call.ByName("main.App.SetLocalEditModel", code)) as (code: string) => Promise<void>,
   toolGenModels: ((toolId: string, sourceName: string | null, meta: GenerationMeta | null) =>
     Call.ByName("main.App.ToolGenModels", toolId, sourceName ?? "", meta ?? null)) as (
     toolId: string,

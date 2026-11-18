@@ -324,7 +324,12 @@ export function ToolEditor({
   const engineModelName = (m?: { name?: string; modelCode?: string } | null) => (m ? m.name || m.modelCode || "" : "");
   const localSwap: { load: string; replaces: string; run: () => Promise<void> } | null = (() => {
     if (!tool || effectiveCloud || isWeb) return null;
-    if (isInstruct && editModels && !editModels.local && editModels.localCandidate) {
+    // No edit model loaded, or another one than the one picked for local runs.
+    if (
+      isInstruct &&
+      editModels?.localCandidate &&
+      editModels.local?.modelCode !== editModels.localCandidate.modelCode
+    ) {
       return {
         load: engineModelName(editModels.localCandidate),
         replaces: engineModelName(editModels.engine) || t("tools.swap.nothing"),
@@ -551,6 +556,7 @@ export function ToolEditor({
                         refs={refs}
                         onRefsChange={setRefs}
                         models={editModels}
+                        onModelsChanged={() => setEditModelsRev((r) => r + 1)}
                         cloud={effectiveCloud}
                         rail={rail}
                         onSubmit={() => {
@@ -1098,6 +1104,8 @@ function InstructEditForm({
     reader.readAsDataURL(f);
   };
   const cloudModels = models?.cloud ?? [];
+  const localChoices = models?.localChoices ?? [];
+  const localValue = models?.localCandidate?.modelCode ?? models?.local?.modelCode ?? "";
   const modelValue = String(params.model ?? models?.defaultCloud ?? "");
 
   return (
@@ -1217,7 +1225,34 @@ function InstructEditForm({
           )
         ) : null}
         {cloud && <ExternalModelWarning model={cloudModels.find((m) => m.modelCode === modelValue)} />}
-        {cloud ? null : (
+        {cloud ? null : localChoices.length > 1 ? (
+          <>
+            <Select
+              size="sm"
+              fullWidth
+              value={localValue}
+              onChange={(v) => {
+                void api
+                  .setLocalEditModel(v)
+                  .then(() => onModelsChanged?.())
+                  .catch(() => {});
+              }}
+              disabled={disabled}
+              aria-label={t("tools.params.model")}
+            >
+              {localChoices.map((m) => (
+                <option key={m.modelCode} value={m.modelCode}>
+                  {m.name || m.modelCode}
+                </option>
+              ))}
+            </Select>
+            <p className="text-muted-foreground text-2xs">
+              {models?.local?.modelCode === localValue
+                ? t("tools.instruct.onThisComputer")
+                : t("tools.instruct.notLoaded")}
+            </p>
+          </>
+        ) : (
           <p className="text-xs">
             {models?.local?.name ??
               models?.localCandidate?.name ??

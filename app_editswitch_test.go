@@ -124,3 +124,57 @@ func TestToolGenModels(t *testing.T) {
 		t.Fatalf("edit model loaded: %+v", m)
 	}
 }
+
+// Several local edit models in the catalog: the first is the default, the
+// user's pick (SetLocalEditModel) wins while the catalog still offers it.
+func TestLocalEditModelChoice(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "format") {
+			_, _ = w.Write([]byte(`{"formats": []}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"models": [
+			{"model_code":"qwen-image-edit-2511","name":"Qwen Edit","model_type":"image-edit","im_engine":"qwenimage-edit",
+			 "model_url":"https://x/q.gguf","im_local":true,"model_order":1},
+			{"model_code":"longcat-image-edit-turbo","name":"LongCat Edit","model_type":"image-edit","im_engine":"longcat-edit",
+			 "model_url":"auto","im_local":true,"model_order":2},
+			{"model_code":"flux2-klein-4b","name":"klein","model_type":"image","im_engine":"flux2-klein",
+			 "model_url":"auto","im_local":true,"model_order":3}]}`))
+	}))
+	defer srv.Close()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", home)
+	t.Setenv("LOCALAPPDATA", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	store, err := settings.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus := logbus.New()
+	c := cloud.New(bus)
+	c.SetBaseURL(srv.URL)
+	a := &App{settings: store, bus: bus, ctx: context.Background(), cloud: c}
+
+	if got := a.localEditChoices(); len(got) != 2 {
+		t.Fatalf("choices %+v", got)
+	}
+	if m := a.localEditCandidate(); m.ModelCode != "qwen-image-edit-2511" {
+		t.Fatalf("default candidate %s", m.ModelCode)
+	}
+	if err := a.SetLocalEditModel("flux2-klein-4b"); err == nil {
+		t.Fatal("a generation model is not an edit choice")
+	}
+	if err := a.SetLocalEditModel("longcat-image-edit-turbo"); err != nil {
+		t.Fatal(err)
+	}
+	m := a.localEditCandidate()
+	if m.ModelCode != "longcat-image-edit-turbo" || !cloud.IsEngineManaged(m) || m.BackendType != "longcat-edit" {
+		t.Fatalf("picked candidate %+v", m)
+	}
+	// The engine-managed generation model is a local model too (no built-in).
+	if g, err := a.localCatalogModel("flux2-klein-4b"); err != nil || !cloud.IsEngineManaged(g) {
+		t.Fatalf("klein %+v %v", g, err)
+	}
+}

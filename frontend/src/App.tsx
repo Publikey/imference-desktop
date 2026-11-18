@@ -276,7 +276,10 @@ export default function App() {
         setJobs((js) => {
           let target = -1;
           for (let i = js.length - 1; i >= 0; i--) {
-            if (js[i].status === "running" && js[i].mode === "local" && js[i].kind !== "tool") {
+            // Step ticks belong to generations; a model download (or its end)
+            // is also shown on a tool run, e.g. the first local edit.
+            const dl = !!p.download || (p.total === 0 && !!js[i].progress?.download);
+            if (js[i].status === "running" && js[i].mode === "local" && (js[i].kind !== "tool" || dl)) {
               target = i;
               break;
             }

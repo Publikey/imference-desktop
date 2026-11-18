@@ -592,6 +592,17 @@ type GenerateProgress struct {
 	Step    int `json:"step"`
 	Total   int `json:"total"`
 	Percent int `json:"percent"`
+	// Download is set while the ENGINE fetches model files before the run (a
+	// model with engine-managed weights, on its first use): Step / Total are
+	// zero and Percent is the file's. Nil once the download is over.
+	Download *DownloadProgress `json:"download,omitempty"`
+}
+
+// DownloadProgress is one model file the engine is fetching from the CDN.
+type DownloadProgress struct {
+	File     string `json:"file"`
+	DoneMiB  int    `json:"doneMiB"`
+	TotalMiB int    `json:"totalMiB"`
 }
 
 // SidecarStatus is broadcast via Wails events on the "sidecar:status" channel

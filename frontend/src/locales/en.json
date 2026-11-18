@@ -269,6 +269,7 @@
     "step": "step {{step}}/{{total}}",
     "cloudRunning": "Running in the cloud…",
     "generating": "Generating…",
+    "downloading": "Downloading {{file}} · {{done}} / {{total}} GB",
     "queuedNext": "Queued · next up",
     "queuedPosition": "Queued · #{{position}} in line",
     "done": "Done in {{time}}",

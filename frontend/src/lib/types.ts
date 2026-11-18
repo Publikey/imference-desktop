@@ -365,6 +365,8 @@ export type GenerateProgress = {
   step: number;
   total: number;
   percent: number;
+  /** Set while the engine downloads a model file before the run (percent is the file's). */
+  download?: { file: string; doneMiB: number; totalMiB: number } | null;
 };
 
 /** A previously-generated image found on disk (the output folder gallery). */

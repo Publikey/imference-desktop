@@ -715,6 +715,14 @@ var deviceLogRE = regexp.MustCompile(`Sidecar ready on (\S+) device`)
 // sidecar/main.py:_run_tool).
 const toolProgressPrefix = "IMTOOL_PROGRESS "
 
+// downloadRE parses the engine's CDN download progress line, e.g.
+// "  model.safetensors: 3690/7341 MiB (50%) [8 streams]".
+var downloadRE = regexp.MustCompile(`^\s*(\S+): (\d+)/(\d+) MiB \((\d+)%\) \[\d+ streams\]`)
+
+// downloadProgressMinMiB: smaller files (configs, tokenizers) finish in one
+// tick — reporting them would only make the UI flicker.
+const downloadProgressMinMiB = 32
+
 var tqdmRE = regexp.MustCompile(`(\d+)%\|[^|]*\|\s*(\d+)/(\d+)`)
 
 // scanLinesOrCR splits on either '\n' or '\r' so tqdm's in-place redraws (which
@@ -743,9 +751,29 @@ func (m *Manager) streamStderr(r io.Reader) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	scanner.Split(scanLinesOrCR)
+	downloading := "" // the file whose download is being reported
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
+			continue
+		}
+		// Engine-side weight downloads (engine-managed models fetch their
+		// files on the first run): one redraw every half second, turned into
+		// progress events. Only the first line of each file reaches the log.
+		if dm := downloadRE.FindStringSubmatch(line); dm != nil {
+			done, _ := strconv.Atoi(dm[2])
+			total, _ := strconv.Atoi(dm[3])
+			pct, _ := strconv.Atoi(dm[4])
+			if total >= downloadProgressMinMiB {
+				if downloading != dm[1] {
+					downloading = dm[1]
+					m.bus.Info("engine", "Downloading "+dm[1]+" ("+dm[3]+" MiB)", nil)
+				}
+				if m.progress != nil {
+					m.progress(types.GenerateProgress{Percent: pct,
+						Download: &types.DownloadProgress{File: dm[1], DoneMiB: done, TotalMiB: total}})
+				}
+			}
 			continue
 		}
 		if rest, ok := strings.CutPrefix(line, toolProgressPrefix); ok {
@@ -766,6 +794,13 @@ func (m *Manager) streamStderr(r io.Reader) {
 		// progress bars don't drive the UI's step counter.
 		if strings.Contains(line, "Inference chunk") {
 			m.inferring.Store(true)
+			if downloading != "" {
+				// Downloads are over: clear the download state in the UI.
+				downloading = ""
+				if m.progress != nil {
+					m.progress(types.GenerateProgress{})
+				}
+			}
 		}
 		if m.inferring.Load() {
 			if pm := tqdmRE.FindStringSubmatch(line); pm != nil {

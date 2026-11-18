@@ -70,14 +70,18 @@ import (
 // weight files (LoRAs, Qwen-Edit lite, CDN base components fetched by the
 // engine), and a flat single-colour image is an error, not a result.
 //
-// Pinned to the imference-engine release v0.5.2.
-const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.5.2.tar.gz"
+// v0.6.0: FLUX.2 klein, ERNIE-Image, Lumina-Image 2.0, LongCat-Image(-Edit) and
+// the Qwen-Image 2512 lite build, with per-card build selection
+// (weights_path="auto": the catalog's model_url "auto").
+//
+// Pinned to the imference-engine release v0.6.0.
+const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.6.0.tar.gz"
 
 // EngineExtras is the extras list installed with the engine: the eight image
 // backends, the Qwen-Image-Edit GGUF lite build (gguf + bitsandbytes for its
 // NF4 encoder) and the editing tools. Shared by the tarball spec and the editable
 // IMFERENCE_ENGINE_SOURCE install so both resolve the same dependency set.
-const EngineExtras = "sdxl,sd15,zimage,flux,chroma,qwenimage,qwenimage-edit,anima,krea2,tools"
+const EngineExtras = "sdxl,sd15,zimage,flux,chroma,qwenimage,qwenimage-edit,anima,krea2,flux2-klein,ernie-image,lumina2,longcat,tools"
 
 // EngineSourceEnvVar lets a developer point the installer at a local
 // imference-engine checkout instead of the GitHub tarball. Set to an absolute

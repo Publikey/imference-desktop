@@ -5,7 +5,8 @@
 # Imference Desktop
 
 **90 curated AI image and video models. One app.**
-Run them free on your own GPU — or in the cloud when you need more.
+Run them free on your own GPU, load any checkpoint you already have,
+or switch to the cloud when you need more.
 
 Free · No subscription · Windows & macOS
 
@@ -75,11 +76,15 @@ available; code signing and silent in-app auto-update are on the roadmap.
 
 ## 🎨 Models
 
-Every model in the catalog is hand-picked and pre-tuned: steps, guidance,
-resolutions, quality tags and negative prompt are set for you. Pick one, type a
-prompt, generate.
+Two ways to get a model, and you can mix them:
 
-### On your own GPU — 11 families, 75+ models, $0 per image
+- **The curated catalog**: 90 hand-picked models that download in one click and
+  arrive pre-tuned (steps, guidance, resolutions, quality tags, negative
+  prompt). The fastest way to a good first image.
+- **Your own checkpoints**: any `.safetensors` you downloaded from Civitai,
+  Hugging Face or anywhere else. The catalog is a starting point, not a limit.
+
+### Curated, on your own GPU — 11 families, 75+ models, $0 per image
 
 | Family | Models | What it is good at |
 |---|:---:|---|
@@ -99,9 +104,18 @@ Short on VRAM? For FLUX.2 klein, ERNIE-Image, Lumina-Image and Qwen-Image 2512
 the app picks the build that fits your card; all four were measured on an
 8 GB GPU.
 
-**Got your own checkpoint?** Load any local `.safetensors` (from Civitai, say)
-and pick its family. SD 1.5, FLUX.1 and Chroma files work too. The file is used
-in place: nothing is copied or uploaded.
+### Any checkpoint you already have
+
+Not in the catalog? Load it anyway. In the model picker, click **Add a
+checkpoint…**, point at a local `.safetensors` file and pick its family:
+
+**SDXL** (Illustrious, Pony, NoobAI and every other SDXL finetune) · **SD 1.5**
+· **Z-Image** · **FLUX.1** · **Chroma** · **Qwen-Image** · **Qwen-Image-Edit**
+· **Anima** · **Krea 2**
+
+The file is used where it is: nothing is copied, nothing is uploaded. Your
+model shows up next to the catalog ones, with the same controls, LoRAs and
+gallery. LoRAs work the same way: import your own `.safetensors`.
 
 ### Cloud only — 4 more families, no GPU needed
 
@@ -122,6 +136,8 @@ which needs no account.
   GPU, and starts and stops the engine on demand.
 - 🖥️ **Local, private, free.** Images made on your GPU cost nothing, and your
   prompts and pictures never leave your machine.
+- 📦 **Not a walled garden.** Bring any checkpoint or LoRA you already have;
+  the catalog is there to save you the setup, not to limit you.
 - ☁️ **Cloud when you want it.** Same interface, one switch. Bigger models,
   video, or just no GPU at hand.
 - 🧩 **25+ LoRAs.** Stack up to four styles, characters or detail boosters on

@@ -2780,6 +2780,14 @@ func (a *App) ensureEngineUpToDate() {
 	if err != nil {
 		return
 	}
+	if v := installer.VenvPythonVersion(a.ctx, venvDir); v != "" && !installer.PythonMeetsFloor(v) {
+		// The pinned engine no longer installs on this venv's Python: keep the
+		// working engine. A full reinstall (engine settings) rebuilds the venv.
+		a.bus.Warn("app", "engine environment Python is too old for the pinned engine — keeping the installed engine; reinstall the local engine to update", map[string]any{
+			"python": v, "installed": info.EngineVersion, "pinned": info.PinnedVersion,
+		})
+		return
+	}
 	if !installer.EngineTarballReachable(a.ctx, nil) {
 		// Keep the working engine: an unpublished tag or no network must not
 		// turn a version mismatch into an uninstalled engine.

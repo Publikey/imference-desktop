@@ -76,8 +76,12 @@ import (
 //
 // v0.6.1: video-concat keeps the audio of the joined clips.
 //
-// Pinned to the imference-engine release v0.6.1.
-const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.6.1.tar.gz"
+// v0.7.0: the diffusers 0.43 stack (transformers 5.22.2, peft 0.21.2,
+// accelerate 1.15.0). Needs Python >= 3.11 — see minPyMinor. Same images as
+// v0.6.1 on every image backend but Lumina 2 (Gemma 2 runs with eager attention).
+//
+// Pinned to the imference-engine release v0.7.0.
+const EngineTarball = "imference-engine[" + EngineExtras + "] @ https://github.com/Publikey/imference-engine/archive/refs/tags/v0.7.0.tar.gz"
 
 // EngineExtras is the extras list installed with the engine: the eight image
 // backends, the Qwen-Image-Edit GGUF lite build (gguf + bitsandbytes for its
@@ -458,11 +462,11 @@ func (i *Installer) Install(ctx context.Context, opts Options, progress chan<- t
 	emit(describeGPU(g))
 
 	amdWindows := g.Vendor == gpu.VendorAMD && runtime.GOOS == "windows"
-	pySeries := "" // "" = any Python >= 3.10
+	pySeries := "" // "" = any Python >= 3.11
 	if amdWindows {
 		pySeries = rocmWindowsPythonSeries
 	}
-	pyMsg := prog("detect", "Looking for Python 3.10+ on PATH…", "install.lookingPython", nil)
+	pyMsg := prog("detect", "Looking for Python 3.11+ on PATH…", "install.lookingPython", nil)
 	if amdWindows {
 		pyMsg = prog("detect",
 			"Looking for Python "+rocmWindowsPythonSeries+" on PATH (required by AMD's ROCm-for-Windows torch wheels)…",
@@ -631,6 +635,16 @@ func (i *Installer) reinstallEngineOnly(
 		return e
 	}
 
+	// The pinned engine needs Python >= 3.11: on an older venv the install
+	// below would fail AFTER the uninstall, leaving no engine at all. Refuse
+	// before touching anything — a full install rebuilds the venv.
+	if v := VenvPythonVersion(ctx, venvDir); v != "" && !PythonMeetsFloor(v) {
+		e := fmt.Errorf("engine-only reinstall: the engine environment runs Python %s, the engine needs %d.%d or newer — reinstall the local engine to rebuild it",
+			v, minPyMajor, minPyMinor)
+		emit(types.InstallProgress{Phase: "error", Error: e.Error(), Done: true})
+		return e
+	}
+
 	// Force-uninstall first (best-effort: a missing package is not an error).
 	emit(prog("engine", "Removing outdated imference-engine", "install.engineRemoving", nil))
 	i.bus.Info("installer", "engine-only: uninstall", nil)
@@ -700,13 +714,21 @@ func (i *Installer) ensureVenv(ctx context.Context, pythonPath, dir, requireSeri
 		if probeErr == nil {
 			// "--version" prints "Python X.Y.Z".
 			version := strings.TrimPrefix(strings.TrimSpace(string(out)), "Python ")
-			if requireSeries == "" || strings.HasPrefix(version, requireSeries+".") {
+			switch {
+			case !PythonMeetsFloor(version):
+				// A venv built on a Python the pinned engine no longer installs
+				// on (3.10): rebuild it on the interpreter just detected.
+				i.bus.Warn("installer", "existing venv Python is too old for the engine, wiping", map[string]any{
+					"dir": dir, "have": version, "need": fmt.Sprintf("%d.%d+", minPyMajor, minPyMinor),
+				})
+			case requireSeries == "" || strings.HasPrefix(version, requireSeries+"."):
 				i.bus.Info("installer", "reusing existing venv", map[string]any{"dir": dir, "version": version})
 				return true, nil
+			default:
+				i.bus.Warn("installer", "existing venv is the wrong Python series, wiping", map[string]any{
+					"dir": dir, "have": version, "need": requireSeries,
+				})
 			}
-			i.bus.Warn("installer", "existing venv is the wrong Python series, wiping", map[string]any{
-				"dir": dir, "have": version, "need": requireSeries,
-			})
 		} else {
 			i.bus.Warn("installer", "existing venv python is broken, wiping", map[string]any{"dir": dir})
 		}

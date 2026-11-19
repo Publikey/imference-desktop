@@ -15,7 +15,7 @@ import (
 	"imference-desktop-go/internal/types"
 )
 
-const minPyMajor, minPyMinor = 3, 10
+const minPyMajor, minPyMinor = 3, 11
 
 type pyCandidate struct {
 	cmd  string
@@ -25,14 +25,15 @@ type pyCandidate struct {
 // pythonSeriesPreference orders the minor series we ask for by name, best
 // first. 3.12 leads because it has the widest wheel coverage for our stack
 // (it's also the series AMD's ROCm-for-Windows wheels require — see
-// rocmWindowsPythonSeries). Anything >= 3.10 is still accepted; this list only
+// rocmWindowsPythonSeries). Anything >= 3.11 is still accepted (the engine's
+// diffusers 0.43 stack dropped 3.10); this list only
 // decides *which* interpreter wins on a machine that has several. A bare
 // `python3` newer than everything here (3.14+) is accepted last: it generally
 // resolves, but it's outside what the engine pin is tested against, so we
 // prefer landing on a known-good series.
-var pythonSeriesPreference = []string{"3.12", "3.11", "3.13", "3.10"}
+var pythonSeriesPreference = []string{"3.12", "3.11", "3.13"}
 
-// pythonCandidates is tried in order; first match >= 3.10 wins. On Windows the
+// pythonCandidates is tried in order; first match >= 3.11 wins. On Windows the
 // `py` launcher (PEP 397) is the preferred entry point because it knows about
 // every installed interpreter. The versioned `pythonX.Y` names matter on
 // macOS/Linux, where Homebrew and the python.org installer always ship them
@@ -60,7 +61,7 @@ func buildPythonCandidates() []pyCandidate {
 // Finder/Dock on macOS inherits launchd's PATH — /usr/bin:/bin:/usr/sbin:/sbin
 // — not the user's shell PATH. Homebrew (/opt/homebrew/bin), pyenv and conda
 // are all invisible there, and the only `python3` on that PATH is Xcode's
-// 3.9.6 stub, which fails the >= 3.10 floor. The user then gets "no Python
+// 3.9.6 stub, which fails the >= 3.11 floor. The user then gets "no Python
 // found" on a machine with several usable interpreters installed. Probing
 // absolute paths is the only reliable way out.
 //
@@ -87,7 +88,7 @@ func fallbackPythonPaths() []string {
 		return out
 	}
 	// Version-manager layouts we can't name exactly. Glob results come back
-	// sorted, so the choice is deterministic; any match >= 3.10 is fine here.
+	// sorted, so the choice is deterministic; any match >= 3.11 is fine here.
 	for _, pattern := range []string{
 		".pyenv/versions/*/bin/python3",
 		"miniconda3/bin/python3",
@@ -101,7 +102,7 @@ func fallbackPythonPaths() []string {
 }
 
 // DetectPython walks the candidates and returns the first interpreter that
-// reports a version >= 3.10. Returns a typed error with a hint when nothing
+// reports a version >= 3.11. Returns a typed error with a hint when nothing
 // matches — the frontend surfaces the message directly.
 func DetectPython(ctx context.Context) (types.PythonInfo, error) {
 	var tried []string
@@ -143,7 +144,7 @@ func noPythonFoundError(tried []string) error {
 
 // detectPythonSeries finds an interpreter of the exact "major.minor" series
 // (e.g. "3.12") when series is non-empty, or delegates to DetectPython (any
-// >= 3.10) when it's "". The exact-series path exists for AMD's
+// >= 3.11) when it's "". The exact-series path exists for AMD's
 // ROCm-for-Windows torch wheels, which are built for a single Python ABI
 // (cp312) — a 3.11 interpreter would pass the generic check and then fail the
 // torch phase with pip's opaque "not a supported wheel on this platform".
@@ -216,6 +217,31 @@ func probe(ctx context.Context, cmd string, args []string) (path, version string
 		return "", "", false
 	}
 	return path, version, true
+}
+
+// PythonMeetsFloor reports whether a "major.minor[.patch]" version is one the
+// pinned engine installs on (>= minPyMajor.minPyMinor). Unparseable = false.
+func PythonMeetsFloor(version string) bool {
+	major, minor, err := parseMajorMinor(version)
+	if err != nil {
+		return false
+	}
+	return major > minPyMajor || (major == minPyMajor && minor >= minPyMinor)
+}
+
+// VenvPythonVersion returns the interpreter version of an existing venv
+// ("3.12.3"), or "" when the venv has no working Python.
+func VenvPythonVersion(ctx context.Context, venvDir string) string {
+	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(checkCtx, venvPythonPath(venvDir), "--version")
+	cmd.SysProcAttr = hideWindowAttr() // no console flash under the GUI build
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	// "--version" prints "Python X.Y.Z".
+	return strings.TrimPrefix(strings.TrimSpace(string(out)), "Python ")
 }
 
 func parseMajorMinor(v string) (int, int, error) {

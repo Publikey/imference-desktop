@@ -365,6 +365,8 @@ export type GenerateProgress = {
   step: number;
   total: number;
   percent: number;
+  /** Set while the engine downloads a model file before the run (percent is the file's). */
+  download?: { file: string; doneMiB: number; totalMiB: number } | null;
 };
 
 /** A previously-generated image found on disk (the output folder gallery). */
@@ -766,6 +768,8 @@ export type EditModelsInfo = {
   localCandidate?: ModelInfo | null;
   /** Its weights are already downloaded. */
   localCandidateCached?: boolean;
+  /** The edit models this computer can run (a choice when there are several). */
+  localChoices?: ModelInfo[];
   /** The model to switch back to after switching to the edit model. */
   previous?: ModelInfo | null;
   /** The local model the engine holds now (what a swap replaces). */

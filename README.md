@@ -4,7 +4,9 @@
 
 # Imference Desktop
 
-**Generate AI images and videos — on your own GPU or in the cloud. One app.**
+**90 curated AI image and video models. One app.**
+Run them free on your own GPU, load any checkpoint you already have,
+or switch to the cloud when you need more.
 
 Free · No subscription · Windows & macOS
 
@@ -17,9 +19,17 @@ Free · No subscription · Windows & macOS
 
 **English** · [简体中文](README.zh-CN.md)
 
-[**Download**](#download) · [Quick start](#quick-start) · [Website](https://imference.com/desktop) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[**Download**](#download) · [Quick start](#quick-start) · [Models](#models) · [Website](https://imference.com/desktop) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 <img src="docs/screenshots/hero.png" alt="Imference Desktop — generation view" width="800" />
+
+</div>
+
+<div align="center">
+
+| **90** | **15** | **75+** | **25+** | **$0** |
+|:---:|:---:|:---:|:---:|:---:|
+| curated models | model families | run on your own GPU | LoRAs | per image, locally |
 
 </div>
 
@@ -41,13 +51,13 @@ All versions and `checksums.txt` (SHA-256) are on the
 ## 🚀 Quick start
 
 1. **Download** the installer for your OS above and run it.
-2. **Open the app** — it installs its own inference engine and detects your GPU.
-   Nothing touches your system Python.
-3. **Pick a model, hit Generate** — the weights download automatically and every
+2. **Open the app.** It sets up its own inference engine in an isolated
+   environment and detects your GPU. No terminal, no CUDA wrestling.
+3. **Pick a model, hit Generate.** The weights download on their own and every
    model ships pre-tuned, so your first image already looks right.
 
-No GPU? Switch the toggle to **Cloud** in step 3 and generate on
-[imference.com](https://imference.com) instead.
+No GPU? Flip the switch to **Cloud** and generate on
+[imference.com](https://imference.com) from the same screen.
 
 ### ⚠️ First launch
 
@@ -62,282 +72,138 @@ You can verify your download against `checksums.txt` from the release.
 The app checks for new versions at startup and shows a banner when one is
 available; code signing and silent in-app auto-update are on the roadmap.
 
+<a id="models"></a>
+
+## 🎨 Models
+
+Two ways to get a model, and you can mix them:
+
+- **The curated catalog**: 90 hand-picked models that download in one click and
+  arrive pre-tuned (steps, guidance, resolutions, quality tags, negative
+  prompt). The fastest way to a good first image.
+- **Your own checkpoints**: any `.safetensors` you downloaded from Civitai,
+  Hugging Face or anywhere else. The catalog is a starting point, not a limit.
+
+### Curated, on your own GPU — 11 families, 75+ models, $0 per image
+
+| Family | Models | What it is good at |
+|---|:---:|---|
+| **Illustrious** | 28 | Anime and illustration, the biggest community catalog. LoRAs. |
+| **Anima** | 16 | Modern anime models with strong prompt following. LoRAs. |
+| **Krea 2** | 11 | Photoreal and stylized images in 8 steps. LoRAs. |
+| **Z-Image** | 9 | Fast, realistic photos in 8 steps. LoRAs. |
+| **SDXL** | 3 | The classic all-rounder. LoRAs. |
+| **Pony** | 3 | Characters and stylized art. LoRAs. |
+| **Qwen-Image** | 2 | Text and layout in 4 steps (Qwen-Image 2512), and editing by instruction (Qwen-Image-Edit). |
+| **FLUX.2 klein** | 1 | An image in 4 steps; edits a reference image by instruction. |
+| **ERNIE-Image** | 1 | Accurate text inside the image, 8 steps. |
+| **Lumina-Image 2.0** | 1 | The base of the Neta anime finetunes. |
+| **LongCat-Image-Edit** | 1 | Editing by instruction in 8 steps. |
+
+Short on VRAM? For FLUX.2 klein, ERNIE-Image, Lumina-Image and Qwen-Image 2512
+the app picks the build that fits your card; all four were measured on an
+8 GB GPU.
+
+### Any checkpoint you already have
+
+Not in the catalog? Load it anyway. In the model picker, click **Add a
+checkpoint…**, point at a local `.safetensors` file and pick its family:
+
+**SDXL** (Illustrious, Pony, NoobAI and every other SDXL finetune) · **SD 1.5**
+· **Z-Image** · **FLUX.1** · **Chroma** · **Qwen-Image** · **Qwen-Image-Edit**
+· **Anima** · **Krea 2**
+
+The file is used where it is: nothing is copied, nothing is uploaded. Your
+model shows up next to the catalog ones, with the same controls, LoRAs and
+gallery. LoRAs work the same way: import your own `.safetensors`.
+
+### Cloud only — 4 more families, no GPU needed
+
+| Family | Models | Type |
+|---|---|---|
+| **GPT Image** (OpenAI) | GPT Image-1, Image-2, 2.5 and 2.6 in Flare and Sunburst | Image, and editing by instruction |
+| **FLUX 3** | FLUX 3, FLUX 3 Klein | Image |
+| **MiniMax H3** | H3, H3 Max Turbo | Video with sound |
+| **Wan 3.0** | Wan 3.0 | Video |
+
+Most local models also run in the cloud (85 models in all), so a laptop without
+a GPU gets the same catalog. Pay with credits or with **x402** (USDC on Base),
+which needs no account.
+
 ## Why Imference Desktop
 
-- ⚡ **One-click setup** — the app installs an isolated inference engine for
-  you (nothing touches your system Python), detects your GPU, and starts and
-  stops the engine on demand. No terminal, no CUDA wrestling.
-- 🖥️ **Local generation, $0 per image** — run **eight model families** on your
-  own GPU: **SDXL, SD 1.5, Z-Image, FLUX, Chroma, Qwen-Image, Anima and
-  Krea 2**. Your prompts and images never leave your machine.
-- 🧩 **Preconfigured models, zero setup** — pick a model from the curated
-  catalog and hit Generate: the weights **download automatically**, and every
-  model ships pre-tuned (steps, CFG, resolutions, quality tags, negative
-  prompt) so your first image already looks right.
-- 🎨 **LoRAs** — stack up to four styles, characters or detail boosters on
-  SDXL (Pony, Illustrious), Z-Image, Krea 2 and Anima models: pick them from
-  the curated catalog (one-click download, weights pre-tuned) or import your
-  own `.safetensors`. Works locally and in the cloud.
-- 📦 **Bring your own model** — load any local `.safetensors` checkpoint
-  (e.g. downloaded from Civitai) and pick its family. The file is used in
-  place — nothing is copied or uploaded.
-- ☁️ **Cloud when you want it** — no GPU or a weak one? Generate images and
-  **video** on [imference.com](https://imference.com) from the same interface.
-  Pay with an **API key (credits)** or **x402 (USDC on Base)** — the x402
-  route needs no account at all.
-- 🎛️ **Real controls, simple interface** — format, steps, CFG, seed, quality
-  tags, negative prompt, **image-to-image**. Stack generations in a queue,
-  and even switch models mid-run — the app finishes the current image first.
-- 🗂️ **A gallery that remembers everything** — every image and video is saved
-  with its prompt, model and settings. Filter, search, and review in a
-  fullscreen viewer.
-- 🪄 **Editing tools** — edit with instructions ("replace the sky with a
-  sunset"), upscale, vary, remove background, magic eraser with
-  click-to-select, expand (outpaint), repaint, restore faces, describe, and
-  quick utilities (resize, crop, convert, strip metadata, video trim/convert)
-  right from the gallery — on your machine or in the cloud.
-- 🤖 **Driven by your AI agent** — connect **Claude Desktop, Claude Code,
-  Cursor** or any MCP app in one click (Settings → AI agents, or the *AI
-  agents* button in the header). Ask for an image in the chat: it's generated
-  on your GPU, for free, and shows up live in the app. See
-  [AI agents](#ai-agents-claude-cursor).
+- ⚡ **Set up in one click.** The app installs its own engine, detects your
+  GPU, and starts and stops the engine on demand.
+- 🖥️ **Local, private, free.** Images made on your GPU cost nothing, and your
+  prompts and pictures never leave your machine.
+- 📦 **Not a walled garden.** Bring any checkpoint or LoRA you already have;
+  the catalog is there to save you the setup, not to limit you.
+- ☁️ **Cloud when you want it.** Same interface, one switch. Bigger models,
+  video, or just no GPU at hand.
+- 🧩 **25+ LoRAs.** Stack up to four styles, characters or detail boosters on
+  Illustrious, Pony, SDXL, Z-Image, Krea 2 and Anima. One-click download from
+  the catalog, or import your own `.safetensors`.
+- 🎛️ **Real controls, simple screen.** Format, steps, guidance, seed, negative
+  prompt, image-to-image. Queue generations and switch models mid-run.
+- 🗂️ **A gallery that remembers.** Every image and video is saved with its
+  prompt, model and settings. Filter, search, reuse a past recipe.
+- 🪄 **Editing tools built in.** Edit with instructions, upscale, remove a
+  background, erase an object, expand, repaint, restore faces.
+- 🤖 **Driven by your AI agent.** Connect Claude Desktop, Claude Code, Cursor
+  or any MCP app in one click and ask for an image in the chat.
 
 <div align="center">
 
-<!-- More screenshots: drop captures in docs/screenshots/ then uncomment -->
-<!--
-<img src="docs/screenshots/gallery.png" alt="Gallery" width="400" /> <img src="docs/screenshots/params.png" alt="Parameters" width="400" />
+<!-- More screenshots: drop the captures in docs/screenshots/ then uncomment.
+<img src="docs/screenshots/models.png" alt="Model picker" width="400" /> <img src="docs/screenshots/gallery.png" alt="Gallery" width="400" />
+<img src="docs/screenshots/tools.png" alt="Editing tools" width="400" /> <img src="docs/screenshots/cloud.png" alt="Cloud mode" width="400" />
 -->
 
 </div>
 
-## AI agents (Claude, Cursor…)
+## 🪄 Editing tools
 
-Imference Desktop can be driven by an AI agent through the open-source
-[Imference MCP server](https://github.com/Publikey/Imference-mcp) — ask Claude
-for an image and your own GPU makes it.
+Right-click any image in the gallery, or open it and press **Edit**.
 
-1. Open **Settings → AI agents** (or click **AI agents** in the header).
-2. Click **Connect** next to Claude Desktop or Claude Code. Desktop looks at
-   what's already there (an MCP server set up before, an npm install, a
-   Node.js ≥ 20.10) and downloads only what's missing: the server
-   (`imference-mcp.js`, from the MCP's GitHub release) and, if no usable
-   Node.js is found, the official portable Node.js — both checked against
-   their published SHA-256. For any other MCP app, **Show setup** gives the
-   config snippet to paste.
-3. Restart the AI app and ask: *"Generate a lighthouse in a storm with
+- **Edit with instructions**: "replace the sky with a sunset", "remove the man
+  on the left", with up to two reference images.
+- **Upscale, vary, expand, repaint, restore faces.**
+- **Remove background** and **magic eraser** with click-to-select.
+- **Describe** an image, plus quick utilities: resize, crop, convert, strip
+  metadata, trim or convert a video.
+
+Each tool shows where it will run before you start: on your computer (nothing
+is uploaded) or in the cloud at the price shown. The app never switches to the
+cloud without asking. Details in [docs/editing-tools.md](docs/editing-tools.md).
+
+## 🤖 AI agents (Claude, Cursor…)
+
+Ask Claude for an image and your own GPU makes it, for free, live in the app.
+
+1. Open **Settings → AI agents** and click **Connect** next to Claude Desktop
+   or Claude Code. For any other MCP app, **Show setup** gives the snippet.
+2. Restart the AI app and ask: *"Generate a lighthouse in a storm with
    Imference."*
 
-What the agent can do, and how it shows:
-
-- **Generate locally, for free**, with the models you downloaded (a
-  downloaded model that isn't loaded is loaded first; an agent never starts a
-  multi-GB download), and run the **editing tools** on your machine.
-- **Everything is visible**: each run appears live in Activity, marked
-  *via Claude* (or the app's name) with its model, and lands in the gallery —
-  including the agent's cloud runs.
-- **Cloud only if you allow it**: *Let AI agents spend my credits for cloud
-  runs* (off by default) lets the MCP server use this app's Imference account
-  for cloud runs. The key is handed out on request and never written into the
-  agent's config; turning the option off stops it at once.
-- **Your call**: *Let AI agents use Imference Desktop* turns the whole local
-  API off. A local failure is reported to the agent, never silently retried
-  as a paid cloud run.
-
-The local API behind it is documented in [Editing tools](#editing-tools)
-below.
-
-## Editing tools
-
-Right-click any image in the gallery (or open it and press **Edit**) to run a
-tool on it. Every tool shows where it will run before you start:
-
-| Badge | Meaning |
-|---|---|
-| **Local** | Runs on this computer at full speed (GPU, or a light CPU tool). Nothing is uploaded. |
-| **Local (slow)** | Runs on this computer on the CPU — no compatible GPU runtime was found. Still private, just slower. |
-| **Cloud** | This computer can't run it (engine not installed, not enough memory, no generation model loaded…): it runs on imference.com at the price shown. |
-
-- **Where it runs.** Settings → *Editing tools* picks the default: **Auto**
-  (local when the badge says so, otherwise the cloud), **Always local** or
-  **Always cloud**; each run can override it. If a local run fails because the
-  machine runs out of memory or lacks a runtime, the app *proposes* the cloud
-  with its price — it never switches silently.
-- **Privacy.** Local tools never upload anything. Cloud runs show *"Runs in
-  the cloud: your image is uploaded"* and the price before you start; uploads
-  are deleted from the cloud within 24 hours.
-- **How it works.** Image and video tools run in a small separate tools engine
-  (ONNX models of 2–500 MB, downloaded on first use and cached) that starts on
-  demand and frees its memory after a few idle minutes. *Vary*, *Repaint* and
-  *Expand* run on the generation model you have loaded (any model that does
-  image-to-image). Results land in your gallery with a **tool** badge and the
-  tool's settings in their metadata; you can chain another tool on a result.
-- **Edit with instructions.** Describe the change in plain words ("replace
-  the sky with a sunset", "remove the man on the left", "make it a watercolor")
-  and optionally add up to two reference images ("put the hat from image 2 on
-  the cat"). It uses an instruction-edit model (Qwen-Image-Edit 2511), not
-  your text-to-image model; the instruction is saved as the result's prompt.
-  - *Local*: load an edit model (Qwen-Image-Edit) as your local model. It
-    needs a CUDA or ROCm GPU with about **12 GB of VRAM** (the app streams the
-    20B transformer with group offload) and about **64 GB of RAM**. An edit
-    model can't generate from a prompt: while it is loaded, Generate points
-    you to *Edit with instructions*, and *Vary / Repaint / Expand* run in the
-    cloud.
-  - *Otherwise* it runs in the cloud on `qwen-image-edit-2511` (or another
-    edit model you pick in the dialog) at that model's price.
-- **Local API for AI agents.** While the app is open it serves a local API on
-  `127.0.0.1` (port 47823 when free) protected by a random token, so agents —
-  e.g. the Imference MCP server with `run_on: local` — can run tools on your
-  machine for free. The port and token are in
-  `<config dir>/imference-desktop-go/local-api.json` (`{"port","token","pid"}`,
-  readable only by you, removed when the app quits):
-
-  ```bash
-  curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:47823/v1/tools
-  curl -H "Authorization: Bearer $TOKEN" -X POST http://127.0.0.1:47823/v1/tools/upscale \
-       -d '{"inputs": {"image": "/path/to/in.png"}, "params": {"scale": 2}}'
-  # with an edit model loaded: references is a list (up to 2)
-  curl -H "Authorization: Bearer $TOKEN" -X POST http://127.0.0.1:47823/v1/tools/instruct-edit \
-       -d '{"inputs": {"image": "/path/in.png", "references": ["/path/hat.png"]},
-            "params": {"instruction": "put the hat from image 2 on the cat"}}'
-  ```
-
-  Inputs may be absolute paths, `https://` URLs or `data:` URIs; outputs are
-  saved to the gallery and returned as paths. Runs are local only (`503
-  unsupported_runtime` when this machine can't run the tool). Turn the API off
-  in Settings → *AI agents*.
-
-  Agents can also **generate** with your GPU (the MCP server's `generate` with
-  `run_on: local`):
-
-  ```bash
-  # the loaded model, the local models and which are downloaded
-  curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:47823/v1/generation
-  curl -H "Authorization: Bearer $TOKEN" -X POST http://127.0.0.1:47823/v1/generate \
-       -d '{"prompt": "a red fox in fresh snow", "format_code": "portrait"}'
-  ```
-
-  Empty fields take the model's defaults (format, steps, guidance, quality
-  tags). A `model` other than the loaded one is loaded first when it is already
-  downloaded (`400 model_not_cached` otherwise: agents never start a download);
-  the engine starts on demand (`503 engine_not_ready` when it isn't installed).
-  `source_image` + `strength` run image-to-image.
-
-  Runs started this way show up live in Activity ("via Claude" — the MCP
-  server sends its client's name as `X-Imference-Agent`) and land in the
-  gallery.
-- **Connect Claude (Settings → AI agents).** One click wires the
-  [Imference MCP server](https://github.com/Publikey/Imference-mcp) into
-  Claude Desktop (its `claude_desktop_config.json`, merged, `.bak` first) or
-  Claude Code (`claude mcp add -s user`), or shows the snippet for any other
-  MCP app. Desktop first looks at what's there — servers already configured
-  (and whether they start), an npm install, a Node.js ≥ 20.10 — and only
-  downloads what's missing: the single-file server `imference-mcp.js` from the
-  MCP's GitHub release, and the official portable Node.js when none fits, both
-  sha256-checked, into `<config dir>/imference-desktop-go/mcp/`. The client
-  config points at them with absolute paths. Your API key is only added when
-  you tick the option (cloud runs then spend your credits).
-
-## Web version (prototype)
-
-The same app, cloud-only, in a browser: `task build:web` (or
-`cd frontend && npm run build:web && go build -tags "web server" -o bin/imference-web .`),
-then `IMFERENCE_WEB_ADDR=127.0.0.1:8090 bin/imference-web` and sign in with an
-imference.com API key.
-
-How it works — one Go codebase, no business logic in TypeScript:
-
-- `web_main.go` / `web_server.go` (build tag `web`): an HTTP server that runs
-  **one cloud-only `App` per signed-in user** (own settings, pending cloud jobs
-  and gallery under `IMFERENCE_WEB_DATA/users/<id>/`), with the same methods
-  the desktop binds.
-- The React frontend is built with `--mode web`: Vite aliases
-  `@wailsio/runtime` to `src/lib/web-runtime.ts`, so the generated bindings
-  keep calling `Call.ByID` (Wails' FNV-32a ID of `main.App.<Method>`) and
-  `Events.On` — now over `POST /web/call` and Server-Sent Events
-  (`GET /web/events`). `src/lib/target.ts` hides the local-only UI (engine,
-  local mode, storage, x402 wallet).
-- `web_rpc.go` is the policy: cloud methods are allowed, local status reads
-  return empty values, local actions (engine, sidecar, file pickers, wallet,
-  local models) answer 501. Settings writes only accept the cloud model; the
-  API key is the session's; tools always run in the cloud and refuse file paths.
-- Sign-in: `POST /web/login` checks the key against `GET /credits/balance`,
-  then sets an `HttpOnly`, `SameSite=Strict` session cookie; every POST also
-  needs the `X-Imference-Web: 1` header.
-
-| Env | Default | |
-|---|---|---|
-| `IMFERENCE_WEB_ADDR` | `127.0.0.1:8090` | listen address |
-| `IMFERENCE_WEB_DATA` | `web-data` | per-user data root |
-| `IMFERENCE_BASE_URL` | `https://imference.com` | API base |
-| `IMFERENCE_WEB_SECURE` | unset | `1` behind HTTPS (Secure cookie) |
-| `IMFERENCE_WEB_BASE` | unset | path prefix, e.g. `/app` behind the imference API proxy |
-| `IMFERENCE_WEB_GALLERY` | unset (`client`) | `server` keeps generated images on the server instead of the user's disk |
-
-Container: `docker build -f Dockerfile.web -t imference-web .` (Node 22 +
-Go 1.25 build stages, distroless non-root runtime, ~28 MB), then
-`docker run -p 8090:8090 -v imference-web-data:/data imference-web`. The
-frontend uses relative URLs only, so the same image serves `/` or `/app/`
-(`IMFERENCE_WEB_BASE=/app`). On imference.com it sits behind the API's `/app`
-reverse proxy (`WEB_APP_URL`, see the imference repo README). Base images are
-overridable (`--build-arg NODE_IMAGE=... GO_IMAGE=...`) when Docker Hub
-rate-limits.
-
-**Deployment (Imference Web).** `.github/workflows/web-deploy.yml` builds
-`Dockerfile.web` on every push to `main` and deploys it to the `imference-web`
-Azure Container App (internal ingress on `8090`, one replica, env
-`IMFERENCE_WEB_BASE=/app` and `IMFERENCE_WEB_SECURE=1`, image pulled with its
-system managed identity). It needs these repo secrets:
-`IMFERENCE_AZURE_CLIENT_ID`, `IMFERENCE_AZURE_TENANT_ID`,
-`IMFERENCE_AZURE_SUBSCRIPTION_ID` (OIDC, with a federated credential for this
-repo's `main`; the identity needs push rights on the registry and Contributor on the
-Container App), `IMFERENCE_REGISTRY_URL` and `IMFERENCE_RESOURCE_GROUP`. From
-Git Bash, pass `/app` to `az` with `MSYS_NO_PATHCONV=1`, or it becomes a
-Windows path.
-
-**Gallery on the user's disk (default).** The server never keeps images: a
-result comes back to the browser (image + metadata) and
-`src/lib/web-gallery.ts` saves it, in the desktop format
-(`<YYYYMMDD-HHMMSS>_<source>_<seed>.<ext>` + `.json` sidecar), either in a
-folder the user picks (File System Access API: Chrome / Edge / Brave / Opera
-desktop; Settings > Gallery) or in the browser's private storage (OPFS, every
-browser) — the desktop app can point at the same folder and share the gallery.
-`web-runtime.ts` keeps the gallery calls (`ListSavedImages`, `GalleryFacets`,
-`GetSavedImage`, `DeleteSavedImage`) in the browser, saves `GenerateCloud` /
-`RunTool` results, and sends gallery images to tools as data URIs with their
-metadata. Cloud jobs that finish while no tab is open wait in a per-user server
-outbox (`TakeClientGalleryOutbox`) until the next visit. `IMFERENCE_WEB_GALLERY=server`
-keeps the previous server-side gallery.
-
-**Cloud history.** The gallery's **History** button (and the command palette)
-lists every cloud call paid with the API key or the wallet, newest first, from
-the API's `GET /history` (`app_history.go`, `internal/cloud/history.go`). The
-server keeps the call and its results only, never the prompt or the settings;
-a result can be saved to the gallery again (`RedownloadCloudOutput`) for 24 h.
-An API key reads its own calls. A wallet signs a Sign-In with Ethereum message
-(`personal_sign`, no payment): the desktop with its keychain wallet (a new
-sign-in every hour, no prompt), the web with the browser wallet (one prompt a
-day, `web:sign` with `purpose: "history"`).
-
-Prototype limits: sessions live in memory (a restart signs everyone out) and
-the server is single-instance; the API key is stored in the user's
-`settings.json` on the server; no rate limiting. `go test -tags "web server" .` covers the
-binding-ID mapping, sign-in/CSRF, the method policy, per-user isolation, the
-event stream and a cloud generation end to end against a mock API.
+Every run shows up in Activity, marked *via Claude*, and lands in your gallery.
+Cloud runs spend your credits only if you allow it; that option is off by
+default. Setup details and the local API are in
+[docs/local-api.md](docs/local-api.md).
 
 ## Requirements
 
 | Mode | What you need |
 |---|---|
-| **Local** | Windows: an NVIDIA GPU (CUDA), or an AMD Radeon RX 7000/9000 (ROCm preview — needs Python 3.12 + a recent Adrenalin driver) · macOS: Apple Silicon. ~6–13 GB disk per model. |
-| **Cloud** | Any machine — an [imference.com API key](https://imference.com/payments), or a funded x402 wallet. |
+| **Local** | **Windows**: an NVIDIA GPU (CUDA), or an AMD Radeon RX 7000/9000 (ROCm preview, needs Python 3.12 and a recent Adrenalin driver). **macOS**: Apple Silicon. Python 3.11 or newer installed (the app builds its own isolated environment from it). About 6 to 13 GB of disk per model. |
+| **Cloud** | Any machine, with an [imference.com API key](https://imference.com/payments) or a funded x402 wallet. |
 
 Linux (NVIDIA CUDA / AMD ROCm) is supported by the engine and builds from
-source, but there's no prebuilt binary yet — see
+source, but there is no prebuilt binary yet: see
 [Build from source](#build-from-source).
 
-Learn more about the app on the
-[imference.com/desktop](https://imference.com/desktop) page.
+There is also a cloud-only **web version** of the app, as a prototype:
+[docs/web.md](docs/web.md). More about the app on
+[imference.com/desktop](https://imference.com/desktop).
 
 ## Feedback
 
@@ -378,8 +244,9 @@ before a PR, and how to add a language.
 [MIT](LICENSE) © Publikey Sàrl
 
 Model weights are **not** covered by this license — each model on the catalog
-carries its own terms (CreativeML, FLUX non-commercial, Apache-2.0…). Check the
-license of any model you use, especially commercially.
+carries its own terms (CreativeML, Apache-2.0, the Gemma Terms of Use for
+Lumina-Image's text encoder, the providers' terms for GPT Image and FLUX 3…).
+Check the license of any model you use, especially commercially.
 
 Found a security issue? See [SECURITY.md](SECURITY.md) — please don't open a
 public issue.

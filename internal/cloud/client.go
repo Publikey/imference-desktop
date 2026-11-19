@@ -419,6 +419,14 @@ func normalizeEngine(imEngine string) string {
 		return "anima"
 	case "krea2", "krea-2", "krea2-turbo":
 		return "krea2"
+	case "flux2-klein", "flux2klein", "flux.2-klein":
+		return "flux2-klein"
+	case "ernie-image", "ernieimage", "ernie_image":
+		return "ernie-image"
+	case "lumina2", "lumina-image-2", "lumina":
+		return "lumina2"
+	case "longcat-edit", "longcat_edit", "longcat-image-edit":
+		return LongCatEditBackend
 	case "wan22", "wan":
 		return "wan"
 	default:
@@ -439,6 +447,24 @@ var imageBackends = map[string]bool{
 	// wants ~13 GB VRAM (no sub-module offload in the image engine) — small
 	// cards OOM at load, so catalog rows should gate it via ImLocal.
 	"krea2": true,
+	// Engine-managed builds (weights "auto": the engine picks and downloads the
+	// build that fits the card — see EngineWeightsAuto).
+	"flux2-klein": true, "ernie-image": true, "lumina2": true,
+	// LongCat-Image-Edit: instruction editing only, like Qwen-Image-Edit.
+	LongCatEditBackend: true,
+}
+
+// EngineWeightsAuto is the ModelURL of a model whose weights the ENGINE manages:
+// it picks the build that fits the card (GGUF quantization, fp8 encoder, offload
+// mode) and fetches it from the CDN into its own cache on first load. The
+// desktop downloads nothing for such a model and passes "auto" as the weights
+// path.
+const EngineWeightsAuto = "auto"
+
+// IsEngineManaged reports whether a model's weights are picked and fetched by
+// the engine (ModelURL "auto") rather than downloaded by the desktop.
+func IsEngineManaged(m *types.ModelInfo) bool {
+	return m != nil && m.ModelURL == EngineWeightsAuto
 }
 
 // EditBackend is the engine's instruction-edit backend (Qwen-Image-Edit). Its
@@ -480,8 +506,14 @@ func BuiltinEditModel() types.ModelInfo {
 	}
 }
 
+// LongCatEditBackend is the engine's second instruction-edit backend
+// (LongCat-Image-Edit Turbo, engine-managed weights).
+const LongCatEditBackend = "longcat-edit"
+
 // IsEditBackend reports whether a normalized backend is an instruction-edit one.
-func IsEditBackend(backend string) bool { return backend == EditBackend }
+func IsEditBackend(backend string) bool {
+	return backend == EditBackend || backend == LongCatEditBackend
+}
 
 // EditModels filters a catalog list to the instruction-edit models. The
 // model type (image-edit) or the backend (im_engine qwenimage-edit) is
@@ -549,6 +581,8 @@ func IsImageBackend(name string) bool {
 var refImageBackends = map[string]bool{
 	"sdxl": true, "sd15": true, "zimage": true,
 	"flux": true, "chroma": true, "qwenimage": true, "anima": true,
+	// FLUX.2 klein: the image is a REFERENCE edited by the prompt (no strength).
+	"flux2-klein": true,
 }
 
 // SupportsRefImages reports whether a normalized local backend accepts a

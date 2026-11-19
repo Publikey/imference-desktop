@@ -49,7 +49,7 @@ logger = logging.getLogger("imference.sidecar")
 MODEL_NAME = "local"
 
 # Instruction-edit backends (Qwen-Image-Edit): only the instruct-edit tool.
-EDIT_BACKENDS = ("qwenimage-edit",)
+EDIT_BACKENDS = ("qwenimage-edit", "longcat-edit")
 
 
 def _device_label(dev) -> str:
@@ -70,6 +70,45 @@ def _device_label(dev) -> str:
     return label
 
 
+# Engine packages holding a per-VRAM build table (weights "auto").
+_BUILD_PACKAGES = {
+    "flux2-klein": "flux2klein",
+    "ernie-image": "ernieimage",
+    "lumina2": "lumina2",
+    "qwenimage": "qwenimage",
+    "longcat": "longcat",
+    "longcat-edit": "longcat",
+}
+
+
+def _apply_build_offload(runtime, backend: str) -> None:
+    """Take the offload mode from the engine's measured build for this card.
+
+    The build a model with engine-managed weights gets (quantization, encoder
+    storage) and the offload mode it was measured with go together: the Go
+    side's generic VRAM thresholds know nothing about them. Only when the user
+    left both offload settings on Auto."""
+    pkg = _BUILD_PACKAGES.get(backend)
+    if not pkg:
+        return
+    try:
+        import importlib
+
+        builds = importlib.import_module(f"imference_engine.{pkg}.builds")
+        from imference_engine.managers.builds import cuda_vram_gb
+
+        build = builds.recommend_build(cuda_vram_gb())
+        for key, value in build.runtime_kwargs().items():
+            setattr(runtime, key, value)
+        logger.info(
+            "Engine build for this card: %s (%s) -> enable_offload=%s offload_mode=%s",
+            build.name, build.reason, runtime.enable_offload,
+            getattr(runtime, "offload_mode", None),
+        )
+    except Exception:  # noqa: BLE001 — unknown engine version: keep the env settings
+        logger.warning("No build table for backend %s; keeping the offload settings", backend, exc_info=True)
+
+
 @load
 def setup() -> dict:
     """Loaded once before the first task. Initializes the engine and
@@ -81,7 +120,12 @@ def setup() -> dict:
         # on stdout and exit 1 — the Go side surfaces that as a clean
         # startup error in the UI.
         raise RuntimeError("IMFERENCE_LOCAL_SDXL_PATH not set")
-    if not os.path.isfile(weights):
+    # "auto": the engine picks the build that fits the card and fetches it from
+    # the CDN itself (FLUX.2 klein, ERNIE-Image, Qwen-Image 2512, Lumina 2).
+    engine_managed = weights.strip().lower() == "auto"
+    if engine_managed:
+        weights = "auto"
+    elif not os.path.isfile(weights):
         raise RuntimeError(f"SDXL weights not found at {weights}")
 
     # Lazy import — keeps the import chain off the critical path of stdout
@@ -110,6 +154,9 @@ def setup() -> dict:
     base_model = os.environ.get("IMFERENCE_LOCAL_BASE_MODEL", "").strip() or None
     shift_raw = os.environ.get("IMFERENCE_BACKEND_SHIFT", "").strip()
     shift = float(shift_raw) if shift_raw else None
+
+    if engine_managed and os.environ.get("IMFERENCE_OFFLOAD_AUTO") == "1":
+        _apply_build_offload(runtime, backend)
 
     logger.info(
         "Loading engine: backend=%s weights=%s base_model=%s shift=%s",

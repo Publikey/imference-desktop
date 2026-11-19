@@ -11,6 +11,10 @@ export const ENGINE_LABEL: Record<string, string> = {
   "qwenimage-edit": "Qwen-Image-Edit",
   anima: "Anima",
   krea2: "Krea 2",
+  "flux2-klein": "FLUX.2 klein",
+  "ernie-image": "ERNIE-Image",
+  lumina2: "Lumina-Image 2.0",
+  "longcat-edit": "LongCat-Image-Edit",
   wan: "WAN Video",
 };
 

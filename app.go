@@ -323,7 +323,7 @@ func (a *App) clearStaleLocalModel() types.Settings {
 		s.CustomModels = kept
 	}
 
-	if s.SDXLPath != "" {
+	if s.SDXLPath != "" && s.SDXLPath != cloud.EngineWeightsAuto {
 		if _, err := os.Stat(s.SDXLPath); err != nil {
 			a.bus.Warn("app", "selected model weights missing; clearing stale selection", map[string]any{"path": s.SDXLPath})
 			s.SDXLPath = ""
@@ -984,6 +984,10 @@ func (a *App) SelectLocalModel(modelCode string) error {
 		return err
 	}
 
+	if cloud.IsEngineManaged(chosen) {
+		return a.selectEngineManagedModel(chosen)
+	}
+
 	dir, err := modelsDir()
 	if err != nil {
 		return err
@@ -1121,6 +1125,59 @@ func (a *App) SelectLocalModel(modelCode string) error {
 		})
 	}()
 
+	return nil
+}
+
+// selectEngineManagedModel activates a model whose weights the engine picks and
+// fetches itself (cloud.EngineWeightsAuto): nothing is downloaded here, the
+// sidecar is restarted with "auto" as its weights and the engine pulls the build
+// that fits the card from the CDN on the first generation.
+func (a *App) selectEngineManagedModel(chosen *types.ModelInfo) error {
+	emit := func(p types.InstallProgress) {
+		if a.canEmit() {
+			a.emit("model:progress", p)
+		}
+	}
+	go func() {
+		emit(types.InstallProgress{
+			Phase: "model", Message: "Preparing " + chosen.Name,
+			MessageKey: "progress.preparing", MessageArgs: map[string]string{"name": chosen.Name},
+		})
+		a.bus.Info("app", "SelectLocalModel start (engine-managed weights)", map[string]any{"model": chosen.ModelCode})
+		if a.sidecar.IsGenerating() {
+			emit(types.InstallProgress{
+				Phase: "model", Message: "Waiting for the current generation to finish…",
+				MessageKey: "progress.waitingGeneration",
+			})
+			a.sidecar.WaitForIdle()
+		}
+		a.sidecar.Stop()
+
+		s := a.settings.Get()
+		s.SDXLPath = cloud.EngineWeightsAuto
+		s.LocalModel = chosen
+		if _, serr := a.settings.Save(s); serr != nil {
+			a.bus.Error("app", "SelectLocalModel settings save failed", map[string]any{"err": serr.Error()})
+			emit(types.InstallProgress{Phase: "error", Error: serr.Error(), Done: true})
+			return
+		}
+		emit(types.InstallProgress{
+			Phase: "model", Message: "Loading " + chosen.Name + " into the engine…",
+			MessageKey: "progress.loadingEngine", MessageArgs: map[string]string{"name": chosen.Name},
+			PercentEstimate: 100,
+		})
+		if rerr := a.sidecar.Restart(a.ctx, s.PythonPath, s.SDXLPath, s.LocalModel, s.EngineRuntime); rerr != nil {
+			a.bus.Warn("app", "SelectLocalModel sidecar restart failed", map[string]any{"err": rerr.Error()})
+			emit(types.InstallProgress{Phase: "error", Error: rerr.Error(), Done: true})
+			return
+		}
+		a.bus.Info("app", "SelectLocalModel done", map[string]any{"model": chosen.ModelCode})
+		emit(types.InstallProgress{
+			Phase: "done", Message: chosen.Name + " ready",
+			MessageKey: "progress.modelReady", MessageArgs: map[string]string{"name": chosen.Name},
+			PercentEstimate: 100, Done: true,
+		})
+	}()
 	return nil
 }
 
@@ -1337,6 +1394,9 @@ func (a *App) EnsureLocalModel(modelCode string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if cloud.IsEngineManaged(chosen) {
+		return true, a.SelectLocalModel(modelCode)
+	}
 	dir, err := modelsDir()
 	if err != nil {
 		return false, err
@@ -1474,6 +1534,9 @@ func (a *App) relabelModelCache() {
 	}
 	refs := make([]modelcache.CatalogRef, 0, len(models))
 	for _, m := range models {
+		if m.ModelURL == cloud.EngineWeightsAuto {
+			continue // the engine's own cache, not a file of ours
+		}
 		refs = append(refs, modelcache.CatalogRef{ModelCode: m.ModelCode, ModelName: m.Name, ModelURL: m.ModelURL})
 	}
 	renamed, rerr := a.modelCache.Relabel(refs)
@@ -2645,7 +2708,7 @@ func (a *App) InstallEngine() error {
 		// A reinstall keeps a valid prior model, but a from-scratch install (cache
 		// dir wiped) can inherit a dangling SDXLPath from the surviving
 		// settings.json — drop it so we don't try to load missing weights.
-		if s.SDXLPath != "" {
+		if s.SDXLPath != "" && s.SDXLPath != cloud.EngineWeightsAuto {
 			if _, err := os.Stat(s.SDXLPath); err != nil {
 				a.bus.Warn("app", "post-install: selected model weights missing; clearing", map[string]any{"path": s.SDXLPath})
 				s.SDXLPath = ""
@@ -2715,6 +2778,14 @@ func (a *App) ensureEngineUpToDate() {
 	}
 	reqs, err := resolveSidecarRequirements()
 	if err != nil {
+		return
+	}
+	if v := installer.VenvPythonVersion(a.ctx, venvDir); v != "" && !installer.PythonMeetsFloor(v) {
+		// The pinned engine no longer installs on this venv's Python: keep the
+		// working engine. A full reinstall (engine settings) rebuilds the venv.
+		a.bus.Warn("app", "engine environment Python is too old for the pinned engine — keeping the installed engine; reinstall the local engine to update", map[string]any{
+			"python": v, "installed": info.EngineVersion, "pinned": info.PinnedVersion,
+		})
 		return
 	}
 	if !installer.EngineTarballReachable(a.ctx, nil) {

@@ -143,6 +143,7 @@ function idb(): Promise<IDBDatabase> {
     r.onupgradeneeded = () => r.result.createObjectStore(STORE);
     r.onsuccess = () => resolve(r.result);
     r.onerror = () => reject(r.error);
+    r.onblocked = () => reject(new Error("IndexedDB is blocked by another tab"));
   });
 }
 
@@ -181,6 +182,33 @@ function storedMode(): GalleryMode {
   }
 }
 
+// Browser storage calls can stay pending forever on a profile whose site data
+// is damaged or locked (IndexedDB open, a stored handle's permission query).
+// Nothing here may hang the gallery: past the delay, the call counts as failed.
+function settle<T>(p: Promise<T>, ms = 4000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error("browser storage did not answer")), ms);
+    p.then(
+      (v) => (clearTimeout(id), resolve(v)),
+      (e) => (clearTimeout(id), reject(e)),
+    );
+  });
+}
+
+/** The folder handle kept from a previous visit and whether it is readable now.
+ *  "unknown" = the browser could not tell (treated as "needs a click"). */
+async function storedFolder(): Promise<{ handle: DirHandle | null; granted: boolean }> {
+  try {
+    const h = await settle(idbGet<DirHandle>("gallery"));
+    if (!h) return { handle: null, granted: false };
+    const p = (await settle(Promise.resolve(h.queryPermission?.({ mode: "readwrite" })))) ?? "granted";
+    return { handle: h, granted: p === "granted" };
+  } catch (e) {
+    console.error("gallery: could not read the stored folder", e);
+    return { handle: null, granted: false };
+  }
+}
+
 let cachedRoot: DirHandle | null = null;
 // The folder handle this page holds access to (picked, re-granted, or found
 // granted); access lasts as long as the page.
@@ -209,14 +237,13 @@ async function browserRoot(): Promise<DirHandle> {
 async function root(): Promise<DirHandle | null> {
   if (cachedRoot) return cachedRoot;
   if (storedMode() === "folder") {
-    const h = await idbGet<DirHandle>("gallery").catch(() => undefined);
-    if (h) {
-      const p = (await h.queryPermission?.({ mode: "readwrite" })) ?? "granted";
-      if (p !== "granted") return null;
-      return (cachedRoot = grantedFolder = h);
-    }
+    const { handle, granted } = await storedFolder();
+    // Folder mode without a readable folder: never fall back to the browser
+    // storage silently, new images would land where the user is not looking.
+    if (!handle || !granted) return null;
+    return (cachedRoot = grantedFolder = handle);
   }
-  return (cachedRoot = await browserRoot());
+  return (cachedRoot = await settle(browserRoot()));
 }
 
 export async function galleryStatus(): Promise<GalleryStatus> {
@@ -228,11 +255,11 @@ export async function galleryStatus(): Promise<GalleryStatus> {
     if (grantedFolder) {
       return { mode, folderName: grantedFolder.name, needsPermission: false, folderSupported: folderSupported() };
     }
-    const h = await idbGet<DirHandle>("gallery").catch(() => undefined);
-    if (h) {
-      const p = (await h.queryPermission?.({ mode: "readwrite" })) ?? "granted";
-      return { mode, folderName: h.name, needsPermission: p !== "granted", folderSupported: folderSupported() };
-    }
+    const { handle, granted } = await storedFolder();
+    // The folder is lost (site data damaged or cleared): still say "folder" and
+    // "needs access", so Settings offers to pick it again or to go back to the
+    // browser storage instead of showing nothing.
+    return { mode, folderName: handle?.name ?? "", needsPermission: !granted, folderSupported: folderSupported() };
   }
   return { mode: "browser", folderName: "", needsPermission: false, folderSupported: folderSupported() };
 }
@@ -243,7 +270,9 @@ export async function chooseFolder(): Promise<GalleryStatus> {
   const pick = (window as any).showDirectoryPicker as (o: object) => Promise<DirHandle>;
   const h = await pick({ id: "imference-gallery", mode: "readwrite", startIn: "pictures" });
   const prev = await root().catch(() => null);
-  await idbSet("gallery", h);
+  // Keeping the handle is what lets the next visit reopen the folder; if the
+  // browser cannot store it, the folder still works for this page.
+  await settle(idbSet("gallery", h)).catch((e) => console.error("gallery: could not remember the folder", e));
   localStorage.setItem(MODE_KEY, "folder");
   cachedRoot = grantedFolder = h;
   if (prev && prev !== h) await copyAll(prev, h);
@@ -253,7 +282,7 @@ export async function chooseFolder(): Promise<GalleryStatus> {
 
 /** Re-grant access to the chosen folder (must run in a click handler). */
 export async function reconnectFolder(): Promise<GalleryStatus> {
-  const h = await idbGet<DirHandle>("gallery");
+  const h = await settle(idbGet<DirHandle>("gallery")).catch(() => undefined);
   if (h && (await h.requestPermission?.({ mode: "readwrite" })) === "granted") {
     cachedRoot = grantedFolder = h;
     changed();

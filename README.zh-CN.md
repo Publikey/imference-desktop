@@ -4,11 +4,10 @@
 
 # Imference Desktop
 
-**90 个精选 AI 图像与视频模型，一个应用搞定。**
-在自己的 GPU 上免费运行，也可以加载你已有的任意模型文件，
-需要更多时切换到云端。
+**AI 图像与视频：用自己的 GPU，或用云端。同一个应用，一个开关。**
+一键安装，模型自动下载，无需账号。
 
-免费 · 无订阅 · Windows & macOS
+免费 · 开源 · Windows & macOS
 
 [![Latest release](https://img.shields.io/github/v/release/Publikey/imference-desktop?label=latest&color=f59e0b)](https://github.com/Publikey/imference-desktop/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Publikey/imference-desktop/total?color=38bdf8)](https://github.com/Publikey/imference-desktop/releases)
@@ -25,11 +24,28 @@
 
 </div>
 
+### 🔀 本地与云端，同一个界面
+
+在自己的 GPU 上免费生成，或者拨一下开关，把同一条提示词交给云端运行。
+同一个界面、同一个图库、同一套工具：不用重新学习，每张图在哪里运行由你决定。
+
+### ⚡ 几分钟就能出图
+
+安装、打开、选一个模型、点击生成。应用会安装自带的引擎、检测你的 GPU，
+并替你下载权重。每个精选模型都已预调好参数，第一张图就有不错的效果。
+无需命令行，无需折腾 CUDA。
+
+### 🙅 无需账号
+
+本地生成什么都不需要：不用注册，不用邮箱，提示词和图片永远不会离开你的电脑。
+用 x402（Base 链 USDC）付费时，连云端也不需要账号。
+
 <div align="center">
 
-| **90** | **15** | **75+** | **25+** | **0 元** |
-|:---:|:---:|:---:|:---:|:---:|
-| 精选模型 | 模型家族 | 可在自己的 GPU 上运行 | LoRA | 本地每张图 |
+<!-- 更多截图：把图片放进 docs/screenshots/ 后取消注释。
+<img src="docs/screenshots/models.png" alt="模型选择" width="400" /> <img src="docs/screenshots/gallery.png" alt="图库" width="400" />
+<img src="docs/screenshots/tools.png" alt="编辑工具" width="400" /> <img src="docs/screenshots/cloud.png" alt="云端模式" width="400" />
+-->
 
 </div>
 
@@ -45,8 +61,6 @@
 
 所有版本和 `checksums.txt`（SHA-256）见
 [**Releases**](https://github.com/Publikey/imference-desktop/releases) 页面。
-
-<a id="quick-start"></a>
 
 <a id="quick-start"></a>
 
@@ -74,113 +88,44 @@
 
 <a id="models"></a>
 
-## 🎨 模型
+## 🎨 90 个精选模型，开箱即用
 
-获取模型有两种方式，可以混用：
+人工挑选，一键下载，参数已调好：选一个模型，输入提示词，直接生成。
+而且目录只是起点，不是限制：你从 Civitai、Hugging Face 或其他地方下载的
+任意模型文件，都可以和目录中的模型一起使用。
 
-- **精选目录**：90 个人工挑选的模型，一键下载，参数已预调好（步数、引导强度、
-  分辨率、质量标签、负面提示词）。这是得到第一张好图最快的方式。
-- **你自己的模型文件**：从 Civitai、Hugging Face 或其他地方下载的任意
-  `.safetensors`。目录只是起点，不是限制。
+| 模型家族 | 自己的 GPU | 云端 | 自己的模型文件 |
+|---|:---:|:---:|:---:|
+| **Illustrious · Pony · SDXL** | ✅ | ✅ | ✅ |
+| **Anima · Krea 2 · Z-Image** | ✅ | ✅ | ✅ |
+| **Qwen-Image-Edit** | ✅ | ✅ | ✅ |
+| **Qwen-Image** | ✅ | | ✅ |
+| **SD 1.5 · FLUX.1 · Chroma** | ✅ | | ✅ |
+| **FLUX.2 klein · ERNIE-Image · Lumina-Image 2.0 · LongCat-Image-Edit** | ✅ | | |
+| **GPT Image · FLUX 3** | | ✅ | |
+| **MiniMax H3 · Wan 3.0**（视频） | | ✅ | |
 
-### 精选目录，在自己的 GPU 上 — 11 个家族，75+ 个模型，每张图 0 元
+- **自己的模型文件。** 在模型选择窗口中点击**添加模型文件…**，选择本地的
+  `.safetensors` 文件，再选好所属家族。文件在原位置直接使用：不会被复制，
+  也不会被上传。LoRA 也一样。
+- **显存不够？** 对于 FLUX.2 klein、ERNIE-Image、Lumina-Image 和 Qwen-Image，
+  应用会自动选择适合你显卡的版本。
+- **完全没有 GPU？** 把开关切到云端，在
+  [imference.com](https://imference.com) 上继续生成，可用积分或 x402 付费。
 
-| 家族 | 模型数 | 擅长什么 |
-|---|:---:|---|
-| **Illustrious** | 28 | 动漫与插画，社区模型最多。支持 LoRA。 |
-| **Anima** | 16 | 新一代动漫模型，对提示词的理解更准确。支持 LoRA。 |
-| **Krea 2** | 11 | 8 步生成写实与风格化图像。支持 LoRA。 |
-| **Z-Image** | 9 | 8 步生成写实照片，速度快。支持 LoRA。 |
-| **SDXL** | 3 | 经典的通用模型。支持 LoRA。 |
-| **Pony** | 3 | 角色与风格化作品。支持 LoRA。 |
-| **Qwen-Image** | 2 | 4 步生成，擅长文字与排版（Qwen-Image 2512）；按指令编辑图片（Qwen-Image-Edit）。 |
-| **FLUX.2 klein** | 1 | 4 步出图；可按指令编辑参考图。 |
-| **ERNIE-Image** | 1 | 图片内文字准确，8 步。 |
-| **Lumina-Image 2.0** | 1 | Neta 系列动漫微调模型的基础模型。 |
-| **LongCat-Image-Edit** | 1 | 8 步按指令编辑图片。 |
+## ✨ 还有这些
 
-显存不够？对于 FLUX.2 klein、ERNIE-Image、Lumina-Image 和 Qwen-Image 2512，
-应用会自动选择适合你显卡的版本；这四个模型都在 8 GB 显卡上实测过。
-
-### 你已有的任意模型文件
-
-目录里没有？照样可以加载。在模型选择窗口中点击**添加模型文件…**，选择本地的 `.safetensors` 文件，
-再选好所属家族：
-
-**SDXL**（Illustrious、Pony、NoobAI 以及其他所有 SDXL 微调模型）· **SD 1.5**
-· **Z-Image** · **FLUX.1** · **Chroma** · **Qwen-Image** · **Qwen-Image-Edit**
-· **Anima** · **Krea 2**
-
-文件在原位置直接使用：不会被复制，也不会被上传。你的模型会和目录中的模型
-显示在一起，使用同样的参数控制、LoRA 和图库。LoRA 也一样：可以导入自己的
-`.safetensors`。
-
-### 仅云端 — 另外 4 个家族，无需 GPU
-
-| 家族 | 模型 | 类型 |
-|---|---|---|
-| **GPT Image**（OpenAI） | GPT Image-1、Image-2，以及 2.5 和 2.6 的 Flare 与 Sunburst | 图像，以及按指令编辑 |
-| **FLUX 3** | FLUX 3、FLUX 3 Klein | 图像 |
-| **MiniMax H3** | H3、H3 Max Turbo | 带声音的视频 |
-| **Wan 3.0** | Wan 3.0 | 视频 |
-
-大多数本地模型也能在云端运行（共 85 个模型），没有 GPU 的笔记本也能用上同一份
-目录。可用积分付费，或用 **x402**（Base 链 USDC），后者无需注册账号。
-
-## 为什么选择 Imference Desktop
-
-- ⚡ **一键安装。** 应用会安装自带的引擎，自动检测 GPU，并按需启动和停止引擎。
-- 🖥️ **本地、私密、免费。** 在自己的 GPU 上生成不花钱，提示词和图片永远不会
-  离开你的电脑。
-- 📦 **不设围墙。** 你已有的任意模型文件和 LoRA 都能用；目录是为了省去配置，
-  不是为了限制你。
-- ☁️ **需要时切换云端。** 同一界面，一个开关。更大的模型、视频，或者手边没有 GPU。
-- 🧩 **25+ 个 LoRA。** 在 Illustrious、Pony、SDXL、Z-Image、Krea 2 和 Anima 上
-  最多叠加四个风格、角色或细节增强。可从目录一键下载，也可导入自己的
-  `.safetensors`。
-- 🎛️ **真正的参数控制，界面简洁。** 画幅、步数、引导强度、种子、负面提示词、
-  图生图。任务可排队，生成中途也能切换模型。
+- 🪄 **编辑工具。** 按指令编辑（“把天空换成日落”）、放大、去除背景、擦除物体、
+  扩图、局部重绘、修复人脸。每个工具在运行前都会显示运行位置，应用不会不经
+  询问就切换到云端。[详情](docs/editing-tools.md)（英文）
+- 🤖 **让你的 AI 智能体来操作。** 在**设置 → AI 智能体**中连接 Claude Desktop、
+  Claude Code、Cursor 或任何 MCP 应用，然后在对话里要一张图：由你自己的 GPU
+  生成，并实时显示在应用里。[详情](docs/local-api.md)（英文）
+- 🧩 **LoRA。** 叠加风格、角色和细节增强，可来自目录，也可用自己的文件。
 - 🗂️ **记住一切的图库。** 每张图片和视频都会连同提示词、模型和参数一起保存。
   支持筛选、搜索，并可复用以前的参数。
-- 🪄 **内置编辑工具。** 按指令编辑、放大、去除背景、擦除物体、扩图、局部重绘、
-  修复人脸。
-- 🤖 **由你的 AI 智能体驱动。** 一键连接 Claude Desktop、Claude Code、Cursor
-  或任何 MCP 应用，在对话里直接要一张图。
-
-<div align="center">
-
-<!-- 更多截图：把图片放进 docs/screenshots/ 后取消注释。
-<img src="docs/screenshots/models.png" alt="模型选择" width="400" /> <img src="docs/screenshots/gallery.png" alt="图库" width="400" />
-<img src="docs/screenshots/tools.png" alt="编辑工具" width="400" /> <img src="docs/screenshots/cloud.png" alt="云端模式" width="400" />
--->
-
-</div>
-
-## 🪄 编辑工具
-
-在图库中右键任意图片，或打开图片后点**编辑**。
-
-- **按指令编辑**：“把天空换成日落”“去掉左边的人”，最多可附两张参考图。
-- **放大、变体、扩图、局部重绘、修复人脸。**
-- **去除背景**和支持点击选取的**魔法橡皮擦**。
-- **描述图片**，以及常用小工具：调整尺寸、裁剪、转换、清除元数据、
-  视频裁剪和转换。
-
-每个工具在运行前都会显示运行位置：在本机（不上传任何内容），或在云端并显示
-价格。应用不会不经询问就切换到云端。详情见
-[docs/editing-tools.md](docs/editing-tools.md)（英文）。
-
-## 🤖 AI 智能体（Claude、Cursor…）
-
-向 Claude 要一张图，由你自己的 GPU 免费生成，并实时显示在应用里。
-
-1. 打开**设置 → AI 智能体**，点击 Claude Desktop 或 Claude Code 旁的**连接**。
-   其他 MCP 应用可点**显示配置**获取配置片段。
-2. 重启 AI 应用，然后说：*“用 Imference 生成一座暴风雨中的灯塔。”*
-
-每次运行都会出现在活动面板中，标注为*来自 Claude*，并保存到图库。只有在你
-允许时，云端运行才会消耗你的积分；该选项默认关闭。配置细节和本地 API 见
-[docs/local-api.md](docs/local-api.md)（英文）。
+- 🎛️ **真正的参数控制，界面简洁。** 画幅、步数、引导强度、种子、负面提示词、
+  图生图。任务可排队，生成中途也能切换模型。
 
 ## 系统要求
 

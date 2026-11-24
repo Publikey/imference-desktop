@@ -4,11 +4,10 @@
 
 # Imference Desktop
 
-**90 curated AI image and video models. One app.**
-Run them free on your own GPU, load any checkpoint you already have,
-or switch to the cloud when you need more.
+**AI images and video on your GPU or in the cloud. Same app, one switch.**
+One-click setup. Models download themselves. No account.
 
-Free · No subscription · Windows & macOS
+Free · Open source · Windows & macOS
 
 [![Latest release](https://img.shields.io/github/v/release/Publikey/imference-desktop?label=latest&color=f59e0b)](https://github.com/Publikey/imference-desktop/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Publikey/imference-desktop/total?color=38bdf8)](https://github.com/Publikey/imference-desktop/releases)
@@ -25,11 +24,31 @@ Free · No subscription · Windows & macOS
 
 </div>
 
+### 🔀 Local and cloud, one interface
+
+Generate on your own GPU for free, or flip a switch and run the same prompt in
+the cloud. Same screen, same gallery, same tools: nothing new to learn, and you
+decide where each image runs.
+
+### ⚡ Running in minutes
+
+Install, open, pick a model, hit Generate. The app sets up its own engine,
+detects your GPU and downloads the weights for you. Every curated model arrives
+pre-tuned, so your first image already looks right. No terminal, no CUDA
+wrestling.
+
+### 🙅 No account
+
+Local generation asks for nothing: no sign-up, no email, and your prompts and
+pictures never leave your machine. Even the cloud works without an account
+when you pay with x402 (USDC on Base).
+
 <div align="center">
 
-| **90** | **15** | **75+** | **25+** | **$0** |
-|:---:|:---:|:---:|:---:|:---:|
-| curated models | model families | run on your own GPU | LoRAs | per image, locally |
+<!-- More screenshots: drop the captures in docs/screenshots/ then uncomment.
+<img src="docs/screenshots/models.png" alt="Model picker" width="400" /> <img src="docs/screenshots/gallery.png" alt="Gallery" width="400" />
+<img src="docs/screenshots/tools.png" alt="Editing tools" width="400" /> <img src="docs/screenshots/cloud.png" alt="Cloud mode" width="400" />
+-->
 
 </div>
 
@@ -74,121 +93,47 @@ available; code signing and silent in-app auto-update are on the roadmap.
 
 <a id="models"></a>
 
-## 🎨 Models
+## 🎨 90 curated models, ready to run
 
-Two ways to get a model, and you can mix them:
+Hand-picked, one click to download, already tuned: pick one, type a prompt,
+generate. And the catalog is a starting point, not a limit. Any checkpoint you
+already have, from Civitai, Hugging Face or anywhere else, loads next to it.
 
-- **The curated catalog**: 90 hand-picked models that download in one click and
-  arrive pre-tuned (steps, guidance, resolutions, quality tags, negative
-  prompt). The fastest way to a good first image.
-- **Your own checkpoints**: any `.safetensors` you downloaded from Civitai,
-  Hugging Face or anywhere else. The catalog is a starting point, not a limit.
+| Model family | Your GPU | Cloud | Your own checkpoint |
+|---|:---:|:---:|:---:|
+| **Illustrious · Pony · SDXL** | ✅ | ✅ | ✅ |
+| **Anima · Krea 2 · Z-Image** | ✅ | ✅ | ✅ |
+| **Qwen-Image-Edit** | ✅ | ✅ | ✅ |
+| **Qwen-Image** | ✅ | | ✅ |
+| **SD 1.5 · FLUX.1 · Chroma** | ✅ | | ✅ |
+| **FLUX.2 klein · ERNIE-Image · Lumina-Image 2.0 · LongCat-Image-Edit** | ✅ | | |
+| **GPT Image · FLUX 3** | | ✅ | |
+| **MiniMax H3 · Wan 3.0** (video) | | ✅ | |
 
-### Curated, on your own GPU — 11 families, 75+ models, $0 per image
+- **Your own checkpoint.** In the model picker, click **Add a checkpoint…**,
+  point at a local `.safetensors` file and pick its family. The file is used
+  where it is: nothing is copied, nothing is uploaded. LoRAs work the same way.
+- **Short on VRAM?** For FLUX.2 klein, ERNIE-Image, Lumina-Image and Qwen-Image
+  the app picks the build that fits your card.
+- **No GPU at all?** Flip the switch to Cloud and keep going on
+  [imference.com](https://imference.com), with credits or x402.
 
-| Family | Models | What it is good at |
-|---|:---:|---|
-| **Illustrious** | 28 | Anime and illustration, the biggest community catalog. LoRAs. |
-| **Anima** | 16 | Modern anime models with strong prompt following. LoRAs. |
-| **Krea 2** | 11 | Photoreal and stylized images in 8 steps. LoRAs. |
-| **Z-Image** | 9 | Fast, realistic photos in 8 steps. LoRAs. |
-| **SDXL** | 3 | The classic all-rounder. LoRAs. |
-| **Pony** | 3 | Characters and stylized art. LoRAs. |
-| **Qwen-Image** | 2 | Text and layout in 4 steps (Qwen-Image 2512), and editing by instruction (Qwen-Image-Edit). |
-| **FLUX.2 klein** | 1 | An image in 4 steps; edits a reference image by instruction. |
-| **ERNIE-Image** | 1 | Accurate text inside the image, 8 steps. |
-| **Lumina-Image 2.0** | 1 | The base of the Neta anime finetunes. |
-| **LongCat-Image-Edit** | 1 | Editing by instruction in 8 steps. |
+## ✨ Also inside
 
-Short on VRAM? For FLUX.2 klein, ERNIE-Image, Lumina-Image and Qwen-Image 2512
-the app picks the build that fits your card; all four were measured on an
-8 GB GPU.
-
-### Any checkpoint you already have
-
-Not in the catalog? Load it anyway. In the model picker, click **Add a
-checkpoint…**, point at a local `.safetensors` file and pick its family:
-
-**SDXL** (Illustrious, Pony, NoobAI and every other SDXL finetune) · **SD 1.5**
-· **Z-Image** · **FLUX.1** · **Chroma** · **Qwen-Image** · **Qwen-Image-Edit**
-· **Anima** · **Krea 2**
-
-The file is used where it is: nothing is copied, nothing is uploaded. Your
-model shows up next to the catalog ones, with the same controls, LoRAs and
-gallery. LoRAs work the same way: import your own `.safetensors`.
-
-### Cloud only — 4 more families, no GPU needed
-
-| Family | Models | Type |
-|---|---|---|
-| **GPT Image** (OpenAI) | GPT Image-1, Image-2, 2.5 and 2.6 in Flare and Sunburst | Image, and editing by instruction |
-| **FLUX 3** | FLUX 3, FLUX 3 Klein | Image |
-| **MiniMax H3** | H3, H3 Max Turbo | Video with sound |
-| **Wan 3.0** | Wan 3.0 | Video |
-
-Most local models also run in the cloud (85 models in all), so a laptop without
-a GPU gets the same catalog. Pay with credits or with **x402** (USDC on Base),
-which needs no account.
-
-## Why Imference Desktop
-
-- ⚡ **Set up in one click.** The app installs its own engine, detects your
-  GPU, and starts and stops the engine on demand.
-- 🖥️ **Local, private, free.** Images made on your GPU cost nothing, and your
-  prompts and pictures never leave your machine.
-- 📦 **Not a walled garden.** Bring any checkpoint or LoRA you already have;
-  the catalog is there to save you the setup, not to limit you.
-- ☁️ **Cloud when you want it.** Same interface, one switch. Bigger models,
-  video, or just no GPU at hand.
-- 🧩 **25+ LoRAs.** Stack up to four styles, characters or detail boosters on
-  Illustrious, Pony, SDXL, Z-Image, Krea 2 and Anima. One-click download from
-  the catalog, or import your own `.safetensors`.
-- 🎛️ **Real controls, simple screen.** Format, steps, guidance, seed, negative
-  prompt, image-to-image. Queue generations and switch models mid-run.
+- 🪄 **Editing tools.** Edit with instructions ("replace the sky with a
+  sunset"), upscale, remove a background, erase an object, expand, repaint,
+  restore faces. Each tool says where it will run before you start, and the app
+  never switches to the cloud without asking.
+  [More](docs/editing-tools.md)
+- 🤖 **Your AI agent can drive it.** Connect Claude Desktop, Claude Code, Cursor
+  or any MCP app from **Settings → AI agents**, then ask for an image in the
+  chat: your own GPU makes it, live in the app. [More](docs/local-api.md)
+- 🧩 **LoRAs.** Stack styles, characters and detail boosters, from the catalog
+  or from your own files.
 - 🗂️ **A gallery that remembers.** Every image and video is saved with its
   prompt, model and settings. Filter, search, reuse a past recipe.
-- 🪄 **Editing tools built in.** Edit with instructions, upscale, remove a
-  background, erase an object, expand, repaint, restore faces.
-- 🤖 **Driven by your AI agent.** Connect Claude Desktop, Claude Code, Cursor
-  or any MCP app in one click and ask for an image in the chat.
-
-<div align="center">
-
-<!-- More screenshots: drop the captures in docs/screenshots/ then uncomment.
-<img src="docs/screenshots/models.png" alt="Model picker" width="400" /> <img src="docs/screenshots/gallery.png" alt="Gallery" width="400" />
-<img src="docs/screenshots/tools.png" alt="Editing tools" width="400" /> <img src="docs/screenshots/cloud.png" alt="Cloud mode" width="400" />
--->
-
-</div>
-
-## 🪄 Editing tools
-
-Right-click any image in the gallery, or open it and press **Edit**.
-
-- **Edit with instructions**: "replace the sky with a sunset", "remove the man
-  on the left", with up to two reference images.
-- **Upscale, vary, expand, repaint, restore faces.**
-- **Remove background** and **magic eraser** with click-to-select.
-- **Describe** an image, plus quick utilities: resize, crop, convert, strip
-  metadata, trim or convert a video.
-
-Each tool shows where it will run before you start: on your computer (nothing
-is uploaded) or in the cloud at the price shown. The app never switches to the
-cloud without asking. Details in [docs/editing-tools.md](docs/editing-tools.md).
-
-## 🤖 AI agents (Claude, Cursor…)
-
-Ask Claude for an image and your own GPU makes it, for free, live in the app.
-
-1. Open **Settings → AI agents** and click **Connect** next to Claude Desktop
-   or Claude Code. For any other MCP app, **Show setup** gives the snippet.
-2. Restart the AI app and ask: *"Generate a lighthouse in a storm with
-   Imference."*
-
-Every run shows up in Activity, marked *via Claude*, and lands in your gallery.
-Cloud runs spend your credits only if you allow it; that option is off by
-default. Setup details and the local API are in
-[docs/local-api.md](docs/local-api.md).
+- 🎛️ **Real controls, simple screen.** Format, steps, guidance, seed, negative
+  prompt, image-to-image. Queue generations and switch models mid-run.
 
 ## Requirements
 

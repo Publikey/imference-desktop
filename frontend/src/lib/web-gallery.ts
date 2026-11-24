@@ -195,17 +195,38 @@ function settle<T>(p: Promise<T>, what: string, ms = 4000): Promise<T> {
   });
 }
 
-/** The folder handle kept from a previous visit and whether it is readable now.
- *  "unknown" = the browser could not tell (treated as "needs a click"). */
+/** The folder handle kept from a previous visit and whether it is readable now. */
 async function storedFolder(): Promise<{ handle: DirHandle | null; granted: boolean }> {
+  let h: DirHandle | undefined;
   try {
-    const h = await settle(idbGet<DirHandle>("gallery"), "reading the folder handle");
-    if (!h) return { handle: null, granted: false };
+    h = await settle(idbGet<DirHandle>("gallery"), "reading the folder handle");
+  } catch (e) {
+    console.error("gallery: could not read the stored folder", e);
+  }
+  if (!h) return { handle: null, granted: false };
+  // The slow answer below is kept for the page: every status read would
+  // otherwise wait for the same query to time out again.
+  if (slowProbe) return slowProbe;
+  try {
     const p = (await settle(Promise.resolve(h.queryPermission?.({ mode: "readwrite" })), "querying the folder permission")) ?? "granted";
     return { handle: h, granted: p === "granted" };
   } catch (e) {
-    console.error("gallery: could not read the stored folder", e);
-    return { handle: null, granted: false };
+    // Seen on Chrome: queryPermission() on a handle read back from IndexedDB
+    // never settles. The folder is known, so keep its name, and find out by
+    // reading it: listing works when access is granted and throws when not.
+    console.error("gallery: the folder permission query failed, trying to read the folder", e);
+    return (slowProbe = { handle: h, granted: await listable(h) });
+  }
+}
+
+let slowProbe: { handle: DirHandle; granted: boolean } | null = null;
+
+async function listable(h: DirHandle): Promise<boolean> {
+  try {
+    await settle(h.values!()[Symbol.asyncIterator]().next(), "listing the folder");
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -218,6 +239,7 @@ const listeners = new Set<() => void>();
 
 function changed() {
   metaCache = null;
+  slowProbe = null;
   listeners.forEach((f) => f());
   window.dispatchEvent(new Event(GALLERY_CHANGED_EVENT));
 }

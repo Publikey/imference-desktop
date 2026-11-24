@@ -19,6 +19,8 @@ Free · Open source · Windows & macOS
 
 <img src="docs/screenshots/hero.png" alt="Imference Desktop — generation view" width="800" />
 
+<img src="docs/screenshots/showcase.jpg" alt="Images made with Imference Desktop" width="800" />
+
 </div>
 
 ### 🔀 Local and cloud, one interface
@@ -26,6 +28,10 @@ Free · Open source · Windows & macOS
 Generate on your own GPU for free, or flip a switch and run the same prompt in
 the cloud. Same screen, same gallery, same tools: nothing new to learn, and you
 decide where each image runs.
+
+<div align="center">
+<img src="docs/screenshots/cloud.png" alt="Cloud models: video and more, from the same app" width="720" />
+</div>
 
 ### ⚡ Running in minutes
 
@@ -104,7 +110,8 @@ Supported model families:
   the app picks the build that fits your card.
 - **In the cloud.** Video with sound (MiniMax H3), video (Wan 3.0), GPT Image
   and FLUX 3 run on [imference.com](https://imference.com), and so do most of
-  the local models if you have no GPU. Pay with credits or x402 (USDC on Base).
+  the local models if you have no GPU. From $0.003 per image and $0.15 per
+  video, paid with credits or x402 (USDC on Base).
 
 ## ✨ Also inside
 
@@ -131,7 +138,7 @@ Supported model families:
 
 | Mode | What you need |
 |---|---|
-| **Local** | **Windows**: an NVIDIA GPU (CUDA), or an AMD Radeon RX 7000/9000 (ROCm preview, needs Python 3.12 and a recent Adrenalin driver). **macOS**: Apple Silicon. Python 3.11 or newer installed (the app builds its own isolated environment from it). About 6 to 13 GB of disk per model. |
+| **Local** | **Windows**: an NVIDIA GPU (CUDA), or an AMD Radeon RX 7000/9000 (ROCm preview, needs Python 3.12 and a recent Adrenalin driver). **macOS**: Apple Silicon. 8 GB of VRAM recommended; the smaller models run on 6 GB. Python 3.11 or newer installed (the app builds its own isolated environment from it). About 6 to 13 GB of disk per model. |
 | **Cloud** | Any machine, with an [imference.com API key](https://imference.com/payments) or a funded x402 wallet. |
 
 Linux (NVIDIA CUDA / AMD ROCm) is supported by the engine and builds from

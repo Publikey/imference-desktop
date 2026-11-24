@@ -19,12 +19,18 @@
 
 <img src="docs/screenshots/hero_zn.png" alt="Imference Desktop — 生成界面" width="800" />
 
+<img src="docs/screenshots/showcase.jpg" alt="用 Imference Desktop 生成的图片" width="800" />
+
 </div>
 
 ### 🔀 本地与云端，同一个界面
 
 在自己的 GPU 上免费生成，或者拨一下开关，把同一条提示词交给云端运行。
 同一个界面、同一个图库、同一套工具：不用重新学习，每张图在哪里运行由你决定。
+
+<div align="center">
+<img src="docs/screenshots/cloud_zn.png" alt="云端模型：视频等更多模型，同一个应用" width="720" />
+</div>
 
 ### ⚡ 几分钟就能出图
 
@@ -98,7 +104,8 @@
   应用会自动选择适合你显卡的版本。
 - **云端。** 带声音的视频（MiniMax H3）、视频（Wan 3.0）、GPT Image 和 FLUX 3
   在 [imference.com](https://imference.com) 上运行；没有 GPU 时，大多数本地模型
-  也可以在云端运行。可用积分或 x402（Base 链 USDC）付费。
+  也可以在云端运行。每张图 0.003 美元起，每段视频 0.15 美元起，可用积分或
+  x402（Base 链 USDC）付费。
 
 ## ✨ 还有这些
 
@@ -122,7 +129,7 @@
 
 | 模式 | 需要什么 |
 |---|---|
-| **本地** | **Windows**：NVIDIA GPU（CUDA），或 AMD Radeon RX 7000/9000（ROCm 预览版，需要 Python 3.12 和较新的 Adrenalin 驱动）。**macOS**：Apple Silicon。需已安装 Python 3.11 或更高版本（应用会基于它创建自己的隔离环境）。每个模型约 6–13 GB 磁盘空间。 |
+| **本地** | **Windows**：NVIDIA GPU（CUDA），或 AMD Radeon RX 7000/9000（ROCm 预览版，需要 Python 3.12 和较新的 Adrenalin 驱动）。**macOS**：Apple Silicon。建议 8 GB 显存，较小的模型 6 GB 即可运行。需已安装 Python 3.11 或更高版本（应用会基于它创建自己的隔离环境）。每个模型约 6–13 GB 磁盘空间。 |
 | **云端** | 任何电脑，加上一个 [imference.com API 密钥](https://imference.com/payments)，或一个有余额的 x402 钱包。 |
 
 Linux（NVIDIA CUDA / AMD ROCm）引擎本身已支持，也可以从源码构建，

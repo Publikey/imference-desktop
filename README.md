@@ -10,10 +10,7 @@ One-click setup. Models download themselves. No account.
 Free · Open source · Windows & macOS
 
 [![Latest release](https://img.shields.io/github/v/release/Publikey/imference-desktop?label=latest&color=f59e0b)](https://github.com/Publikey/imference-desktop/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/Publikey/imference-desktop/total?color=38bdf8)](https://github.com/Publikey/imference-desktop/releases)
-[![Build](https://img.shields.io/github/actions/workflow/status/Publikey/imference-desktop/release.yml)](https://github.com/Publikey/imference-desktop/actions)
 [![License](https://img.shields.io/github/license/Publikey/imference-desktop)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/Publikey/imference-desktop?style=flat&logo=github)](https://github.com/Publikey/imference-desktop/stargazers)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)](#download)
 
 **English** · [简体中文](README.zh-CN.md)
@@ -34,8 +31,8 @@ decide where each image runs.
 
 Install, open, pick a model, hit Generate. The app sets up its own engine,
 detects your GPU and downloads the weights for you. Every curated model arrives
-pre-tuned, so your first image already looks right. No terminal, no CUDA
-wrestling.
+pre-tuned, so your first image already looks right. No terminal, no node
+graph to wire, no CUDA wrestling.
 
 <div align="center">
 <img src="docs/screenshots/models.png" alt="Model picker" width="720" />
@@ -44,8 +41,8 @@ wrestling.
 ### 🙅 No account
 
 Local generation asks for nothing: no sign-up, no email, and your prompts and
-pictures never leave your machine. Even the cloud works without an account
-when you pay with x402 (USDC on Base).
+pictures never leave your machine. Even the cloud can run without one: pay as
+you go from a wallet, no sign-up.
 
 <a id="download"></a>
 
@@ -65,10 +62,9 @@ All versions and `checksums.txt` (SHA-256) are on the
 ## 🚀 Quick start
 
 1. **Download** the installer for your OS above and run it.
-2. **Open the app.** It sets up its own inference engine in an isolated
-   environment and detects your GPU. No terminal, no CUDA wrestling.
-3. **Pick a model, hit Generate.** The weights download on their own and every
-   model ships pre-tuned, so your first image already looks right.
+2. **Open the app** and let it set up its engine: a few minutes, once.
+3. **Pick a model, hit Generate.** The model downloads the first time you use
+   it.
 
 No GPU? Flip the switch to **Cloud** and generate on
 [imference.com](https://imference.com) from the same screen.
@@ -90,9 +86,9 @@ available; code signing and silent in-app auto-update are on the roadmap.
 
 ## 🎨 90 curated models, ready to run
 
-Hand-picked, one click to download, already tuned: pick one, type a prompt,
-generate. And the catalog is a starting point, not a limit. Any checkpoint you
-already have, from Civitai, Hugging Face or anywhere else, loads next to it.
+Hand-picked and tuned one by one, so you never hunt for the right settings.
+And the catalog is a starting point, not a limit: any checkpoint you already
+have, from Civitai, Hugging Face or anywhere else, loads next to it.
 
 Supported model families:
 
@@ -106,8 +102,9 @@ Supported model families:
   where it is: nothing is copied, nothing is uploaded. LoRAs work the same way.
 - **Short on VRAM?** For FLUX.2 klein, ERNIE-Image, Lumina-Image and Qwen-Image
   the app picks the build that fits your card.
-- **No GPU at all?** Flip the switch to Cloud and keep going on
-  [imference.com](https://imference.com), with credits or x402.
+- **In the cloud.** Video with sound (MiniMax H3), video (Wan 3.0), GPT Image
+  and FLUX 3 run on [imference.com](https://imference.com), and so do most of
+  the local models if you have no GPU. Pay with credits or x402 (USDC on Base).
 
 ## ✨ Also inside
 

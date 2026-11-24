@@ -10,10 +10,7 @@
 免费 · 开源 · Windows & macOS
 
 [![Latest release](https://img.shields.io/github/v/release/Publikey/imference-desktop?label=latest&color=f59e0b)](https://github.com/Publikey/imference-desktop/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/Publikey/imference-desktop/total?color=38bdf8)](https://github.com/Publikey/imference-desktop/releases)
-[![Build](https://img.shields.io/github/actions/workflow/status/Publikey/imference-desktop/release.yml)](https://github.com/Publikey/imference-desktop/actions)
 [![License](https://img.shields.io/github/license/Publikey/imference-desktop)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/Publikey/imference-desktop?style=flat&logo=github)](https://github.com/Publikey/imference-desktop/stargazers)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)](#download)
 
 [English](README.md) · **简体中文**
@@ -33,7 +30,7 @@
 
 安装、打开、选一个模型、点击生成。应用会安装自带的引擎、检测你的 GPU，
 并替你下载权重。每个精选模型都已预调好参数，第一张图就有不错的效果。
-无需命令行，无需折腾 CUDA。
+无需命令行，无需连节点图，无需折腾 CUDA。
 
 <div align="center">
 <img src="docs/screenshots/models_zn.png" alt="模型选择" width="720" />
@@ -42,7 +39,7 @@
 ### 🙅 无需账号
 
 本地生成什么都不需要：不用注册，不用邮箱，提示词和图片永远不会离开你的电脑。
-用 x402（Base 链 USDC）付费时，连云端也不需要账号。
+连云端也可以不用账号：用钱包按次付费，无需注册。
 
 <a id="download"></a>
 
@@ -62,10 +59,8 @@
 ## 🚀 快速开始
 
 1. **下载**上方对应系统的安装程序并运行。
-2. **打开应用。** 它会在隔离环境中安装自带的推理引擎并检测 GPU。
-   无需命令行，无需折腾 CUDA。
-3. **选一个模型，点击生成。** 权重自动下载，每个模型都已预调好参数，
-   第一张图就有不错的效果。
+2. **打开应用**，等它安装好引擎：只需几分钟，只需一次。
+3. **选一个模型，点击生成。** 模型会在第一次使用时自动下载。
 
 没有 GPU？把开关切到**云端**，在同一界面用
 [imference.com](https://imference.com) 生成。
@@ -85,7 +80,7 @@
 
 ## 🎨 90 个精选模型，开箱即用
 
-人工挑选，一键下载，参数已调好：选一个模型，输入提示词，直接生成。
+每个模型都经过人工挑选和逐一调参，你不用再到处找合适的参数。
 而且目录只是起点，不是限制：你从 Civitai、Hugging Face 或其他地方下载的
 任意模型文件，都可以和目录中的模型一起使用。
 
@@ -101,8 +96,9 @@
   也不会被上传。LoRA 也一样。
 - **显存不够？** 对于 FLUX.2 klein、ERNIE-Image、Lumina-Image 和 Qwen-Image，
   应用会自动选择适合你显卡的版本。
-- **完全没有 GPU？** 把开关切到云端，在
-  [imference.com](https://imference.com) 上继续生成，可用积分或 x402 付费。
+- **云端。** 带声音的视频（MiniMax H3）、视频（Wan 3.0）、GPT Image 和 FLUX 3
+  在 [imference.com](https://imference.com) 上运行；没有 GPU 时，大多数本地模型
+  也可以在云端运行。可用积分或 x402（Base 链 USDC）付费。
 
 ## ✨ 还有这些
 

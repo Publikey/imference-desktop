@@ -33,6 +33,7 @@ export type GalleryStatus = {
   folderName: string;
   needsPermission: boolean; // folder chosen but the browser wants a click to re-grant access
   folderSupported: boolean; // File System Access API available
+  stuck?: boolean; // the browser answers nothing about the stored folder: it must be picked again
 };
 
 const EXT_KIND: Record<string, string> = {
@@ -195,40 +196,51 @@ function settle<T>(p: Promise<T>, what: string, ms = 4000): Promise<T> {
   });
 }
 
-/** The folder handle kept from a previous visit and whether it is readable now. */
-async function storedFolder(): Promise<{ handle: DirHandle | null; granted: boolean }> {
+type Probe = { handle: DirHandle | null; granted: boolean; stuck: boolean };
+
+/** The folder handle kept from a previous visit and whether it is readable now.
+ *  `stuck`: the browser answers nothing about this handle (seen on Chrome: the
+ *  permission query AND a listing never settle) — only picking the folder
+ *  again gives a working handle. */
+async function storedFolder(): Promise<Probe> {
   let h: DirHandle | undefined;
   try {
     h = await settle(idbGet<DirHandle>("gallery"), "reading the folder handle");
   } catch (e) {
     console.error("gallery: could not read the stored folder", e);
   }
-  if (!h) return { handle: null, granted: false };
-  // The slow answer below is kept for the page: every status read would
-  // otherwise wait for the same query to time out again.
+  if (!h) return { handle: null, granted: false, stuck: false };
+  // A slow answer is kept for the page: every status read would otherwise
+  // wait for the same calls to time out again.
   if (slowProbe) return slowProbe;
+  // Both at once, so a browser that answers neither costs one delay, not two.
+  const listing = listable(h);
   try {
     const p = (await settle(Promise.resolve(h.queryPermission?.({ mode: "readwrite" })), "querying the folder permission")) ?? "granted";
-    return { handle: h, granted: p === "granted" };
+    return { handle: h, granted: p === "granted", stuck: false };
   } catch (e) {
-    // Seen on Chrome: queryPermission() on a handle read back from IndexedDB
-    // never settles. The folder is known, so keep its name, and find out by
-    // reading it: listing works when access is granted and throws when not.
-    console.error("gallery: the folder permission query failed, trying to read the folder", e);
-    return (slowProbe = { handle: h, granted: await listable(h) });
+    // No answer about the permission: reading tells. A listing works when
+    // access is granted and throws when it is not.
+    const l = await listing;
+    console.error(`gallery: the folder permission query failed (listing the folder: ${l})`, e);
+    return (slowProbe = { handle: h, granted: l === "ok", stuck: l === "stuck" });
   }
 }
 
-let slowProbe: { handle: DirHandle; granted: boolean } | null = null;
-
-async function listable(h: DirHandle): Promise<boolean> {
+async function listable(h: DirHandle): Promise<"ok" | "denied" | "stuck"> {
+  let timedOut = false;
   try {
-    await settle(h.values!()[Symbol.asyncIterator]().next(), "listing the folder");
-    return true;
+    await settle(h.values!()[Symbol.asyncIterator]().next(), "listing the folder").catch((e) => {
+      timedOut = /did not answer/.test(String(e?.message));
+      throw e;
+    });
+    return "ok";
   } catch {
-    return false;
+    return timedOut ? "stuck" : "denied";
   }
 }
+
+let slowProbe: Probe | null = null;
 
 let cachedRoot: DirHandle | null = null;
 // The folder handle this page holds access to (picked, re-granted, or found
@@ -277,11 +289,11 @@ export async function galleryStatus(): Promise<GalleryStatus> {
     if (grantedFolder) {
       return { mode, folderName: grantedFolder.name, needsPermission: false, folderSupported: folderSupported() };
     }
-    const { handle, granted } = await storedFolder();
+    const { handle, granted, stuck } = await storedFolder();
     // The folder is lost (site data damaged or cleared): still say "folder" and
     // "needs access", so Settings offers to pick it again or to go back to the
     // browser storage instead of showing nothing.
-    return { mode, folderName: handle?.name ?? "", needsPermission: !granted, folderSupported: folderSupported() };
+    return { mode, folderName: handle?.name ?? "", needsPermission: !granted, folderSupported: folderSupported(), stuck };
   }
   return { mode: "browser", folderName: "", needsPermission: false, folderSupported: folderSupported() };
 }

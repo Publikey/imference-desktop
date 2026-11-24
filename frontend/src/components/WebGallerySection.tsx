@@ -15,7 +15,14 @@ export function WebGallerySection() {
   const [st, setSt] = useState<GalleryStatus | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
-    void gallery().then((g) => g.galleryStatus()).then(setSt);
+    void gallery()
+      .then((g) => g.galleryStatus())
+      .then(setSt)
+      .catch((e) => {
+        // Never an empty pane: show the choices, and why the status is unknown.
+        setErr(String(e?.message || e));
+        setSt({ mode: "browser", folderName: "", needsPermission: false, folderSupported: "showDirectoryPicker" in window });
+      });
   }, []);
 
   const act = (f: (g: typeof import("@/lib/web-gallery")) => Promise<GalleryStatus>) => async () => {
@@ -40,7 +47,7 @@ export function WebGallerySection() {
         <p className="text-muted-foreground mt-1 text-xs">
           {st.mode === "folder" ? t("web.gallery.folderHint") : t("web.gallery.browserHint")}
         </p>
-        {st.needsPermission && (
+        {st.needsPermission && st.folderName && (
           <Button size="sm" className="mt-3 gap-1.5" onClick={act((g) => g.reconnectFolder())}>
             <RefreshCw className="size-3.5" />
             {t("web.gallery.reconnect")}
@@ -76,7 +83,8 @@ export function WebGalleryBanner() {
     const check = () =>
       void gallery()
         .then((g) => g.galleryStatus())
-        .then((s) => setNeed(s.needsPermission));
+        .then((s) => setNeed(s.needsPermission && !!s.folderName))
+        .catch(() => {});
     check();
     // Access granted (here or in Settings) → the banner goes away.
     window.addEventListener(GALLERY_CHANGED_EVENT, check);

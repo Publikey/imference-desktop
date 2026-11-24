@@ -30,10 +30,6 @@ Generate on your own GPU for free, or flip a switch and run the same prompt in
 the cloud. Same screen, same gallery, same tools: nothing new to learn, and you
 decide where each image runs.
 
-<div align="center">
-<img src="docs/screenshots/cloud.png" alt="Cloud mode: same screen, one switch" width="720" />
-</div>
-
 ### ⚡ Running in minutes
 
 Install, open, pick a model, hit Generate. The app sets up its own engine,

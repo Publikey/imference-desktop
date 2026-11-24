@@ -21,6 +21,8 @@ Free · Open source · Windows & macOS
 
 <img src="docs/screenshots/showcase.jpg" alt="Images made with Imference Desktop" width="800" />
 
+<sub>Made on a local GPU with CyberRealistic Z-Image Turbo · Anima · RedCraft Krea 2 · Kraken NOIR · Nova Pixels XL</sub>
+
 </div>
 
 ### 🔀 Local and cloud, one interface

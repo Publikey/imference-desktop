@@ -21,6 +21,8 @@
 
 <img src="docs/screenshots/showcase.jpg" alt="用 Imference Desktop 生成的图片" width="800" />
 
+<sub>本地 GPU 生成，使用模型：CyberRealistic Z-Image Turbo · Anima · RedCraft Krea 2 · Kraken NOIR · Nova Pixels XL</sub>
+
 </div>
 
 ### 🔀 本地与云端，同一个界面

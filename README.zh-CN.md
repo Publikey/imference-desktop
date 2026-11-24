@@ -30,7 +30,7 @@
 同一个界面、同一个图库、同一套工具：不用重新学习，每张图在哪里运行由你决定。
 
 <div align="center">
-<img src="docs/screenshots/cloud.png" alt="云端模式：同一个界面，一个开关" width="720" />
+<img src="docs/screenshots/cloud_zn.png" alt="云端模式：同一个界面，一个开关" width="720" />
 </div>
 
 ### ⚡ 几分钟就能出图
@@ -40,7 +40,7 @@
 无需命令行，无需折腾 CUDA。
 
 <div align="center">
-<img src="docs/screenshots/models.png" alt="模型选择" width="720" />
+<img src="docs/screenshots/models_zn.png" alt="模型选择" width="720" />
 </div>
 
 ### 🙅 无需账号
@@ -123,7 +123,7 @@
   图生图。任务可排队，生成中途也能切换模型。
 
 <div align="center">
-<img src="docs/screenshots/tools.png" alt="按指令编辑" width="720" />
+<img src="docs/screenshots/tools_zn.png" alt="按指令编辑" width="720" />
 </div>
 
 ## 系统要求

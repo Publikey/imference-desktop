@@ -5,6 +5,7 @@ import { modLabel } from "@/components/CommandPalette";
 import type { PanelId } from "@/components/PanelBoard";
 import { PanelToggles } from "@/components/PanelToggles";
 import { Button } from "@/components/ui/button";
+import { SUPPORTED_LANGUAGES, setLanguage } from "@/i18n";
 import { isWeb } from "@/lib/target";
 import { api } from "@/lib/wails-bridge";
 import { isDark, setThemePref, subscribeTheme, type ThemePref } from "@/lib/theme";
@@ -84,7 +85,7 @@ export function Header({
   // One system for the whole bar: every control is 36px high (h-9) with the
   // same radius; three zones — where things run (left), which panels are
   // shown (centre, exactly centred), a few uniform icon buttons (right):
-  // commands, theme, settings. The language is in the palette and Settings,
+  // commands, theme, language, settings. The language is also in the palette and Settings,
   // the logs in the palette (and back here, flagged, when something fails). On a phone
   // the bar is a plain row with the panel switches, theme and settings.
   const iconBtn = "text-muted-foreground hover:text-foreground hover:bg-muted relative size-9 rounded-lg";
@@ -163,6 +164,7 @@ export function Header({
           </Button>
         )}
         <ThemeToggle />
+        <LanguageToggle />
         {/* The main utility: named, not just an icon (icon only on phones). */}
         <Button
           variant="ghost"
@@ -204,6 +206,31 @@ function AgentsButton({ onClick }: { onClick: () => void }) {
       <Bot className="size-4" />
       <span className="max-sm:sr-only">{t("header.agents")}</span>
       {connected && <span className="bg-success ring-background absolute right-1 top-1 size-2 rounded-full ring-2" />}
+    </Button>
+  );
+}
+
+// LanguageToggle — cycles through SUPPORTED_LANGUAGES from the header. It sets
+// an explicit (persisted) choice, exactly like picking a language in Settings;
+// "follow the system" remains available there.
+export function LanguageToggle() {
+  const { i18n } = useTranslation();
+  const idx = SUPPORTED_LANGUAGES.findIndex((l) => l.code === i18n.language);
+  const current = SUPPORTED_LANGUAGES[idx] ?? SUPPORTED_LANGUAGES[0];
+  const next = SUPPORTED_LANGUAGES[(Math.max(idx, 0) + 1) % SUPPORTED_LANGUAGES.length];
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => setLanguage(next.code)}
+      // The next language names itself (中文 reads it in Chinese, English in
+      // English), so the tooltip stays readable before AND after switching.
+      title={next.label}
+      // The name starts with the visible code (WCAG 2.5.3, label in name).
+      aria-label={`${current.short} · ${next.label}`}
+      className="text-muted-foreground hover:text-foreground hover:bg-muted size-9 rounded-lg p-0 text-[11px] font-semibold max-sm:hidden"
+    >
+      {current.short}
     </Button>
   );
 }

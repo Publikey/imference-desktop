@@ -30,6 +30,10 @@ Generate on your own GPU for free, or flip a switch and run the same prompt in
 the cloud. Same screen, same gallery, same tools: nothing new to learn, and you
 decide where each image runs.
 
+<div align="center">
+<img src="docs/screenshots/cloud.png" alt="Cloud mode: same screen, one switch" width="720" />
+</div>
+
 ### ⚡ Running in minutes
 
 Install, open, pick a model, hit Generate. The app sets up its own engine,
@@ -37,20 +41,15 @@ detects your GPU and downloads the weights for you. Every curated model arrives
 pre-tuned, so your first image already looks right. No terminal, no CUDA
 wrestling.
 
+<div align="center">
+<img src="docs/screenshots/models.png" alt="Model picker" width="720" />
+</div>
+
 ### 🙅 No account
 
 Local generation asks for nothing: no sign-up, no email, and your prompts and
 pictures never leave your machine. Even the cloud works without an account
 when you pay with x402 (USDC on Base).
-
-<div align="center">
-
-<!-- More screenshots: drop the captures in docs/screenshots/ then uncomment.
-<img src="docs/screenshots/models.png" alt="Model picker" width="400" /> <img src="docs/screenshots/gallery.png" alt="Gallery" width="400" />
-<img src="docs/screenshots/tools.png" alt="Editing tools" width="400" /> <img src="docs/screenshots/cloud.png" alt="Cloud mode" width="400" />
--->
-
-</div>
 
 <a id="download"></a>
 
@@ -130,6 +129,10 @@ Supported model families:
   prompt, model and settings. Filter, search, reuse a past recipe.
 - 🎛️ **Real controls, simple screen.** Format, steps, guidance, seed, negative
   prompt, image-to-image. Queue generations and switch models mid-run.
+
+<div align="center">
+<img src="docs/screenshots/tools.png" alt="Edit with instructions" width="720" />
+</div>
 
 ## Requirements
 

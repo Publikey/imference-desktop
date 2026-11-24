@@ -29,25 +29,24 @@
 在自己的 GPU 上免费生成，或者拨一下开关，把同一条提示词交给云端运行。
 同一个界面、同一个图库、同一套工具：不用重新学习，每张图在哪里运行由你决定。
 
+<div align="center">
+<img src="docs/screenshots/cloud.png" alt="云端模式：同一个界面，一个开关" width="720" />
+</div>
+
 ### ⚡ 几分钟就能出图
 
 安装、打开、选一个模型、点击生成。应用会安装自带的引擎、检测你的 GPU，
 并替你下载权重。每个精选模型都已预调好参数，第一张图就有不错的效果。
 无需命令行，无需折腾 CUDA。
 
+<div align="center">
+<img src="docs/screenshots/models.png" alt="模型选择" width="720" />
+</div>
+
 ### 🙅 无需账号
 
 本地生成什么都不需要：不用注册，不用邮箱，提示词和图片永远不会离开你的电脑。
 用 x402（Base 链 USDC）付费时，连云端也不需要账号。
-
-<div align="center">
-
-<!-- 更多截图：把图片放进 docs/screenshots/ 后取消注释。
-<img src="docs/screenshots/models.png" alt="模型选择" width="400" /> <img src="docs/screenshots/gallery.png" alt="图库" width="400" />
-<img src="docs/screenshots/tools.png" alt="编辑工具" width="400" /> <img src="docs/screenshots/cloud.png" alt="云端模式" width="400" />
--->
-
-</div>
 
 <a id="download"></a>
 
@@ -122,6 +121,10 @@
   支持筛选、搜索，并可复用以前的参数。
 - 🎛️ **真正的参数控制，界面简洁。** 画幅、步数、引导强度、种子、负面提示词、
   图生图。任务可排队，生成中途也能切换模型。
+
+<div align="center">
+<img src="docs/screenshots/tools.png" alt="按指令编辑" width="720" />
+</div>
 
 ## 系统要求
 

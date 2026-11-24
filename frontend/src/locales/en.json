@@ -1094,7 +1094,10 @@
       "bannerText": "Your gallery folder needs your permission again to be read.",
       "chipBrowser": "Saved in this browser",
       "chipFolder": "Saved in {{name}}",
-      "chipNeedsAccess": "{{name}}: allow access"
+      "chipNeedsAccess": "{{name}}: allow access",
+      "folderLost": "Folder not reachable",
+      "folderLostHint": "The browser could not reopen the folder you chose earlier, so the gallery is empty for now. Your files are still in that folder: choose it again to get them back, or keep new images in the browser storage.",
+      "chipLost": "Folder not reachable"
     }
   },
   "webpay": {

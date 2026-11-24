@@ -37,15 +37,17 @@ export function WebGallerySection() {
   };
 
   if (!st) return null;
+  // Folder mode, but the folder kept from a previous visit could not be reopened.
+  const lost = st.mode === "folder" && !st.folderName;
   return (
     <div className="space-y-4">
       <div className="ds-card p-4">
         <div className="flex items-center gap-2 text-sm font-medium">
           {st.mode === "folder" ? <FolderOpen className="size-4" /> : <HardDrive className="size-4" />}
-          {st.mode === "folder" ? t("web.gallery.folder", { name: st.folderName }) : t("web.gallery.browser")}
+          {lost ? t("web.gallery.folderLost") : st.mode === "folder" ? t("web.gallery.folder", { name: st.folderName }) : t("web.gallery.browser")}
         </div>
         <p className="text-muted-foreground mt-1 text-xs">
-          {st.mode === "folder" ? t("web.gallery.folderHint") : t("web.gallery.browserHint")}
+          {lost ? t("web.gallery.folderLostHint") : st.mode === "folder" ? t("web.gallery.folderHint") : t("web.gallery.browserHint")}
         </p>
         {st.needsPermission && st.folderName && (
           <Button size="sm" className="mt-3 gap-1.5" onClick={act((g) => g.reconnectFolder())}>
@@ -140,7 +142,7 @@ export function WebGalleryLocation() {
       )}
     >
       {folder ? <FolderOpen className="size-3.5 shrink-0" /> : <HardDrive className="size-3.5 shrink-0" />}
-      <span className="truncate">{st.needsPermission ? t("web.gallery.chipNeedsAccess", { name: st.folderName }) : label}</span>
+      <span className="truncate">{!st.needsPermission ? label : st.folderName ? t("web.gallery.chipNeedsAccess", { name: st.folderName }) : t("web.gallery.chipLost")}</span>
     </button>
   );
 }

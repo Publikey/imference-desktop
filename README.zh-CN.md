@@ -94,16 +94,12 @@
 而且目录只是起点，不是限制：你从 Civitai、Hugging Face 或其他地方下载的
 任意模型文件，都可以和目录中的模型一起使用。
 
-| 模型家族 | 自己的 GPU | 云端 | 自己的模型文件 |
-|---|:---:|:---:|:---:|
-| **Illustrious · Pony · SDXL** | ✅ | ✅ | ✅ |
-| **Anima · Krea 2 · Z-Image** | ✅ | ✅ | ✅ |
-| **Qwen-Image-Edit** | ✅ | ✅ | ✅ |
-| **Qwen-Image** | ✅ | | ✅ |
-| **SD 1.5 · FLUX.1 · Chroma** | ✅ | | ✅ |
-| **FLUX.2 klein · ERNIE-Image · Lumina-Image 2.0 · LongCat-Image-Edit** | ✅ | | |
-| **GPT Image · FLUX 3** | | ✅ | |
-| **MiniMax H3 · Wan 3.0**（视频） | | ✅ | |
+支持的模型家族：
+
+**Illustrious** · **Pony** · **SDXL** · **SD 1.5** · **Anima** · **Krea 2** ·
+**Z-Image** · **Qwen-Image** · **Qwen-Image-Edit** · **FLUX.1** · **FLUX.2 klein** ·
+**FLUX 3** · **Chroma** · **ERNIE-Image** · **Lumina-Image 2.0** ·
+**LongCat-Image-Edit** · **GPT Image** · **MiniMax H3** · **Wan 3.0**
 
 - **自己的模型文件。** 在模型选择窗口中点击**添加模型文件…**，选择本地的
   `.safetensors` 文件，再选好所属家族。文件在原位置直接使用：不会被复制，

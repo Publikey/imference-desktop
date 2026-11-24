@@ -99,16 +99,12 @@ Hand-picked, one click to download, already tuned: pick one, type a prompt,
 generate. And the catalog is a starting point, not a limit. Any checkpoint you
 already have, from Civitai, Hugging Face or anywhere else, loads next to it.
 
-| Model family | Your GPU | Cloud | Your own checkpoint |
-|---|:---:|:---:|:---:|
-| **Illustrious · Pony · SDXL** | ✅ | ✅ | ✅ |
-| **Anima · Krea 2 · Z-Image** | ✅ | ✅ | ✅ |
-| **Qwen-Image-Edit** | ✅ | ✅ | ✅ |
-| **Qwen-Image** | ✅ | | ✅ |
-| **SD 1.5 · FLUX.1 · Chroma** | ✅ | | ✅ |
-| **FLUX.2 klein · ERNIE-Image · Lumina-Image 2.0 · LongCat-Image-Edit** | ✅ | | |
-| **GPT Image · FLUX 3** | | ✅ | |
-| **MiniMax H3 · Wan 3.0** (video) | | ✅ | |
+Supported model families:
+
+**Illustrious** · **Pony** · **SDXL** · **SD 1.5** · **Anima** · **Krea 2** ·
+**Z-Image** · **Qwen-Image** · **Qwen-Image-Edit** · **FLUX.1** · **FLUX.2 klein** ·
+**FLUX 3** · **Chroma** · **ERNIE-Image** · **Lumina-Image 2.0** ·
+**LongCat-Image-Edit** · **GPT Image** · **MiniMax H3** · **Wan 3.0**
 
 - **Your own checkpoint.** In the model picker, click **Add a checkpoint…**,
   point at a local `.safetensors` file and pick its family. The file is used

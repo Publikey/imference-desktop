@@ -57,6 +57,12 @@ export interface EditModelsInfo {
     "localCandidateCached": boolean;
 
     /**
+     * LocalChoices are the edit models this computer can run (the catalog's
+     * local edit models): the dialog offers the choice when there are several.
+     */
+    "localChoices": types$0.ModelInfo[] | null;
+
+    /**
      * Previous is the model to switch back to after a SwitchToEditModel.
      */
     "previous"?: types$0.ModelInfo | null;

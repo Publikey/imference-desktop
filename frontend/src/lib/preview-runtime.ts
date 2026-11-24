@@ -306,7 +306,7 @@ async function handle(name: string, args: any[]): Promise<any> {
         promptPre: "", promptNegative: "", schedulerDefault: "", formatCode: "sq", backendType: "qwenimage-edit",
         cost: 2, canLocal: true, canCloud: true, modelType: "image",
       };
-      return { local: edit, cloud: [edit], defaultCloud: edit.modelCode, localCandidate: edit, localCandidateCached: true };
+      return { local: edit, cloud: [edit], defaultCloud: edit.modelCode, localCandidate: edit, localCandidateCached: true, localChoices: [edit] };
     }
     case "CheckModelReadiness":
       return { ready: true, missing: [], bytes: 0 };

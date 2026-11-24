@@ -31,6 +31,10 @@ type Settings struct {
 	// switched to a local edit model from the "Edit with instructions" dialog
 	// (App.SwitchToEditModel), so App.SwitchBackFromEditModel can restore it.
 	PreviousLocalModel string `json:"previousLocalModel,omitempty"`
+	// LocalEditModel is the edit model the user picked for local runs in the
+	// "Edit with instructions" dialog (App.SetLocalEditModel). Empty = the
+	// catalog's first locally runnable edit model.
+	LocalEditModel string `json:"localEditModel,omitempty"`
 	// EngineRuntime holds host-machine tuning for the engine (device, VAE mode,
 	// offload, model-residency caps, WAN quantization). Applied as env vars when
 	// the sidecar starts. NOT generation params — those live in the generation UI.
@@ -588,6 +592,17 @@ type GenerateProgress struct {
 	Step    int `json:"step"`
 	Total   int `json:"total"`
 	Percent int `json:"percent"`
+	// Download is set while the ENGINE fetches model files before the run (a
+	// model with engine-managed weights, on its first use): Step / Total are
+	// zero and Percent is the file's. Nil once the download is over.
+	Download *DownloadProgress `json:"download,omitempty"`
+}
+
+// DownloadProgress is one model file the engine is fetching from the CDN.
+type DownloadProgress struct {
+	File     string `json:"file"`
+	DoneMiB  int    `json:"doneMiB"`
+	TotalMiB int    `json:"totalMiB"`
 }
 
 // SidecarStatus is broadcast via Wails events on the "sidecar:status" channel

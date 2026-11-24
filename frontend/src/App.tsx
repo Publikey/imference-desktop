@@ -276,7 +276,10 @@ export default function App() {
         setJobs((js) => {
           let target = -1;
           for (let i = js.length - 1; i >= 0; i--) {
-            if (js[i].status === "running" && js[i].mode === "local" && js[i].kind !== "tool") {
+            // Step ticks belong to generations; a model download (or its end)
+            // is also shown on a tool run, e.g. the first local edit.
+            const dl = !!p.download || (p.total === 0 && !!js[i].progress?.download);
+            if (js[i].status === "running" && js[i].mode === "local" && (js[i].kind !== "tool" || dl)) {
               target = i;
               break;
             }
@@ -1296,8 +1299,9 @@ export default function App() {
   }, [jobs, execToolJob]);
 
   // --- Gallery → composer bridges ------------------------------------------
-  // Send an image into the img2img source and switch to local (img2img is
-  // local-only). Used by the gallery context menu and by dropping onto the panel.
+  // Send an image into the img2img source of the CURRENT mode (local or cloud:
+  // both take a source image when the selected model does). Used by the gallery
+  // context menu and by dropping onto the panel.
   const useAsImg2img = useCallback(async (getSrc: () => Promise<string>) => {
     try {
       const src = await getSrc();
@@ -1312,7 +1316,6 @@ export default function App() {
         return;
       }
       setSourceImage(await prepareRefImage(src, refDimsRef.current.width, refDimsRef.current.height));
-      setMode("local");
     } catch {
       /* fetch/read failure — ignore */
     }

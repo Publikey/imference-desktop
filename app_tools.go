@@ -1052,6 +1052,9 @@ type EditModelsInfo struct {
 	LocalCandidate *types.ModelInfo `json:"localCandidate,omitempty"`
 	// LocalCandidateCached: its weights are already downloaded (no 13 GB wait).
 	LocalCandidateCached bool `json:"localCandidateCached"`
+	// LocalChoices are the edit models this computer can run (the catalog's
+	// local edit models): the dialog offers the choice when there are several.
+	LocalChoices []types.ModelInfo `json:"localChoices"`
 	// Previous is the model to switch back to after a SwitchToEditModel.
 	Previous *types.ModelInfo `json:"previous,omitempty"`
 	// Engine is the local model the engine holds now (what a swap replaces).
@@ -1076,6 +1079,7 @@ func (a *App) ListEditModels() EditModelsInfo {
 		info.Cloud = cloud.EditModels(models)
 	}
 	info.DefaultCloud = editDefaultFrom(info.Cloud, s)
+	info.LocalChoices = a.localEditChoices()
 	info.LocalCandidate = a.localEditCandidate()
 	if c := info.LocalCandidate; c != nil {
 		if dir, derr := modelsDir(); derr == nil {
@@ -1092,17 +1096,43 @@ func (a *App) ListEditModels() EditModelsInfo {
 	return info
 }
 
-// localEditCandidate is the edit model to run locally: the catalog's first
-// locally runnable edit model, else the built-in GGUF entry.
-func (a *App) localEditCandidate() *types.ModelInfo {
+// localEditChoices are the edit models this computer can run: the catalog's
+// locally runnable edit models, else the built-in GGUF entry alone.
+func (a *App) localEditChoices() []types.ModelInfo {
 	if models, err := a.cloud.ListModels(a.ctx, true); err == nil {
-		for _, m := range cloud.EditModels(models) {
-			mm := m
-			return &mm
+		if edits := cloud.EditModels(models); len(edits) > 0 {
+			return edits
 		}
 	}
-	m := cloud.BuiltinEditModel()
-	return &m
+	return []types.ModelInfo{cloud.BuiltinEditModel()}
+}
+
+// localEditCandidate is the edit model to run locally: the one the user
+// picked (Settings.LocalEditModel) while it is still offered, else the first.
+func (a *App) localEditCandidate() *types.ModelInfo {
+	choices := a.localEditChoices()
+	if want := a.settings.Get().LocalEditModel; want != "" {
+		for i := range choices {
+			if choices[i].ModelCode == want {
+				return &choices[i]
+			}
+		}
+	}
+	return &choices[0]
+}
+
+// SetLocalEditModel remembers the edit model local runs use. It loads
+// nothing: the dialog then offers to load it (SwitchToEditModel).
+func (a *App) SetLocalEditModel(modelCode string) error {
+	for _, m := range a.localEditChoices() {
+		if m.ModelCode == modelCode {
+			s := a.settings.Get()
+			s.LocalEditModel = modelCode
+			_, err := a.settings.Save(s)
+			return err
+		}
+	}
+	return fmt.Errorf("%q is not an edit model this computer can run", modelCode)
 }
 
 // SwitchToEditModel makes the edit model the local model (downloading it the

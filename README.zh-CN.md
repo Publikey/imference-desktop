@@ -4,24 +4,50 @@
 
 # Imference Desktop
 
-**生成 AI 图像与视频 — 用自己的 GPU，或用云端。一个应用搞定。**
+**AI 图像与视频：用自己的 GPU，或用云端。同一个应用，一个开关。**
+一键安装，模型自动下载，无需账号。
 
-免费 · 无订阅 · Windows & macOS
+免费 · 开源 · Windows & macOS
 
 [![Latest release](https://img.shields.io/github/v/release/Publikey/imference-desktop?label=latest&color=f59e0b)](https://github.com/Publikey/imference-desktop/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/Publikey/imference-desktop/total?color=38bdf8)](https://github.com/Publikey/imference-desktop/releases)
-[![Build](https://img.shields.io/github/actions/workflow/status/Publikey/imference-desktop/release.yml)](https://github.com/Publikey/imference-desktop/actions)
 [![License](https://img.shields.io/github/license/Publikey/imference-desktop)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/Publikey/imference-desktop?style=flat&logo=github)](https://github.com/Publikey/imference-desktop/stargazers)
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)](#download)
 
 [English](README.md) · **简体中文**
 
-[**下载**](#download) · [快速开始](#quick-start) · [官网](https://imference.com/desktop) · [参与贡献](CONTRIBUTING.md) · [安全](SECURITY.md)
+[**下载**](#download) · [快速开始](#quick-start) · [模型](#models) · [官网](https://imference.com/desktop) · [参与贡献](CONTRIBUTING.md) · [安全](SECURITY.md)
 
 <img src="docs/screenshots/hero_zn.png" alt="Imference Desktop — 生成界面" width="800" />
 
+<img src="docs/screenshots/showcase.jpg" alt="用 Imference Desktop 生成的图片" width="800" />
+
+<sub>本地 GPU 生成，使用模型：CyberRealistic Z-Image Turbo · Anima · RedCraft Krea 2 · Kraken NOIR · Nova Pixels XL</sub>
+
 </div>
+
+### 🔀 本地与云端，同一个界面
+
+在自己的 GPU 上免费生成，或者拨一下开关，把同一条提示词交给云端运行。
+同一个界面、同一个图库、同一套工具：不用重新学习，每张图在哪里运行由你决定。
+
+<div align="center">
+<img src="docs/screenshots/cloud_zn.png" alt="云端模型：视频等更多模型，同一个应用" width="720" />
+</div>
+
+### ⚡ 几分钟就能出图
+
+安装、打开、选一个模型、点击生成。应用会安装自带的引擎、检测你的 GPU，
+并替你下载权重。每个精选模型都已预调好参数，第一张图就有不错的效果。
+无需命令行，无需连节点图，无需折腾 CUDA。
+
+<div align="center">
+<img src="docs/screenshots/models_zn.png" alt="模型选择" width="720" />
+</div>
+
+### 🙅 无需账号
+
+本地生成什么都不需要：不用注册，不用邮箱，提示词和图片永远不会离开你的电脑。
+连云端也可以不用账号：用钱包按次付费，无需注册。
 
 <a id="download"></a>
 
@@ -41,12 +67,11 @@
 ## 🚀 快速开始
 
 1. **下载**上方对应系统的安装程序并运行。
-2. **打开应用** — 它会自动安装自带的推理引擎并检测 GPU，全程不影响系统 Python。
-3. **选一个模型，点击生成** — 权重自动下载，每个模型都已预调好参数，
-   第一张图就有不错的效果。
+2. **打开应用**，等它安装好引擎：只需几分钟，只需一次。
+3. **选一个模型，点击生成。** 模型会在第一次使用时自动下载。
 
-没有 GPU？在第 3 步把开关切到**云端**，直接在
-[imference.com](https://imference.com) 上生成。
+没有 GPU？把开关切到**云端**，在同一界面用
+[imference.com](https://imference.com) 生成。
 
 ### ⚠️ 首次启动
 
@@ -59,52 +84,60 @@
 你可以用 Release 中的 `checksums.txt` 校验下载文件。
 应用启动时会检查新版本并显示提示横幅；代码签名和应用内静默自动更新已列入路线图。
 
-## 为什么选择 Imference Desktop
+<a id="models"></a>
 
-- ⚡ **一键安装，开箱即用** — 应用会为你安装一个隔离的推理引擎（不影响系统
-  Python），自动检测 GPU，并按需启动 / 停止引擎。无需命令行，无需折腾 CUDA。
-- 🖥️ **本地生成，每张图 0 元** — 在你自己的 GPU 上运行**七大模型家族**：
-  **SDXL、SD 1.5、Z-Image、FLUX、Chroma、Qwen-Image 和 Anima**。
-  提示词和图片永远不会离开你的电脑。
-- 🧩 **预配置模型，零设置** — 从精选目录里选一个模型点击生成即可：权重
-  **自动下载**，每个模型都已预调好参数（步数、CFG、分辨率、质量标签、
-  负面提示词），第一张图就是对的效果。
-- 📦 **自带模型** — 加载任意本地 `.safetensors` 模型文件（例如从 Civitai
-  下载的），选好所属家族即可。文件在原位置直接使用 — 不会被复制或上传。
-- ☁️ **需要时随时切换云端** — 没有 GPU 或性能不足？在同一界面用
-  [imference.com](https://imference.com) 云端生成图像和**视频**。支持
-  **API 密钥（积分）** 或 **x402（Base 链 USDC）** 付费 — x402 方式甚至
-  无需注册账号。
-- 🎛️ **真正的参数控制，界面简洁** — 画幅、步数、CFG、种子、质量标签、
-  负面提示词，还支持**图生图**。生成任务可排队，甚至可以在生成中途切换
-  模型 — 应用会先完成当前这张图。
-- 🗂️ **记住一切的图库** — 每张图片和视频都会连同提示词、模型和参数一起
-  保存。支持筛选、搜索和全屏查看。
+## 🎨 90 个精选模型，开箱即用
 
-## 编辑工具
+每个模型都经过人工挑选和逐一调参，你不用再到处找合适的参数。
+而且目录只是起点，不是限制：你从 Civitai、Hugging Face 或其他地方下载的
+任意模型文件，都可以和目录中的模型一起使用。
 
-在图库中右键任意图片（或打开图片后点 **编辑**）即可运行工具：放大、变体、去除背景、魔法橡皮擦（支持点击选取）、扩图、局部重绘、修复人脸、描述图片，以及调整尺寸、裁剪、转换、清除元数据、视频剪辑/转换等实用工具。每个工具运行前都会标明运行位置：
+支持的模型家族：
 
-| 标记 | 含义 |
-|---|---|
-| **本地** | 在本机全速运行（GPU 或轻量 CPU 工具），不上传任何内容。 |
-| **本地（较慢）** | 在本机用 CPU 运行（未找到兼容的 GPU 运行时），依然私密，只是较慢。 |
-| **云端** | 本机无法运行（未安装引擎、内存不足、未加载生成模型等），在 imference.com 上运行，并显示价格。 |
+**Illustrious** · **Pony** · **SDXL** · **SD 1.5** · **Anima** · **Krea 2** ·
+**Z-Image** · **Qwen-Image** · **Qwen-Image-Edit** · **FLUX.1** · **FLUX.2 klein** ·
+**FLUX 3** · **Chroma** · **ERNIE-Image** · **Lumina-Image 2.0** ·
+**LongCat-Image-Edit** · **GPT Image** · **MiniMax H3** · **Wan 3.0**
 
-- **运行位置**：设置 → *编辑工具* 中可选 **自动**（能本地就本地，否则云端）、**始终本地** 或 **始终云端**，每次运行也可单独选择。本地运行因内存不足或缺少运行时失败时，应用会*提示*改用云端并显示价格，绝不会悄悄切换。
-- **隐私**：本地工具不上传任何内容；云端运行前会提示“在云端运行：你的图片将被上传”并显示价格，上传内容会在 24 小时内从云端删除。
-- **面向 AI 智能体的本地 API**：应用运行时会在 `127.0.0.1`（端口优先 47823）提供带随机令牌保护的本地 API，供 Imference MCP 服务器以 `run_on: local` 在本机免费运行工具。端口和令牌写在 `<配置目录>/imference-desktop-go/local-api.json`（仅当前用户可读，退出时删除）。可在 设置 → *编辑工具* 中关闭。
+- **自己的模型文件。** 在模型选择窗口中点击**添加模型文件…**，选择本地的
+  `.safetensors` 文件，再选好所属家族。文件在原位置直接使用：不会被复制，
+  也不会被上传。LoRA 也一样。
+- **显存不够？** 对于 FLUX.2 klein、ERNIE-Image、Lumina-Image 和 Qwen-Image，
+  应用会自动选择适合你显卡的版本。
+- **云端。** 带声音的视频（MiniMax H3）、视频（Wan 3.0）、GPT Image 和 FLUX 3
+  在 [imference.com](https://imference.com) 上运行；没有 GPU 时，大多数本地模型
+  也可以在云端运行。每张图 0.003 美元起，每段视频 0.15 美元起，可用积分或
+  x402（Base 链 USDC）付费。
+
+## ✨ 还有这些
+
+- 🪄 **编辑工具。** 按指令编辑（“把天空换成日落”）、放大、去除背景、擦除物体、
+  扩图、局部重绘、修复人脸。每个工具在运行前都会显示运行位置，应用不会不经
+  询问就切换到云端。[详情](docs/editing-tools.md)（英文）
+- 🤖 **让你的 AI 智能体来操作。** 在**设置 → AI 智能体**中连接 Claude Desktop、
+  Claude Code、Cursor 或任何 MCP 应用，然后在对话里要一张图：由你自己的 GPU
+  生成，并实时显示在应用里。[详情](docs/local-api.md)（英文）
+- 🧩 **LoRA。** 叠加风格、角色和细节增强，可来自目录，也可用自己的文件。
+- 🗂️ **记住一切的图库。** 每张图片和视频都会连同提示词、模型和参数一起保存。
+  支持筛选、搜索，并可复用以前的参数。
+- 🎛️ **真正的参数控制，界面简洁。** 画幅、步数、引导强度、种子、负面提示词、
+  图生图。任务可排队，生成中途也能切换模型。
+
+<div align="center">
+<img src="docs/screenshots/tools_zn.png" alt="按指令编辑" width="720" />
+</div>
 
 ## 系统要求
 
 | 模式 | 需要什么 |
 |---|---|
-| **本地** | Windows：NVIDIA GPU（CUDA），或 AMD Radeon RX 7000/9000（ROCm 预览版 — 需要 Python 3.12 和较新的 Adrenalin 驱动）· macOS：Apple Silicon。每个模型约 6–7 GB 磁盘空间。 |
-| **云端** | 任何电脑 — 一个 [imference.com API 密钥](https://imference.com/payments)，或一个有余额的 x402 钱包。 |
+| **本地** | **Windows**：NVIDIA GPU（CUDA），或 AMD Radeon RX 7000/9000（ROCm 预览版，需要 Python 3.12 和较新的 Adrenalin 驱动）。**macOS**：Apple Silicon。建议 8 GB 显存，较小的模型 6 GB 即可运行。需已安装 Python 3.11 或更高版本（应用会基于它创建自己的隔离环境）。每个模型约 6–13 GB 磁盘空间。 |
+| **云端** | 任何电脑，加上一个 [imference.com API 密钥](https://imference.com/payments)，或一个有余额的 x402 钱包。 |
 
 Linux（NVIDIA CUDA / AMD ROCm）引擎本身已支持，也可以从源码构建，
 但目前还没有预编译版本 — 见[从源码构建](#build-from-source)。
 
+应用还有一个仅云端的**网页版**（原型）：[docs/web.md](docs/web.md)（英文）。
 更多信息见 [imference.com/desktop](https://imference.com/desktop) 页面。
 
 ### 🌐 界面语言
@@ -151,7 +184,8 @@ wails3 package  # 生产构建 + 平台打包（Windows 上为 NSIS）
 [MIT](LICENSE) © Publikey Sàrl
 
 模型权重**不在**本许可证范围内 — 目录中的每个模型都有各自的授权条款
-（CreativeML、FLUX 非商用、Apache-2.0 等）。使用任何模型前请先确认其许可证，
+（CreativeML、Apache-2.0、Lumina-Image 文本编码器的 Gemma 使用条款、GPT Image 和
+FLUX 3 的服务商条款等）。使用任何模型前请先确认其许可证，
 商用场景尤其如此。
 
 发现安全问题？请见 [SECURITY.md](SECURITY.md) — 不要提交公开 issue。

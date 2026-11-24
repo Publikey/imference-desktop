@@ -12,10 +12,10 @@ import (
 
 func TestEngineTarballPinsToolsRelease(t *testing.T) {
 	t.Setenv(EngineSourceEnvVar, "")
-	if got := PinnedEngineVersion(); got != "0.5.2" {
-		t.Fatalf("PinnedEngineVersion = %q, want 0.5.2", got)
+	if got := PinnedEngineVersion(); got != "0.7.0" {
+		t.Fatalf("PinnedEngineVersion = %q, want 0.7.0", got)
 	}
-	if !strings.Contains(EngineTarball, "/tags/v0.5.2.tar.gz") {
+	if !strings.Contains(EngineTarball, "/tags/v0.7.0.tar.gz") {
 		t.Fatalf("EngineTarball must stay a tag pin, got %s", EngineTarball)
 	}
 	for _, extra := range []string{"sdxl", "krea2", "tools"} {
@@ -100,6 +100,18 @@ func TestPinnedVersionRegexPreReleases(t *testing.T) {
 		m := pinnedEngineVersionRe.FindStringSubmatch(url)
 		if len(m) != 2 || m[1] != want {
 			t.Errorf("%s: got %v, want %s", url, m, want)
+		}
+	}
+}
+
+// The pinned engine (diffusers 0.43 stack) installs on Python 3.11+ only.
+func TestPythonMeetsFloor(t *testing.T) {
+	for v, want := range map[string]bool{
+		"3.12.3": true, "3.11.0": true, "3.13.1": true, "4.0.0": true,
+		"3.10.14": false, "3.9.6": false, "2.7.18": false, "": false, "garbage": false,
+	} {
+		if got := PythonMeetsFloor(v); got != want {
+			t.Errorf("PythonMeetsFloor(%q) = %v, want %v", v, got, want)
 		}
 	}
 }

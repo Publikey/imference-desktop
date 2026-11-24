@@ -118,9 +118,15 @@ function QueueRow({
   const thumb = isTool ? job.tool?.preview : job.image?.imageBase64;
   const toolPct = isTool && job.tool?.fraction ? job.tool.fraction * 100 : null;
 
+  // The engine is fetching model files first (engine-managed weights).
+  const dl = running ? job.progress?.download : null;
+  const gb = (mib: number) => (mib / 1024).toFixed(1);
+
   const toolText = isTool ? job.tool?.result?.outputs.find((o) => o.type === "text" && o.text)?.text : undefined;
   const statusLine = isTool && job.status === "done" && toolText
     ? toolText
+    : dl
+    ? t("queue.downloading", { file: dl.file, done: gb(dl.doneMiB), total: gb(dl.totalMiB) })
     : isTool && running
     ? t(`tools.stage.${KNOWN_STAGES.has(job.tool?.stage ?? "") ? job.tool!.stage : "running"}`)
     : queued
@@ -283,7 +289,7 @@ function QueueRow({
       </div>
 
       {/* Progress: determinate brand bar for local steps, sweeping pulse for cloud. */}
-      {running && <ProgressBar percent={isTool ? toolPct : pct} height="h-1" className="mt-2" />}
+      {running && <ProgressBar percent={dl ? job.progress!.percent : isTool ? toolPct : pct} height="h-1" className="mt-2" />}
     </li>
   );
 }

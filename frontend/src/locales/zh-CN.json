@@ -1082,7 +1082,10 @@
       "bannerText": "你的图库文件夹需要再次授权才能读取。",
       "chipBrowser": "保存在此浏览器中",
       "chipFolder": "保存在 {{name}}",
-      "chipNeedsAccess": "{{name}}：需要授权"
+      "chipNeedsAccess": "{{name}}：需要授权",
+      "folderLost": "无法访问文件夹",
+      "folderLostHint": "浏览器无法重新打开你之前选择的文件夹，所以图库暂时为空。文件仍在该文件夹中：重新选择它即可恢复，或者把新图片保存在浏览器存储中。",
+      "chipLost": "无法访问文件夹"
     }
   },
   "webpay": {
